@@ -590,9 +590,9 @@ def _search_gdelt(
         params["enddatetime"] = date_to.strftime("%Y%m%d235959")
 
     last_err: Exception = RuntimeError("GDELT: no attempts made")
-    for attempt in range(3):
+    for attempt in range(2):  # 1 retry max — connection failures should fail fast
         if attempt:
-            time.sleep(5 * attempt)  # 5 s, 10 s between retries
+            time.sleep(5)
         elapsed = time.time() - _GDELT_LAST_CALL
         if elapsed < GDELT_MIN_INTERVAL:
             time.sleep(GDELT_MIN_INTERVAL - elapsed)
@@ -600,9 +600,9 @@ def _search_gdelt(
             r = httpx.get(
                 "https://api.gdeltproject.org/api/v2/doc/doc",
                 params=params,
-                # Explicit sub-timeouts: 5 s connect caps SSL handshake (was 20 s
-                # scalar which allowed 80+ s hangs and consumed gunicorn budget).
-                timeout=httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0),
+                # Connect timeout 2 s: GDELT TLS is fast when reachable; longer
+                # values cause 30+ s hangs when the EC2 IP is being throttled.
+                timeout=httpx.Timeout(connect=2.0, read=10.0, write=2.0, pool=2.0),
             )
         except Exception as e:
             last_err = e

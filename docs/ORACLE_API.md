@@ -7,7 +7,7 @@
 
 The Oracle API is a FastAPI microservice that lives in `retro/api/`. Given a binary question, it:
 
-1. Searches for relevant news articles (`web_search.py` — Serper.dev → Brave → DDG)
+1. Searches for relevant news articles (`web_search.py` — 10-provider chain, GDELT-first)
 2. Runs each article through the TruthMachine pipeline (gatekeeper → extractor)
 3. Weights each source's predictions by its historical Brier score from `leaderboard.json`
 4. Aggregates into a calibrated probability distribution and returns it
@@ -44,6 +44,35 @@ Port 8001 is not exposed to the public internet. Only the daatan EC2 security gr
 AWS SG: daatan-ec2-sg → retro-ec2:8001
 App:    x-api-key: $ORACLE_API_KEY
 ```
+
+---
+
+## Search Provider Chain
+
+All article searches — both `/forecast` internal searches and `/search` requests — use `web_search.py`, which tries providers in order and returns the first non-empty result.
+
+**Current chain (as of 2026-05-17):**
+
+| # | Provider | Cost | Notes |
+|---|---|---|---|
+| 1 | **GDELT Doc API** | Free | Primary. No API key. Rate-limited to 1 req/10s. Returns titles + URLs; no snippets. |
+| 2 | SerpAPI | Paid | |
+| 3 | Serper.dev | Paid | |
+| 4 | Brave News | Paid | |
+| 5 | BrightData | Paid | |
+| 6 | Nimbleway | Paid | |
+| 7 | ScrapingBee | Paid | |
+| 8 | Newsdata.io | Paid | |
+| 9 | **DataForSEO** | Paid ~$7/day | Last-resort paid fallback only. Was primary until May 2026. |
+| 10 | DuckDuckGo | Free | Final fallback. Blocked on EC2 IPs by Yahoo. No date filtering. |
+
+**To change the order or add a provider:** edit `pipeline/src/tm/web_search.py`, function `search_articles()`. The numbered comments make the chain easy to reorder.
+
+**GDELT caveats:**
+- 10-second minimum interval between requests (`GDELT_MIN_INTERVAL` constant)
+- `artlist` mode returns no snippet text — only title, URL, domain, and date
+- Historical date filtering works via `startdatetime`/`enddatetime` (GDELT covers its full archive)
+- Rapid sequential calls (faster than 1/10s) get HTTP 429 and fall through to the next provider
 
 ---
 
@@ -88,6 +117,72 @@ App:    x-api-key: $ORACLE_API_KEY
 - `-1` = all sources certain it won't
 - `0` = neutral / mixed
 - Convert to probability: `p = (mean + 1) / 2`
+
+### `POST /search`
+
+**Auth:** `x-api-key` header required.
+
+Exposes the provider chain directly. Useful for bediavad (historical article discovery) and debugging which provider served a query.
+
+```json
+// Request
+{
+  "query": "bitcoin price rally",
+  "limit": 15,
+  "date_from": "2024-10-01",
+  "date_to": "2025-01-01",
+  "enrich_snippets": true
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `query` | string | required | Search string. Supports `site:domain.com`. |
+| `limit` | int | 5 | Max results (1–30). |
+| `date_from` | string | null | ISO date `YYYY-MM-DD`. Passed to providers that support native date filtering (GDELT, Newsdata.io, DataForSEO). |
+| `date_to` | string | null | ISO date `YYYY-MM-DD`. |
+| `enrich_snippets` | bool | `false` | When `true`, scrapes each article URL to fill the `snippet` field. GDELT returns no snippet text by default; this compensates. Adds 5–15s latency. Not suitable for daatan live calls. |
+
+```json
+// Response
+{
+  "query": "bitcoin price rally",
+  "count": 5,
+  "results": [
+    {
+      "title": "Bitcoin Surges Past $90k",
+      "url": "https://coindesk.com/...",
+      "snippet": "Bitcoin hit a new all-time high on Monday as institutional...",
+      "source": "coindesk.com",
+      "published_date": "2024-11-12"
+    }
+  ]
+}
+```
+
+**`enrich_snippets` implementation:** after `search_articles()` returns, `enrich_snippets()` fans out URL fetches with 8 parallel workers and an 8-second total timeout. Uses `trafilatura` (primary) and BeautifulSoup (fallback) for HTML extraction. Articles whose URLs fail or timeout keep an empty snippet.
+
+**For bediavad / historical backtest use:** set `enrich_snippets: true` and pace requests no faster than one every 12 seconds to stay within GDELT's rate limit. If GDELT returns 0 results (common for very narrow date ranges), the chain falls through to paid providers or DDG; DDG does not honour date filters.
+
+### `GET /search/health`
+
+**Auth:** `x-api-key` header required.
+
+Returns per-provider status with credit counts where available.
+
+```json
+{
+  "overall": "degraded",
+  "usable_count": 2,
+  "providers": {
+    "gdelt":       {"configured": true, "exhausted": false, "status": "ok"},
+    "dataforseo":  {"configured": true, "exhausted": false, "status": "ok", "credits": null},
+    "serper":      {"configured": true, "exhausted": true,  "status": "exhausted"},
+    "brave":       {"configured": true, "exhausted": true,  "status": "exhausted"},
+    "ddg":         {"configured": true, "exhausted": false, "status": "ok"}
+  }
+}
+```
 
 ### `GET /health`
 

@@ -114,6 +114,49 @@ The summary includes: run timestamp, model type used, window settings, full resu
 
 ---
 
+## Historical Article Search (Oracle `/search`)
+
+Bediavad needs articles published **before** a specific date, not current news. The Oracle's `/search` endpoint supports this directly.
+
+```bash
+# Example: find articles about Bitcoin published before 2025-01-01
+curl -s -X POST https://oracle.daatan.com/search \
+  -H "x-api-key: $ORACLE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "bitcoin price crash",
+    "limit": 15,
+    "date_from": "2024-10-01",
+    "date_to": "2025-01-01",
+    "enrich_snippets": true
+  }'
+```
+
+**Provider behaviour with date filters:**
+- **GDELT (primary):** Supports `startdatetime`/`enddatetime` natively. Free, no API key. Rate-limited to 1 request per 10 seconds — pace bediavad calls accordingly (≥12s between requests to be safe).
+- **GDELT returns no snippets** — set `enrich_snippets: true` to scrape article text in parallel (8 workers, 8s cap). Adds 5–15s per call.
+- If GDELT hits 429 (rapid sequential calls) it falls through to paid providers which may not respect the date filter.
+
+**Recommended bediavad loop:**
+```python
+import time, requests
+
+def oracle_search_historical(query, date_from, date_to, limit=15):
+    r = requests.post(
+        "https://oracle.daatan.com/search",
+        headers={"x-api-key": ORACLE_API_KEY},
+        json={"query": query, "limit": limit,
+              "date_from": date_from, "date_to": date_to,
+              "enrich_snippets": True},
+        timeout=60,
+    )
+    results = r.json().get("results", [])
+    time.sleep(12)  # stay within GDELT 1-req/10s rate limit
+    return results
+```
+
+---
+
 ## How to Run
 
 ```bash

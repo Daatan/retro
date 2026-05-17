@@ -14,6 +14,8 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "truthmachine-pipeline",
+    "trafilatura>=2.0.0",
+    "beautifulsoup4>=4.14.3",
 ]
 
 [project.optional-dependencies]

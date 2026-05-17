@@ -27,6 +27,8 @@ async def run_search(req: SearchRequest) -> SearchResponse:
     results = await asyncio.to_thread(
         _ws.search_articles, req.query, req.limit, date_from, date_to
     )
+    if req.enrich_snippets:
+        results = await asyncio.to_thread(_ws.enrich_snippets, results)
     return SearchResponse(
         query=req.query,
         results=[

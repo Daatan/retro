@@ -35,13 +35,21 @@ import os
 import re
 import threading
 import time
-from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import List, Optional
 from urllib.parse import urlencode
 
 import httpx
 from ddgs import DDGS
+
+try:
+    import trafilatura as _trafilatura
+    from bs4 import BeautifulSoup as _BeautifulSoup
+    _SNIPPET_LIBS_AVAILABLE = True
+except ImportError:
+    _SNIPPET_LIBS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -718,6 +726,76 @@ def _search_newsdata_io(
         if item.get("link")
     ]
     return _filter_by_date(results, date_from, date_to)
+
+
+# ──────────────────────────────────────────────
+# Snippet enrichment (opt-in scraping for GDELT results)
+# ──────────────────────────────────────────────
+
+_SNIPPET_UA = "Mozilla/5.0 (compatible; TruthMachine/1.0)"
+_SNIPPET_TIMEOUT = httpx.Timeout(connect=3.0, read=7.0, write=3.0, pool=3.0)
+
+
+def _fetch_snippet(url: str) -> str:
+    """Fetch *url* and return first ~600 chars of article text. Returns '' on any failure."""
+    if not _SNIPPET_LIBS_AVAILABLE:
+        return ""
+    try:
+        r = httpx.get(url, headers={"User-Agent": _SNIPPET_UA},
+                      timeout=_SNIPPET_TIMEOUT, follow_redirects=True)
+        if r.status_code != 200 or "text/html" not in r.headers.get("content-type", ""):
+            return ""
+        text = _trafilatura.extract(r.text, include_comments=False, include_tables=False)
+        if not text:
+            soup = _BeautifulSoup(r.text, "html.parser")
+            for tag in soup(["script", "style", "nav", "footer", "header", "aside", "iframe", "figure"]):
+                tag.extract()
+            for sel in ["article", "main", ".article-body", ".article-content", ".post-content",
+                        '[class*="article"]', '[class*="story"]']:
+                el = soup.select_one(sel)
+                if el:
+                    candidate = el.get_text(separator=" ", strip=True)
+                    if len(candidate) > 200:
+                        text = candidate
+                        break
+            if not text:
+                text = soup.get_text(separator=" ", strip=True)
+        return text[:600].strip() if text else ""
+    except Exception:
+        return ""
+
+
+def enrich_snippets(results: List[SearchResult], timeout: float = 8.0) -> List[SearchResult]:
+    """Fetch and fill snippets for results that have none, up to *timeout* seconds total.
+
+    Uses up to 8 parallel workers. Articles that timeout or fail keep an empty snippet.
+    Only has an effect when trafilatura and beautifulsoup4 are installed.
+    """
+    to_enrich = [i for i, r in enumerate(results) if not r.snippet]
+    if not to_enrich or not _SNIPPET_LIBS_AVAILABLE:
+        return results
+
+    fetched: dict[int, str] = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(_fetch_snippet, results[i].url): i for i in to_enrich}
+        try:
+            for fut in as_completed(futures, timeout=timeout):
+                idx = futures[fut]
+                try:
+                    fetched[idx] = fut.result()
+                except Exception:
+                    fetched[idx] = ""
+        except TimeoutError:
+            logger.warning("enrich_snippets: %ss wall hit, %d URLs incomplete",
+                           timeout, sum(1 for f in futures if not f.done()))
+            for fut, idx in futures.items():
+                if idx not in fetched:
+                    fetched[idx] = ""
+
+    out = list(results)
+    for idx, snippet in fetched.items():
+        out[idx] = replace(out[idx], snippet=snippet)
+    return out
 
 
 # ──────────────────────────────────────────────

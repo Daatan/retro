@@ -9,6 +9,7 @@ class SearchRequest(BaseModel):
     limit: int = Field(default=5, ge=1, le=30, description="Max results to return")
     date_from: Optional[str] = Field(default=None, description="ISO date lower bound YYYY-MM-DD")
     date_to: Optional[str] = Field(default=None, description="ISO date upper bound YYYY-MM-DD")
+    enrich_snippets: bool = Field(default=False, description="Scrape article URLs to fill empty snippets (adds latency)")
 
 
 class SearchResultItem(BaseModel):

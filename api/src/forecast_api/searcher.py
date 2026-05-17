@@ -143,17 +143,9 @@ async def _check_scrapingbee() -> ProviderStatus:
 
 
 async def _check_gdelt() -> ProviderStatus:
-    try:
-        async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.get(
-                "https://api.gdeltproject.org/api/v2/doc/doc",
-                params={"query": "test", "mode": "artlist", "format": "json", "maxrecords": 1},
-            )
-        if not r.is_success:
-            return ProviderStatus(configured=True, exhausted=False, status="error", error=f"HTTP {r.status_code}")
-        return ProviderStatus(configured=True, exhausted=False, status="ok")
-    except Exception as e:
-        return ProviderStatus(configured=True, exhausted=False, status="error", error=str(e))
+    # GDELT needs no API key and has no credit quota — always configured and available.
+    # A live probe would consume the shared 10s rate limit and degrade real searches.
+    return ProviderStatus(configured=True, exhausted=False, status="ok")
 
 
 async def run_search_health() -> SearchHealthResponse:

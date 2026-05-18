@@ -14,6 +14,26 @@ Fallback order:
   9. DataForSEO Google News         DATAFORSEO_API_KEY  (last-resort paid fallback)
  10. DuckDuckGo Lite                (free, no key)
 
+GDELT rate limiting
+-------------------
+GDELT enforces 1 request / 10 s per IP. When the limit is exceeded it throttles
+at the TCP/TLS layer — the handshake stalls for ~25 s before returning HTTP 429.
+Because the API runs under multiple gunicorn workers (separate OS processes), a
+simple module-level timestamp is not shared and concurrent workers can all pass
+the in-process check and fire simultaneously.
+
+The fix is a cross-process slot:
+  * A flock(2) on /tmp/gdelt_ratelimit.lock serialises all workers through a
+    shared critical section that reads/writes /tmp/gdelt_ratelimit.ts.
+  * The lock is held only long enough to read the timestamp, optionally sleep the
+    remaining window, and write the new "claimed at" time — not during the HTTP
+    call itself.
+  * If the remaining window is longer than _GDELT_SLOT_WAIT (1.5 s) the slot is
+    considered busy and GDELT is skipped; the caller falls through to the next
+    provider immediately rather than stalling the forecast pipeline.
+  * HTTP 429 triggers a per-process 60 s cooldown (_GDELT_COOLDOWN_UNTIL) so we
+    don't hammer an already-throttled IP every 10 s.
+
 All keys are loaded from the environment first, then from AWS Secrets Manager
 (openclaw/* namespace) as a fallback. See _secret().
 
@@ -30,14 +50,17 @@ Usage:
         print(r.url, r.title)
 """
 
+import fcntl
 import logging
 import os
 import re
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
 from urllib.parse import urlencode
 
@@ -125,8 +148,81 @@ def _refresh_keys_if_stale() -> None:
 
 _DDG_LAST_CALL: float = 0.0
 DDG_MIN_INTERVAL = 2.0
-_GDELT_LAST_CALL: float = 0.0
-GDELT_MIN_INTERVAL = 10.0  # GDELT rate limit: 1 req / 10s
+
+# ── GDELT cross-process rate limiting ────────────────────────────────────────
+GDELT_MIN_INTERVAL = 10.0   # documented GDELT rate limit: 1 req / 10 s
+_GDELT_SLOT_WAIT   = 1.5    # max seconds we're willing to wait for a slot before skipping
+_GDELT_COOLDOWN_UNTIL: float = 0.0   # per-process; epoch time until which GDELT is skipped after a 429
+
+_GDELT_LOCK_PATH = Path(tempfile.gettempdir()) / "gdelt_ratelimit.lock"
+_GDELT_TS_PATH   = Path(tempfile.gettempdir()) / "gdelt_ratelimit.ts"
+
+
+class _GDELTSlotBusy(Exception):
+    """Raised by _gdelt_acquire_slot when the cross-process slot is not available."""
+
+
+def _gdelt_acquire_slot() -> None:
+    """Claim the next available GDELT request slot, enforced across all OS processes.
+
+    Acquires an exclusive flock on _GDELT_LOCK_PATH, reads the timestamp of the
+    last claimed request from _GDELT_TS_PATH, sleeps for any remaining window, then
+    writes the current time to claim the slot before releasing the lock.
+
+    Raises _GDELTSlotBusy if:
+      - the remaining window exceeds _GDELT_SLOT_WAIT (slot too fresh — skip GDELT
+        rather than stalling the forecast pipeline), or
+      - the lock itself cannot be acquired within _GDELT_SLOT_WAIT (another worker
+        is mid-claim).
+
+    Falls back to no-op if file operations fail (e.g. read-only /tmp); callers
+    are then responsible for their own rate limiting.
+    """
+    deadline = time.time() + _GDELT_SLOT_WAIT
+    try:
+        lock_fd = open(_GDELT_LOCK_PATH, "w")
+        try:
+            # Spin-acquire with deadline so we don't stall indefinitely.
+            while True:
+                try:
+                    fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.time() >= deadline:
+                        raise _GDELTSlotBusy("another worker holds the GDELT lock")
+                    time.sleep(0.05)
+
+            # Lock held — read the last claimed timestamp.
+            last_ts = 0.0
+            if _GDELT_TS_PATH.exists():
+                try:
+                    last_ts = float(_GDELT_TS_PATH.read_text().strip())
+                except ValueError:
+                    pass
+
+            wait = GDELT_MIN_INTERVAL - (time.time() - last_ts)
+            if wait > _GDELT_SLOT_WAIT:
+                raise _GDELTSlotBusy(
+                    f"GDELT slot in use, next available in {wait:.1f}s"
+                )
+
+            if wait > 0:
+                logger.debug("GDELT rate-limit: waiting %.2fs (cross-process)", wait)
+                time.sleep(wait)
+
+            # Claim the slot.
+            _GDELT_TS_PATH.write_text(str(time.time()))
+
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            lock_fd.close()
+
+    except _GDELTSlotBusy:
+        raise
+    except OSError as exc:
+        # File operations unavailable — silently degrade to no rate limiting.
+        logger.debug("GDELT file lock unavailable (%s): rate limit unenforced", exc)
+
 
 _DATAFORSEO_QUOTA_EXHAUSTED: bool = False
 _SERPAPI_QUOTA_EXHAUSTED: bool = False
@@ -572,9 +668,20 @@ def _search_gdelt(
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
 ) -> List[SearchResult]:
-    global _GDELT_LAST_CALL
+    """Search GDELT Doc API.
 
-    # Translate Google-style site: operator to GDELT domain: filter
+    Acquires a cross-process rate-limit slot before issuing the request; raises
+    _GDELTSlotBusy (not an error) when the slot is unavailable within 1.5 s.
+
+    Connect timeout is intentionally short (2 s): when GDELT rate-limits an IP it
+    throttles the TLS handshake to ~25 s before returning 429. Failing fast here
+    lets the fallback chain proceed without stalling the pipeline.  A 429 response
+    sets a per-process 60 s cooldown so we don't re-probe on every subsequent call.
+    """
+    # Raises _GDELTSlotBusy if the slot is not available within _GDELT_SLOT_WAIT.
+    _gdelt_acquire_slot()
+
+    # Translate Google-style site: operator to GDELT domain: filter.
     gdelt_query = re.sub(r"site:(\S+)", r"domain:\1", query)
 
     params: dict = {
@@ -590,36 +697,49 @@ def _search_gdelt(
         params["enddatetime"] = date_to.strftime("%Y%m%d235959")
 
     last_err: Exception = RuntimeError("GDELT: no attempts made")
-    for attempt in range(2):  # 1 retry max — connection failures should fail fast
+    for attempt in range(2):  # 1 retry on connection failures; slot already claimed
         if attempt:
-            time.sleep(5)
-        elapsed = time.time() - _GDELT_LAST_CALL
-        if elapsed < GDELT_MIN_INTERVAL:
-            time.sleep(GDELT_MIN_INTERVAL - elapsed)
+            time.sleep(3)
         try:
             r = httpx.get(
                 "https://api.gdeltproject.org/api/v2/doc/doc",
                 params=params,
-                # Connect timeout 2 s: GDELT TLS is fast when reachable; longer
-                # values cause 30+ s hangs when the EC2 IP is being throttled.
+                # Short connect timeout: GDELT stalls the TLS handshake when
+                # rate-limiting rather than refusing the connection, so a long
+                # timeout here causes multi-second hangs on every throttled call.
                 timeout=httpx.Timeout(connect=2.0, read=10.0, write=2.0, pool=2.0),
             )
         except Exception as e:
             last_err = e
+            logger.debug("GDELT attempt %d network error: %s", attempt + 1, e)
             continue
-        finally:
-            _GDELT_LAST_CALL = time.time()
+
+        if r.status_code == 429:
+            global _GDELT_COOLDOWN_UNTIL
+            _GDELT_COOLDOWN_UNTIL = time.time() + 60.0
+            last_err = RuntimeError("GDELT 429: IP rate-limited; 60 s cooldown set")
+            logger.warning(
+                "GDELT returned 429 — IP is throttled. "
+                "Cooldown until %.0f (%.0fs from now). "
+                "Likely cause: concurrent workers bypassed the cross-process slot.",
+                _GDELT_COOLDOWN_UNTIL,
+                60.0,
+            )
+            break  # no point retrying a rate-limit hit
 
         if r.status_code != 200:
-            last_err = RuntimeError(f"GDELT returned HTTP {r.status_code}")
+            last_err = RuntimeError(f"GDELT HTTP {r.status_code}")
+            logger.debug("GDELT attempt %d: HTTP %d", attempt + 1, r.status_code)
             continue
+
         if not r.text.strip():
             last_err = RuntimeError("GDELT returned empty body")
             continue
+
         try:
             data = r.json()
         except Exception as e:
-            last_err = RuntimeError(f"GDELT returned non-JSON body: {e}")
+            last_err = RuntimeError(f"GDELT non-JSON body: {e}")
             continue
 
         articles = data.get("articles") or []
@@ -638,7 +758,9 @@ def _search_gdelt(
                 published_date=pub_str,
             ))
         # GDELT occasionally leaks ±1 day past enddatetime; post-filter to be strict.
-        return _filter_by_date(results[:limit], date_from, date_to)
+        filtered = _filter_by_date(results[:limit], date_from, date_to)
+        logger.debug("GDELT returned %d articles (%d after date filter)", len(results), len(filtered))
+        return filtered
 
     raise last_err
 
@@ -832,14 +954,22 @@ def search_articles(
 
     # 1. GDELT (free, no key) — primary provider; news-only, reliable dates, no snippets
     _provider_local.chain.append("gdelt")
-    try:
-        results = _search_gdelt(query, limit, date_from, date_to)
-        if results:
-            _provider_local.name = "gdelt"
-            return results
-        logger.warning("GDELT returned 0 results for: %s", query[:60])
-    except Exception as e:
-        logger.warning("GDELT failed: %s", e)
+    _gdelt_cooldown_remaining = _GDELT_COOLDOWN_UNTIL - time.time()
+    if _gdelt_cooldown_remaining > 0:
+        logger.info(
+            "GDELT skipped: 429 cooldown active for %.0fs more", _gdelt_cooldown_remaining
+        )
+    else:
+        try:
+            results = _search_gdelt(query, limit, date_from, date_to)
+            if results:
+                _provider_local.name = "gdelt"
+                return results
+            logger.warning("GDELT returned 0 results for: %s", query[:60])
+        except _GDELTSlotBusy as e:
+            logger.info("GDELT skipped (slot busy): %s", e)
+        except Exception as e:
+            logger.warning("GDELT failed: %s", e)
 
     # 2. SerpAPI
     if SERPAPI_API_KEY and not _SERPAPI_QUOTA_EXHAUSTED:

@@ -449,7 +449,12 @@ async def _run_forecast_inner(
     search_start = time.perf_counter()
     search_provider: str
     provider_chain: list[str]
-    search_query = req.question  # updated to distilled keywords if verbatim finds nothing
+    # Strip leading emoji/markers the frontend may prepend (e.g. "🤖 Question…")
+    # before any provider sees the query; supplementary-plane chars (U+10000+) cover
+    # virtually all emoji while leaving ordinary punctuation and non-ASCII text intact.
+    search_query = re.sub(r'^[\U00010000-\U0010FFFF\s]+', '', req.question).strip()
+    if search_query != req.question:
+        logger.info("Stripped leading markers from search query: %r → %r", req.question[:40], search_query[:40])
     if req.articles:
         search_results: list[SearchResult] = [
             SearchResult(

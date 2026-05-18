@@ -4,6 +4,7 @@ Python equivalent of daatan's webSearch.ts utility.
 
 Fallback order:
   1. GDELT Doc API                  (free, no key — primary; news-only, reliable dates)
+  1b. GDELT BigQuery GKG            (free tier; historical coverage >3 months; entity-based)
   2. SerpAPI (serpapi.com)          SERPAPI_API_KEY
   3. Serper.dev /news endpoint      SERPER_API_KEY
   4. Brave News Search              BRAVE_API_KEY
@@ -33,6 +34,26 @@ The fix is a cross-process slot:
     provider immediately rather than stalling the forecast pipeline.
   * HTTP 429 triggers a per-process 60 s cooldown (_GDELT_COOLDOWN_UNTIL) so we
     don't hammer an already-throttled IP every 10 s.
+
+GDELT BigQuery (historical coverage)
+-------------------------------------
+The GDELT Doc API covers only a 3-month rolling window. For historical research
+(duel scoring, retro analysis) we fall back to the GDELT GKG table in BigQuery:
+  gdelt-bq.gdeltv2.gkg
+
+Key differences from the Doc API:
+  - Entity-based matching only (V2Persons, V2Locations, V2Organizations, AllNames)
+  - No article titles — synthesized from the URL path slug
+  - No full-text search — queries with only generic nouns will miss many articles
+  - No rate limit; GCP free tier = 1 TB/month of query data
+
+Requires a GCP service-account JSON key stored in AWS Secrets Manager at:
+  openclaw/gcp-service-account-key
+
+The key is loaded once at startup (same _secret() pattern as other providers) and
+used to construct a BigQuery client. When the secret is absent the provider is
+silently skipped. The table is partitioned by day; all queries use _PARTITIONTIME
+for efficient partition pruning.
 
 All keys are loaded from the environment first, then from AWS Secrets Manager
 (openclaw/* namespace) as a fallback. See _secret().
@@ -73,6 +94,14 @@ try:
     _SNIPPET_LIBS_AVAILABLE = True
 except ImportError:
     _SNIPPET_LIBS_AVAILABLE = False
+
+try:
+    import json as _json
+    from google.cloud import bigquery as _bigquery
+    from google.oauth2 import service_account as _sa
+    _BQ_AVAILABLE = True
+except ImportError:
+    _BQ_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +145,30 @@ BRIGHTDATA_API_KEY: Optional[str] = _secret("BRIGHTDATA_API_KEY", "openclaw/brig
 NIMBLEWAY_API_KEY: Optional[str] = _secret("NIMBLEWAY_API_KEY", "openclaw/nimbleway-api-key")
 SCRAPINGBEE_API_KEY: Optional[str] = _secret("SCRAPINGBEE_API_KEY", "openclaw/scrapingbee-api-key")
 NEWSDATA_API_KEY: Optional[str] = _secret("NEWSDATA_API_KEY", "openclaw/newsdata-api-key")
+GCP_SA_KEY_JSON: Optional[str] = _secret("GCP_SA_KEY_JSON", "openclaw/gcp-service-account-key")
 
 _KEY_LOADED_AT: float = time.time()
+
+# Cached BigQuery client — created lazily on first use, invalidated on key refresh.
+_BQ_CLIENT: Optional[object] = None
+
+
+def _get_bq_client() -> object:
+    """Return a cached BigQuery client, creating it from GCP_SA_KEY_JSON if needed."""
+    global _BQ_CLIENT
+    if _BQ_CLIENT is not None:
+        return _BQ_CLIENT
+    if not _BQ_AVAILABLE:
+        raise RuntimeError("google-cloud-bigquery not installed")
+    if not GCP_SA_KEY_JSON:
+        raise RuntimeError("GCP_SA_KEY_JSON / openclaw/gcp-service-account-key not configured")
+    info = _json.loads(GCP_SA_KEY_JSON)
+    creds = _sa.Credentials.from_service_account_info(
+        info,
+        scopes=["https://www.googleapis.com/auth/bigquery.readonly"],
+    )
+    _BQ_CLIENT = _bigquery.Client(credentials=creds, project=info["project_id"])
+    return _BQ_CLIENT
 _KEY_MAX_AGE_SECONDS: float = 86400.0  # 24h
 
 
@@ -130,7 +181,7 @@ def _refresh_keys_if_stale() -> None:
     """
     global DATAFORSEO_API_KEY, SERPAPI_API_KEY, SERPER_API_KEY, BRAVE_API_KEY
     global BRIGHTDATA_API_KEY, NIMBLEWAY_API_KEY, SCRAPINGBEE_API_KEY, NEWSDATA_API_KEY
-    global _KEY_LOADED_AT
+    global GCP_SA_KEY_JSON, _BQ_CLIENT, _KEY_LOADED_AT
     if time.time() - _KEY_LOADED_AT < _KEY_MAX_AGE_SECONDS:
         return
     logger.info("Refreshing search API keys from Secrets Manager (>24h since last fetch)")
@@ -142,6 +193,10 @@ def _refresh_keys_if_stale() -> None:
     NIMBLEWAY_API_KEY = _secret("NIMBLEWAY_API_KEY", "openclaw/nimbleway-api-key")
     SCRAPINGBEE_API_KEY = _secret("SCRAPINGBEE_API_KEY", "openclaw/scrapingbee-api-key")
     NEWSDATA_API_KEY = _secret("NEWSDATA_API_KEY", "openclaw/newsdata-api-key")
+    new_gcp = _secret("GCP_SA_KEY_JSON", "openclaw/gcp-service-account-key")
+    if new_gcp != GCP_SA_KEY_JSON:
+        GCP_SA_KEY_JSON = new_gcp
+        _BQ_CLIENT = None  # force client rebuild with new credentials
     _KEY_LOADED_AT = time.time()
 
 
@@ -766,6 +821,142 @@ def _search_gdelt(
 
 
 # ──────────────────────────────────────────────
+# Provider: GDELT BigQuery GKG (historical, entity-based)
+# ──────────────────────────────────────────────
+
+# GDELT DOC API covers a rolling 3-month window. Beyond that, fall back to BQ.
+_GDELT_DOC_WINDOW_DAYS = 90
+
+
+def _slug_to_title(url: str) -> str:
+    """Derive a human-readable title from a URL path slug.
+
+    E.g. 'https://bbc.com/news/world-middle-east-67891234-netanyahu-ceasefire-deal'
+    →    'Netanyahu Ceasefire Deal'
+    """
+    try:
+        from urllib.parse import urlparse as _up
+        path = _up(url).path.rstrip("/")
+        slug = path.split("/")[-1]
+        # Strip leading digits (article IDs like '67891234-')
+        slug = re.sub(r'^\d+-', '', slug)
+        words = slug.replace("-", " ").replace("_", " ").split()
+        # Title-case non-stopword segments; keep short segments as-is
+        _stops = {"a", "an", "the", "and", "or", "of", "in", "on", "at", "to", "for", "with"}
+        return " ".join(w.capitalize() if w.lower() not in _stops else w for w in words if w)
+    except Exception:
+        return ""
+
+
+def _extract_bq_terms(query: str) -> list[str]:
+    """Extract search terms for BigQuery entity matching from a natural-language query.
+
+    Returns a list of strings to REGEXP_CONTAINS against AllNames/V2Persons/V2Locations.
+    Prioritises multi-word proper-noun phrases; falls back to significant single words.
+    Empty list means no useful terms could be extracted.
+    """
+    # Strip search operators
+    clean = re.sub(r'\b(?:site|after|before|domain):\S+', '', query)
+    clean = re.sub(r'\b(?:OR|AND|NOT)\b', ' ', clean)
+
+    # Multi-word proper-noun phrases (consecutive title-cased words)
+    phrases = re.findall(r'\b([A-Z][a-z]{1,}(?:\s+[A-Z][a-z]{1,})+)\b', clean)
+
+    # Single proper nouns (title-cased, length ≥ 4 to skip 'The', 'And', etc.)
+    singles = re.findall(r'\b([A-Z][a-z]{3,})\b', clean)
+    _common = {
+        "Israel", "Israeli", "Iran", "Iranian", "Gaza", "West", "Bank",
+        "United", "States", "America", "American", "European", "Middle", "East",
+    }
+    # Keep all phrases; filter singles to proper nouns not in stopword set
+    terms = list(dict.fromkeys(phrases + [s for s in singles if s not in _common]))
+    return terms[:8]  # cap to keep SQL manageable
+
+
+def _search_gdelt_bq(
+    query: str,
+    limit: int,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+) -> List[SearchResult]:
+    """Search GDELT GKG via BigQuery for historical coverage beyond the DOC API 3-month window.
+
+    Matches against V2Persons, V2Locations, V2Organizations, and AllNames using
+    REGEXP_CONTAINS. Partition pruning via _PARTITIONTIME keeps scan costs low.
+    Article titles are synthesized from the URL slug since GKG stores no titles.
+    """
+    client = _get_bq_client()  # raises if not configured
+
+    terms = _extract_bq_terms(query)
+    if not terms:
+        raise RuntimeError("GDELT BQ: no extractable entity terms in query")
+
+    # Build entity filter: any term present in any of the four entity columns
+    entity_conditions = " OR ".join(
+        f"REGEXP_CONTAINS(COALESCE(V2Persons,''), r'(?i){re.escape(t)}') "
+        f"OR REGEXP_CONTAINS(COALESCE(V2Locations,''), r'(?i){re.escape(t)}') "
+        f"OR REGEXP_CONTAINS(COALESCE(V2Organizations,''), r'(?i){re.escape(t)}') "
+        f"OR REGEXP_CONTAINS(COALESCE(AllNames,''), r'(?i){re.escape(t)}')"
+        for t in terms
+    )
+
+    # Partition bounds — always required; fall back to a 90-day window if not given
+    if date_from:
+        ts_from = date_from.strftime("%Y-%m-%d")
+    else:
+        from datetime import timedelta
+        ts_from = (datetime.utcnow() - timedelta(days=_GDELT_DOC_WINDOW_DAYS)).strftime("%Y-%m-%d")
+    ts_to = date_to.strftime("%Y-%m-%d") if date_to else datetime.utcnow().strftime("%Y-%m-%d")
+
+    sql = f"""
+        SELECT
+            DocumentIdentifier AS url,
+            SourceCommonName   AS source,
+            DATE               AS gkg_date
+        FROM `gdelt-bq.gdeltv2.gkg`
+        WHERE _PARTITIONTIME BETWEEN TIMESTAMP('{ts_from}') AND TIMESTAMP('{ts_to}')
+          AND ({entity_conditions})
+          AND DocumentIdentifier IS NOT NULL
+          AND DocumentIdentifier != ''
+        ORDER BY DATE DESC
+        LIMIT {min(limit * 4, 100)}
+    """
+
+    logger.debug("GDELT BQ query for %r (terms: %s)", query[:60], terms)
+    job = client.query(sql)
+    rows = list(job.result())
+
+    seen_urls: set[str] = set()
+    results = []
+    for row in rows:
+        url = row.url or ""
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+
+        # DATE column is an integer: YYYYMMDDHHMMSS
+        pub_str = ""
+        try:
+            pub_str = datetime.strptime(str(row.gkg_date)[:8], "%Y%m%d").strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+
+        results.append(SearchResult(
+            title=_slug_to_title(url),
+            url=url,
+            snippet="",
+            source=row.source or _extract_domain(url),
+            published_date=pub_str,
+        ))
+        if len(results) >= limit:
+            break
+
+    filtered = _filter_by_date(results, date_from, date_to)
+    logger.debug("GDELT BQ returned %d rows, %d after dedup/date-filter", len(rows), len(filtered))
+    return filtered
+
+
+# ──────────────────────────────────────────────
 # Provider: DuckDuckGo Lite (free fallback)
 # ──────────────────────────────────────────────
 
@@ -952,7 +1143,7 @@ def search_articles(
     _provider_local.name = "none"
     _provider_local.chain = []
 
-    # 1. GDELT (free, no key) — primary provider; news-only, reliable dates, no snippets
+    # 1. GDELT Doc API (free, no key) — primary; news-only, reliable dates, 3-month window
     _provider_local.chain.append("gdelt")
     _gdelt_cooldown_remaining = _GDELT_COOLDOWN_UNTIL - time.time()
     if _gdelt_cooldown_remaining > 0:
@@ -970,6 +1161,26 @@ def search_articles(
             logger.info("GDELT skipped (slot busy): %s", e)
         except Exception as e:
             logger.warning("GDELT failed: %s", e)
+
+    # 1b. GDELT BigQuery GKG — historical coverage beyond the 3-month DOC API window.
+    #     Entity-based matching; titles synthesised from URL slug; no rate limit.
+    #     Skipped for recent queries (date_from within last 90 days) where DOC API
+    #     should have succeeded — BQ is only valuable for truly historical searches.
+    if GCP_SA_KEY_JSON:
+        _bq_query_is_historical = (
+            date_from is None or
+            (datetime.utcnow() - date_from).days > _GDELT_DOC_WINDOW_DAYS
+        )
+        if _bq_query_is_historical:
+            _provider_local.chain.append("gdelt_bq")
+            try:
+                results = _search_gdelt_bq(query, limit, date_from, date_to)
+                if results:
+                    _provider_local.name = "gdelt_bq"
+                    return results
+                logger.warning("GDELT BQ returned 0 results for: %s", query[:60])
+            except Exception as e:
+                logger.warning("GDELT BQ failed: %s", e)
 
     # 2. SerpAPI
     if SERPAPI_API_KEY and not _SERPAPI_QUOTA_EXHAUSTED:

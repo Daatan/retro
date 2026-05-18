@@ -148,6 +148,15 @@ async def _check_gdelt() -> ProviderStatus:
     return ProviderStatus(configured=True, exhausted=False, status="ok")
 
 
+async def _check_gdelt_bq() -> ProviderStatus:
+    if not _ws.GCP_SA_KEY_JSON:
+        return ProviderStatus(configured=False, exhausted=False, status="not_configured")
+    if not _ws._BQ_AVAILABLE:
+        return ProviderStatus(configured=False, exhausted=False, status="not_configured",
+                              error="google-cloud-bigquery not installed")
+    return ProviderStatus(configured=True, exhausted=False, status="ok")
+
+
 async def run_search_health() -> SearchHealthResponse:
     _ws._refresh_keys_if_stale()
 
@@ -162,6 +171,7 @@ async def run_search_health() -> SearchHealthResponse:
         ("scrapingbee", _check_scrapingbee()),
         ("newsdata",   _check_simple(_ws.NEWSDATA_API_KEY, _ws._NEWSDATA_QUOTA_EXHAUSTED)),
         ("gdelt",      _check_gdelt()),
+        ("gdelt_bq",   _check_gdelt_bq()),
     ]
     names, coros = zip(*provider_checks)
     results = await asyncio.gather(*coros)

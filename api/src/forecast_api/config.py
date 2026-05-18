@@ -9,7 +9,7 @@ class ApiSettings(BaseSettings):
 
     data_dir: Path = Path("/home/ubuntu/truthmachine/data")
     leaderboard_path: Path = Path("")  # empty = data_dir/leaderboard.json
-    leaderboard_refresh_seconds: int = 300
+    leaderboard_refresh_seconds: int = 86400  # pipeline writes this at most once/day
 
     max_articles: int = 5
     host: str = "127.0.0.1"

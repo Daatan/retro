@@ -83,9 +83,62 @@
     }
     .detail-row .lbl { color: #8b949e; }
     .detail-row .val { font-family: monospace; font-weight: 600; }
-    .val.hi { color: #f85149; }
+    .val.hi  { color: #f85149; }
     .val.mid { color: #f0883e; }
-    .val.ok { color: #3fb950; }
+    .val.ok  { color: #3fb950; }
+
+    /* Root node slider */
+    #d-slider-row {
+      display: none;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid #21262d;
+    }
+    #d-slider-row label {
+      font-size: 10px;
+      color: #58a6ff;
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    #d-slider {
+      width: 100%;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: #2d333b;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    #d-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #58a6ff;
+      border: 2px solid #a8d4ff;
+      cursor: pointer;
+    }
+    .slider-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+    }
+    #d-slider-val { font-family: monospace; font-size: 13px; font-weight: 700; color: #fff; }
+    #d-slider-reset {
+      background: none;
+      border: 1px solid #30363d;
+      color: #8b949e;
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #d-slider-reset:hover { border-color: #58a6ff; color: #58a6ff; }
+
     .cond-table {
       width: 100%;
       border-collapse: collapse;
@@ -128,26 +181,40 @@
     }
     .div-bar { height: 5px; border-radius: 3px; }
     .div-label { font-size: 11px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .div-dir { font-size: 9px; color: #6e7681; white-space: nowrap; }
-    .div-num { font-family: monospace; font-size: 11px; width: 38px; text-align: right; flex-shrink: 0; }
+    .div-dir  { font-size: 9px; color: #6e7681; white-space: nowrap; }
+    .div-num  { font-family: monospace; font-size: 11px; width: 38px; text-align: right; flex-shrink: 0; }
 
-    /* PM sum */
-    .sum-row {
+    /* PM + Bayes sum panel */
+    .sum-header {
       display: flex;
       justify-content: space-between;
-      font-size: 12px;
-      padding: 2px 0;
+      font-size: 10px;
+      color: #6e7681;
+      margin-bottom: 3px;
+      padding: 0 2px;
     }
-    .sum-row .name { color: #8b949e; }
-    .sum-row .pct { font-family: monospace; }
+    .sum-header .sh-label { flex: 1; }
+    .sum-header .sh-pm    { width: 44px; text-align: right; }
+    .sum-header .sh-bayes { width: 44px; text-align: right; color: #58a6ff; }
+    .sum-row {
+      display: flex;
+      align-items: center;
+      font-size: 12px;
+      padding: 2px 2px;
+    }
+    .sum-row .name { color: #8b949e; flex: 1; }
+    .sum-row .pct  { font-family: monospace; width: 44px; text-align: right; }
+    .sum-row .bayes-pct { font-family: monospace; width: 44px; text-align: right; color: #58a6ff; }
     .sum-divider { border-top: 1px solid #21262d; margin: 5px 0; }
     .sum-total {
       display: flex;
-      justify-content: space-between;
       font-size: 12px;
       font-weight: 600;
-      padding: 2px 0;
+      padding: 2px 2px;
     }
+    .sum-total .st-label { flex: 1; }
+    .sum-total .st-pm    { font-family: monospace; width: 44px; text-align: right; }
+    .sum-total .st-bayes { font-family: monospace; width: 44px; text-align: right; color: #58a6ff; }
     .sum-note { font-size: 10px; color: #6e7681; margin-top: 3px; }
 
     /* Poll section */
@@ -172,14 +239,8 @@
       line-height: 1.5;
     }
     #poll-status.error { color: #f85149; }
-    #poll-status.ok { color: #3fb950; }
-    .pm-link {
-      display: inline-block;
-      margin-top: 6px;
-      font-size: 11px;
-      color: #58a6ff;
-      text-decoration: none;
-    }
+    #poll-status.ok    { color: #3fb950; }
+    .pm-link { display: inline-block; margin-top: 6px; font-size: 11px; color: #58a6ff; text-decoration: none; }
     .pm-link:hover { text-decoration: underline; }
     .div-pm-link { font-size: 10px; color: #58a6ff; text-decoration: none; flex-shrink: 0; }
     .div-pm-link:hover { text-decoration: underline; }
@@ -194,17 +255,17 @@
       <div class="leg-item"><div class="leg-dot" style="background:#f57c00"></div> Med (2–5pp)</div>
       <div class="leg-item"><div class="leg-dot" style="background:#d32f2f"></div> High (5–8pp)</div>
       <div class="leg-item"><div class="leg-dot" style="background:#7b1fa2"></div> Extreme (&gt;8pp)</div>
-      <div class="leg-item" style="color:#8b949e; font-size:11px;">Solid edge = primary · Dashed = secondary</div>
+      <div class="leg-item" style="color:#8b949e; font-size:11px;">Solid blue = positive · Solid orange = inhibitory · Dashed = secondary</div>
     </div>
   </div>
   <div id="main">
     <div id="cy-wrap">
       <div id="cy"></div>
-      <div id="footer">
-        Prices: Polymarket Gamma API, May 14 2026 &nbsp;·&nbsp;
+      <div id="footer" id="footer">
+        Prices: Polymarket Gamma API &nbsp;·&nbsp;
         Conditionals: LLM-estimated, May 2026 &nbsp;·&nbsp;
         Node label: <em>Name · PM% / Bayes%</em> &nbsp;·&nbsp;
-        Click any node for detail
+        Click any node for detail · Root nodes: drag slider to hypothesise
       </div>
     </div>
     <div id="sidebar">
@@ -223,6 +284,15 @@
             <tbody id="d-cond-body"></tbody>
           </table>
           <div class="bayes-note" id="d-bayes-note"></div>
+          <!-- Root node probability slider -->
+          <div id="d-slider-row">
+            <label>Hypothetical override (root node)</label>
+            <input type="range" id="d-slider" min="0" max="1" step="0.01">
+            <div class="slider-meta">
+              <span id="d-slider-val"></span>
+              <button id="d-slider-reset">Reset to PM</button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="sb-section">
@@ -235,7 +305,7 @@
       </div>
       <div class="sb-section">
         <button id="poll-btn">🔄 Poll PM Live Prices</button>
-        <div id="poll-status">Prices from May 14, 2026</div>
+        <div id="poll-status">Prices baked in from May 14, 2026</div>
       </div>
     </div>
   </div>
@@ -247,7 +317,7 @@
   // pY = P(this | parent=1),  pN = P(this | parent=0).
 
   const NODES = [
-    // Layer 0 — Exogenous roots
+    // Layer 0 — Exogenous roots (no Bayes computation; PM price is the prior)
     { id:'IRAN_DEAL',     label:'Iran Deal',          pmId:'665325',  pm:0.575, layer:0, slug:'us-iran-nuclear-deal-before-2027' },
     { id:'CEASEFIRE_X',   label:'Ceasefire Breaks',   pmId:'1090489', pm:0.140, layer:0, slug:'israel-x-hamas-ceasefire-cancelled-by-june-30' },
     { id:'TRUMP_IL',      label:'Trump Backs IL',      pmId:'665260',  pm:0.470, layer:0, slug:'will-donald-trump-visit-israel-in-2026' },
@@ -286,6 +356,9 @@
     { id:'US_DECLARE',    label:'US Declares War', pmId:'1170144', pm:0.075, layer:4, primary:'US_WAR_IRAN', pY:0.274, pN:0.022, slug:'will-the-us-officially-declare-war-on-iran-by-december-31-2026-746' },
   ];
 
+  // Store baseline PM prices so sliders can reset
+  NODES.forEach(n => { n.pmBase = n.pm; });
+
   // Secondary edges (displayed as dashed; included in multi-parent BayesOracle blend at half weight)
   const EXTRA_EDGES = [
     { source:'IRAN_DEAL',   target:'ELECTIONS',  pY:0.424, pN:0.629 },
@@ -301,37 +374,24 @@
   ];
 
   // ─── Preset layout positions ──────────────────────────────────────────────────
-  // Nodes arranged by layer (y-axis) and connectivity (x-axis).
-  // Iran-related roots (US_WAR_IRAN, IRAN_REGIME, IRAN_NUKE) placed right
-  // to minimise crossing of edges to Layer 4 STRIKE_5 / PAHLAVI / US_DECLARE.
-
   const POSITIONS = {
-    // Layer 0 (y = 70)
     IRAN_DEAL:     { x:  85, y:  70 },
     CEASEFIRE_X:   { x: 265, y:  70 },
     TRUMP_IL:      { x: 450, y:  70 },
     US_WAR_IRAN:   { x: 660, y:  70 },
     IRAN_REGIME:   { x: 845, y:  70 },
     IRAN_NUKE:     { x:1020, y:  70 },
-
-    // Layer 1 (y = 225)
     ELECTIONS:     { x: 305, y: 225 },
     BIBI_OUT:      { x: 540, y: 225 },
-
-    // Layer 2 (y = 385)
     BIBI_PM:       { x: 110, y: 385 },
     BENNETT_PM:    { x: 295, y: 385 },
     EIZENKOT_PM:   { x: 478, y: 385 },
     LIEBERMAN_PM:  { x: 648, y: 385 },
     LAPID_PM:      { x: 818, y: 385 },
-
-    // Layer 3 (y = 530)
     ANNEX_WB:      { x:  88, y: 530 },
     ANNEX_GAZA:    { x: 242, y: 530 },
     US_GAZA:       { x: 395, y: 530 },
     TURKEY_CLASH:  { x: 550, y: 530 },
-
-    // Layer 4 (y = 680)
     SAUDI_NORM:    { x:  80, y: 680 },
     SAUDI_ACCORDS: { x: 222, y: 680 },
     LEBANON_NORM:  { x: 365, y: 680 },
@@ -341,11 +401,10 @@
     US_DECLARE:    { x:1010, y: 680 },
   };
 
-  // ─── BayesOracle: Law of Total Probability (primary + secondary parents) ────────
+  // ─── BayesOracle: Law of Total Probability ────────────────────────────────────
 
   const nodeMap = Object.fromEntries(NODES.map(n => [n.id, n]));
 
-  // Index secondary edges by target for fast lookup
   const secondaryByTarget = {};
   EXTRA_EDGES.forEach(e => {
     if (!secondaryByTarget[e.target]) secondaryByTarget[e.target] = [];
@@ -373,14 +432,11 @@
   }
 
   function recompute() {
-    // Propagate in topological order (layer 0 → 4) so parents are ready
     const byLayer = [0,1,2,3,4].map(l => NODES.filter(n => n.layer === l));
-    byLayer.forEach(layer => {
-      layer.forEach(n => {
-        n.bayes = computeBayes(n);
-        n.div = (n.bayes !== null) ? Math.abs(n.pm - n.bayes) : null;
-      });
-    });
+    byLayer.forEach(layer => layer.forEach(n => {
+      n.bayes = computeBayes(n);
+      n.div   = (n.bayes !== null) ? Math.abs(n.pm - n.bayes) : null;
+    }));
   }
   recompute();
 
@@ -389,19 +445,20 @@
   function pct(v) { return (v * 100).toFixed(1) + '%'; }
 
   function divColor(d) {
-    if (d === null) return '#546e7a'; // root
-    if (d < 0.02)   return '#388e3c'; // green
-    if (d < 0.05)   return '#f57c00'; // orange
-    if (d < 0.08)   return '#d32f2f'; // red
-    return '#7b1fa2';                  // purple
+    if (d === null) return '#546e7a';
+    if (d < 0.02)   return '#388e3c';
+    if (d < 0.05)   return '#f57c00';
+    if (d < 0.08)   return '#d32f2f';
+    return '#7b1fa2';
   }
 
   function nodeLabel(n) {
-    const base = n.label;
     const prices = n.bayes !== null
       ? pct(n.pm) + ' / ' + pct(n.bayes)
       : pct(n.pm);
-    return base + '\n' + prices;
+    // Mark root nodes that have been overridden by slider
+    const ovr = (n.layer === 0 && n.pm !== n.pmBase) ? ' *' : '';
+    return n.label + ovr + '\n' + prices;
   }
 
   // ─── Cytoscape ────────────────────────────────────────────────────────────────
@@ -413,27 +470,31 @@
 
   const cyEdges = [];
 
-  // Primary edges (solid blue)
+  // Primary edges — solid; orange if inhibitory (pN > pY), blue if excitatory
   NODES.forEach(n => {
     if (n.primary) {
+      const inhibitory = n.pN > n.pY ? 1 : 0;
       cyEdges.push({ data: {
         id: 'ep_' + n.primary + '_' + n.id,
         source: n.primary,
         target: n.id,
         primary: 1,
-        label: `✓${(n.pY*100).toFixed(0)}%  ✗${(n.pN*100).toFixed(0)}%`,
+        inhibitory,
+        label: `${inhibitory ? '↓' : '↑'}✓${(n.pY*100).toFixed(0)}%  ✗${(n.pN*100).toFixed(0)}%`,
       }});
     }
   });
 
-  // Secondary edges (dashed gray)
+  // Secondary edges — dashed; same inhibitory colouring
   EXTRA_EDGES.forEach((e, i) => {
+    const inhibitory = e.pN > e.pY ? 1 : 0;
     cyEdges.push({ data: {
       id: 'es_' + i,
       source: e.source,
       target: e.target,
       primary: 0,
-      label: `✓${(e.pY*100).toFixed(0)}%  ✗${(e.pN*100).toFixed(0)}%`,
+      inhibitory,
+      label: `${inhibitory ? '↓' : '↑'}✓${(e.pY*100).toFixed(0)}%  ✗${(e.pN*100).toFixed(0)}%`,
     }});
   });
 
@@ -462,14 +523,11 @@
       },
       {
         selector: 'node:selected',
-        style: {
-          'border-width': 2,
-          'border-color': '#58a6ff',
-          'border-style': 'solid',
-        }
+        style: { 'border-width': 2, 'border-color': '#58a6ff', 'border-style': 'solid' }
       },
+      // Positive primary edges — solid blue
       {
-        selector: 'edge[primary = 1]',
+        selector: 'edge[primary = 1][inhibitory = 0]',
         style: {
           'width': 1.5,
           'line-color': '#58a6ff',
@@ -488,8 +546,30 @@
           'text-margin-y': -7,
         }
       },
+      // Inhibitory primary edges — solid orange
       {
-        selector: 'edge[primary = 0]',
+        selector: 'edge[primary = 1][inhibitory = 1]',
+        style: {
+          'width': 1.5,
+          'line-color': '#f0883e',
+          'target-arrow-color': '#f0883e',
+          'target-arrow-shape': 'triangle',
+          'curve-style': 'bezier',
+          'arrow-scale': 0.9,
+          'opacity': 0.75,
+          'label': 'data(label)',
+          'font-size': 8,
+          'color': '#f0a870',
+          'text-background-color': '#0d1117',
+          'text-background-opacity': 0.88,
+          'text-background-padding': '2px',
+          'text-rotation': 'autorotate',
+          'text-margin-y': -7,
+        }
+      },
+      // Positive secondary edges — dashed gray
+      {
+        selector: 'edge[primary = 0][inhibitory = 0]',
         style: {
           'width': 1,
           'line-color': '#4a5568',
@@ -510,10 +590,30 @@
           'text-margin-y': -7,
         }
       },
+      // Inhibitory secondary edges — dashed orange-gray
       {
-        selector: ':selected',
-        style: { 'opacity': 1 }
-      }
+        selector: 'edge[primary = 0][inhibitory = 1]',
+        style: {
+          'width': 1,
+          'line-color': '#7a5030',
+          'target-arrow-color': '#7a5030',
+          'target-arrow-shape': 'triangle',
+          'curve-style': 'bezier',
+          'line-style': 'dashed',
+          'line-dash-pattern': [5, 4],
+          'arrow-scale': 1.0,
+          'opacity': 0.60,
+          'label': 'data(label)',
+          'font-size': 8,
+          'color': '#8a6040',
+          'text-background-color': '#0d1117',
+          'text-background-opacity': 0.88,
+          'text-background-padding': '2px',
+          'text-rotation': 'autorotate',
+          'text-margin-y': -7,
+        }
+      },
+      { selector: ':selected', style: { 'opacity': 1 } }
     ],
   });
 
@@ -524,9 +624,7 @@
   function buildRanking() {
     const divEl = document.getElementById('div-ranking');
     divEl.innerHTML = '';
-    const ranked = NODES
-      .filter(n => n.div !== null)
-      .sort((a, b) => b.div - a.div);
+    const ranked = NODES.filter(n => n.div !== null).sort((a, b) => b.div - a.div);
     const maxDiv = ranked[0]?.div || 0.01;
 
     ranked.forEach(n => {
@@ -551,64 +649,78 @@
   }
   buildRanking();
 
-  // ─── PM candidate sum panel ───────────────────────────────────────────────────
+  // ─── PM + Bayes candidate sum panel ───────────────────────────────────────────
 
   const CANDIDATES = ['BIBI_PM','BENNETT_PM','EIZENKOT_PM','LIEBERMAN_PM','LAPID_PM'];
 
   function buildSumPanel() {
     const el = document.getElementById('pm-sum-content');
     el.innerHTML = '';
-    let total = 0;
+
+    // Column headers
+    const hdr = document.createElement('div');
+    hdr.className = 'sum-header';
+    hdr.innerHTML = '<span class="sh-label">Candidate</span><span class="sh-pm">PM</span><span class="sh-bayes">Bayes</span>';
+    el.appendChild(hdr);
+
+    let pmTotal = 0, bayesTotal = 0;
     CANDIDATES.forEach(id => {
       const n = nodeMap[id];
-      total += n.pm;
+      pmTotal    += n.pm;
+      bayesTotal += (n.bayes !== null ? n.bayes : n.pm);
       const row = document.createElement('div');
       row.className = 'sum-row';
-      row.innerHTML = `<span class="name">${n.label}</span><span class="pct">${pct(n.pm)}</span>`;
+      const bayesPct = n.bayes !== null ? pct(n.bayes) : '—';
+      row.innerHTML = `<span class="name">${n.label}</span><span class="pct">${pct(n.pm)}</span><span class="bayes-pct">${bayesPct}</span>`;
       el.appendChild(row);
     });
-    const div = document.createElement('div');
-    div.className = 'sum-divider';
-    el.appendChild(div);
 
-    const slack = 1 - total;
-    const slackColor = Math.abs(slack) > 0.05 ? '#f85149' : (Math.abs(slack) > 0.02 ? '#f0883e' : '#3fb950');
-    const totRow = document.createElement('div');
-    totRow.className = 'sum-total';
-    totRow.innerHTML = `<span>Sum</span><span style="font-family:monospace;color:${slackColor}">${pct(total)}</span>`;
-    el.appendChild(totRow);
+    el.appendChild(Object.assign(document.createElement('div'), { className: 'sum-divider' }));
+
+    // PM total
+    const pmSlack = 1 - pmTotal;
+    const pmColor = Math.abs(pmSlack) > 0.05 ? '#f85149' : (Math.abs(pmSlack) > 0.02 ? '#f0883e' : '#3fb950');
+    const tot = document.createElement('div');
+    tot.className = 'sum-total';
+    tot.innerHTML =
+      `<span class="st-label">Sum</span>` +
+      `<span class="st-pm" style="color:${pmColor}">${pct(pmTotal)}</span>` +
+      `<span class="st-bayes" style="color:#58a6ff">${pct(bayesTotal)}</span>`;
+    el.appendChild(tot);
 
     const note = document.createElement('div');
     note.className = 'sum-note';
-    const slackSign = slack >= 0 ? '+' : '';
-    const slackMsg = slack >= 0
-      ? `${slackSign}${(slack*100).toFixed(1)}pp slack — gap or arb opportunity`
-      : `${(slack*100).toFixed(1)}pp — prices sum above 100%`;
-    note.textContent = slackMsg;
+    const slackSign = pmSlack >= 0 ? '+' : '';
+    note.textContent = pmSlack >= 0
+      ? `PM: ${slackSign}${(pmSlack*100).toFixed(1)}pp slack — gap or arb opportunity`
+      : `PM: ${(pmSlack*100).toFixed(1)}pp — prices sum above 100%`;
     el.appendChild(note);
   }
   buildSumPanel();
 
   // ─── Node detail panel ────────────────────────────────────────────────────────
 
+  let _activeNodeId = null;
+
   function showDetail(nodeId) {
+    _activeNodeId = nodeId;
     const n = nodeMap[nodeId];
     document.getElementById('detail-empty').style.display = 'none';
     const dc = document.getElementById('detail-content');
     dc.style.display = 'block';
 
     document.getElementById('d-name').textContent = n.label;
-    document.getElementById('d-pm').textContent = pct(n.pm);
+    document.getElementById('d-pm').textContent   = pct(n.pm) + (n.pm !== n.pmBase ? ' *' : '');
     const pmLink = document.getElementById('d-pm-link');
     pmLink.href = 'https://polymarket.com/event/' + n.slug;
     pmLink.style.display = 'inline-block';
 
-    const bayesEl = document.getElementById('d-bayes');
-    const divEl   = document.getElementById('d-div');
-    const parEl   = document.getElementById('d-parent');
-    const condTbl = document.getElementById('d-cond-table');
-    const condBody= document.getElementById('d-cond-body');
-    const noteEl  = document.getElementById('d-bayes-note');
+    const bayesEl  = document.getElementById('d-bayes');
+    const divEl    = document.getElementById('d-div');
+    const parEl    = document.getElementById('d-parent');
+    const condTbl  = document.getElementById('d-cond-table');
+    const condBody = document.getElementById('d-cond-body');
+    const noteEl   = document.getElementById('d-bayes-note');
 
     if (n.bayes !== null) {
       bayesEl.textContent = pct(n.bayes);
@@ -619,12 +731,10 @@
       parEl.textContent = nodeMap[n.primary].label + (secs.length ? ` + ${secs.length} secondary` : '');
 
       condBody.innerHTML = '';
-      // Primary row
       const tr0 = document.createElement('tr');
       tr0.className = 'primary-row';
       tr0.innerHTML = `<td>${nodeMap[n.primary].label} <em style="color:#58a6ff">(w=1.0)</em></td><td>${pct(n.pY)}</td><td>${pct(n.pN)}</td>`;
       condBody.appendChild(tr0);
-      // Secondary rows
       secs.forEach(e => {
         const tr = document.createElement('tr');
         tr.innerHTML = `<td>${nodeMap[e.source].label} <em style="color:#8b949e">(w=0.5)</em></td><td>${pct(e.pY)}</td><td>${pct(e.pN)}</td>`;
@@ -639,65 +749,114 @@
       noteEl.textContent = `LToTP: ${formula}`;
     } else {
       bayesEl.textContent = 'Root node';
-      divEl.textContent = '—';
-      divEl.className = 'val';
-      parEl.textContent = '—';
-      condBody.innerHTML = '';
+      divEl.textContent   = '—';
+      divEl.className     = 'val';
+      parEl.textContent   = '—';
+      condBody.innerHTML  = '';
       condTbl.style.display = 'none';
-      noteEl.textContent = 'No parent — PM price used as-is.';
+      noteEl.textContent  = 'No parent — PM price used as-is for downstream Bayes computation.';
+    }
+
+    // Root node slider
+    const sliderRow = document.getElementById('d-slider-row');
+    if (n.layer === 0) {
+      sliderRow.style.display = 'block';
+      const slider    = document.getElementById('d-slider');
+      const sliderVal = document.getElementById('d-slider-val');
+      slider.value    = n.pm;
+      sliderVal.textContent = pct(n.pm);
+
+      slider.oninput = () => {
+        n.pm = parseFloat(slider.value);
+        sliderVal.textContent = pct(n.pm);
+        document.getElementById('d-pm').textContent = pct(n.pm) + (n.pm !== n.pmBase ? ' *' : '');
+        recompute();
+        refreshGraph(false);
+      };
+
+      document.getElementById('d-slider-reset').onclick = () => {
+        n.pm = n.pmBase;
+        slider.value = n.pmBase;
+        sliderVal.textContent = pct(n.pmBase);
+        document.getElementById('d-pm').textContent = pct(n.pm);
+        recompute();
+        refreshGraph(false);
+      };
+    } else {
+      sliderRow.style.display = 'none';
     }
   }
 
   cy.on('tap', 'node', e => { showDetail(e.target.id()); });
 
-  // ─── Poll PM button ────────────────────────────────────────────────────────────
+  // ─── Poll Polymarket Gamma API for live prices ─────────────────────────────────
 
   document.getElementById('poll-btn').addEventListener('click', async () => {
-    const btn = document.getElementById('poll-btn');
+    const btn      = document.getElementById('poll-btn');
     const statusEl = document.getElementById('poll-status');
-    btn.disabled = true;
-    statusEl.className = '';
+    btn.disabled   = true;
+    statusEl.className   = '';
     statusEl.textContent = 'Fetching…';
 
-    const ids = NODES.map(n => n.pmId).join(',');
-    const url = `https://bayes.daatan.com/pm/markets?id=${ids}`;
-
     try {
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      // Gamma API accepts comma-separated ids as a query param
+      const ids = NODES.map(n => n.pmId).join(',');
+      const res = await fetch(`https://gamma-api.polymarket.com/markets?id=${ids}`, {
+        headers: { 'Accept': 'application/json' }
+      });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
+
       let updated = 0;
       data.forEach(m => {
         const node = NODES.find(n => n.pmId === String(m.id));
-        if (node && m.lastTradePrice != null) {
-          node.pm = parseFloat(m.lastTradePrice);
+        if (!node) return;
+        // outcomePrices is a JSON-encoded string: ["0.47","0.53"] (YES, NO)
+        const prices = JSON.parse(m.outcomePrices || '[]');
+        const p = prices[0] != null ? parseFloat(prices[0]) : null;
+        if (p != null && !isNaN(p)) {
+          node.pm     = p;
+          node.pmBase = p;  // new baseline after a live poll
           updated++;
         }
       });
+
       recompute();
-      refreshGraph();
-      statusEl.className = 'ok';
-      statusEl.textContent = `Updated ${updated}/${NODES.length} at ${new Date().toLocaleTimeString()}`;
+      refreshGraph(true);
+
+      const ts = new Date().toLocaleTimeString();
+      statusEl.className   = 'ok';
+      statusEl.textContent = `Updated ${updated}/${NODES.length} nodes at ${ts}`;
+
+      // Update footer timestamp
+      document.getElementById('footer').innerHTML =
+        `Prices: Polymarket Gamma API, polled ${new Date().toLocaleString()} &nbsp;·&nbsp;` +
+        `Conditionals: LLM-estimated, May 2026 &nbsp;·&nbsp;` +
+        `Node label: <em>Name · PM% / Bayes%</em> &nbsp;·&nbsp;` +
+        `Click any node for detail · Root nodes: drag slider to hypothesise`;
+
     } catch (err) {
-      statusEl.className = 'error';
-      if (err instanceof TypeError) {
-        statusEl.textContent = 'Network error — is bayes.daatan.com reachable?';
-      } else {
-        statusEl.textContent = `Error: ${err.message}`;
-      }
+      statusEl.className   = 'error';
+      statusEl.textContent = err.message.includes('Failed to fetch')
+        ? 'Network error — check CORS or connection'
+        : `Error: ${err.message}`;
     } finally {
       btn.disabled = false;
     }
   });
 
-  // ─── Refresh graph after price update ─────────────────────────────────────────
+  // ─── Refresh graph visuals after any price change ─────────────────────────────
 
-  function refreshGraph() {
+  function refreshGraph(reopenDetail = false) {
     NODES.forEach(n => {
-      cy.$('#' + n.id).data('label', nodeLabel(n)).data('color', divColor(n.div));
+      cy.$('#' + n.id)
+        .data('label', nodeLabel(n))
+        .data('color', divColor(n.div));
     });
     buildRanking();
     buildSumPanel();
+    // Re-render detail panel if open (avoids stale numbers after cascade)
+    if (_activeNodeId && reopenDetail) showDetail(_activeNodeId);
   }
   </script>
 </body>

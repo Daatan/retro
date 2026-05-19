@@ -273,7 +273,7 @@
         <div class="sb-title">Node Detail</div>
         <div id="detail-empty">Click a node to inspect</div>
         <div id="detail-content">
-          <div class="detail-row"><span class="lbl">Market</span><span id="d-name" class="val">—</span></div>
+          <div id="d-question" style="font-size:12px;color:#e6edf3;line-height:1.45;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid #21262d;"></div>
           <div class="detail-row"><span class="lbl">PM price</span><span id="d-pm" class="val">—</span></div>
           <div class="detail-row"><span class="lbl">BayesOracle</span><span id="d-bayes" class="val">—</span></div>
           <div class="detail-row"><span class="lbl">Divergence</span><span id="d-div" class="val">—</span></div>
@@ -318,42 +318,40 @@
 
   const NODES = [
     // Layer 0 — Exogenous roots (no Bayes computation; PM price is the prior)
-    { id:'IRAN_DEAL',     label:'Iran Deal',          pmId:'665325',  pm:0.575, layer:0, slug:'us-iran-nuclear-deal-before-2027' },
-    { id:'CEASEFIRE_X',   label:'Ceasefire Breaks',   pmId:'1090489', pm:0.140, layer:0, slug:'israel-x-hamas-ceasefire-cancelled-by-june-30' },
-    { id:'TRUMP_IL',      label:'Trump Backs IL',      pmId:'665260',  pm:0.470, layer:0, slug:'will-donald-trump-visit-israel-in-2026' },
-    { id:'US_WAR_IRAN',   label:'US-Iran War',         pmId:'665374',  pm:0.295, layer:0, slug:'will-the-us-invade-iran-before-2027' },
-    { id:'IRAN_REGIME',   label:'Iran Regime Falls',   pmId:'663583',  pm:0.165, layer:0, slug:'will-the-iranian-regime-fall-by-the-end-of-2026' },
-    { id:'IRAN_NUKE',     label:'Iran Nuclear Thresh', pmId:'665521',  pm:0.085, layer:0, slug:'iran-nuclear-test-before-2027' },
+    { id:'IRAN_DEAL',     label:'Iran Deal',          question:'US–Iran nuclear deal signed before 2027',                              pmId:'665325',  pm:0.575, layer:0, slug:'us-iran-nuclear-deal-before-2027' },
+    { id:'CEASEFIRE_X',   label:'Ceasefire Breaks',   question:'Israel–Hamas ceasefire cancelled by June 30 2026',                    pmId:'1090489', pm:0.140, layer:0, slug:'israel-x-hamas-ceasefire-cancelled-by-june-30' },
+    { id:'TRUMP_IL',      label:'Trump Backs IL',      question:'Donald Trump visits Israel in 2026',                                  pmId:'665260',  pm:0.470, layer:0, slug:'will-donald-trump-visit-israel-in-2026' },
+    { id:'US_WAR_IRAN',   label:'US-Iran War',         question:'US invades or attacks Iran before 2027',                              pmId:'665374',  pm:0.295, layer:0, slug:'will-the-us-invade-iran-before-2027' },
+    { id:'IRAN_REGIME',   label:'Iran Regime Falls',   question:'Iranian regime collapses or falls by end of 2026',                   pmId:'663583',  pm:0.165, layer:0, slug:'will-the-iranian-regime-fall-by-the-end-of-2026' },
+    { id:'IRAN_NUKE',     label:'Iran Nuclear Thresh', question:'Iran conducts a nuclear test before 2027',                            pmId:'665521',  pm:0.085, layer:0, slug:'iran-nuclear-test-before-2027' },
 
     // Layer 1 — Near-term political
-    // ELECTIONS primary parent: CEASEFIRE_X (ceasefire collapse most destabilizing)
-    { id:'ELECTIONS', label:'Early Elections',   pmId:'1280208', pm:0.470, layer:1,
+    { id:'ELECTIONS', label:'Early Elections',   question:'Israeli parliament dissolved and early elections called by June 30 2026',  pmId:'1280208', pm:0.470, layer:1,
       primary:'CEASEFIRE_X', pY:0.875, pN:0.316, slug:'israeli-parliament-dissolved-by-june-30-228' },
-    // BIBI_OUT primary parent: ELECTIONS (elections are the main removal mechanism)
-    { id:'BIBI_OUT',  label:'Bibi Not PM 2027', pmId:'567688',  pm:0.435, layer:1,
+    { id:'BIBI_OUT',  label:'Bibi Not PM 2027', question:'Benjamin Netanyahu is no longer Prime Minister before end of 2027',         pmId:'567688',  pm:0.435, layer:1,
       primary:'ELECTIONS', pY:0.659, pN:0.202, slug:'netanyahu-out-before-2027-684-719-226-657' },
 
     // Layer 2 — PM race (all share primary parent BIBI_OUT)
-    { id:'BIBI_PM',      label:'Bibi PM',      pmId:'682705', pm:0.395,  layer:2, primary:'BIBI_OUT', pY:0.111, pN:0.67,  slug:'will-benjamin-netanyahu-be-the-next-prime-minister-of-israel' },
-    { id:'BENNETT_PM',   label:'Bennett PM',   pmId:'682706', pm:0.400,  layer:2, primary:'BIBI_OUT', pY:0.606, pN:0.175, slug:'will-naftali-bennett-be-the-next-prime-minister-of-israel' },
-    { id:'EIZENKOT_PM',  label:'Eizenkot PM',  pmId:'682708', pm:0.119,  layer:2, primary:'BIBI_OUT', pY:0.173, pN:0.111, slug:'will-gadi-eizenkot-be-the-next-prime-minister-of-israel' },
-    { id:'LIEBERMAN_PM', label:'Lieberman PM', pmId:'682710', pm:0.039,  layer:2, primary:'BIBI_OUT', pY:0.131, pN:0.019, slug:'will-avigdor-lieberman-be-the-next-prime-minister-of-israel' },
-    { id:'LAPID_PM',     label:'Lapid PM',     pmId:'682707', pm:0.009,  layer:2, primary:'BIBI_OUT', pY:0.153, pN:0.01,  slug:'will-yair-lapid-be-the-next-prime-minister-of-israel' },
+    { id:'BIBI_PM',      label:'Bibi PM',      question:'Benjamin Netanyahu becomes the next Prime Minister of Israel',               pmId:'682705', pm:0.395,  layer:2, primary:'BIBI_OUT', pY:0.111, pN:0.67,  slug:'will-benjamin-netanyahu-be-the-next-prime-minister-of-israel' },
+    { id:'BENNETT_PM',   label:'Bennett PM',   question:'Naftali Bennett becomes the next Prime Minister of Israel',                  pmId:'682706', pm:0.400,  layer:2, primary:'BIBI_OUT', pY:0.606, pN:0.175, slug:'will-naftali-bennett-be-the-next-prime-minister-of-israel' },
+    { id:'EIZENKOT_PM',  label:'Eizenkot PM',  question:'Gadi Eizenkot becomes the next Prime Minister of Israel',                   pmId:'682708', pm:0.119,  layer:2, primary:'BIBI_OUT', pY:0.173, pN:0.111, slug:'will-gadi-eizenkot-be-the-next-prime-minister-of-israel' },
+    { id:'LIEBERMAN_PM', label:'Lieberman PM', question:'Avigdor Lieberman becomes the next Prime Minister of Israel',               pmId:'682710', pm:0.039,  layer:2, primary:'BIBI_OUT', pY:0.131, pN:0.019, slug:'will-avigdor-lieberman-be-the-next-prime-minister-of-israel' },
+    { id:'LAPID_PM',     label:'Lapid PM',     question:'Yair Lapid becomes the next Prime Minister of Israel',                       pmId:'682707', pm:0.009,  layer:2, primary:'BIBI_OUT', pY:0.153, pN:0.01,  slug:'will-yair-lapid-be-the-next-prime-minister-of-israel' },
 
     // Layer 3 — Policy outcomes (primary parent: BIBI_PM)
-    { id:'ANNEX_WB',     label:'W.Bank Annex',   pmId:'665515', pm:0.120, layer:3, primary:'BIBI_PM', pY:0.305, pN:0.03,  slug:'will-israel-annex-west-bank-territory-before-2027' },
-    { id:'ANNEX_GAZA',   label:'Gaza Annex',     pmId:'636921', pm:0.029, layer:3, primary:'BIBI_PM', pY:0.135, pN:0.016, slug:'will-israel-annex-gaza-territory-by-2026' },
-    { id:'US_GAZA',      label:'US Gaza Admin',  pmId:'665485', pm:0.130, layer:3, primary:'BIBI_PM', pY:0.393, pN:0.099, slug:'us-forces-in-gaza-before-2027' },
-    { id:'TURKEY_CLASH', label:'IL-Turkey Clash',pmId:'665484', pm:0.195, layer:3, primary:'BIBI_PM', pY:0.27,  pN:0.126, slug:'israel-x-turkey-military-clash-before-2027' },
+    { id:'ANNEX_WB',     label:'W.Bank Annex',   question:'Israel formally annexes West Bank territory before 2027',                 pmId:'665515', pm:0.120, layer:3, primary:'BIBI_PM', pY:0.305, pN:0.03,  slug:'will-israel-annex-west-bank-territory-before-2027' },
+    { id:'ANNEX_GAZA',   label:'Gaza Annex',     question:'Israel formally annexes Gaza territory by 2026',                          pmId:'636921', pm:0.029, layer:3, primary:'BIBI_PM', pY:0.135, pN:0.016, slug:'will-israel-annex-gaza-territory-by-2026' },
+    { id:'US_GAZA',      label:'US Gaza Admin',  question:'US forces deployed and administering Gaza before 2027',                   pmId:'665485', pm:0.130, layer:3, primary:'BIBI_PM', pY:0.393, pN:0.099, slug:'us-forces-in-gaza-before-2027' },
+    { id:'TURKEY_CLASH', label:'IL-Turkey Clash',question:'Israel and Turkey engage in a military clash before 2027',                pmId:'665484', pm:0.195, layer:3, primary:'BIBI_PM', pY:0.27,  pN:0.126, slug:'israel-x-turkey-military-clash-before-2027' },
 
     // Layer 4 — Downstream outcomes
-    { id:'SAUDI_NORM',    label:'Saudi Norm.',     pmId:'665218',  pm:0.175, layer:4, primary:'BIBI_PM',     pY:0.283, pN:0.122, slug:'israel-and-saudi-arabia-normalize-relations-before-2027' },
-    { id:'SAUDI_ACCORDS', label:'Saudi Accords',   pmId:'665474',  pm:0.115, layer:4, primary:'BIBI_PM',     pY:0.252, pN:0.078, slug:'will-saudi-arabia-join-the-abraham-accords-before-2027' },
-    { id:'LEBANON_NORM',  label:'Lebanon Norm.',   pmId:'665414',  pm:0.185, layer:4, primary:'BIBI_PM',     pY:0.258, pN:0.211, slug:'israel-and-lebanon-normalize-relations-before-2027' },
-    { id:'SYRIA_NORM',    label:'Syria Norm.',     pmId:'677273',  pm:0.105, layer:4, primary:'BIBI_PM',     pY:0.259, pN:0.068, slug:'israel-and-syria-normalize-relations-by-december-31-2026-166' },
-    { id:'STRIKE_5',      label:'Strike on Iran',  pmId:'678748',  pm:0.396, layer:4, primary:'IRAN_NUKE',   pY:0.428, pN:0.294, slug:'will-israel-strike-5-countries-in-november-2025' },
-    { id:'PAHLAVI',       label:'Pahlavi Returns', pmId:'1115288', pm:0.085, layer:4, primary:'IRAN_REGIME', pY:0.506, pN:0.013, slug:'us-recognizes-reza-pahlavi-as-leader-of-iran-in2026' },
-    { id:'US_DECLARE',    label:'US Declares War', pmId:'1170144', pm:0.075, layer:4, primary:'US_WAR_IRAN', pY:0.274, pN:0.022, slug:'will-the-us-officially-declare-war-on-iran-by-december-31-2026-746' },
+    { id:'SAUDI_NORM',    label:'Saudi Norm.',     question:'Israel and Saudi Arabia normalize diplomatic relations before 2027',     pmId:'665218',  pm:0.175, layer:4, primary:'BIBI_PM',     pY:0.283, pN:0.122, slug:'israel-and-saudi-arabia-normalize-relations-before-2027' },
+    { id:'SAUDI_ACCORDS', label:'Saudi Accords',   question:'Saudi Arabia joins the Abraham Accords before 2027',                    pmId:'665474',  pm:0.115, layer:4, primary:'BIBI_PM',     pY:0.252, pN:0.078, slug:'will-saudi-arabia-join-the-abraham-accords-before-2027' },
+    { id:'LEBANON_NORM',  label:'Lebanon Norm.',   question:'Israel and Lebanon normalize relations before 2027',                    pmId:'665414',  pm:0.185, layer:4, primary:'BIBI_PM',     pY:0.258, pN:0.211, slug:'israel-and-lebanon-normalize-relations-before-2027' },
+    { id:'SYRIA_NORM',    label:'Syria Norm.',     question:'Israel and Syria normalize relations by December 31 2026',              pmId:'677273',  pm:0.105, layer:4, primary:'BIBI_PM',     pY:0.259, pN:0.068, slug:'israel-and-syria-normalize-relations-by-december-31-2026-166' },
+    { id:'STRIKE_5',      label:'Strike on Iran',  question:'Israel conducts a second major military operation against Iran',        pmId:'678748',  pm:0.396, layer:4, primary:'IRAN_NUKE',   pY:0.428, pN:0.294, slug:'will-israel-strike-5-countries-in-november-2025' },
+    { id:'PAHLAVI',       label:'Pahlavi Returns', question:'US officially recognizes Reza Pahlavi as leader of Iran in 2026',       pmId:'1115288', pm:0.085, layer:4, primary:'IRAN_REGIME', pY:0.506, pN:0.013, slug:'us-recognizes-reza-pahlavi-as-leader-of-iran-in2026' },
+    { id:'US_DECLARE',    label:'US Declares War', question:'US officially declares war on Iran by December 31 2026',               pmId:'1170144', pm:0.075, layer:4, primary:'US_WAR_IRAN', pY:0.274, pN:0.022, slug:'will-the-us-officially-declare-war-on-iran-by-december-31-2026-746' },
   ];
 
   // Store baseline PM prices so sliders can reset
@@ -709,8 +707,8 @@
     const dc = document.getElementById('detail-content');
     dc.style.display = 'block';
 
-    document.getElementById('d-name').textContent = n.label;
-    document.getElementById('d-pm').textContent   = pct(n.pm) + (n.pm !== n.pmBase ? ' *' : '');
+    document.getElementById('d-question').textContent = n.question;
+    document.getElementById('d-pm').textContent = pct(n.pm) + (n.pm !== n.pmBase ? ' *' : '');
     const pmLink = document.getElementById('d-pm-link');
     pmLink.href = 'https://polymarket.com/event/' + n.slug;
     pmLink.style.display = 'inline-block';
@@ -799,20 +797,20 @@
     statusEl.textContent = 'Fetching…';
 
     try {
-      // Gamma API accepts comma-separated ids as a query param
-      const ids = NODES.map(n => n.pmId).join(',');
-      const res = await fetch(`https://gamma-api.polymarket.com/markets?id=${ids}`, {
-        headers: { 'Accept': 'application/json' }
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
+      // Gamma API: individual requests per market (batch ?id=... returns 422)
+      const results = await Promise.allSettled(
+        NODES.map(n =>
+          fetch(`https://gamma-api.polymarket.com/markets/${n.pmId}`, { headers: { 'Accept': 'application/json' } })
+            .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(m => ({ node: n, outcomePrices: m.outcomePrices }))
+        )
+      );
 
       let updated = 0;
-      data.forEach(m => {
-        const node = NODES.find(n => n.pmId === String(m.id));
-        if (!node) return;
-        // outcomePrices is a JSON-encoded string: ["0.47","0.53"] (YES, NO)
-        const prices = JSON.parse(m.outcomePrices || '[]');
+      results.forEach(r => {
+        if (r.status !== 'fulfilled') return;
+        const { node, outcomePrices } = r.value;
+        const prices = JSON.parse(outcomePrices || '[]');
         const p = prices[0] != null ? parseFloat(prices[0]) : null;
         if (p != null && !isNaN(p)) {
           node.pm     = p;

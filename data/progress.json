@@ -577,7 +577,7 @@
     "A19:reuters": {
       "event_id": "A19",
       "source_id": "reuters",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-05-20T11:31:46.169469"
+  "last_updated": "2026-05-20T11:34:56.960912"
 }

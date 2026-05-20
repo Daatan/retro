@@ -5211,7 +5211,7 @@
     "F02:reuters": {
       "event_id": "F02",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-05-20T12:05:18.577006"
+  "last_updated": "2026-05-20T15:38:09.432014"
 }

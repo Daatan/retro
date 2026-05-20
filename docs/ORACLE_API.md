@@ -51,20 +51,22 @@ App:    x-api-key: $ORACLE_API_KEY
 
 All article searches — both `/forecast` internal searches and `/search` requests — use `web_search.py`, which tries providers in order and returns the first non-empty result.
 
-**Current chain (as of 2026-05-17):**
+**Current chain (as of 2026-05-20):**
 
 | # | Provider | Cost | Notes |
 |---|---|---|---|
-| 1 | **GDELT Doc API** | Free | Primary. No API key. Rate-limited to 1 req/10s. Returns titles + URLs; no snippets. |
+| 1 | **GDELT Doc API** | Free | Primary. No API key. Rate-limited to 1 req/10s. 3-month rolling window. Returns titles + URLs; no snippets. |
+| 1b | **GDELT BigQuery** | Free | Historical only (>90 days). Entity-based matching. Requires GCP service account with BigQuery roles. |
 | 2 | SerpAPI | Paid | |
 | 3 | Serper.dev | Paid | |
+| 3b | **Tavily** | 1 credit/call | `topic=news`; native `start_date`/`end_date` date windowing; supports `site:` operator. |
 | 4 | Brave News | Paid | |
 | 5 | BrightData | Paid | |
 | 6 | Nimbleway | Paid | |
 | 7 | ScrapingBee | Paid | |
 | 8 | Newsdata.io | Paid | |
-| 9 | **DataForSEO** | Paid ~$7/day | Last-resort paid fallback only. Was primary until May 2026. |
-| 10 | DuckDuckGo | Free | Final fallback. Blocked on EC2 IPs by Yahoo. No date filtering. |
+| 9 | **DataForSEO** | Paid | Last-resort paid fallback only. |
+| 10 | DuckDuckGo | Free | Final fallback. Uses DDG `/news.js` (Bing-backed) — works from EC2. Post-filtered by date. |
 
 **To change the order or add a provider:** edit `pipeline/src/tm/web_search.py`, function `search_articles()`. The numbered comments make the chain easy to reorder.
 
@@ -139,7 +141,7 @@ Exposes the provider chain directly. Useful for bediavad (historical article dis
 |---|---|---|---|
 | `query` | string | required | Search string. Supports `site:domain.com`. |
 | `limit` | int | 5 | Max results (1–30). |
-| `date_from` | string | null | ISO date `YYYY-MM-DD`. Passed to providers that support native date filtering (GDELT, Newsdata.io, DataForSEO). |
+| `date_from` | string | null | ISO date `YYYY-MM-DD`. Passed to providers that support native date filtering (GDELT, Tavily, Newsdata.io, DataForSEO). Other providers receive it as post-filter. |
 | `date_to` | string | null | ISO date `YYYY-MM-DD`. |
 | `enrich_snippets` | bool | `false` | When `true`, scrapes each article URL to fill the `snippet` field. GDELT returns no snippet text by default; this compensates. Adds 5–15s latency. Not suitable for daatan live calls. |
 
@@ -162,7 +164,7 @@ Exposes the provider chain directly. Useful for bediavad (historical article dis
 
 **`enrich_snippets` implementation:** after `search_articles()` returns, `enrich_snippets()` fans out URL fetches with 8 parallel workers and an 8-second total timeout. Uses `trafilatura` (primary) and BeautifulSoup (fallback) for HTML extraction. Articles whose URLs fail or timeout keep an empty snippet.
 
-**For bediavad / historical backtest use:** set `enrich_snippets: true` and pace requests no faster than one every 12 seconds to stay within GDELT's rate limit. If GDELT returns 0 results (common for very narrow date ranges), the chain falls through to paid providers or DDG; DDG does not honour date filters.
+**For bediavad / historical backtest use:** set `enrich_snippets: true` and pace requests no faster than one every 12 seconds to stay within GDELT's rate limit. If GDELT returns 0 results (common for very narrow date ranges or queries older than 3 months), the chain falls through to GDELT BigQuery (if GCP key configured), then paid providers, then DDG. DDG (`d.news()`) returns results filtered by date post-fetch; it does not accept a date range natively.
 
 ### `GET /search/health`
 

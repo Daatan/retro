@@ -145,6 +145,7 @@ BRIGHTDATA_API_KEY: Optional[str] = _secret("BRIGHTDATA_API_KEY", "openclaw/brig
 NIMBLEWAY_API_KEY: Optional[str] = _secret("NIMBLEWAY_API_KEY", "openclaw/nimbleway-api-key")
 SCRAPINGBEE_API_KEY: Optional[str] = _secret("SCRAPINGBEE_API_KEY", "openclaw/scrapingbee-api-key")
 NEWSDATA_API_KEY: Optional[str] = _secret("NEWSDATA_API_KEY", "openclaw/newsdata-api-key")
+TAVILY_API_KEY: Optional[str] = _secret("TAVILY_API_KEY", "openclaw/tavily-api-key")
 GCP_SA_KEY_JSON: Optional[str] = _secret("GCP_SA_KEY_JSON", "openclaw/gcp-service-account-key")
 
 _KEY_LOADED_AT: float = time.time()
@@ -181,6 +182,7 @@ def _refresh_keys_if_stale() -> None:
     """
     global DATAFORSEO_API_KEY, SERPAPI_API_KEY, SERPER_API_KEY, BRAVE_API_KEY
     global BRIGHTDATA_API_KEY, NIMBLEWAY_API_KEY, SCRAPINGBEE_API_KEY, NEWSDATA_API_KEY
+    global TAVILY_API_KEY
     global GCP_SA_KEY_JSON, _BQ_CLIENT, _KEY_LOADED_AT
     if time.time() - _KEY_LOADED_AT < _KEY_MAX_AGE_SECONDS:
         return
@@ -193,6 +195,7 @@ def _refresh_keys_if_stale() -> None:
     NIMBLEWAY_API_KEY = _secret("NIMBLEWAY_API_KEY", "openclaw/nimbleway-api-key")
     SCRAPINGBEE_API_KEY = _secret("SCRAPINGBEE_API_KEY", "openclaw/scrapingbee-api-key")
     NEWSDATA_API_KEY = _secret("NEWSDATA_API_KEY", "openclaw/newsdata-api-key")
+    TAVILY_API_KEY = _secret("TAVILY_API_KEY", "openclaw/tavily-api-key")
     new_gcp = _secret("GCP_SA_KEY_JSON", "openclaw/gcp-service-account-key")
     if new_gcp != GCP_SA_KEY_JSON:
         GCP_SA_KEY_JSON = new_gcp
@@ -287,6 +290,7 @@ _BRIGHTDATA_QUOTA_EXHAUSTED: bool = False
 _NIMBLEWAY_QUOTA_EXHAUSTED: bool = False
 _SCRAPINGBEE_QUOTA_EXHAUSTED: bool = False
 _NEWSDATA_QUOTA_EXHAUSTED: bool = False
+_TAVILY_QUOTA_EXHAUSTED: bool = False
 
 
 @dataclass
@@ -957,6 +961,63 @@ def _search_gdelt_bq(
 
 
 # ──────────────────────────────────────────────
+# Provider: Tavily Search API
+# ──────────────────────────────────────────────
+
+def _search_tavily(
+    query: str,
+    limit: int,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+) -> List[SearchResult]:
+    global _TAVILY_QUOTA_EXHAUSTED
+    if not TAVILY_API_KEY:
+        raise RuntimeError("TAVILY_API_KEY not set")
+
+    # Tavily supports site: in the query string; keep it as-is.
+    body: dict = {
+        "query": query,
+        "topic": "news",
+        "max_results": min(limit, 20),
+        "search_depth": "basic",  # 1 credit/call
+        "include_answer": False,
+    }
+    if date_from:
+        body["start_date"] = date_from.strftime("%Y-%m-%d")
+    if date_to:
+        body["end_date"] = date_to.strftime("%Y-%m-%d")
+
+    r = httpx.post(
+        "https://api.tavily.com/search",
+        json=body,
+        headers={"Authorization": f"Bearer {TAVILY_API_KEY}", "Content-Type": "application/json"},
+        timeout=15,
+    )
+    if r.status_code in (401, 403, 429):
+        body_text = r.text.lower()
+        if any(x in body_text for x in ("quota", "credit", "limit", "exceeded", "invalid")):
+            _TAVILY_QUOTA_EXHAUSTED = True
+            raise RuntimeError(f"Tavily quota/key error ({r.status_code}) — disabling for session")
+        raise RuntimeError(f"Tavily HTTP {r.status_code}")
+    r.raise_for_status()
+
+    items = r.json().get("results", [])
+    results = [
+        SearchResult(
+            title=item.get("title", ""),
+            url=item.get("url", ""),
+            snippet=item.get("content", ""),
+            source=_extract_domain(item.get("url", "")),
+            # Tavily does not return published_date; date window enforced via start_date/end_date
+            published_date="",
+        )
+        for item in items[:limit]
+        if item.get("url")
+    ]
+    return _filter_by_date(results, date_from, date_to)
+
+
+# ──────────────────────────────────────────────
 # Provider: DuckDuckGo Lite (free fallback)
 # ──────────────────────────────────────────────
 
@@ -1127,7 +1188,7 @@ def search_articles(
 
     Tries providers in order, skipping any without a configured key or with
     an exhausted quota flag set for this process lifetime:
-      GDELT → SerpAPI → Serper.dev → Brave → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG
+      GDELT → SerpAPI → Serper.dev → Tavily → Brave → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG
 
     DDG is tried last; if AWS IPs are blocked by DDG/Yahoo it fails and is logged.
 
@@ -1206,6 +1267,18 @@ def search_articles(
             logger.warning("Serper returned 0 results for: %s", query[:60])
         except Exception as e:
             logger.warning("Serper failed: %s", e)
+
+    # 3b. Tavily news (1 credit/call; topic=news; start_date/end_date supported)
+    if TAVILY_API_KEY and not _TAVILY_QUOTA_EXHAUSTED:
+        _provider_local.chain.append("tavily")
+        try:
+            results = _search_tavily(query, limit, date_from, date_to)
+            if results:
+                _provider_local.name = "tavily"
+                return results
+            logger.warning("Tavily returned 0 results for: %s", query[:60])
+        except Exception as e:
+            logger.warning("Tavily failed: %s", e)
 
     # 4. Brave News
     if BRAVE_API_KEY and not _BRAVE_QUOTA_EXHAUSTED:

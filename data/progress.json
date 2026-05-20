@@ -297,7 +297,7 @@
     "B10:reuters": {
       "event_id": "B10",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-05-20T11:34:56.960912"
+  "last_updated": "2026-05-20T11:42:24.289461"
 }

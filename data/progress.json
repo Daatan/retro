@@ -612,8 +612,8 @@
     "D02:reuters": {
       "event_id": "D02",
       "source_id": "reuters",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "D02:toi": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-05-20T11:56:05.554052"
+  "last_updated": "2026-05-20T12:05:18.577006"
 }

@@ -971,18 +971,19 @@ def _search_ddg_news(
     if elapsed < DDG_MIN_INTERVAL:
         time.sleep(DDG_MIN_INTERVAL - elapsed)
 
-    # DDG has no arbitrary date range; inject after:/before: operators (Bing honours them).
-    dated_query = query + _date_query_suffix(date_from, date_to)
+    # Use d.news() (DDG /news.js → Bing backend) — works from EC2 datacenter IPs.
+    # d.text() uses Yahoo which blocks AWS IPs; d.news() does not.
     results = []
     with DDGS() as d:
-        for item in d.text(dated_query, max_results=limit):
+        for item in d.news(query, max_results=limit):
+            url = item.get("url", "")
             results.append(
                 SearchResult(
                     title=item.get("title", ""),
-                    url=item.get("href", ""),
+                    url=url,
                     snippet=item.get("body", ""),
-                    source=_extract_domain(item.get("href", "")),
-                    published_date=item.get("published", "")[:10] if item.get("published") else "",
+                    source=item.get("source") or _extract_domain(url),
+                    published_date=item.get("date", "")[:10] if item.get("date") else "",
                 )
             )
     _DDG_LAST_CALL = time.time()

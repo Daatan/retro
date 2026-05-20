@@ -16,7 +16,7 @@ pipeline/
     gdelt_ingest.py        # GDELT Doc 2.0 API batch ingestor (sequential, rate-limited)
     ingestor.py            # Pluggable ingestor classes: DDGIngestor, GDELTIngestor
     site_search.py         # Direct site-search scraper (no API key, high reliability)
-    web_search.py          # Multi-provider search: SerpAPI → Serper → Brave → DDG
+    web_search.py          # Multi-provider search: GDELT → GDELT BQ → SerpAPI → Serper → Tavily → Brave → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG
     polymarket.py          # Polymarket Gamma API: fetch market history per event
     polymarket_harvest.py  # Bulk harvest of all resolved Polymarket political markets
 
@@ -68,9 +68,16 @@ uv sync
 | `MODEL_API_BASE` | No | LiteLLM-compatible base URL (leave empty for AWS Bedrock default) |
 | `AWS_REGION` | No | AWS region for Bedrock (default: `us-east-1`) |
 | `OPENROUTER_API_KEY` | No | OpenRouter key — alternative LLM provider |
-| `BRAVE_API_KEY` | No | Brave Search — URL resolution fallback |
-| `SERPAPI_API_KEY` | No | SerpAPI — news search provider (highest priority) |
-| `SERPER_API_KEY` | No | Serper.dev — news search provider (second priority) |
+| `SERPAPI_API_KEY` | No | SerpAPI — news search (priority 2) |
+| `SERPER_API_KEY` | No | Serper.dev — news search (priority 3) |
+| `TAVILY_API_KEY` | No | Tavily — news search with date windowing (priority 3b); 1 credit/call |
+| `BRAVE_API_KEY` | No | Brave News Search (priority 4); also URL resolution fallback in gnews_ingest |
+| `BRIGHTDATA_API_KEY` | No | BrightData SERP API (priority 5) |
+| `NIMBLEWAY_API_KEY` | No | Nimbleway SERP API (priority 6) |
+| `SCRAPINGBEE_API_KEY` | No | ScrapingBee Google Search (priority 7) |
+| `NEWSDATA_API_KEY` | No | Newsdata.io archive search (priority 8) |
+| `DATAFORSEO_API_KEY` | No | DataForSEO — last-resort paid fallback (priority 9) |
+| `GCP_SA_KEY_JSON` | No | GCP service account JSON — enables GDELT BigQuery for historical queries (>90 days) |
 | `DATA_DIR` | No | Path to data directory (default: `../data`) |
 | `VAULT_DIR` | No | Path to vault directory (default: `$DATA_DIR/vault`) |
 

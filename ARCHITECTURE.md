@@ -35,7 +35,7 @@ retro/
 │   │   ├── gdelt_ingest.py      # GDELT Doc 2.0 API batch ingestor (sequential, rate-limited)
 │   │   ├── ingestor.py          # Pluggable ingestor classes: DDGIngestor, GDELTIngestor
 │   │   ├── site_search.py       # Direct site-search scraper (no API key, high reliability)
-│   │   ├── web_search.py        # Multi-provider news search: SerpAPI → Serper → Brave → BrightData → Nimbleway → ScrapingBee → DDG
+│   │   ├── web_search.py        # Multi-provider news search: GDELT → GDELT BQ → SerpAPI → Serper → Tavily → Brave → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG
 │   │   ├── polymarket.py        # Polymarket Gamma API: fetch market history per event
 │   │   ├── polymarket_harvest.py # Bulk harvest of all resolved Polymarket political markets
 │   │   │
@@ -508,7 +508,7 @@ POST /api/forecast
 ### Pipeline
 
 **Stage 1 — Search & Fetch**
-1. `web_search.search_articles(question, limit)` — SerpAPI → Serper.dev → Brave → BrightData → Nimbleway → ScrapingBee → DDG fallback chain
+1. `web_search.search_articles(question, limit)` — GDELT → GDELT BQ → SerpAPI → Serper → Tavily → Brave → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG fallback chain
 2. Per article: trafilatura full-text fetch (falls back to title+snippet)
 
 **Stage 2 — Gatekeeper + Extractor** (parallel per article)

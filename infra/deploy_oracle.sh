@@ -53,8 +53,8 @@ $AS_UBUNTU $UV sync --frozen --quiet
 # gracefully drains the old ones. No socket close = no 502 window. If the
 # dep graph changed in a way that needs a new master (rare), a separate
 # `systemctl restart oracle-api` is the escape hatch.
-log "reloading oracle-api (SIGHUP)..."
-sudo /bin/systemctl reload oracle-api
+log "reloading oracle-api (SIGHUP, or restart if stopped)..."
+sudo /bin/systemctl reload-or-restart oracle-api
 
 # ── 4. Health check ──────────────────────────────────────────────────────────
 # Gunicorn's reload is async: the new workers take ~2-3s to import and start

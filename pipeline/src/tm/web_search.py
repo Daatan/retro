@@ -52,8 +52,8 @@ Requires a GCP service-account JSON key stored in AWS Secrets Manager at:
 
 The key is loaded once at startup (same _secret() pattern as other providers) and
 used to construct a BigQuery client. When the secret is absent the provider is
-silently skipped. The table is partitioned by day; all queries use _PARTITIONDATE
-for efficient partition pruning.
+silently skipped. The table is date-sharded (gkg_YYYYMMDD); queries use the
+wildcard form gkg_* with _TABLE_SUFFIX for efficient shard pruning.
 
 All keys are loaded from the environment first, then from AWS Secrets Manager
 (openclaw/* namespace) as a fallback. See _secret().
@@ -890,7 +890,7 @@ def _search_gdelt_bq(
     """Search GDELT GKG via BigQuery for historical coverage beyond the DOC API 3-month window.
 
     Matches against V2Persons, V2Locations, V2Organizations, and AllNames using
-    REGEXP_CONTAINS. Partition pruning via _PARTITIONDATE keeps scan costs low.
+    REGEXP_CONTAINS. Shard pruning via _TABLE_SUFFIX on gkg_* keeps scan costs low.
     Article titles are synthesized from the URL slug since GKG stores no titles.
     """
     client = _get_bq_client()  # raises if not configured
@@ -908,21 +908,23 @@ def _search_gdelt_bq(
         for t in terms
     )
 
-    # Partition bounds — always required; fall back to a 90-day window if not given
+    # gdelt-bq.gdeltv2.gkg is a date-sharded table (gkg_YYYYMMDD shards behind a
+    # wildcard view). Pseudo-columns for ingestion-time partitioning do not apply;
+    # use _TABLE_SUFFIX on the wildcard form `gkg_*` for efficient shard pruning.
     if date_from:
-        ts_from = date_from.strftime("%Y-%m-%d")
+        shard_from = date_from.strftime("%Y%m%d")
     else:
         from datetime import timedelta
-        ts_from = (datetime.utcnow() - timedelta(days=_GDELT_DOC_WINDOW_DAYS)).strftime("%Y-%m-%d")
-    ts_to = date_to.strftime("%Y-%m-%d") if date_to else datetime.utcnow().strftime("%Y-%m-%d")
+        shard_from = (datetime.utcnow() - timedelta(days=_GDELT_DOC_WINDOW_DAYS)).strftime("%Y%m%d")
+    shard_to = date_to.strftime("%Y%m%d") if date_to else datetime.utcnow().strftime("%Y%m%d")
 
     sql = f"""
         SELECT
             DocumentIdentifier AS url,
             SourceCommonName   AS source,
             DATE               AS gkg_date
-        FROM `gdelt-bq.gdeltv2.gkg`
-        WHERE _PARTITIONDATE BETWEEN DATE('{ts_from}') AND DATE('{ts_to}')
+        FROM `gdelt-bq.gdeltv2.gkg_*`
+        WHERE _TABLE_SUFFIX BETWEEN '{shard_from}' AND '{shard_to}'
           AND ({entity_conditions})
           AND DocumentIdentifier IS NOT NULL
           AND DocumentIdentifier != ''

@@ -1209,6 +1209,7 @@ def search_articles(
     Returns:
         List of SearchResult(title, url, snippet, source, published_date).
     """
+    global _GDELT_DOC_FAIL_COUNT, _GDELT_DOC_BROKEN_UNTIL
     _refresh_keys_if_stale()
     _provider_local.name = "none"
     _provider_local.chain = []
@@ -1227,7 +1228,6 @@ def search_articles(
             "GDELT skipped: 429 cooldown active for %.0fs more", _gdelt_cooldown_remaining
         )
     else:
-        global _GDELT_DOC_FAIL_COUNT, _GDELT_DOC_BROKEN_UNTIL
         try:
             results = _search_gdelt(query, limit, date_from, date_to)
             if results:

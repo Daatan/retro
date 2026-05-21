@@ -52,7 +52,7 @@ Requires a GCP service-account JSON key stored in AWS Secrets Manager at:
 
 The key is loaded once at startup (same _secret() pattern as other providers) and
 used to construct a BigQuery client. When the secret is absent the provider is
-silently skipped. The table is partitioned by day; all queries use _PARTITIONTIME
+silently skipped. The table is partitioned by day; all queries use _PARTITIONDATE
 for efficient partition pruning.
 
 All keys are loaded from the environment first, then from AWS Secrets Manager
@@ -890,7 +890,7 @@ def _search_gdelt_bq(
     """Search GDELT GKG via BigQuery for historical coverage beyond the DOC API 3-month window.
 
     Matches against V2Persons, V2Locations, V2Organizations, and AllNames using
-    REGEXP_CONTAINS. Partition pruning via _PARTITIONTIME keeps scan costs low.
+    REGEXP_CONTAINS. Partition pruning via _PARTITIONDATE keeps scan costs low.
     Article titles are synthesized from the URL slug since GKG stores no titles.
     """
     client = _get_bq_client()  # raises if not configured
@@ -922,7 +922,7 @@ def _search_gdelt_bq(
             SourceCommonName   AS source,
             DATE               AS gkg_date
         FROM `gdelt-bq.gdeltv2.gkg`
-        WHERE _PARTITIONTIME BETWEEN TIMESTAMP('{ts_from}') AND TIMESTAMP('{ts_to}')
+        WHERE _PARTITIONDATE BETWEEN DATE('{ts_from}') AND DATE('{ts_to}')
           AND ({entity_conditions})
           AND DocumentIdentifier IS NOT NULL
           AND DocumentIdentifier != ''

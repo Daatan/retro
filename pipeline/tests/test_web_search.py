@@ -101,20 +101,36 @@ class TestGdeltBqSql:
         lines = _SOURCE.splitlines()[func.lineno - 1 : func.end_lineno]
         return "\n".join(lines)
 
-    def test_uses_partition_date_not_partition_time(self):
-        """
-        Regression (PR #127): SQL used _PARTITIONTIME — unrecognised on
-        date-partitioned tables. Must use _PARTITIONDATE.
-        """
+    def _sql_block(self) -> str:
+        """Extract only the SQL string literal from _search_gdelt_bq."""
         src = self._bq_function_src()
-        assert "_PARTITIONDATE" in src, "SQL must use _PARTITIONDATE"
-        assert "_PARTITIONTIME" not in src, "SQL must NOT use _PARTITIONTIME"
+        # Grab everything between the triple-quoted sql = f""" ... """
+        m = re.search(r'sql\s*=\s*f"""(.*?)"""', src, re.DOTALL)
+        assert m, "_search_gdelt_bq must contain a sql = f\"\"\"...\"\"\" block"
+        return m.group(1)
 
-    def test_bounds_cast_with_date_not_timestamp(self):
-        """Partition bounds must use DATE(), not TIMESTAMP(), for a DATE-type column."""
+    def test_uses_table_suffix_shard_pruning(self):
+        """
+        Regression (PRs #127/#129): gdelt-bq.gdeltv2.gkg is a date-sharded table —
+        pseudo-columns for ingestion-time partitioning do not apply. Must use the
+        wildcard form gkg_* with _TABLE_SUFFIX for efficient shard pruning.
+        """
+        sql = self._sql_block()
+        assert "gkg_*" in sql, "SQL must query the wildcard table gkg_*"
+        assert "_TABLE_SUFFIX" in sql, "SQL must use _TABLE_SUFFIX for shard pruning"
+        assert "_PARTITIONTIME" not in sql, "SQL must NOT use _PARTITIONTIME"
+        assert "_PARTITIONDATE" not in sql, "SQL must NOT use _PARTITIONDATE"
+
+    def test_shard_bounds_are_yyyymmdd(self):
+        """_TABLE_SUFFIX values must be YYYYMMDD strings (no dashes), not ISO dates."""
         src = self._bq_function_src()
-        assert re.search(r"DATE\(['\"]?\{ts_", src), "Bounds must use DATE({ts_...})"
-        assert not re.search(r"TIMESTAMP\(['\"]?\{ts_", src), "Must not cast bounds with TIMESTAMP()"
+        # The shard_from / shard_to format strings must use %Y%m%d (no dashes)
+        assert re.search(r'strftime\(["\']%Y%m%d["\']', src), \
+            "Shard dates must be formatted with %Y%m%d"
+        # The SQL itself must not embed ISO-format dates in the BETWEEN clause
+        sql = self._sql_block()
+        assert "'%Y-%m-%d'" not in sql and '"%Y-%m-%d"' not in sql, \
+            "SQL shard bounds must not use ISO format with dashes"
 
     def test_uses_full_bigquery_oauth_scope(self):
         """

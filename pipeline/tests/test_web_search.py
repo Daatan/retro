@@ -181,15 +181,15 @@ class TestTavily432:
             _search_tavily=_spy,
             _search_gdelt=MagicMock(side_effect=skip),
             _search_gdelt_bq=MagicMock(side_effect=skip),
-            _search_serpapi=MagicMock(side_effect=skip),
-            _search_serper=MagicMock(side_effect=skip),
-            _search_brave=MagicMock(side_effect=skip),
+            _search_serpapi_news=MagicMock(side_effect=skip),
+            _search_serper_news=MagicMock(side_effect=skip),
+            _search_brave_news=MagicMock(side_effect=skip),
             _search_brightdata=MagicMock(side_effect=skip),
             _search_nimbleway=MagicMock(side_effect=skip),
             _search_scrapingbee=MagicMock(side_effect=skip),
-            _search_newsdata=MagicMock(side_effect=skip),
+            _search_newsdata_io=MagicMock(side_effect=skip),
             _search_dataforseo=MagicMock(side_effect=skip),
-            _search_ddg=MagicMock(return_value=[]),
+            _search_ddg_news=MagicMock(return_value=[]),
         ):
             ws.search_articles("test")
 
@@ -208,16 +208,16 @@ class TestGdeltDocCircuitBreaker:
         return patch.multiple(ws,
             _search_gdelt=MagicMock(side_effect=gdelt_side_effect),
             _search_gdelt_bq=MagicMock(side_effect=skip),
-            _search_serpapi=MagicMock(side_effect=skip),
-            _search_serper=MagicMock(side_effect=skip),
+            _search_serpapi_news=MagicMock(side_effect=skip),
+            _search_serper_news=MagicMock(side_effect=skip),
             _search_tavily=MagicMock(side_effect=skip),
-            _search_brave=MagicMock(side_effect=skip),
+            _search_brave_news=MagicMock(side_effect=skip),
             _search_brightdata=MagicMock(side_effect=skip),
             _search_nimbleway=MagicMock(side_effect=skip),
             _search_scrapingbee=MagicMock(side_effect=skip),
-            _search_newsdata=MagicMock(side_effect=skip),
+            _search_newsdata_io=MagicMock(side_effect=skip),
             _search_dataforseo=MagicMock(side_effect=skip),
-            _search_ddg=MagicMock(return_value=[]),
+            _search_ddg_news=MagicMock(return_value=[]),
         )
 
     def test_circuit_opens_after_threshold_failures(self):

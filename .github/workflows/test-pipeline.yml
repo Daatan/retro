@@ -1,0 +1,42 @@
+name: Test Pipeline
+
+# Runs unit tests for pipeline/src/tm/ on every PR and push to main that
+# touches pipeline code. Acts as a gate before deploy-oracle.yml kicks in,
+# catching import errors, SyntaxErrors, and logic regressions without needing
+# API keys or a live EC2 instance.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pipeline/**
+      - .github/workflows/test-pipeline.yml
+  pull_request:
+    paths:
+      - pipeline/**
+      - .github/workflows/test-pipeline.yml
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pipeline
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Syntax check (py_compile)
+        run: uv run python -m py_compile src/tm/web_search.py
+
+      - name: Import check
+        run: uv run python -c "import tm.web_search; print('import ok')"
+
+      - name: Run unit tests
+        run: uv run pytest tests/ -v --tb=short

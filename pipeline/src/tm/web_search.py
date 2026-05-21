@@ -166,7 +166,7 @@ def _get_bq_client() -> object:
     info = _json.loads(GCP_SA_KEY_JSON)
     creds = _sa.Credentials.from_service_account_info(
         info,
-        scopes=["https://www.googleapis.com/auth/bigquery.readonly"],
+        scopes=["https://www.googleapis.com/auth/bigquery"],
     )
     _BQ_CLIENT = _bigquery.Client(credentials=creds, project=info["project_id"])
     return _BQ_CLIENT
@@ -211,6 +211,10 @@ DDG_MIN_INTERVAL = 2.0
 GDELT_MIN_INTERVAL = 10.0   # documented GDELT rate limit: 1 req / 10 s
 _GDELT_SLOT_WAIT   = 1.5    # max seconds we're willing to wait for a slot before skipping
 _GDELT_COOLDOWN_UNTIL: float = 0.0   # per-process; epoch time until which GDELT is skipped after a 429
+_GDELT_DOC_BROKEN_UNTIL: float = 0.0  # epoch; GDELT Doc skipped after repeated connection failures
+_GDELT_DOC_FAIL_COUNT: int = 0        # consecutive connection failures (resets on success/empty result)
+_GDELT_DOC_FAIL_THRESHOLD: int = 2    # open circuit after this many consecutive failures
+_GDELT_DOC_BREAK_SECS: float = 3600.0 # 1-hour circuit break
 
 _GDELT_LOCK_PATH = Path(tempfile.gettempdir()) / "gdelt_ratelimit.lock"
 _GDELT_TS_PATH   = Path(tempfile.gettempdir()) / "gdelt_ratelimit.ts"
@@ -993,6 +997,10 @@ def _search_tavily(
         headers={"Authorization": f"Bearer {TAVILY_API_KEY}", "Content-Type": "application/json"},
         timeout=15,
     )
+    if r.status_code == 432:
+        # Tavily-specific: plan usage limit exceeded (non-standard HTTP code)
+        _TAVILY_QUOTA_EXHAUSTED = True
+        raise RuntimeError("Tavily usage limit exceeded (432) — disabling for session")
     if r.status_code in (401, 403, 429):
         body_text = r.text.lower()
         if any(x in body_text for x in ("quota", "credit", "limit", "exceeded", "invalid")):
@@ -1208,21 +1216,38 @@ def search_articles(
     # 1. GDELT Doc API (free, no key) — primary; news-only, reliable dates, 3-month window
     _provider_local.chain.append("gdelt")
     _gdelt_cooldown_remaining = _GDELT_COOLDOWN_UNTIL - time.time()
-    if _gdelt_cooldown_remaining > 0:
+    _gdelt_broken_remaining = _GDELT_DOC_BROKEN_UNTIL - time.time()
+    if _gdelt_broken_remaining > 0:
+        logger.info(
+            "GDELT Doc skipped: circuit open for %.0fs more (repeated connection failures)",
+            _gdelt_broken_remaining,
+        )
+    elif _gdelt_cooldown_remaining > 0:
         logger.info(
             "GDELT skipped: 429 cooldown active for %.0fs more", _gdelt_cooldown_remaining
         )
     else:
+        global _GDELT_DOC_FAIL_COUNT, _GDELT_DOC_BROKEN_UNTIL
         try:
             results = _search_gdelt(query, limit, date_from, date_to)
             if results:
+                _GDELT_DOC_FAIL_COUNT = 0
                 _provider_local.name = "gdelt"
                 return results
             logger.warning("GDELT returned 0 results for: %s", query[:60])
+            _GDELT_DOC_FAIL_COUNT = 0  # empty result is not a connection failure
         except _GDELTSlotBusy as e:
             logger.info("GDELT skipped (slot busy): %s", e)
         except Exception as e:
             logger.warning("GDELT failed: %s", e)
+            _GDELT_DOC_FAIL_COUNT += 1
+            if _GDELT_DOC_FAIL_COUNT >= _GDELT_DOC_FAIL_THRESHOLD:
+                _GDELT_DOC_BROKEN_UNTIL = time.time() + _GDELT_DOC_BREAK_SECS
+                logger.warning(
+                    "GDELT Doc: %d consecutive failures — circuit open for %.0f min",
+                    _GDELT_DOC_FAIL_COUNT,
+                    _GDELT_DOC_BREAK_SECS / 60,
+                )
 
     # 1b. GDELT BigQuery GKG — historical coverage beyond the 3-month DOC API window.
     #     Entity-based matching; titles synthesised from URL slug; no rate limit.

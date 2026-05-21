@@ -1,6 +1,6 @@
 """Basic model validation tests — no LLM calls."""
 
-from src.tm.models import (
+from tm.models import (
     GatekeeperOutput,
     PredictionExtraction,
     ExtractionOutput,

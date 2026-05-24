@@ -255,7 +255,18 @@
       <div class="leg-item"><div class="leg-dot" style="background:#f57c00"></div> Med (2–5pp)</div>
       <div class="leg-item"><div class="leg-dot" style="background:#d32f2f"></div> High (5–8pp)</div>
       <div class="leg-item"><div class="leg-dot" style="background:#7b1fa2"></div> Extreme (&gt;8pp)</div>
-      <div class="leg-item" style="color:#8b949e; font-size:11px;">Solid blue = positive · Solid orange = inhibitory · Dashed = secondary</div>
+      <div class="leg-item" style="gap:6px">
+        <svg width="22" height="10" style="flex-shrink:0"><line x1="0" y1="5" x2="22" y2="5" stroke="#58a6ff" stroke-width="1.5"/><polygon points="17,2 22,5 17,8" fill="#58a6ff"/></svg>
+        <span style="font-size:11px;color:#8b949e">positive</span>
+      </div>
+      <div class="leg-item" style="gap:6px">
+        <svg width="22" height="10" style="flex-shrink:0"><line x1="0" y1="5" x2="22" y2="5" stroke="#f0883e" stroke-width="1.5"/><polygon points="17,2 22,5 17,8" fill="#f0883e"/></svg>
+        <span style="font-size:11px;color:#8b949e">inhibitory</span>
+      </div>
+      <div class="leg-item" style="gap:6px">
+        <svg width="22" height="10" style="flex-shrink:0"><line x1="0" y1="5" x2="22" y2="5" stroke="#4a5568" stroke-width="1" stroke-dasharray="4,3"/><polygon points="17,2 22,5 17,8" fill="#4a5568"/></svg>
+        <span style="font-size:11px;color:#8b949e">secondary</span>
+      </div>
     </div>
   </div>
   <div id="main">
@@ -263,7 +274,7 @@
       <div id="cy"></div>
       <div id="footer">
         Prices: Polymarket Gamma API &nbsp;·&nbsp;
-        Conditionals: LLM-estimated, May 2026 &nbsp;·&nbsp;
+        <span title="Conditional probabilities are static LLM estimates and are not updated by polling">⚠ Conditionals: LLM-estimated, May 2026</span> &nbsp;·&nbsp;
         Node label: <em>Name · PM% / Bayes%</em> &nbsp;·&nbsp;
         Click any node for detail · Click a root node to open its hypothetical slider
       </div>
@@ -521,7 +532,16 @@
       },
       {
         selector: 'node:selected',
-        style: { 'border-width': 2, 'border-color': '#58a6ff', 'border-style': 'solid' }
+        style: {
+          'border-width': 3,
+          'border-color': '#58a6ff',
+          'border-style': 'solid',
+          'shadow-blur': 14,
+          'shadow-color': '#58a6ff',
+          'shadow-opacity': 0.6,
+          'shadow-offset-x': 0,
+          'shadow-offset-y': 0,
+        }
       },
       // Positive primary edges — solid blue
       {
@@ -846,7 +866,7 @@
       // Update footer timestamp
       document.getElementById('footer').innerHTML =
         `Prices: Polymarket Gamma API, polled ${new Date().toLocaleString()} &nbsp;·&nbsp;` +
-        `Conditionals: LLM-estimated, May 2026 &nbsp;·&nbsp;` +
+        `<span title="Conditional probabilities are static LLM estimates and are not updated by polling">⚠ Conditionals: LLM-estimated, May 2026</span> &nbsp;·&nbsp;` +
         `Node label: <em>Name · PM% / Bayes%</em> &nbsp;·&nbsp;` +
         `Click any node for detail · Click a root node to open its hypothetical slider`;
 

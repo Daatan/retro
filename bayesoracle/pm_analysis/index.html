@@ -261,11 +261,11 @@
   <div id="main">
     <div id="cy-wrap">
       <div id="cy"></div>
-      <div id="footer" id="footer">
+      <div id="footer">
         Prices: Polymarket Gamma API &nbsp;·&nbsp;
         Conditionals: LLM-estimated, May 2026 &nbsp;·&nbsp;
         Node label: <em>Name · PM% / Bayes%</em> &nbsp;·&nbsp;
-        Click any node for detail · Root nodes: drag slider to hypothesise
+        Click any node for detail · Click a root node to open its hypothetical slider
       </div>
     </div>
     <div id="sidebar">
@@ -349,7 +349,7 @@
     { id:'SAUDI_ACCORDS', label:'Saudi Accords',   question:'Saudi Arabia joins the Abraham Accords before 2027',                    pmId:'665474',  pm:0.115, layer:4, primary:'BIBI_PM',     pY:0.252, pN:0.078, slug:'will-saudi-arabia-join-the-abraham-accords-before-2027' },
     { id:'LEBANON_NORM',  label:'Lebanon Norm.',   question:'Israel and Lebanon normalize relations before 2027',                    pmId:'665414',  pm:0.185, layer:4, primary:'BIBI_PM',     pY:0.258, pN:0.211, slug:'israel-and-lebanon-normalize-relations-before-2027' },
     { id:'SYRIA_NORM',    label:'Syria Norm.',     question:'Israel and Syria normalize relations by December 31 2026',              pmId:'677273',  pm:0.105, layer:4, primary:'BIBI_PM',     pY:0.259, pN:0.068, slug:'israel-and-syria-normalize-relations-by-december-31-2026-166' },
-    { id:'STRIKE_5',      label:'Strike on Iran',  question:'Israel conducts a second major military operation against Iran',        pmId:'678748',  pm:0.396, layer:4, primary:'IRAN_NUKE',   pY:0.428, pN:0.294, slug:'will-israel-strike-5-countries-in-november-2025' },
+    { id:'STRIKE_5',      label:'Strike on Iran',  question:'Israel conducts a second major military operation against Iran',        pmId:'678748',  pm:0.396, layer:4, primary:'IRAN_NUKE',   pY:0.428, pN:0.294, slug:'israel-military-action-against-iran-by-167' },
     { id:'PAHLAVI',       label:'Pahlavi Returns', question:'US officially recognizes Reza Pahlavi as leader of Iran in 2026',       pmId:'1115288', pm:0.085, layer:4, primary:'IRAN_REGIME', pY:0.506, pN:0.013, slug:'us-recognizes-reza-pahlavi-as-leader-of-iran-in2026' },
     { id:'US_DECLARE',    label:'US Declares War', question:'US officially declares war on Iran by December 31 2026',               pmId:'1170144', pm:0.075, layer:4, primary:'US_WAR_IRAN', pY:0.274, pN:0.022, slug:'will-the-us-officially-declare-war-on-iran-by-december-31-2026-746' },
   ];
@@ -611,11 +611,24 @@
           'text-margin-y': -7,
         }
       },
-      { selector: ':selected', style: { 'opacity': 1 } }
+      { selector: ':selected', style: { 'opacity': 1 } },
+      {
+        selector: 'node.bayes-changed',
+        style: { 'border-width': 3, 'border-color': '#e8c84a', 'border-opacity': 1 }
+      }
     ],
   });
 
   cy.ready(() => { cy.fit(undefined, 28); });
+
+  function flashChangedNodes(oldBayes) {
+    NODES.forEach(n => {
+      if (n.bayes !== null && oldBayes[n.id] !== null &&
+          Math.abs(n.bayes - oldBayes[n.id]) > 0.001) {
+        cy.$('#' + n.id).flashClass('bayes-changed', 700);
+      }
+    });
+  }
 
   // ─── Divergence ranking panel ─────────────────────────────────────────────────
 
@@ -768,8 +781,10 @@
         n.pm = parseFloat(slider.value);
         sliderVal.textContent = pct(n.pm);
         document.getElementById('d-pm').textContent = pct(n.pm) + (n.pm !== n.pmBase ? ' *' : '');
+        const oldBayes = Object.fromEntries(NODES.map(nd => [nd.id, nd.bayes]));
         recompute();
         refreshGraph(false);
+        flashChangedNodes(oldBayes);
       };
 
       document.getElementById('d-slider-reset').onclick = () => {
@@ -777,8 +792,10 @@
         slider.value = n.pmBase;
         sliderVal.textContent = pct(n.pmBase);
         document.getElementById('d-pm').textContent = pct(n.pm);
+        const oldBayes = Object.fromEntries(NODES.map(nd => [nd.id, nd.bayes]));
         recompute();
         refreshGraph(false);
+        flashChangedNodes(oldBayes);
       };
     } else {
       sliderRow.style.display = 'none';
@@ -831,7 +848,7 @@
         `Prices: Polymarket Gamma API, polled ${new Date().toLocaleString()} &nbsp;·&nbsp;` +
         `Conditionals: LLM-estimated, May 2026 &nbsp;·&nbsp;` +
         `Node label: <em>Name · PM% / Bayes%</em> &nbsp;·&nbsp;` +
-        `Click any node for detail · Root nodes: drag slider to hypothesise`;
+        `Click any node for detail · Click a root node to open its hypothetical slider`;
 
     } catch (err) {
       statusEl.className   = 'error';

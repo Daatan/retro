@@ -160,6 +160,17 @@
       color: #6e7681;
       line-height: 1.4;
     }
+    .r2-badge {
+      font-size: 9px;
+      font-family: monospace;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: #21262d;
+      color: #8b949e;
+      white-space: nowrap;
+    }
+    .r2-badge.r2-strong { color: #3fb950; }
+    .r2-badge.r2-mod    { color: #f0883e; }
 
     /* Divergence ranking */
     .div-item {
@@ -291,7 +302,7 @@
           <div class="detail-row"><span class="lbl">Primary parent</span><span id="d-parent" class="val">—</span></div>
           <div><a id="d-pm-link" class="pm-link" href="#" target="_blank" rel="noopener">View on Polymarket →</a></div>
           <table class="cond-table" id="d-cond-table">
-            <thead><tr><th>Parent</th><th>P(A|B=1)</th><th>P(A|B=0)</th></tr></thead>
+            <thead><tr><th>Parent</th><th>If YES</th><th>If NO</th><th>R²</th></tr></thead>
             <tbody id="d-cond-body"></tbody>
           </table>
           <div class="bayes-note" id="d-bayes-note"></div>
@@ -367,6 +378,39 @@
 
   // Store baseline PM prices so sliders can reset
   NODES.forEach(n => { n.pmBase = n.pm; });
+
+  // Edge metadata: pY/pN_llm = LLM estimate; pY/pN_c = linear regression on price history;
+  // r2 = R² of regression; n = overlapping trading days; w_c = data weight in blend (w_llm always 1.0).
+  const EDGE_META = {
+    'BIBI_OUT→BIBI_PM': {pY_llm:0.08, pN_llm:0.68, pY_c:0.426, pN_c:0.574, r2:0.0332, n:152, w_c:0.1},
+    'BIBI_OUT→EIZENKOT_PM': {pY_llm:0.24, pN_llm:0.08, pY_c:0.01, pN_c:0.187, r2:0.1356, n:152, w_c:0.407},
+    'BIBI_OUT→LIEBERMAN_PM': {pY_llm:0.14, pN_llm:0.02, pY_c:0.037, pN_c:0.01, r2:0.033, n:152, w_c:0.099},
+    'BIBI_OUT→LAPID_PM': {pY_llm:0.18, pN_llm:0.01, pY_c:0.065, pN_c:0.01, r2:0.1, n:148, w_c:0.3},
+    'CEASEFIRE_X→ELECTIONS': {pY_llm:0.78, pN_llm:0.52, pY_c:0.99, pN_c:0.071, r2:0.2779, n:83, w_c:0.834},
+    'ELECTIONS→BIBI_OUT': {pY_llm:0.68, pN_llm:0.18, pY_c:0.406, pN_c:0.46, r2:0.0278, n:78, w_c:0.083},
+    'BIBI_OUT→BENNETT_PM': {pY_llm:0.68, pN_llm:0.18, pY_c:0.484, pN_c:0.168, r2:0.2008, n:144, w_c:0.602},
+    'BIBI_PM→ANNEX_WB': {pY_llm:0.28, pN_llm:0.04, pY_c:0.357, pN_c:0.01, r2:0.1634, n:158, w_c:0.49},
+    'BIBI_PM→ANNEX_GAZA': {pY_llm:0.12, pN_llm:0.02, pY_c:0.156, pN_c:0.01, r2:0.2513, n:153, w_c:0.754},
+    'BIBI_PM→US_GAZA': {pY_llm:0.08, pN_llm:0.18, pY_c:0.738, pN_c:0.01, r2:0.3027, n:149, w_c:0.908},
+    'BIBI_PM→TURKEY_CLASH': {pY_llm:0.28, pN_llm:0.12, pY_c:0.132, pN_c:0.21, r2:0.0245, n:148, w_c:0.074},
+    'BIBI_PM→SAUDI_NORM': {pY_llm:0.28, pN_llm:0.12, pY_c:0.329, pN_c:0.161, r2:0.0186, n:156, w_c:0.056},
+    'BIBI_PM→SAUDI_ACCORDS': {pY_llm:0.22, pN_llm:0.08, pY_c:0.447, pN_c:0.064, r2:0.0554, n:159, w_c:0.166},
+    'BIBI_PM→LEBANON_NORM': {pY_llm:0.38, pN_llm:0.12, pY_c:0.06, pN_c:0.357, r2:0.2063, n:149, w_c:0.619},
+    'BIBI_PM→SYRIA_NORM': {pY_llm:0.22, pN_llm:0.08, pY_c:0.44, pN_c:0.01, r2:0.072, n:159, w_c:0.216},
+    'IRAN_NUKE→STRIKE_5': {pY_llm:0.72, pN_llm:0.28, pY_c:0.01, pN_c:0.313, r2:0.2326, n:144, w_c:0.698},
+    'IRAN_REGIME→PAHLAVI': {pY_llm:0.42, pN_llm:0.02, pY_c:0.544, pN_c:0.01, r2:0.762, n:99, w_c:2.286},
+    'US_WAR_IRAN→US_DECLARE': {pY_llm:0.28, pN_llm:0.02, pY_c:0.078, pN_c:0.092, r2:0.01, n:90, w_c:0.03},
+    'IRAN_DEAL→ELECTIONS': {pY_llm:0.72, pN_llm:0.48, pY_c:0.01, pN_c:0.838, r2:0.2381, n:82, w_c:0.714},
+    'TRUMP_IL→ELECTIONS': {pY_llm:0.72, pN_llm:0.52, pY_c:0.517, pN_c:0.125, r2:0.0393, n:83, w_c:0.118},
+    'CEASEFIRE_X→BIBI_OUT': {pY_llm:0.68, pN_llm:0.32, pY_c:0.418, pN_c:0.463, r2:0.0044, n:104, w_c:0.013},
+    'TRUMP_IL→BIBI_OUT': {pY_llm:0.52, pN_llm:0.36, pY_c:0.612, pN_c:0.278, r2:0.1467, n:163, w_c:0.44},
+    'TRUMP_IL→BIBI_PM': {pY_llm:0.52, pN_llm:0.34, pY_c:0.589, pN_c:0.345, r2:0.1456, n:157, w_c:0.437},
+    'TRUMP_IL→STRIKE_5': {pY_llm:0.52, pN_llm:0.28, pY_c:0.01, pN_c:0.406, r2:0.2057, n:145, w_c:0.617},
+    'IRAN_DEAL→STRIKE_5': {pY_llm:0.24, pN_llm:0.48, pY_c:0.391, pN_c:0.01, r2:0.323, n:145, w_c:0.969},
+    'BIBI_PM→STRIKE_5': {pY_llm:0.52, pN_llm:0.28, pY_c:0.01, pN_c:0.427, r2:0.1417, n:145, w_c:0.425},
+    'US_WAR_IRAN→PAHLAVI': {pY_llm:0.42, pN_llm:0.02, pY_c:0.106, pN_c:0.209, r2:0.0535, n:107, w_c:0.16},
+    'TRUMP_IL→US_DECLARE': {pY_llm:0.15, pN_llm:0.04, pY_c:0.129, pN_c:0.026, r2:0.234, n:91, w_c:0.702},
+  };
 
   // Secondary edges (displayed as dashed; included in multi-parent BayesOracle blend at half weight)
   const EXTRA_EDGES = [
@@ -761,23 +805,36 @@
       const secs = secondaryByTarget[nodeId] || [];
       parEl.textContent = nodeMap[n.primary].label + (secs.length ? ` + ${secs.length} secondary` : '');
 
+      function r2Badge(src, tgt) {
+        const m = EDGE_META[src + '→' + tgt];
+        if (!m) return '<td></td>';
+        const cls = m.r2 >= 0.15 ? 'r2-strong' : m.r2 >= 0.05 ? 'r2-mod' : '';
+        const title = `LLM: ${pct(m.pY_llm)}/${pct(m.pN_llm)} · Data: ${pct(m.pY_c)}/${pct(m.pN_c)} · n=${m.n}d`;
+        return `<td><span class="r2-badge ${cls}" title="${title}">R²=${m.r2.toFixed(2)}</span></td>`;
+      }
+
       condBody.innerHTML = '';
       const tr0 = document.createElement('tr');
       tr0.className = 'primary-row';
-      tr0.innerHTML = `<td>${nodeMap[n.primary].label} <em style="color:#58a6ff">(w=1.0)</em></td><td>${pct(n.pY)}</td><td>${pct(n.pN)}</td>`;
+      tr0.innerHTML = `<td>${nodeMap[n.primary].label} <em style="color:#58a6ff">(w=1.0)</em></td><td>${pct(n.pY)}</td><td>${pct(n.pN)}</td>${r2Badge(n.primary, nodeId)}`;
       condBody.appendChild(tr0);
       secs.forEach(e => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${nodeMap[e.source].label} <em style="color:#8b949e">(w=0.5)</em></td><td>${pct(e.pY)}</td><td>${pct(e.pN)}</td>`;
+        tr.innerHTML = `<td>${nodeMap[e.source].label} <em style="color:#8b949e">(w=0.5)</em></td><td>${pct(e.pY)}</td><td>${pct(e.pN)}</td>${r2Badge(e.source, nodeId)}`;
         condBody.appendChild(tr);
       });
       condTbl.style.display = 'table';
 
       const pPrim = nodeMap[n.primary].bayes ?? nodeMap[n.primary].pm;
       const pFromPrim = n.pY * pPrim + n.pN * (1 - pPrim);
-      let formula = `primary: ${pct(n.pY)}×${pct(pPrim)} + ${pct(n.pN)}×${pct(1-pPrim)} = ${pct(pFromPrim)}`;
-      if (secs.length) formula += ` | blended with ${secs.length} secondary → ${pct(n.bayes)}`;
-      noteEl.textContent = `LToTP: ${formula}`;
+      const primMeta = EDGE_META[n.primary + '→' + nodeId];
+      let formula = `Law of Total Probability: ${pct(n.pY)}×${pct(pPrim)} + ${pct(n.pN)}×${pct(1-pPrim)} = ${pct(pFromPrim)}`;
+      if (secs.length) formula += ` · blended with ${secs.length} secondary → ${pct(n.bayes)}`;
+      if (primMeta) {
+        const dataShare = Math.round(primMeta.w_c / (1 + primMeta.w_c) * 100);
+        formula += `\nBlend: ${100 - dataShare}% LLM + ${dataShare}% price-history (R²=${primMeta.r2.toFixed(2)}, n=${primMeta.n}d)`;
+      }
+      noteEl.textContent = formula;
     } else {
       bayesEl.textContent = 'Root node';
       divEl.textContent   = '—';

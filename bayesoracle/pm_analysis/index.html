@@ -1043,23 +1043,11 @@
     statusEl.textContent = 'Fetching price histories…';
 
     try {
-      const results = await Promise.allSettled(
-        NODES.map(n =>
-          fetch(`${NODE_HISTORY_BASE}${n.id}.json`)
-            .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-            .then(data => {
-              const h = {};
-              (data.prices || []).forEach(pt => { h[pt.date] = pt.probability; });
-              return { id: n.id, history: h };
-            })
-        )
-      );
+      const allData = await fetch(`${NODE_HISTORY_BASE}all.json`)
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
 
-      const hist = {};
-      let fetched = 0;
-      results.forEach(r => {
-        if (r.status === 'fulfilled') { hist[r.value.id] = r.value.history; fetched++; }
-      });
+      const hist = allData;
+      const fetched = Object.keys(hist).length;
 
       statusEl.textContent = `Got ${fetched}/${NODES.length} histories — computing…`;
 

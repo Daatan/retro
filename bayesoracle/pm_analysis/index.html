@@ -329,6 +329,10 @@
         <button id="poll-btn">🔄 Poll PM Live Prices</button>
         <div id="poll-status">Prices baked in from May 14, 2026</div>
       </div>
+      <div class="sb-section">
+        <button id="cond-btn">📊 Refresh Conditionals</button>
+        <div id="cond-status">Fetches price history · recomputes pY/pN live</div>
+      </div>
     </div>
   </div>
 
@@ -340,40 +344,40 @@
 
   const NODES = [
     // Layer 0 — Exogenous roots (no Bayes computation; PM price is the prior)
-    { id:'IRAN_DEAL',     label:'Iran Deal',          question:'US–Iran nuclear deal signed before 2027',                              pmId:'665325',  pm:0.575, layer:0, slug:'us-iran-nuclear-deal-before-2027' },
-    { id:'CEASEFIRE_X',   label:'Ceasefire Breaks',   question:'Israel–Hamas ceasefire cancelled by June 30 2026',                    pmId:'1090489', pm:0.140, layer:0, slug:'israel-x-hamas-ceasefire-cancelled-by-june-30' },
-    { id:'TRUMP_IL',      label:'Trump Backs IL',      question:'Donald Trump visits Israel in 2026',                                  pmId:'665260',  pm:0.470, layer:0, slug:'will-donald-trump-visit-israel-in-2026' },
-    { id:'US_WAR_IRAN',   label:'US-Iran War',         question:'US invades or attacks Iran before 2027',                              pmId:'665374',  pm:0.295, layer:0, slug:'will-the-us-invade-iran-before-2027' },
-    { id:'IRAN_REGIME',   label:'Iran Regime Falls',   question:'Iranian regime collapses or falls by end of 2026',                   pmId:'663583',  pm:0.165, layer:0, slug:'will-the-iranian-regime-fall-by-the-end-of-2026' },
-    { id:'IRAN_NUKE',     label:'Iran Nuclear Thresh', question:'Iran conducts a nuclear test before 2027',                            pmId:'665521',  pm:0.085, layer:0, slug:'iran-nuclear-test-before-2027' },
+    { id:'IRAN_DEAL',     label:'Iran Deal',          question:'US–Iran nuclear deal signed before 2027',                              pmId:'665325',  pm:0.575, layer:0, slug:'us-iran-nuclear-deal-before-2027',                                       clobToken:'102936224134271070189104847090829839924697394514566827387181305960175107677216' },
+    { id:'CEASEFIRE_X',   label:'Ceasefire Breaks',   question:'Israel–Hamas ceasefire cancelled by June 30 2026',                    pmId:'1090489', pm:0.140, layer:0, slug:'israel-x-hamas-ceasefire-cancelled-by-june-30',                          clobToken:'63808367585655921040786645798394416641162584754134130888507371817017552687973' },
+    { id:'TRUMP_IL',      label:'Trump Backs IL',      question:'Donald Trump visits Israel in 2026',                                  pmId:'665260',  pm:0.470, layer:0, slug:'will-donald-trump-visit-israel-in-2026',                                  clobToken:'17310312046830507121308439157055105976196613647072768511530359658718851345502' },
+    { id:'US_WAR_IRAN',   label:'US-Iran War',         question:'US invades or attacks Iran before 2027',                              pmId:'665374',  pm:0.295, layer:0, slug:'will-the-us-invade-iran-before-2027',                                     clobToken:'55115078421062885512539156303747803058407616201213034911037320915726138659123' },
+    { id:'IRAN_REGIME',   label:'Iran Regime Falls',   question:'Iranian regime collapses or falls by end of 2026',                   pmId:'663583',  pm:0.165, layer:0, slug:'will-the-iranian-regime-fall-by-the-end-of-2026',                        clobToken:'10991849228756847439673778874175365458450913336396982752046655649803657501964' },
+    { id:'IRAN_NUKE',     label:'Iran Nuclear Thresh', question:'Iran conducts a nuclear test before 2027',                            pmId:'665521',  pm:0.085, layer:0, slug:'iran-nuclear-test-before-2027',                                           clobToken:'101371628741119370156433108829627306392734152017027640384155257750266453353351' },
 
     // Layer 1 — Near-term political
     { id:'ELECTIONS', label:'Early Elections',   question:'Israeli parliament dissolved and early elections called by June 30 2026',  pmId:'1280208', pm:0.470, layer:1,
-      primary:'CEASEFIRE_X', pY:0.875, pN:0.372, slug:'israeli-parliament-dissolved-by-june-30-228' },
+      primary:'CEASEFIRE_X', pY:0.875, pN:0.372, slug:'israeli-parliament-dissolved-by-june-30-228',      clobToken:'5500958648222024490080262026563017618333773328581609432182941377205770769101' },
     { id:'BIBI_OUT',  label:'Bibi Not PM 2027', question:'Benjamin Netanyahu is no longer Prime Minister before end of 2027',         pmId:'567688',  pm:0.435, layer:1,
-      primary:'ELECTIONS', pY:0.659, pN:0.398, slug:'netanyahu-out-before-2027-684-719-226-657' },
+      primary:'ELECTIONS', pY:0.659, pN:0.398, slug:'netanyahu-out-before-2027-684-719-226-657',           clobToken:'114694726451307654528948558967898493662917070661203465131156925998487819889437' },
 
     // Layer 2 — PM race (all share primary parent BIBI_OUT)
-    { id:'BIBI_PM',      label:'Bibi PM',      question:'Benjamin Netanyahu becomes the next Prime Minister of Israel',               pmId:'682705', pm:0.395,  layer:2, primary:'BIBI_OUT', pY:0.29,  pN:0.608, slug:'will-benjamin-netanyahu-be-the-next-prime-minister-of-israel' },
-    { id:'BENNETT_PM',   label:'Bennett PM',   question:'Naftali Bennett becomes the next Prime Minister of Israel',                  pmId:'682706', pm:0.400,  layer:2, primary:'BIBI_OUT', pY:0.528, pN:0.242, slug:'will-naftali-bennett-be-the-next-prime-minister-of-israel' },
-    { id:'EIZENKOT_PM',  label:'Eizenkot PM',  question:'Gadi Eizenkot becomes the next Prime Minister of Israel',                   pmId:'682708', pm:0.119,  layer:2, primary:'BIBI_OUT', pY:0.133, pN:0.066, slug:'will-gadi-eizenkot-be-the-next-prime-minister-of-israel' },
-    { id:'LIEBERMAN_PM', label:'Lieberman PM', question:'Avigdor Lieberman becomes the next Prime Minister of Israel',               pmId:'682710', pm:0.039,  layer:2, primary:'BIBI_OUT', pY:0.084, pN:0.013, slug:'will-avigdor-lieberman-be-the-next-prime-minister-of-israel' },
-    { id:'LAPID_PM',     label:'Lapid PM',     question:'Yair Lapid becomes the next Prime Minister of Israel',                       pmId:'682707', pm:0.009,  layer:2, primary:'BIBI_OUT', pY:0.107, pN:0.018, slug:'will-yair-lapid-be-the-next-prime-minister-of-israel' },
+    { id:'BIBI_PM',      label:'Bibi PM',      question:'Benjamin Netanyahu becomes the next Prime Minister of Israel',               pmId:'682705', pm:0.395,  layer:2, primary:'BIBI_OUT', pY:0.29,  pN:0.608, slug:'will-benjamin-netanyahu-be-the-next-prime-minister-of-israel',    clobToken:'20006732765674855733524007935991362439352594042415161039767275461950712817548' },
+    { id:'BENNETT_PM',   label:'Bennett PM',   question:'Naftali Bennett becomes the next Prime Minister of Israel',                  pmId:'682706', pm:0.400,  layer:2, primary:'BIBI_OUT', pY:0.528, pN:0.242, slug:'will-naftali-bennett-be-the-next-prime-minister-of-israel',         clobToken:'58945936829392654397399777214757608864525173988558750256164021442231118224154' },
+    { id:'EIZENKOT_PM',  label:'Eizenkot PM',  question:'Gadi Eizenkot becomes the next Prime Minister of Israel',                   pmId:'682708', pm:0.119,  layer:2, primary:'BIBI_OUT', pY:0.133, pN:0.066, slug:'will-gadi-eizenkot-be-the-next-prime-minister-of-israel',           clobToken:'52487256270918227930942830546248720603566203568229607048093730748840489555808' },
+    { id:'LIEBERMAN_PM', label:'Lieberman PM', question:'Avigdor Lieberman becomes the next Prime Minister of Israel',               pmId:'682710', pm:0.039,  layer:2, primary:'BIBI_OUT', pY:0.084, pN:0.013, slug:'will-avigdor-lieberman-be-the-next-prime-minister-of-israel',       clobToken:'105057524965982907913786325697426001538810836564004836999292309706852745390829' },
+    { id:'LAPID_PM',     label:'Lapid PM',     question:'Yair Lapid becomes the next Prime Minister of Israel',                       pmId:'682707', pm:0.009,  layer:2, primary:'BIBI_OUT', pY:0.107, pN:0.018, slug:'will-yair-lapid-be-the-next-prime-minister-of-israel',               clobToken:'30912854850866302644106316438153629460678506137655559406260043509960678109607' },
 
     // Layer 3 — Policy outcomes (primary parent: BIBI_PM)
-    { id:'ANNEX_WB',     label:'W.Bank Annex',   question:'Israel formally annexes West Bank territory before 2027',                 pmId:'665515', pm:0.120, layer:3, primary:'BIBI_PM', pY:0.305, pN:0.03,  slug:'will-israel-annex-west-bank-territory-before-2027' },
-    { id:'ANNEX_GAZA',   label:'Gaza Annex',     question:'Israel formally annexes Gaza territory by 2026',                          pmId:'636921', pm:0.029, layer:3, primary:'BIBI_PM', pY:0.135, pN:0.016, slug:'will-israel-annex-gaza-territory-by-2026' },
-    { id:'US_GAZA',      label:'US Gaza Admin',  question:'US forces deployed and administering Gaza before 2027',                   pmId:'665485', pm:0.130, layer:3, primary:'BIBI_PM', pY:0.393, pN:0.099, slug:'us-forces-in-gaza-before-2027' },
-    { id:'TURKEY_CLASH', label:'IL-Turkey Clash',question:'Israel and Turkey engage in a military clash before 2027',                pmId:'665484', pm:0.195, layer:3, primary:'BIBI_PM', pY:0.27,  pN:0.126, slug:'israel-x-turkey-military-clash-before-2027' },
+    { id:'ANNEX_WB',     label:'W.Bank Annex',   question:'Israel formally annexes West Bank territory before 2027',                 pmId:'665515', pm:0.120, layer:3, primary:'BIBI_PM', pY:0.305, pN:0.03,  slug:'will-israel-annex-west-bank-territory-before-2027',                clobToken:'77622159301151595600018692169046934155670985348681037776543994015872072881759' },
+    { id:'ANNEX_GAZA',   label:'Gaza Annex',     question:'Israel formally annexes Gaza territory by 2026',                          pmId:'636921', pm:0.029, layer:3, primary:'BIBI_PM', pY:0.135, pN:0.016, slug:'will-israel-annex-gaza-territory-by-2026',                          clobToken:'70359681490276052691112887648329793451326841944052095594051773436187530963436' },
+    { id:'US_GAZA',      label:'US Gaza Admin',  question:'US forces deployed and administering Gaza before 2027',                   pmId:'665485', pm:0.130, layer:3, primary:'BIBI_PM', pY:0.393, pN:0.099, slug:'us-forces-in-gaza-before-2027',                                     clobToken:'105233400859414924844071137932068265322197459969475638102195871238609459335708' },
+    { id:'TURKEY_CLASH', label:'IL-Turkey Clash',question:'Israel and Turkey engage in a military clash before 2027',                pmId:'665484', pm:0.195, layer:3, primary:'BIBI_PM', pY:0.27,  pN:0.126, slug:'israel-x-turkey-military-clash-before-2027',                        clobToken:'87453347574739433727741310300628833850540987232802276383336752817811816312350' },
 
     // Layer 4 — Downstream outcomes
-    { id:'SAUDI_NORM',    label:'Saudi Norm.',     question:'Israel and Saudi Arabia normalize diplomatic relations before 2027',     pmId:'665218',  pm:0.175, layer:4, primary:'BIBI_PM',     pY:0.283, pN:0.122, slug:'israel-and-saudi-arabia-normalize-relations-before-2027' },
-    { id:'SAUDI_ACCORDS', label:'Saudi Accords',   question:'Saudi Arabia joins the Abraham Accords before 2027',                    pmId:'665474',  pm:0.115, layer:4, primary:'BIBI_PM',     pY:0.252, pN:0.078, slug:'will-saudi-arabia-join-the-abraham-accords-before-2027' },
-    { id:'LEBANON_NORM',  label:'Lebanon Norm.',   question:'Israel and Lebanon normalize relations before 2027',                    pmId:'665414',  pm:0.185, layer:4, primary:'BIBI_PM',     pY:0.258, pN:0.211, slug:'israel-and-lebanon-normalize-relations-before-2027' },
-    { id:'SYRIA_NORM',    label:'Syria Norm.',     question:'Israel and Syria normalize relations by December 31 2026',              pmId:'677273',  pm:0.105, layer:4, primary:'BIBI_PM',     pY:0.259, pN:0.068, slug:'israel-and-syria-normalize-relations-by-december-31-2026-166' },
-    { id:'STRIKE_5',      label:'Strike on Iran',  question:'Israel conducts a second major military operation against Iran',        pmId:'678748',  pm:0.396, layer:4, primary:'IRAN_NUKE',   pY:0.428, pN:0.156, slug:'israel-military-action-against-iran-by-167' },
-    { id:'PAHLAVI',       label:'Pahlavi Returns', question:'US officially recognizes Reza Pahlavi as leader of Iran in 2026',       pmId:'1115288', pm:0.085, layer:4, primary:'IRAN_REGIME', pY:0.506, pN:0.15,  slug:'us-recognizes-reza-pahlavi-as-leader-of-iran-in2026' },
-    { id:'US_DECLARE',    label:'US Declares War', question:'US officially declares war on Iran by December 31 2026',               pmId:'1170144', pm:0.075, layer:4, primary:'US_WAR_IRAN', pY:0.274, pN:0.08,  slug:'will-the-us-officially-declare-war-on-iran-by-december-31-2026-746' },
+    { id:'SAUDI_NORM',    label:'Saudi Norm.',     question:'Israel and Saudi Arabia normalize diplomatic relations before 2027',     pmId:'665218',  pm:0.175, layer:4, primary:'BIBI_PM',     pY:0.283, pN:0.122, slug:'israel-and-saudi-arabia-normalize-relations-before-2027',       clobToken:'86727316187077924188803504745015598973723867072517640274231186919208073176698' },
+    { id:'SAUDI_ACCORDS', label:'Saudi Accords',   question:'Saudi Arabia joins the Abraham Accords before 2027',                    pmId:'665474',  pm:0.115, layer:4, primary:'BIBI_PM',     pY:0.252, pN:0.078, slug:'will-saudi-arabia-join-the-abraham-accords-before-2027',         clobToken:'44330303251518041570433466737679109932061477358497939773558457869950245007155' },
+    { id:'LEBANON_NORM',  label:'Lebanon Norm.',   question:'Israel and Lebanon normalize relations before 2027',                    pmId:'665414',  pm:0.185, layer:4, primary:'BIBI_PM',     pY:0.258, pN:0.211, slug:'israel-and-lebanon-normalize-relations-before-2027',            clobToken:'101831681716333180244111475646971936256198362513844467846876475971510978571235' },
+    { id:'SYRIA_NORM',    label:'Syria Norm.',     question:'Israel and Syria normalize relations by December 31 2026',              pmId:'677273',  pm:0.105, layer:4, primary:'BIBI_PM',     pY:0.259, pN:0.068, slug:'israel-and-syria-normalize-relations-by-december-31-2026-166',  clobToken:'106383854378569763040038727158261681740086130201198677161578651498744312589763' },
+    { id:'STRIKE_5',      label:'Strike on Iran',  question:'Israel conducts a second major military operation against Iran',        pmId:'678748',  pm:0.396, layer:4, primary:'IRAN_NUKE',   pY:0.428, pN:0.156, slug:'israel-military-action-against-iran-by-167',                    clobToken:'11412542007717408179922453938322356199012298204805894786640983803350145893058' },
+    { id:'PAHLAVI',       label:'Pahlavi Returns', question:'US officially recognizes Reza Pahlavi as leader of Iran in 2026',       pmId:'1115288', pm:0.085, layer:4, primary:'IRAN_REGIME', pY:0.506, pN:0.15,  slug:'us-recognizes-reza-pahlavi-as-leader-of-iran-in2026',           clobToken:'35782709243786983035694178955131584324960374432781357142873120580614410145650' },
+    { id:'US_DECLARE',    label:'US Declares War', question:'US officially declares war on Iran by December 31 2026',               pmId:'1170144', pm:0.075, layer:4, primary:'US_WAR_IRAN', pY:0.274, pN:0.08,  slug:'will-the-us-officially-declare-war-on-iran-by-december-31-2026-746', clobToken:'7557290671053949208699445220310834898387867585937374554219472108856099537227' },
   ];
 
   // Store baseline PM prices so sliders can reset
@@ -946,6 +950,167 @@
       statusEl.className   = 'error';
       statusEl.textContent = err.message.includes('Failed to fetch')
         ? 'Network error — check CORS or connection'
+        : `Error: ${err.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ─── Refresh Conditionals: fetch live price history → recompute pY/pN ───────────
+
+  const CLOB_HISTORY_URL = 'https://clob.polymarket.com/prices-history';
+  const BIN_HI = 0.60, BIN_LO = 0.40, MIN_BIN_PTS = 8;
+
+  function _alignHistories(ha, hb) {
+    const dates = Object.keys(ha).filter(d => d in hb).sort();
+    return { xa: dates.map(d => ha[d]), xb: dates.map(d => hb[d]), n: dates.length };
+  }
+
+  function _binStats(xa, xb, thresh, above) {
+    const vals = xb.filter((_, i) => above ? xa[i] > thresh : xa[i] < thresh);
+    if (vals.length < MIN_BIN_PTS) return { mean: null, std: null, n: vals.length };
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const std  = Math.sqrt(vals.reduce((a, v) => a + (v - mean) ** 2, 0) / vals.length);
+    return { mean, std, n: vals.length };
+  }
+
+  function _linreg(xa, xb) {
+    const n = xa.length;
+    if (n < 20) return { slope: 0, intercept: 0.5, r2: 0 };
+    const sx  = xa.reduce((a, b) => a + b, 0);
+    const sy  = xb.reduce((a, b) => a + b, 0);
+    const sxy = xa.reduce((s, x, i) => s + x * xb[i], 0);
+    const sxx = xa.reduce((s, x) => s + x * x, 0);
+    const den = n * sxx - sx * sx;
+    if (Math.abs(den) < 1e-10) return { slope: 0, intercept: sy / n, r2: 0 };
+    const slope     = (n * sxy - sx * sy) / den;
+    const intercept = (sy - slope * sx) / n;
+    const yMean = sy / n;
+    const ssTot = xb.reduce((s, y) => s + (y - yMean) ** 2, 0);
+    const ssRes = xb.reduce((s, y, i) => s + (y - (intercept + slope * xa[i])) ** 2, 0);
+    return { slope, intercept, r2: ssTot > 1e-10 ? Math.max(0, 1 - ssRes / ssTot) : 0 };
+  }
+
+  function _clip(v) { return Math.max(0.01, Math.min(0.99, v)); }
+
+  function _ci90(p, std, n) {
+    if (!std || n < 2) return [_clip(p - 0.15), _clip(p + 0.15)];
+    const margin = 1.645 * (std / Math.sqrt(n)) * 1.5;
+    return [_clip(p - margin), _clip(p + margin)];
+  }
+
+  function _computeEdge(pY_llm, pN_llm, xa, xb) {
+    const hi  = _binStats(xa, xb, BIN_HI, true);
+    const lo  = _binStats(xa, xb, BIN_LO, false);
+    const reg = _linreg(xa, xb);
+
+    let pY, wY, pY_ci;
+    if (hi.mean !== null) {
+      wY = hi.n / 10;
+      pY = _clip((pY_llm + wY * hi.mean) / (1 + wY));
+      pY_ci = _ci90(pY, hi.std, hi.n);
+    } else if (reg.r2 > 0) {
+      wY = reg.r2 * 3;
+      pY = _clip((pY_llm + wY * _clip(reg.intercept + reg.slope)) / (1 + wY));
+      pY_ci = [_clip(pY - 0.15), _clip(pY + 0.15)];
+    } else {
+      wY = 0; pY = pY_llm; pY_ci = [_clip(pY - 0.15), _clip(pY + 0.15)];
+    }
+
+    let pN, wN, pN_ci;
+    if (lo.mean !== null) {
+      wN = lo.n / 10;
+      pN = _clip((pN_llm + wN * lo.mean) / (1 + wN));
+      pN_ci = _ci90(pN, lo.std, lo.n);
+    } else if (reg.r2 > 0) {
+      wN = reg.r2 * 3;
+      pN = _clip((pN_llm + wN * _clip(reg.intercept)) / (1 + wN));
+      pN_ci = [_clip(pN - 0.15), _clip(pN + 0.15)];
+    } else {
+      wN = 0; pN = pN_llm; pN_ci = [_clip(pN - 0.15), _clip(pN + 0.15)];
+    }
+
+    const srcY = hi.mean !== null ? 'bin' : reg.r2 > 0 ? 'reg' : 'llm';
+    const srcN = lo.mean !== null ? 'bin' : reg.r2 > 0 ? 'reg' : 'llm';
+    return { pY, pN, pY_ci, pN_ci, wy: wY, wn: wN, r2: reg.r2, src_Y: srcY, src_N: srcN };
+  }
+
+  document.getElementById('cond-btn').addEventListener('click', async () => {
+    const btn      = document.getElementById('cond-btn');
+    const statusEl = document.getElementById('cond-status');
+    btn.disabled   = true;
+    statusEl.className   = '';
+    statusEl.textContent = 'Fetching price histories…';
+
+    try {
+      const results = await Promise.allSettled(
+        NODES.map(n =>
+          fetch(`${CLOB_HISTORY_URL}?market=${n.clobToken}&interval=max&fidelity=1440`,
+                { headers: { 'Accept': 'application/json' } })
+            .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(data => {
+              const h = {};
+              (data.history || []).forEach(pt => {
+                h[new Date(pt.t * 1000).toISOString().slice(0, 10)] = pt.p;
+              });
+              return { id: n.id, history: h };
+            })
+        )
+      );
+
+      const hist = {};
+      let fetched = 0;
+      results.forEach(r => {
+        if (r.status === 'fulfilled') { hist[r.value.id] = r.value.history; fetched++; }
+      });
+
+      statusEl.textContent = `Got ${fetched}/${NODES.length} histories — computing…`;
+
+      // Recompute primary edges
+      NODES.forEach(n => {
+        if (!n.primary) return;
+        const hSrc = hist[n.primary], hTgt = hist[n.id];
+        if (!hSrc || !hTgt) return;
+        const { xa, xb, n: cnt } = _alignHistories(hSrc, hTgt);
+        if (cnt < 20) return;
+        const key = n.primary + '→' + n.id;
+        const meta = EDGE_META[key];
+        if (!meta) return;
+        const res = _computeEdge(meta.pY_llm, meta.pN_llm, xa, xb);
+        n.pY = res.pY; n.pN = res.pN;
+        Object.assign(meta, { pY_ci: res.pY_ci, pN_ci: res.pN_ci,
+                               wy: res.wy, wn: res.wn, r2: res.r2,
+                               src_Y: res.src_Y, src_N: res.src_N });
+      });
+
+      // Recompute secondary edges
+      EXTRA_EDGES.forEach(e => {
+        const hSrc = hist[e.source], hTgt = hist[e.target];
+        if (!hSrc || !hTgt) return;
+        const { xa, xb, n: cnt } = _alignHistories(hSrc, hTgt);
+        if (cnt < 20) return;
+        const key = e.source + '→' + e.target;
+        const meta = EDGE_META[key];
+        if (!meta) return;
+        const res = _computeEdge(meta.pY_llm, meta.pN_llm, xa, xb);
+        e.pY = res.pY; e.pN = res.pN;
+        Object.assign(meta, { pY_ci: res.pY_ci, pN_ci: res.pN_ci,
+                               wy: res.wy, wn: res.wn, r2: res.r2,
+                               src_Y: res.src_Y, src_N: res.src_N });
+      });
+
+      recompute();
+      refreshGraph(true);
+      if (_activeNodeId) showDetail(_activeNodeId);
+
+      const ts = new Date().toLocaleTimeString();
+      statusEl.className   = 'ok';
+      statusEl.textContent = `Conditionals updated at ${ts} (${fetched} nodes)`;
+
+    } catch (err) {
+      statusEl.className   = 'error';
+      statusEl.textContent = err.message.includes('Failed to fetch')
+        ? 'Network error — CORS or connectivity issue'
         : `Error: ${err.message}`;
     } finally {
       btn.disabled = false;

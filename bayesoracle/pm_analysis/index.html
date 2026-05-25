@@ -331,7 +331,7 @@
       </div>
       <div class="sb-section">
         <button id="cond-btn">📊 Refresh Conditionals</button>
-        <div id="cond-status">Fetches price history · recomputes pY/pN live</div>
+        <div id="cond-status">Recomputes pY/pN from stored price history</div>
       </div>
     </div>
   </div>
@@ -958,7 +958,7 @@
 
   // ─── Refresh Conditionals: fetch live price history → recompute pY/pN ───────────
 
-  const CLOB_HISTORY_URL = 'https://clob.polymarket.com/prices-history';
+  const NODE_HISTORY_BASE = '../node_history/';
   const BIN_HI = 0.60, BIN_LO = 0.40, MIN_BIN_PTS = 8;
 
   function _alignHistories(ha, hb) {
@@ -1045,14 +1045,11 @@
     try {
       const results = await Promise.allSettled(
         NODES.map(n =>
-          fetch(`${CLOB_HISTORY_URL}?market=${n.clobToken}&interval=max&fidelity=1440`,
-                { headers: { 'Accept': 'application/json' } })
+          fetch(`${NODE_HISTORY_BASE}${n.id}.json`)
             .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
             .then(data => {
               const h = {};
-              (data.history || []).forEach(pt => {
-                h[new Date(pt.t * 1000).toISOString().slice(0, 10)] = pt.p;
-              });
+              (data.prices || []).forEach(pt => { h[pt.date] = pt.probability; });
               return { id: n.id, history: h };
             })
         )

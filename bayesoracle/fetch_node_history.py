@@ -83,27 +83,38 @@ def main() -> None:
 
     for i, (node_id, pm_id) in enumerate(NODES.items(), 1):
         out_path = OUT_DIR / f"{node_id}.json"
-        if out_path.exists():
-            existing = json.loads(out_path.read_text())
-            print(f"[{i}/{total}] {node_id}: skip ({len(existing['prices'])} points cached)")
-            continue
-
         print(f"[{i}/{total}] {node_id} (pmId={pm_id})", end=" ", flush=True)
         try:
-            token = _get_clob_token(client, pm_id)
+            # Reuse cached token to save a Gamma API call
+            existing_prices: dict[str, float] = {}
+            token: str | None = None
+            if out_path.exists():
+                saved = json.loads(out_path.read_text())
+                existing_prices = {pt["date"]: pt["probability"] for pt in saved["prices"]}
+                token = saved.get("clob_token_yes")
+
+            if not token:
+                token = _get_clob_token(client, pm_id)
+                time.sleep(0.3)
             if not token:
                 print("✗ no CLOB token")
                 continue
-            time.sleep(0.3)
 
-            prices = _fetch_history(client, token)
+            new_pts = _fetch_history(client, token)
+            new_prices = {pt["date"]: pt["probability"] for pt in new_pts}
+
+            # Merge: new data overwrites old for same date (handles corrections)
+            merged = {**existing_prices, **new_prices}
+            all_prices = [{"date": d, "probability": p} for d, p in sorted(merged.items())]
+
             out_path.write_text(json.dumps({
                 "node_id": node_id,
                 "pm_id": pm_id,
                 "clob_token_yes": token,
-                "prices": prices,
+                "prices": all_prices,
             }, indent=2))
-            print(f"→ {len(prices)} daily points")
+            added = len(all_prices) - len(existing_prices)
+            print(f"→ {len(all_prices)} points (+{added} new)")
         except Exception as exc:
             print(f"✗ {exc}")
 

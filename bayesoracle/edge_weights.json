@@ -14,12 +14,25 @@
     "pN_corr": 0.574,
     "r2_corr": 0.0332,
     "n_corr": 152,
-    "pY_bin": null,
-    "pN_bin": null,
-    "pY_blend": 0.111,
-    "pN_blend": 0.67,
+    "pY_bin": 0.524,
+    "pN_bin": 0.566,
+    "n_hi": 9,
+    "n_lo": 17,
+    "std_hi": 0.006,
+    "std_lo": 0.047,
+    "pY_blend": 0.29,
+    "pN_blend": 0.608,
+    "pY_ci": [
+      0.285,
+      0.295
+    ],
+    "pN_ci": [
+      0.58,
+      0.636
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.1
+    "w_emp_Y": 0.9,
+    "w_emp_N": 1.7
   },
   {
     "source": "BIBI_OUT",
@@ -36,12 +49,25 @@
     "pN_corr": 0.187,
     "r2_corr": 0.1356,
     "n_corr": 152,
-    "pY_bin": null,
-    "pN_bin": null,
-    "pY_blend": 0.173,
-    "pN_blend": 0.111,
+    "pY_bin": 0.015,
+    "pN_bin": 0.058,
+    "n_hi": 9,
+    "n_lo": 17,
+    "std_hi": 0.005,
+    "std_lo": 0.036,
+    "pY_blend": 0.133,
+    "pN_blend": 0.066,
+    "pY_ci": [
+      0.129,
+      0.138
+    ],
+    "pN_ci": [
+      0.045,
+      0.088
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.407
+    "w_emp_Y": 0.9,
+    "w_emp_N": 1.7
   },
   {
     "source": "BIBI_OUT",
@@ -58,12 +84,25 @@
     "pN_corr": 0.01,
     "r2_corr": 0.033,
     "n_corr": 152,
-    "pY_bin": null,
-    "pN_bin": null,
-    "pY_blend": 0.131,
-    "pN_blend": 0.019,
+    "pY_bin": 0.022,
+    "pN_bin": 0.009,
+    "n_hi": 9,
+    "n_lo": 17,
+    "std_hi": 0.004,
+    "std_lo": 0.002,
+    "pY_blend": 0.084,
+    "pN_blend": 0.013,
+    "pY_ci": [
+      0.081,
+      0.087
+    ],
+    "pN_ci": [
+      0.012,
+      0.014
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.099
+    "w_emp_Y": 0.9,
+    "w_emp_N": 1.7
   },
   {
     "source": "BIBI_OUT",
@@ -80,12 +119,25 @@
     "pN_corr": 0.01,
     "r2_corr": 0.1,
     "n_corr": 148,
-    "pY_bin": null,
-    "pN_bin": null,
-    "pY_blend": 0.153,
-    "pN_blend": 0.01,
+    "pY_bin": 0.025,
+    "pN_bin": 0.022,
+    "n_hi": 9,
+    "n_lo": 17,
+    "std_hi": 0.016,
+    "std_lo": 0.004,
+    "pY_blend": 0.107,
+    "pN_blend": 0.018,
+    "pY_ci": [
+      0.093,
+      0.12
+    ],
+    "pN_ci": [
+      0.015,
+      0.02
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.3
+    "w_emp_Y": 0.9,
+    "w_emp_N": 1.7
   },
   {
     "source": "CEASEFIRE_X",
@@ -103,11 +155,24 @@
     "r2_corr": 0.2779,
     "n_corr": 83,
     "pY_bin": null,
-    "pN_bin": 0.317,
+    "pN_bin": 0.353,
+    "n_hi": 0,
+    "n_lo": 78,
+    "std_hi": null,
+    "std_lo": 0.159,
     "pY_blend": 0.875,
-    "pN_blend": 0.316,
+    "pN_blend": 0.372,
+    "pY_ci": [
+      0.725,
+      0.99
+    ],
+    "pN_ci": [
+      0.328,
+      0.416
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.834
+    "w_emp_Y": 0.834,
+    "w_emp_N": 7.8
   },
   {
     "source": "ELECTIONS",
@@ -125,11 +190,24 @@
     "r2_corr": 0.0278,
     "n_corr": 78,
     "pY_bin": null,
-    "pN_bin": 0.444,
+    "pN_bin": 0.443,
+    "n_hi": 7,
+    "n_lo": 49,
+    "std_hi": null,
+    "std_lo": 0.054,
     "pY_blend": 0.659,
-    "pN_blend": 0.202,
+    "pN_blend": 0.398,
+    "pY_ci": [
+      0.509,
+      0.809
+    ],
+    "pN_ci": [
+      0.379,
+      0.417
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.083
+    "w_emp_Y": 0.083,
+    "w_emp_N": 4.9
   },
   {
     "source": "BIBI_OUT",
@@ -146,12 +224,25 @@
     "pN_corr": 0.168,
     "r2_corr": 0.2008,
     "n_corr": 144,
-    "pY_bin": null,
-    "pN_bin": null,
-    "pY_blend": 0.606,
-    "pN_blend": 0.175,
+    "pY_bin": 0.359,
+    "pN_bin": 0.287,
+    "n_hi": 9,
+    "n_lo": 14,
+    "std_hi": 0.016,
+    "std_lo": 0.022,
+    "pY_blend": 0.528,
+    "pN_blend": 0.242,
+    "pY_ci": [
+      0.515,
+      0.541
+    ],
+    "pN_ci": [
+      0.228,
+      0.257
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.602
+    "w_emp_Y": 0.9,
+    "w_emp_N": 1.4
   },
   {
     "source": "BIBI_PM",
@@ -170,10 +261,23 @@
     "n_corr": 158,
     "pY_bin": null,
     "pN_bin": null,
+    "n_hi": 7,
+    "n_lo": 7,
+    "std_hi": null,
+    "std_lo": null,
     "pY_blend": 0.305,
     "pN_blend": 0.03,
+    "pY_ci": [
+      0.155,
+      0.455
+    ],
+    "pN_ci": [
+      0.01,
+      0.18
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.49
+    "w_emp_Y": 0.49,
+    "w_emp_N": 0.49
   },
   {
     "source": "BIBI_PM",
@@ -192,10 +296,23 @@
     "n_corr": 153,
     "pY_bin": null,
     "pN_bin": null,
+    "n_hi": 7,
+    "n_lo": 6,
+    "std_hi": null,
+    "std_lo": null,
     "pY_blend": 0.135,
     "pN_blend": 0.016,
+    "pY_ci": [
+      0.01,
+      0.285
+    ],
+    "pN_ci": [
+      0.01,
+      0.166
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.754
+    "w_emp_Y": 0.754,
+    "w_emp_N": 0.754
   },
   {
     "source": "BIBI_PM",
@@ -214,10 +331,23 @@
     "n_corr": 149,
     "pY_bin": null,
     "pN_bin": null,
+    "n_hi": 6,
+    "n_lo": 6,
+    "std_hi": null,
+    "std_lo": null,
     "pY_blend": 0.393,
     "pN_blend": 0.099,
+    "pY_ci": [
+      0.243,
+      0.543
+    ],
+    "pN_ci": [
+      0.01,
+      0.249
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.908
+    "w_emp_Y": 0.908,
+    "w_emp_N": 0.908
   },
   {
     "source": "BIBI_PM",
@@ -236,10 +366,23 @@
     "n_corr": 148,
     "pY_bin": null,
     "pN_bin": null,
+    "n_hi": 6,
+    "n_lo": 6,
+    "std_hi": null,
+    "std_lo": null,
     "pY_blend": 0.27,
     "pN_blend": 0.126,
+    "pY_ci": [
+      0.12,
+      0.42
+    ],
+    "pN_ci": [
+      0.01,
+      0.276
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.074
+    "w_emp_Y": 0.074,
+    "w_emp_N": 0.074
   },
   {
     "source": "BIBI_PM",
@@ -258,10 +401,23 @@
     "n_corr": 156,
     "pY_bin": null,
     "pN_bin": null,
+    "n_hi": 7,
+    "n_lo": 7,
+    "std_hi": null,
+    "std_lo": null,
     "pY_blend": 0.283,
     "pN_blend": 0.122,
+    "pY_ci": [
+      0.133,
+      0.433
+    ],
+    "pN_ci": [
+      0.01,
+      0.272
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.056
+    "w_emp_Y": 0.056,
+    "w_emp_N": 0.056
   },
   {
     "source": "BIBI_PM",
@@ -280,10 +436,23 @@
     "n_corr": 159,
     "pY_bin": null,
     "pN_bin": null,
+    "n_hi": 7,
+    "n_lo": 7,
+    "std_hi": null,
+    "std_lo": null,
     "pY_blend": 0.252,
     "pN_blend": 0.078,
+    "pY_ci": [
+      0.102,
+      0.402
+    ],
+    "pN_ci": [
+      0.01,
+      0.228
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.166
+    "w_emp_Y": 0.166,
+    "w_emp_N": 0.166
   },
   {
     "source": "BIBI_PM",
@@ -302,10 +471,23 @@
     "n_corr": 149,
     "pY_bin": null,
     "pN_bin": null,
+    "n_hi": 6,
+    "n_lo": 6,
+    "std_hi": null,
+    "std_lo": null,
     "pY_blend": 0.258,
     "pN_blend": 0.211,
+    "pY_ci": [
+      0.108,
+      0.408
+    ],
+    "pN_ci": [
+      0.061,
+      0.361
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.619
+    "w_emp_Y": 0.619,
+    "w_emp_N": 0.619
   },
   {
     "source": "BIBI_PM",
@@ -324,10 +506,23 @@
     "n_corr": 159,
     "pY_bin": null,
     "pN_bin": null,
+    "n_hi": 7,
+    "n_lo": 7,
+    "std_hi": null,
+    "std_lo": null,
     "pY_blend": 0.259,
     "pN_blend": 0.068,
+    "pY_ci": [
+      0.109,
+      0.409
+    ],
+    "pN_ci": [
+      0.01,
+      0.218
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.216
+    "w_emp_Y": 0.216,
+    "w_emp_N": 0.216
   },
   {
     "source": "IRAN_NUKE",
@@ -346,10 +541,23 @@
     "n_corr": 144,
     "pY_bin": null,
     "pN_bin": 0.147,
+    "n_hi": 0,
+    "n_lo": 144,
+    "std_hi": null,
+    "std_lo": 0.084,
     "pY_blend": 0.428,
-    "pN_blend": 0.294,
+    "pN_blend": 0.156,
+    "pY_ci": [
+      0.278,
+      0.578
+    ],
+    "pN_ci": [
+      0.138,
+      0.173
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.698
+    "w_emp_Y": 0.698,
+    "w_emp_N": 14.4
   },
   {
     "source": "IRAN_REGIME",
@@ -367,11 +575,24 @@
     "r2_corr": 0.762,
     "n_corr": 99,
     "pY_bin": null,
-    "pN_bin": 0.135,
+    "pN_bin": 0.166,
+    "n_hi": 0,
+    "n_lo": 80,
+    "std_hi": null,
+    "std_lo": 0.054,
     "pY_blend": 0.506,
-    "pN_blend": 0.013,
+    "pN_blend": 0.15,
+    "pY_ci": [
+      0.356,
+      0.656
+    ],
+    "pN_ci": [
+      0.135,
+      0.165
+    ],
     "w_llm": 1.0,
-    "w_corr": 2.286
+    "w_emp_Y": 2.286,
+    "w_emp_N": 8.0
   },
   {
     "source": "US_WAR_IRAN",
@@ -390,10 +611,23 @@
     "n_corr": 90,
     "pY_bin": null,
     "pN_bin": 0.088,
+    "n_hi": 2,
+    "n_lo": 80,
+    "std_hi": null,
+    "std_lo": 0.019,
     "pY_blend": 0.274,
-    "pN_blend": 0.022,
+    "pN_blend": 0.08,
+    "pY_ci": [
+      0.124,
+      0.424
+    ],
+    "pN_ci": [
+      0.075,
+      0.086
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.03
+    "w_emp_Y": 0.03,
+    "w_emp_N": 8.0
   },
   {
     "source": "IRAN_DEAL",
@@ -410,12 +644,25 @@
     "pN_corr": 0.838,
     "r2_corr": 0.2381,
     "n_corr": 82,
-    "pY_bin": 0.166,
-    "pN_bin": null,
-    "pY_blend": 0.424,
-    "pN_blend": 0.629,
+    "pY_bin": 0.192,
+    "pN_bin": 0.446,
+    "n_hi": 12,
+    "n_lo": 9,
+    "std_hi": 0.092,
+    "std_lo": 0.126,
+    "pY_blend": 0.432,
+    "pN_blend": 0.464,
+    "pY_ci": [
+      0.366,
+      0.498
+    ],
+    "pN_ci": [
+      0.36,
+      0.568
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.714
+    "w_emp_Y": 1.2,
+    "w_emp_N": 0.9
   },
   {
     "source": "TRUMP_IL",
@@ -432,12 +679,25 @@
     "pN_corr": 0.125,
     "r2_corr": 0.0393,
     "n_corr": 83,
-    "pY_bin": 0.38,
+    "pY_bin": 0.386,
     "pN_bin": null,
-    "pY_blend": 0.699,
+    "n_hi": 35,
+    "n_lo": 0,
+    "std_hi": 0.108,
+    "std_lo": null,
+    "pY_blend": 0.46,
     "pN_blend": 0.478,
+    "pY_ci": [
+      0.415,
+      0.505
+    ],
+    "pN_ci": [
+      0.328,
+      0.628
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.118
+    "w_emp_Y": 3.5,
+    "w_emp_N": 0.118
   },
   {
     "source": "CEASEFIRE_X",
@@ -455,11 +715,24 @@
     "r2_corr": 0.0044,
     "n_corr": 104,
     "pY_bin": null,
-    "pN_bin": 0.45,
+    "pN_bin": 0.447,
+    "n_hi": 0,
+    "n_lo": 96,
+    "std_hi": null,
+    "std_lo": 0.054,
     "pY_blend": 0.677,
-    "pN_blend": 0.322,
+    "pN_blend": 0.435,
+    "pY_ci": [
+      0.527,
+      0.827
+    ],
+    "pN_ci": [
+      0.421,
+      0.449
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.013
+    "w_emp_Y": 0.013,
+    "w_emp_N": 9.6
   },
   {
     "source": "TRUMP_IL",
@@ -476,12 +749,25 @@
     "pN_corr": 0.278,
     "r2_corr": 0.1467,
     "n_corr": 163,
-    "pY_bin": 0.528,
+    "pY_bin": 0.516,
     "pN_bin": null,
-    "pY_blend": 0.548,
+    "n_hi": 113,
+    "n_lo": 0,
+    "std_hi": 0.084,
+    "std_lo": null,
+    "pY_blend": 0.516,
     "pN_blend": 0.335,
+    "pY_ci": [
+      0.497,
+      0.536
+    ],
+    "pN_ci": [
+      0.185,
+      0.485
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.44
+    "w_emp_Y": 11.3,
+    "w_emp_N": 0.44
   },
   {
     "source": "TRUMP_IL",
@@ -498,12 +784,25 @@
     "pN_corr": 0.345,
     "r2_corr": 0.1456,
     "n_corr": 157,
-    "pY_bin": 0.521,
+    "pY_bin": 0.519,
     "pN_bin": null,
-    "pY_blend": 0.541,
+    "n_hi": 105,
+    "n_lo": 0,
+    "std_hi": 0.046,
+    "std_lo": null,
+    "pY_blend": 0.519,
     "pN_blend": 0.342,
+    "pY_ci": [
+      0.508,
+      0.53
+    ],
+    "pN_ci": [
+      0.192,
+      0.492
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.437
+    "w_emp_Y": 10.5,
+    "w_emp_N": 0.437
   },
   {
     "source": "TRUMP_IL",
@@ -520,12 +819,25 @@
     "pN_corr": 0.406,
     "r2_corr": 0.2057,
     "n_corr": 145,
-    "pY_bin": 0.12,
+    "pY_bin": 0.122,
     "pN_bin": null,
-    "pY_blend": 0.325,
+    "n_hi": 100,
+    "n_lo": 0,
+    "std_hi": 0.073,
+    "std_lo": null,
+    "pY_blend": 0.158,
     "pN_blend": 0.328,
+    "pY_ci": [
+      0.14,
+      0.176
+    ],
+    "pN_ci": [
+      0.178,
+      0.478
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.617
+    "w_emp_Y": 10.0,
+    "w_emp_N": 0.617
   },
   {
     "source": "IRAN_DEAL",
@@ -542,12 +854,25 @@
     "pN_corr": 0.01,
     "r2_corr": 0.323,
     "n_corr": 145,
-    "pY_bin": 0.234,
-    "pN_bin": 0.1,
-    "pY_blend": 0.314,
-    "pN_blend": 0.249,
+    "pY_bin": 0.213,
+    "pN_bin": 0.109,
+    "n_hi": 11,
+    "n_lo": 76,
+    "std_hi": 0.065,
+    "std_lo": 0.053,
+    "pY_blend": 0.226,
+    "pN_blend": 0.152,
+    "pY_ci": [
+      0.177,
+      0.274
+    ],
+    "pN_ci": [
+      0.137,
+      0.167
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.969
+    "w_emp_Y": 1.1,
+    "w_emp_N": 7.6
   },
   {
     "source": "BIBI_PM",
@@ -566,10 +891,23 @@
     "n_corr": 145,
     "pY_bin": null,
     "pN_bin": null,
+    "n_hi": 4,
+    "n_lo": 6,
+    "std_hi": null,
+    "std_lo": null,
     "pY_blend": 0.368,
     "pN_blend": 0.324,
+    "pY_ci": [
+      0.218,
+      0.518
+    ],
+    "pN_ci": [
+      0.174,
+      0.474
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.425
+    "w_emp_Y": 0.425,
+    "w_emp_N": 0.425
   },
   {
     "source": "US_WAR_IRAN",
@@ -588,10 +926,23 @@
     "n_corr": 107,
     "pY_bin": null,
     "pN_bin": 0.183,
+    "n_hi": 3,
+    "n_lo": 92,
+    "std_hi": null,
+    "std_lo": 0.066,
     "pY_blend": 0.377,
-    "pN_blend": 0.046,
+    "pN_blend": 0.167,
+    "pY_ci": [
+      0.227,
+      0.527
+    ],
+    "pN_ci": [
+      0.15,
+      0.184
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.16
+    "w_emp_Y": 0.16,
+    "w_emp_N": 9.2
   },
   {
     "source": "TRUMP_IL",
@@ -608,11 +959,24 @@
     "pN_corr": 0.026,
     "r2_corr": 0.234,
     "n_corr": 91,
-    "pY_bin": 0.097,
+    "pY_bin": 0.095,
     "pN_bin": null,
-    "pY_blend": 0.141,
+    "n_hi": 44,
+    "n_lo": 0,
+    "std_hi": 0.017,
+    "std_lo": null,
+    "pY_blend": 0.105,
     "pN_blend": 0.034,
+    "pY_ci": [
+      0.099,
+      0.112
+    ],
+    "pN_ci": [
+      0.01,
+      0.184
+    ],
     "w_llm": 1.0,
-    "w_corr": 0.702
+    "w_emp_Y": 4.4,
+    "w_emp_N": 0.702
   }
 ]

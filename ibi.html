@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IBI Retro Analysis Tool</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #2f81f7;
+    --accent-hover: #388bfd;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --disabled-bg: #0d1117;
+    --disabled-text: #484f58;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
+
+  /* ── Layout ── */
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .header h1 { font-size: 16px; font-weight: 600; white-space: nowrap; }
+  .header-keys { display: flex; gap: 10px; flex: 1; flex-wrap: wrap; }
+  .main { max-width: 900px; margin: 0 auto; padding: 20px 16px 60px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* ── Article input ── */
+  .article-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .article-panel h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+  .row { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+  .row label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .url-group { flex: 1; min-width: 260px; }
+
+  /* ── Stage panels ── */
+  .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: opacity .2s; }
+  .stage.locked { opacity: .45; pointer-events: none; }
+  .stage-header { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); background: var(--surface2); }
+  .stage-header h2 { font-size: 14px; font-weight: 600; }
+  .stage-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; margin-right: 8px; }
+  .stage-num.done { background: var(--green); }
+  .stage-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ── Controls ── */
+  input[type=text], input[type=password], input[type=date], textarea, select {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-size: 13px; padding: 6px 10px; width: 100%;
+    outline: none; font-family: inherit;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { resize: vertical; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; }
+  select { cursor: pointer; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; border: 1px solid; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background .15s; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-next { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn-next:hover { filter: brightness(1.1); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+  /* ── Prompt collapsible ── */
+  .collapsible summary { cursor: pointer; font-size: 12px; color: var(--muted); user-select: none; padding: 4px 0; }
+  .collapsible summary:hover { color: var(--text); }
+  .collapsible[open] summary { margin-bottom: 8px; }
+
+  /* ── Model row ── */
+  .model-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .model-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .model-row select { flex: 1; min-width: 200px; }
+  .model-row input[type=text] { flex: 1; min-width: 200px; }
+
+  /* ── Search results ── */
+  .search-results { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+  .search-result-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; }
+  .search-result-item input[type=checkbox] { margin-top: 3px; flex-shrink: 0; cursor: pointer; }
+  .result-meta { flex: 1; min-width: 0; }
+  .result-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .result-source { font-size: 11px; color: var(--muted); }
+  .result-prob { font-size: 13px; font-weight: 700; white-space: nowrap; min-width: 40px; text-align: right; }
+
+  /* ── Comparison cards ── */
+  .compare-cards { display: flex; flex-direction: column; gap: 12px; }
+  .compare-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .compare-claim { font-size: 15px; font-weight: 600; margin-bottom: 12px; line-height: 1.4; }
+  .compare-quote { font-size: 12px; color: var(--muted); font-style: italic; margin-bottom: 12px; border-left: 3px solid var(--border); padding-left: 10px; }
+  .compare-stats { display: flex; gap: 32px; }
+  .stat-block { display: flex; flex-direction: column; gap: 2px; }
+  .stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .stat-value { font-size: 36px; font-weight: 700; line-height: 1; }
+  .stat-value.author { color: var(--accent); }
+  .stat-value.consensus { color: var(--yellow); }
+  .stat-value.na { color: var(--muted); font-size: 20px; }
+  .stat-delta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Misc ── */
+  .error { background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.3); border-radius: 6px; padding: 10px 12px; font-size: 12px; color: var(--red); }
+  .info { font-size: 12px; color: var(--muted); }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .tag-ok { background: rgba(63,185,80,.15); color: var(--green); }
+  .tag-warn { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .article-preview { font-size: 12px; color: var(--muted); line-height: 1.6; max-height: 100px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--bg); margin-top: 6px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔍 IBI Retro Analysis</h1>
+  <div class="header-keys">
+    <div style="flex:1;min-width:200px">
+      <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">OpenRouter API Key</label>
+      <input type="password" id="orKey" placeholder="sk-or-..." autocomplete="off">
+    </div>
+    <div style="flex:1;min-width:200px">
+      <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Oracle API Key (for search)</label>
+      <input type="password" id="oracleKey" placeholder="oracle-..." autocomplete="off">
+    </div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ── Article Input ── -->
+  <div class="article-panel">
+    <h2>Article</h2>
+    <div class="row" style="margin-bottom:8px">
+      <div class="url-group">
+        <label>URL</label>
+        <input type="text" id="articleUrl" placeholder="https://...">
+      </div>
+      <div style="min-width:150px">
+        <label>Publication date</label>
+        <input type="date" id="articleDate">
+      </div>
+      <div style="padding-top:20px">
+        <button class="btn btn-primary" id="fetchBtn" onclick="fetchArticle()">Fetch</button>
+      </div>
+    </div>
+    <div id="articlePreview" style="display:none">
+      <div class="article-preview" id="articleText"></div>
+    </div>
+  </div>
+
+  <!-- ── Stage 1: Extract ── -->
+  <div class="stage locked" id="stage1">
+    <div class="stage-header">
+      <h2><span class="stage-num" id="s1num">1</span>Extract Forecasts</h2>
+      <span id="s1status" class="info"></span>
+    </div>
+    <div class="stage-body">
+      <details class="collapsible" id="s1promptWrap">
+        <summary>▸ Prompt (click to edit)</summary>
+        <textarea id="s1prompt" rows="12"></textarea>
+      </details>
+      <div class="model-row">
+        <label>Model</label>
+        <select id="s1model" onchange="onModelChange('s1')">
+          <option value="google/gemini-2.5-flash">google/gemini-2.5-flash</option>
+          <option value="google/gemini-2.5-flash:free">google/gemini-2.5-flash:free</option>
+          <option value="deepseek/deepseek-r1:free">deepseek/deepseek-r1:free</option>
+          <option value="meta-llama/llama-3.3-70b-instruct:free">meta-llama/llama-3.3-70b-instruct:free</option>
+          <option value="anthropic/claude-3-5-haiku">anthropic/claude-3-5-haiku</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <input type="text" id="s1modelCustom" placeholder="provider/model-name" style="display:none;flex:1">
+      </div>
+      <div class="actions-row">
+        <button class="btn btn-primary" onclick="runStage1()"><span id="s1spinner"></span>Run Extraction</button>
+      </div>
+      <div id="s1error" style="display:none" class="error"></div>
+      <div id="s1outputWrap" style="display:none">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Output — edit freely before proceeding</label>
+        <textarea id="s1output" rows="12"></textarea>
+        <div class="actions-row" style="margin-top:8px">
+          <button class="btn btn-next" onclick="proceedToStage2()">Next → Consensus Search</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Stage 2: Consensus ── -->
+  <div class="stage locked" id="stage2">
+    <div class="stage-header">
+      <h2><span class="stage-num" id="s2num">2</span>Consensus Search</h2>
+      <span id="s2status" class="info"></span>
+    </div>
+    <div class="stage-body">
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Search query (editable)</label>
+        <div class="row">
+          <input type="text" id="s2query" style="flex:1">
+          <button class="btn btn-secondary" onclick="runSearch()"><span id="s2searchSpinner"></span>Search</button>
+        </div>
+      </div>
+      <div id="s2results" style="display:none">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">Found articles — uncheck to exclude</label>
+        <div class="search-results" id="s2resultList"></div>
+      </div>
+      <div id="s2noResults" style="display:none" class="info">No results found. Try a different search query.</div>
+      <details class="collapsible" id="s2promptWrap">
+        <summary>▸ Consensus prompt (click to edit)</summary>
+        <textarea id="s2prompt" rows="10"></textarea>
+      </details>
+      <div class="model-row">
+        <label>Model</label>
+        <select id="s2model" onchange="onModelChange('s2')">
+          <option value="google/gemini-2.5-flash">google/gemini-2.5-flash</option>
+          <option value="google/gemini-2.5-flash:free">google/gemini-2.5-flash:free</option>
+          <option value="deepseek/deepseek-r1:free">deepseek/deepseek-r1:free</option>
+          <option value="meta-llama/llama-3.3-70b-instruct:free">meta-llama/llama-3.3-70b-instruct:free</option>
+          <option value="anthropic/claude-3-5-haiku">anthropic/claude-3-5-haiku</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <input type="text" id="s2modelCustom" placeholder="provider/model-name" style="display:none;flex:1">
+      </div>
+      <div class="actions-row">
+        <button class="btn btn-primary" id="s2analyzeBtn" onclick="runConsensus()" disabled><span id="s2spinner"></span>Analyze Consensus</button>
+      </div>
+      <div id="s2error" style="display:none" class="error"></div>
+      <div id="s2outputWrap" style="display:none">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Consensus results — edit probability values freely</label>
+        <div class="search-results" id="s2analyzeResults"></div>
+        <div class="actions-row" style="margin-top:8px">
+          <button class="btn btn-next" onclick="proceedToStage3()">Next → Compare</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Stage 3: Compare ── -->
+  <div class="stage locked" id="stage3">
+    <div class="stage-header">
+      <h2><span class="stage-num" id="s3num">3</span>Compare</h2>
+    </div>
+    <div class="stage-body">
+      <div class="compare-cards" id="compareCards"></div>
+      <div class="actions-row" style="margin-top:8px">
+        <button class="btn btn-secondary" onclick="exportJSON()">⬇ Export JSON</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+const ORACLE = 'https://oracle.daatan.com'
+
+// ── Persistent state ──
+const state = {
+  articleUrl: '',
+  articleDate: '',
+  articleText: '',
+  articleTitle: '',
+  predictions: [],      // [{claim, quote, author_probability}]
+  searchResults: [],    // [{title, url, snippet, source, published_date}]
+  consensusResults: [], // [{url, title, probability, reasoning}]
+}
+
+// ── Persist API keys ──
+window.addEventListener('DOMContentLoaded', () => {
+  const orKey = localStorage.getItem('ibi_or_key')
+  const oKey = localStorage.getItem('ibi_oracle_key')
+  if (orKey) document.getElementById('orKey').value = orKey
+  if (oKey) document.getElementById('oracleKey').value = oKey
+
+  document.getElementById('orKey').addEventListener('change', e => localStorage.setItem('ibi_or_key', e.target.value.trim()))
+  document.getElementById('oracleKey').addEventListener('change', e => localStorage.setItem('ibi_oracle_key', e.target.value.trim()))
+
+  // Set default prompts
+  document.getElementById('s1prompt').value = EXTRACT_PROMPT
+  document.getElementById('s2prompt').value = CONSENSUS_PROMPT
+})
+
+// ── Model selector ──
+function onModelChange(prefix) {
+  const sel = document.getElementById(`${prefix}model`)
+  const custom = document.getElementById(`${prefix}modelCustom`)
+  custom.style.display = sel.value === 'custom' ? 'block' : 'none'
+}
+function getModel(prefix) {
+  const sel = document.getElementById(`${prefix}model`)
+  if (sel.value === 'custom') return document.getElementById(`${prefix}modelCustom`).value.trim()
+  return sel.value
+}
+
+// ── Default prompts ──
+const EXTRACT_PROMPT = `Article (published {date}):
+{article_text}
+
+Extract every forward-looking prediction or forecast the author makes in this article.
+For each prediction return:
+- quote: exact text from article (short, the key sentence)
+- claim: clean one-sentence statement of what is being predicted
+- author_probability: your estimate (0-100) of the probability the author implies. 60 means the author thinks it is likely, 40 means unlikely, 50 means neutral/uncertain.
+
+Return valid JSON only, no other text:
+{ "predictions": [{ "quote": "...", "claim": "...", "author_probability": 60 }] }`
+
+const CONSENSUS_PROMPT = `Article (published {date}):
+{article_text}
+
+Regarding this specific forecast: "{claim}"
+
+What probability (0-100) does this article assign to this forecast happening?
+- 60-100: article thinks it will happen
+- 40-60: article is uncertain/neutral
+- 0-40: article thinks it will NOT happen
+- null: article does not address this forecast at all
+
+Return valid JSON only, no other text:
+{ "probability": 55, "reasoning": "one sentence explanation" }`
+
+// ── Fetch article ──
+async function fetchArticle() {
+  const url = document.getElementById('articleUrl').value.trim()
+  if (!url) return
+
+  const btn = document.getElementById('fetchBtn')
+  btn.disabled = true
+  btn.textContent = 'Fetching…'
+
+  try {
+    const resp = await fetch(`${ORACLE}/fetch-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    })
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const data = await resp.json()
+
+    state.articleUrl = url
+    state.articleText = data.text
+    state.articleTitle = data.title || ''
+    if (data.date) document.getElementById('articleDate').value = data.date
+    state.articleDate = document.getElementById('articleDate').value
+
+    document.getElementById('articleText').textContent = data.text.slice(0, 600) + (data.text.length > 600 ? '…' : '')
+    document.getElementById('articlePreview').style.display = 'block'
+
+    // Update stage 1 prompt with article content
+    updateS1Prompt()
+
+    // Unlock stage 1
+    document.getElementById('stage1').classList.remove('locked')
+    document.getElementById('s1status').textContent = data.title ? `"${data.title.slice(0, 60)}${data.title.length > 60 ? '…' : ''}"` : ''
+  } catch (e) {
+    alert('Failed to fetch article: ' + e.message)
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Fetch'
+  }
+}
+
+function updateS1Prompt() {
+  const date = document.getElementById('articleDate').value || 'unknown'
+  const text = state.articleText.slice(0, 4000)
+  document.getElementById('s1prompt').value = EXTRACT_PROMPT
+    .replace('{date}', date)
+    .replace('{article_text}', text)
+}
+
+// ── Stage 1: Extract ──
+async function runStage1() {
+  const orKey = document.getElementById('orKey').value.trim()
+  if (!orKey) return alert('Enter your OpenRouter API key first.')
+  if (!state.articleText) return alert('Fetch an article first.')
+
+  const prompt = document.getElementById('s1prompt').value
+  const model = getModel('s1')
+  const spinner = document.getElementById('s1spinner')
+  const errEl = document.getElementById('s1error')
+
+  spinner.className = 'spinner'
+  errEl.style.display = 'none'
+
+  try {
+    const result = await callLLM(orKey, model, prompt)
+    document.getElementById('s1output').value = result
+    document.getElementById('s1outputWrap').style.display = 'block'
+    document.getElementById('s1status').innerHTML = '<span class="tag tag-ok">done</span>'
+  } catch (e) {
+    errEl.textContent = e.message
+    errEl.style.display = 'block'
+  } finally {
+    spinner.className = ''
+  }
+}
+
+function proceedToStage2() {
+  // Parse output
+  const raw = document.getElementById('s1output').value.trim()
+  try {
+    const parsed = JSON.parse(raw)
+    state.predictions = parsed.predictions || []
+    if (!state.predictions.length) throw new Error('No predictions found in output')
+  } catch (e) {
+    alert('Could not parse extraction output as JSON: ' + e.message)
+    return
+  }
+
+  document.getElementById('s1num').classList.add('done')
+
+  // Auto-generate search query from first claim
+  const firstClaim = state.predictions[0]?.claim || ''
+  const date = document.getElementById('articleDate').value
+  const year = date ? date.slice(0, 4) : ''
+  document.getElementById('s2query').value = firstClaim.slice(0, 120) + (year ? ` ${year}` : '')
+
+  // Unlock stage 2
+  document.getElementById('stage2').classList.remove('locked')
+  document.getElementById('stage2').scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+// ── Stage 2: Search ──
+async function runSearch() {
+  const oKey = document.getElementById('oracleKey').value.trim()
+  if (!oKey) return alert('Enter your Oracle API key to use search.')
+  const query = document.getElementById('s2query').value.trim()
+  if (!query) return alert('Enter a search query.')
+
+  const btn = document.querySelector('#stage2 .btn-secondary')
+  const spinner = document.getElementById('s2searchSpinner')
+  const errEl = document.getElementById('s2error')
+
+  spinner.className = 'spinner'
+  btn.disabled = true
+  errEl.style.display = 'none'
+  document.getElementById('s2results').style.display = 'none'
+  document.getElementById('s2noResults').style.display = 'none'
+
+  try {
+    const date = document.getElementById('articleDate').value
+    const body = { query, limit: 10 }
+    if (date) body.date_to = date
+
+    const resp = await fetch(`${ORACLE}/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': oKey },
+      body: JSON.stringify(body),
+    })
+    if (!resp.ok) throw new Error(`Search failed: HTTP ${resp.status}`)
+    const data = await resp.json()
+    state.searchResults = data.results || []
+
+    if (state.searchResults.length === 0) {
+      document.getElementById('s2noResults').style.display = 'block'
+    } else {
+      renderSearchResults()
+      document.getElementById('s2results').style.display = 'block'
+      document.getElementById('s2analyzeBtn').disabled = false
+    }
+  } catch (e) {
+    errEl.textContent = e.message
+    errEl.style.display = 'block'
+  } finally {
+    spinner.className = ''
+    btn.disabled = false
+  }
+}
+
+function renderSearchResults() {
+  const list = document.getElementById('s2resultList')
+  list.innerHTML = ''
+  state.searchResults.forEach((r, i) => {
+    const item = document.createElement('div')
+    item.className = 'search-result-item'
+    item.innerHTML = `
+      <input type="checkbox" id="sr${i}" checked>
+      <div class="result-meta">
+        <div class="result-title">${esc(r.title || r.url)}</div>
+        <div class="result-source">${esc(r.source || '')} ${r.published_date ? '· ' + r.published_date : ''}</div>
+        ${r.snippet ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(r.snippet.slice(0, 120))}…</div>` : ''}
+      </div>`
+    list.appendChild(item)
+  })
+}
+
+// ── Stage 2: Analyze consensus ──
+async function runConsensus() {
+  const orKey = document.getElementById('orKey').value.trim()
+  if (!orKey) return alert('Enter your OpenRouter API key first.')
+  if (!state.predictions.length) return alert('No predictions from Stage 1.')
+
+  const checkedResults = state.searchResults.filter((_, i) =>
+    document.getElementById(`sr${i}`)?.checked
+  )
+  if (!checkedResults.length) return alert('No articles selected.')
+
+  const spinner = document.getElementById('s2spinner')
+  const errEl = document.getElementById('s2error')
+  spinner.className = 'spinner'
+  errEl.style.display = 'none'
+
+  const promptTemplate = document.getElementById('s2prompt').value
+  const model = getModel('s2')
+  const date = document.getElementById('articleDate').value || 'unknown'
+  const firstClaim = state.predictions[0]?.claim || ''
+
+  state.consensusResults = []
+
+  const analyzeEl = document.getElementById('s2analyzeResults')
+  document.getElementById('s2outputWrap').style.display = 'block'
+  analyzeEl.innerHTML = '<div class="info">Analyzing articles…</div>'
+
+  const results = []
+  for (const article of checkedResults) {
+    // Fetch article text if snippet too short
+    let text = article.snippet || ''
+    if (text.length < 200 && article.url) {
+      try {
+        const oKey = document.getElementById('oracleKey').value.trim()
+        if (oKey || true) { // fetch is public
+          const r = await fetch(`${ORACLE}/fetch-url`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: article.url }),
+          })
+          if (r.ok) { const d = await r.json(); text = d.text?.slice(0, 3000) || text }
+        }
+      } catch { /* use snippet */ }
+    }
+
+    const prompt = promptTemplate
+      .replace('{date}', article.published_date || date)
+      .replace('{article_text}', text.slice(0, 3000))
+      .replace('{claim}', firstClaim)
+
+    try {
+      const raw = await callLLM(orKey, model, prompt)
+      const parsed = JSON.parse(raw)
+      results.push({ url: article.url, title: article.title, source: article.source, published_date: article.published_date, probability: parsed.probability, reasoning: parsed.reasoning })
+    } catch {
+      results.push({ url: article.url, title: article.title, source: article.source, published_date: article.published_date, probability: null, reasoning: 'Parse error' })
+    }
+  }
+
+  state.consensusResults = results
+  renderConsensusResults()
+  document.getElementById('s2status').innerHTML = '<span class="tag tag-ok">done</span>'
+  spinner.className = ''
+}
+
+function renderConsensusResults() {
+  const el = document.getElementById('s2analyzeResults')
+  el.innerHTML = ''
+  state.consensusResults.forEach((r, i) => {
+    const item = document.createElement('div')
+    item.className = 'search-result-item'
+    const prob = r.probability
+    const probColor = prob === null ? 'var(--muted)' : prob >= 60 ? 'var(--green)' : prob >= 40 ? 'var(--yellow)' : 'var(--red)'
+    item.innerHTML = `
+      <div class="result-meta">
+        <div class="result-title">${esc(r.title || r.url)}</div>
+        <div class="result-source">${esc(r.source || '')} ${r.published_date ? '· ' + r.published_date : ''}</div>
+        ${r.reasoning ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;font-style:italic">${esc(r.reasoning)}</div>` : ''}
+      </div>
+      <div class="result-prob" style="color:${probColor}">
+        <input type="number" min="0" max="100" value="${prob ?? ''}" placeholder="—"
+          style="width:60px;text-align:right;background:transparent;border:1px solid var(--border);border-radius:4px;color:${probColor};font-weight:700"
+          onchange="state.consensusResults[${i}].probability = this.value === '' ? null : +this.value">%
+      </div>`
+    el.appendChild(item)
+  })
+}
+
+function proceedToStage3() {
+  document.getElementById('s2num').classList.add('done')
+  document.getElementById('stage3').classList.remove('locked')
+  renderCompare()
+  document.getElementById('stage3').scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+// ── Stage 3: Compare ──
+function renderCompare() {
+  const probs = state.consensusResults.map(r => r.probability).filter(p => p !== null)
+  const consensus = probs.length ? Math.round(probs.reduce((a, b) => a + b, 0) / probs.length) : null
+
+  const cards = document.getElementById('compareCards')
+  cards.innerHTML = ''
+
+  state.predictions.forEach(p => {
+    const author = p.author_probability
+    const card = document.createElement('div')
+    card.className = 'compare-card'
+
+    let deltaHtml = ''
+    if (author !== null && author !== undefined && consensus !== null) {
+      const delta = author - consensus
+      const sign = delta > 0 ? '+' : ''
+      deltaHtml = `<div class="stat-delta">Author was ${sign}${delta}pp ${delta > 0 ? 'more bullish' : delta < 0 ? 'more bearish' : 'aligned'} than consensus</div>`
+    }
+
+    card.innerHTML = `
+      <div class="compare-claim">${esc(p.claim)}</div>
+      ${p.quote ? `<div class="compare-quote">"${esc(p.quote)}"</div>` : ''}
+      <div class="compare-stats">
+        <div class="stat-block">
+          <div class="stat-label">Author estimate</div>
+          <div class="stat-value author">${author !== null && author !== undefined ? author + '%' : '<span class="na">—</span>'}</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-label">Consensus (${probs.length} articles)</div>
+          <div class="stat-value consensus">${consensus !== null ? consensus + '%' : '<span class="na">—</span>'}</div>
+          ${deltaHtml}
+        </div>
+      </div>`
+    cards.appendChild(card)
+  })
+
+  document.getElementById('s3num').classList.add('done')
+}
+
+// ── OpenRouter call ──
+async function callLLM(apiKey, model, prompt) {
+  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://komapc.github.io/retro/ibi.html',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.1,
+    }),
+  })
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}))
+    throw new Error(err?.error?.message || `OpenRouter HTTP ${resp.status}`)
+  }
+  const data = await resp.json()
+  const text = data.choices?.[0]?.message?.content || ''
+  // Strip markdown code fences if present
+  return text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim()
+}
+
+// ── Export ──
+function exportJSON() {
+  const out = {
+    exportedAt: new Date().toISOString(),
+    article: { url: state.articleUrl, title: state.articleTitle, date: state.articleDate },
+    predictions: state.predictions,
+    searchResults: state.searchResults,
+    consensusResults: state.consensusResults,
+  }
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `ibi-analysis-${new Date().toISOString().slice(0,10)}.json`
+  a.click()
+}
+
+// ── Util ──
+function esc(str) {
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+</script>
+</body>
+</html>

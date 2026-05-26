@@ -4,7 +4,18 @@ data/vault/
 data/vault2/
 data/raw_ingest/
 data/pages/
+data/pm_harvest/
 *.db
+
+# Infrastructure provisioning (Terraform state, secrets)
+infra/openclaw/
+infra/email/
+
+# npm
+package-lock.json
+
+# Claude internal
+.claude/scheduled_tasks.lock
 
 # PoC data — bulk intermediate dirs go to S3, not git
 data/poc/raw_ingest/

@@ -3,6 +3,12 @@ name: Deploy Factum Atlas
 on:
   push:
     branches: [main]
+    paths:
+      - factum_atlas.html
+      - oracle-test.html
+      - duel.html
+      - ibi.html
+      - 'bayesoracle/**'
 
   # Allow manual trigger from GitHub UI
   workflow_dispatch:

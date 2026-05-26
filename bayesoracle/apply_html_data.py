@@ -187,11 +187,11 @@ def main() -> None:
 
     # ── 6. Update date strings ────────────────────────────────────────────────
     d = date.today()
-    today_full  = f"{d.strftime('%B')} {d.day}, {d.year}"   # e.g. "May 25, 2026"
-    today_mon_y = f"{d.strftime('%B')} {d.year}"             # e.g. "May 2026"
+    today_full = f"{d.strftime('%B')} {d.day}, {d.year}"   # e.g. "May 25, 2026"
+    today_iso  = d.isoformat()                              # e.g. "2026-05-25"
     html, n1 = re.subn(r"(Prices baked in from )[^<\"]+", r"\g<1>" + today_full, html)
-    html, n2 = re.subn(r"(⚠ Conditionals: LLM-estimated, )[A-Za-z]+ \d{4}",
-                       r"\g<1>" + today_mon_y, html)
+    html, n2 = re.subn(r'(<span id="data-build-date">)[^<]+(</span>)',
+                       r"\g<1>" + today_iso + r"\2", html)
     changes += n1 + n2
 
     HTML_FILE.write_text(html)

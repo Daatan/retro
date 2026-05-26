@@ -228,29 +228,49 @@
     .sum-total .st-bayes { font-family: monospace; width: 44px; text-align: right; color: #58a6ff; }
     .sum-note { font-size: 10px; color: #6e7681; margin-top: 3px; }
 
-    /* Poll section */
-    #poll-btn {
-      width: 100%;
-      padding: 7px;
+    /* Topbar action buttons */
+    #topbar-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .tb-action { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    #poll-btn, #cond-btn {
+      padding: 4px 10px;
       background: #21262d;
       border: 1px solid #30363d;
       color: #58a6ff;
-      border-radius: 6px;
+      border-radius: 5px;
       cursor: pointer;
-      font-size: 12px;
-      margin-bottom: 6px;
-    }
-    #poll-btn:hover:not(:disabled) { background: #2d333b; border-color: #58a6ff; }
-    #poll-btn:disabled { opacity: 0.5; cursor: default; }
-    #poll-status {
       font-size: 11px;
+      white-space: nowrap;
+    }
+    #poll-btn:hover:not(:disabled), #cond-btn:hover:not(:disabled) { background: #2d333b; border-color: #58a6ff; }
+    #poll-btn:disabled, #cond-btn:disabled { opacity: 0.5; cursor: default; }
+    #poll-status, #cond-status {
+      font-size: 10px;
       color: #6e7681;
       text-align: center;
-      min-height: 14px;
-      line-height: 1.5;
+      line-height: 1.4;
+      max-width: 140px;
     }
-    #poll-status.error { color: #f85149; }
-    #poll-status.ok    { color: #3fb950; }
+    #poll-status.error, #cond-status.error { color: #f85149; }
+    #poll-status.ok,    #cond-status.ok    { color: #3fb950; }
+    #data-badge {
+      font-size: 10px;
+      color: #8b949e;
+      padding: 3px 8px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+    /* About/docs section */
+    .sb-toggle { cursor: pointer; user-select: none; }
+    .sb-toggle:hover { color: #79c0ff; }
+    #about-body p { margin-bottom: 5px; }
     .pm-link { display: inline-block; margin-top: 6px; font-size: 11px; color: #58a6ff; text-decoration: none; }
     .pm-link:hover { text-decoration: underline; }
     .div-pm-link { font-size: 10px; color: #58a6ff; text-decoration: none; flex-shrink: 0; }
@@ -279,15 +299,26 @@
         <span style="font-size:11px;color:#8b949e">secondary</span>
       </div>
     </div>
+    <div id="topbar-actions">
+      <span id="data-badge" title="Date when baked-in prices and conditionals were last updated by the daily pipeline">data <span id="data-build-date">2026-05-26</span></span>
+      <div class="tb-action">
+        <button id="cond-btn" title="Recompute pY/pN conditionals from cached price history (all.json). Works offline — no external API call needed.">📊 Refresh cond.</button>
+        <div id="cond-status">from cached history</div>
+      </div>
+      <div class="tb-action">
+        <button id="poll-btn" title="Fetch current prices live from Polymarket Gamma API. Requires direct internet — may fail on corporate networks with SSL inspection.">🔄 Poll live</button>
+        <div id="poll-status">Prices baked in from May 26, 2026</div>
+      </div>
+    </div>
   </div>
   <div id="main">
     <div id="cy-wrap">
       <div id="cy"></div>
       <div id="footer">
-        Prices: Polymarket Gamma API &nbsp;·&nbsp;
-        <span title="Conditional probabilities are static LLM estimates and are not updated by polling">⚠ Conditionals: LLM-estimated, May 2026</span> &nbsp;·&nbsp;
         Node label: <em>Name · PM% / Bayes%</em> &nbsp;·&nbsp;
-        Click any node for detail · Click a root node to open its hypothetical slider
+        Click any node for detail &nbsp;·&nbsp;
+        Click a root node to set a hypothetical value &nbsp;·&nbsp;
+        <span title="Conditionals are LLM-estimated and calibrated from PM price history; updated daily by pipeline">⚠ Conditionals approximate</span>
       </div>
     </div>
     <div id="sidebar">
@@ -326,12 +357,18 @@
         <div id="pm-sum-content"></div>
       </div>
       <div class="sb-section">
-        <button id="poll-btn">🔄 Poll PM Live Prices</button>
-        <div id="poll-status">Prices baked in from May 14, 2026</div>
-      </div>
-      <div class="sb-section">
-        <button id="cond-btn">📊 Refresh Conditionals</button>
-        <div id="cond-status">Recomputes pY/pN from stored price history</div>
+        <div class="sb-title sb-toggle" id="about-toggle" onclick="(function(){const b=document.getElementById('about-body'),t=document.getElementById('about-toggle'),open=b.style.display!=='none';b.style.display=open?'none':'';t.textContent='ℹ How to read this '+(open?'▼':'▲');})()">ℹ How to read this ▼</div>
+        <div id="about-body" style="display:none;font-size:11px;color:#8b949e;line-height:1.55;margin-top:6px">
+          <p><b style="color:#c9d1d9">Node label:</b> <em>Name · PM% / Bayes%</em><br>
+          PM% = Polymarket crowd price. Bayes% = BayesOracle network estimate.</p>
+          <p><b style="color:#c9d1d9">Node colour</b> = divergence |Bayes − PM|. High = BayesOracle disagrees with the market.</p>
+          <p><b style="color:#c9d1d9">Arrow numbers:</b> pY / pN = P(child | parent YES) / P(child | parent NO). Blue = positive influence, orange = inhibitory, dashed = secondary.</p>
+          <p><b style="color:#c9d1d9">BayesOracle formula:</b><br>P(child) = pY × P(parent) + pN × (1 − P(parent))</p>
+          <p><b style="color:#c9d1d9">Root nodes</b> (grey border) have no parents — PM price is used as the prior. Click one to set a hypothetical value with the slider.</p>
+          <p><b style="color:#c9d1d9">pY/pN sources:</b> bin = from historical price bins (≥8 days), reg = regression, llm = LLM-estimated only. Source and R² shown in the detail panel.</p>
+          <p><b style="color:#c9d1d9">📊 Refresh cond.</b> recomputes pY/pN from cached all.json — works offline.<br>
+          <b style="color:#c9d1d9">🔄 Poll live</b> fetches fresh PM prices — needs direct internet access.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -937,14 +974,7 @@
 
       const ts = new Date().toLocaleTimeString();
       statusEl.className   = 'ok';
-      statusEl.textContent = `Updated ${updated}/${NODES.length} nodes at ${ts}`;
-
-      // Update footer timestamp
-      document.getElementById('footer').innerHTML =
-        `Prices: Polymarket Gamma API, polled ${new Date().toLocaleString()} &nbsp;·&nbsp;` +
-        `<span title="Conditional probabilities are static LLM estimates and are not updated by polling">⚠ Conditionals: LLM-estimated, May 2026</span> &nbsp;·&nbsp;` +
-        `Node label: <em>Name · PM% / Bayes%</em> &nbsp;·&nbsp;` +
-        `Click any node for detail · Click a root node to open its hypothetical slider`;
+      statusEl.textContent = `${updated}/${NODES.length} at ${ts}`;
 
     } catch (err) {
       statusEl.className   = 'error';

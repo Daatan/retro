@@ -108,6 +108,24 @@ class DebugInfo(BaseModel):
     extractor_prompt: str
 
 
+# ── LLM proxy ────────────────────────────────────────────────────────────────
+
+class LlmMessage(BaseModel):
+    role: str
+    content: str
+
+
+class LlmRequest(BaseModel):
+    model: str = Field(default="google/gemini-2.5-flash", description="OpenRouter model ID")
+    messages: list[LlmMessage]
+    temperature: float = Field(default=0.1, ge=0.0, le=2.0)
+
+
+class LlmResponse(BaseModel):
+    content: str
+    model: str
+
+
 # ── Article fetch ─────────────────────────────────────────────────────────────
 
 class FetchUrlRequest(BaseModel):

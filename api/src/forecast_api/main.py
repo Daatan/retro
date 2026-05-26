@@ -15,7 +15,7 @@ from .config import settings
 from .forecaster import run_forecast
 from .leaderboard import background_refresh_loop, leaderboard_size, refresh_cache
 from .limiter import limiter
-from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, SearchRequest, SearchResponse, SearchHealthResponse
+from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, LlmRequest, LlmResponse, SearchRequest, SearchResponse, SearchHealthResponse
 from .searcher import run_search, run_search_health
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
@@ -138,6 +138,44 @@ async def search_health(_: None = Depends(verify_api_key)):
     count where the provider exposes a credit API (Serper, SerpAPI, ScrapingBee).
     """
     return await run_search_health()
+
+
+@app.post("/llm", response_model=LlmResponse, tags=["IBI"])
+@limiter.limit("30/minute")
+async def llm_proxy(
+    request: Request,
+    body: LlmRequest,
+    _: None = Depends(verify_api_key),
+):
+    """
+    Proxy LLM calls to OpenRouter using the server-side API key.
+    Accepts model + messages, returns the assistant's text content.
+    """
+    if not settings.openrouter_api_key:
+        return JSONResponse({"detail": "OpenRouter API key not configured on server"}, status_code=503)
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.openrouter_api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://oracle.daatan.com",
+            },
+            json={
+                "model": body.model,
+                "messages": [{"role": m.role, "content": m.content} for m in body.messages],
+                "temperature": body.temperature,
+            },
+        )
+    if not resp.is_success:
+        err = resp.json().get("error", {})
+        return JSONResponse(
+            {"detail": err.get("message", f"OpenRouter HTTP {resp.status_code}")},
+            status_code=resp.status_code,
+        )
+    data = resp.json()
+    content = data["choices"][0]["message"]["content"]
+    return LlmResponse(content=content, model=data.get("model", body.model))
 
 
 @app.post("/fetch-url", response_model=FetchUrlResponse, tags=["IBI"])

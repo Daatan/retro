@@ -177,7 +177,7 @@
     .div-item {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       padding: 3px 4px;
       border-radius: 4px;
       cursor: pointer;
@@ -185,16 +185,33 @@
     }
     .div-item:hover { background: rgba(88,166,255,0.07); }
     .div-bar-wrap {
-      width: 52px;
+      width: 36px;
       height: 5px;
       background: #21262d;
       border-radius: 3px;
       flex-shrink: 0;
     }
     .div-bar { height: 5px; border-radius: 3px; }
-    .div-label { font-size: 11px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .div-dir  { font-size: 9px; color: #6e7681; white-space: nowrap; }
-    .div-num  { font-family: monospace; font-size: 11px; width: 38px; text-align: right; flex-shrink: 0; }
+    .div-label { font-size: 11px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .div-signal {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      letter-spacing: 0.3px;
+    }
+    .div-signal.buy  { background: rgba(63,185,80,0.15); color: #3fb950; }
+    .div-signal.sell { background: rgba(248,81,73,0.15); color: #f85149; }
+    .div-prices {
+      font-family: monospace;
+      font-size: 10px;
+      color: #8b949e;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .div-prices .rec { color: #e6edf3; font-weight: 600; }
+    .div-num  { font-family: monospace; font-size: 10px; width: 34px; text-align: right; flex-shrink: 0; }
 
     /* PM + Bayes sum panel */
     .sum-header {
@@ -255,7 +272,10 @@
       color: #6e7681;
       text-align: center;
       line-height: 1.4;
-      max-width: 140px;
+      max-width: 110px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     #poll-status.error, #cond-status.error { color: #f85149; }
     #poll-status.ok,    #cond-status.ok    { color: #3fb950; }
@@ -308,7 +328,7 @@
       </div>
       <div class="tb-action">
         <button id="poll-btn" title="Fetch current prices live from Polymarket Gamma API. Requires direct internet — may fail on corporate networks with SSL inspection.">🔄 Poll live</button>
-        <div id="poll-status">Prices baked in from May 26, 2026</div>
+        <div id="poll-status" title="Prices baked in from May 26, 2026">baked May 26, 2026</div>
       </div>
     </div>
   </div>
@@ -747,15 +767,31 @@
     const maxDiv = ranked[0]?.div || 0.01;
 
     ranked.forEach(n => {
-      const bayesAbove = n.bayes > n.pm;
-      const dir = bayesAbove ? '▲ Bayes↑' : '▼ Bayes↓';
-      const barW = Math.max(2, Math.round(n.div / maxDiv * 50));
+      const buy = n.bayes > n.pm;
+      const barW = Math.max(2, Math.round(n.div / maxDiv * 34));
+      const pmPct  = Math.round(n.pm   * 100);
+      const recPct = Math.round(n.bayes * 100);
+
+      // CI tooltip from EDGE_META if available
+      const key = n.primary ? n.primary + '→' + n.id : null;
+      const meta = key ? EDGE_META[key] : null;
+      let ciTip = '';
+      if (meta && meta.pY_ci && meta.pN_ci) {
+        const pPrim = nodeMap[n.primary]?.bayes ?? nodeMap[n.primary]?.pm ?? 0.5;
+        const lo = Math.round((meta.pY_ci[0] * pPrim + meta.pN_ci[0] * (1 - pPrim)) * 100);
+        const hi = Math.round((meta.pY_ci[1] * pPrim + meta.pN_ci[1] * (1 - pPrim)) * 100);
+        ciTip = ` · 90% CI: ${lo}%–${hi}%`;
+      }
+      const tip = `${n.label}: market ${pmPct}%, recommended ${recPct}% (${buy ? 'BUY YES' : 'SELL/buy NO'})${ciTip}`;
+
       const row = document.createElement('div');
       row.className = 'div-item';
+      row.title = tip;
       row.innerHTML =
         `<div class="div-bar-wrap"><div class="div-bar" style="width:${barW}px;background:${divColor(n.div)}"></div></div>` +
         `<span class="div-label">${n.label}</span>` +
-        `<span class="div-dir">${dir}</span>` +
+        `<span class="div-signal ${buy ? 'buy' : 'sell'}">${buy ? 'BUY' : 'SELL'}</span>` +
+        `<span class="div-prices">${pmPct}%→<span class="rec">${recPct}%</span></span>` +
         `<span class="div-num" style="color:${divColor(n.div)}">${(n.div*100).toFixed(1)}pp</span>` +
         `<a class="div-pm-link" href="https://polymarket.com/event/${n.slug}" target="_blank" rel="noopener" title="View on Polymarket" onclick="event.stopPropagation()">↗</a>`;
       row.addEventListener('click', () => {

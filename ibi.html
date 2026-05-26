@@ -13,17 +13,17 @@
     --surface2: #21262d;
     --border: #30363d;
     --text: #e6edf3;
-    --muted: #8b949e;
+    --muted: #a0adb8;
+    --label: #c9d1d9;
     --accent: #2f81f7;
     --accent-hover: #388bfd;
     --green: #3fb950;
-    --yellow: #d29922;
+    --yellow: #e3b341;
     --red: #f85149;
-    --disabled-bg: #0d1117;
     --disabled-text: #484f58;
   }
 
-  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.6; }
 
   /* ── Layout ── */
   .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
@@ -33,31 +33,33 @@
 
   /* ── Article input ── */
   .article-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
-  .article-panel h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+  .article-panel h2 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 12px; }
   .row { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
-  .row label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .row label { font-size: 13px; color: var(--label); display: block; margin-bottom: 4px; font-weight: 500; }
   .url-group { flex: 1; min-width: 260px; }
 
   /* ── Stage panels ── */
   .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: opacity .2s; }
-  .stage.locked { opacity: .45; pointer-events: none; }
+  .stage.locked { opacity: .4; pointer-events: none; }
   .stage-header { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); background: var(--surface2); }
-  .stage-header h2 { font-size: 14px; font-weight: 600; }
+  .stage-header h2 { font-size: 15px; font-weight: 600; }
   .stage-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; margin-right: 8px; }
   .stage-num.done { background: var(--green); }
-  .stage-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .stage-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
 
   /* ── Controls ── */
   input[type=text], input[type=password], input[type=date], textarea, select {
     background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-    color: var(--text); font-size: 13px; padding: 6px 10px; width: 100%;
+    color: var(--text); font-size: 14px; padding: 7px 10px; width: 100%;
     outline: none; font-family: inherit;
   }
   input:focus, textarea:focus, select:focus { border-color: var(--accent); }
-  textarea { resize: vertical; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; }
+  textarea { resize: vertical; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; line-height: 1.5; }
   select { cursor: pointer; }
 
-  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; border: 1px solid; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background .15s; }
+  .field-label { font-size: 13px; color: var(--label); display: block; margin-bottom: 5px; font-weight: 500; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 15px; border-radius: 6px; border: 1px solid; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background .15s; }
   .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn-primary:hover { background: var(--accent-hover); }
   .btn-secondary { background: var(--surface2); border-color: var(--border); color: var(--text); }
@@ -68,13 +70,13 @@
   .btn-sm { padding: 4px 10px; font-size: 12px; }
 
   /* ── Prompt collapsible ── */
-  .collapsible summary { cursor: pointer; font-size: 12px; color: var(--muted); user-select: none; padding: 4px 0; }
+  .collapsible summary { cursor: pointer; font-size: 13px; color: var(--muted); user-select: none; padding: 4px 0; }
   .collapsible summary:hover { color: var(--text); }
-  .collapsible[open] summary { margin-bottom: 8px; }
+  .collapsible[open] summary { margin-bottom: 8px; color: var(--label); }
 
   /* ── Model row ── */
   .model-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .model-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .model-row label { font-size: 13px; color: var(--label); white-space: nowrap; font-weight: 500; }
   .model-row select { flex: 1; min-width: 200px; }
   .model-row input[type=text] { flex: 1; min-width: 200px; }
 
@@ -83,34 +85,34 @@
   .search-result-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; }
   .search-result-item input[type=checkbox] { margin-top: 3px; flex-shrink: 0; cursor: pointer; }
   .result-meta { flex: 1; min-width: 0; }
-  .result-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .result-source { font-size: 11px; color: var(--muted); }
-  .result-prob { font-size: 13px; font-weight: 700; white-space: nowrap; min-width: 40px; text-align: right; }
+  .result-title { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+  .result-source { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .result-prob { font-size: 14px; font-weight: 700; white-space: nowrap; min-width: 40px; text-align: right; }
 
   /* ── Comparison cards ── */
   .compare-cards { display: flex; flex-direction: column; gap: 12px; }
-  .compare-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
-  .compare-claim { font-size: 15px; font-weight: 600; margin-bottom: 12px; line-height: 1.4; }
-  .compare-quote { font-size: 12px; color: var(--muted); font-style: italic; margin-bottom: 12px; border-left: 3px solid var(--border); padding-left: 10px; }
-  .compare-stats { display: flex; gap: 32px; }
-  .stat-block { display: flex; flex-direction: column; gap: 2px; }
-  .stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
-  .stat-value { font-size: 36px; font-weight: 700; line-height: 1; }
+  .compare-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+  .compare-claim { font-size: 16px; font-weight: 600; margin-bottom: 12px; line-height: 1.4; color: var(--text); }
+  .compare-quote { font-size: 13px; color: var(--muted); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--border); padding-left: 12px; line-height: 1.5; }
+  .compare-stats { display: flex; gap: 36px; }
+  .stat-block { display: flex; flex-direction: column; gap: 3px; }
+  .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .stat-value { font-size: 38px; font-weight: 700; line-height: 1; }
   .stat-value.author { color: var(--accent); }
   .stat-value.consensus { color: var(--yellow); }
-  .stat-value.na { color: var(--muted); font-size: 20px; }
-  .stat-delta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stat-value.na { color: var(--muted); font-size: 22px; }
+  .stat-delta { font-size: 13px; color: var(--muted); margin-top: 4px; }
 
   /* ── Misc ── */
-  .error { background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.3); border-radius: 6px; padding: 10px 12px; font-size: 12px; color: var(--red); }
-  .info { font-size: 12px; color: var(--muted); }
+  .error { background: rgba(248,81,73,.12); border: 1px solid rgba(248,81,73,.35); border-radius: 6px; padding: 10px 13px; font-size: 13px; color: #ff6b63; }
+  .info { font-size: 13px; color: var(--muted); }
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-  .tag-ok { background: rgba(63,185,80,.15); color: var(--green); }
-  .tag-warn { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .tag-ok { background: rgba(63,185,80,.18); color: #4dbe5e; }
+  .tag-warn { background: rgba(227,179,65,.18); color: var(--yellow); }
   .actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .article-preview { font-size: 12px; color: var(--muted); line-height: 1.6; max-height: 100px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--bg); margin-top: 6px; white-space: pre-wrap; }
+  .article-preview { font-size: 13px; color: var(--label); line-height: 1.7; max-height: 110px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; background: var(--bg); margin-top: 6px; white-space: pre-wrap; }
 </style>
 </head>
 <body>
@@ -119,11 +121,7 @@
   <h1>🔍 IBI Retro Analysis</h1>
   <div class="header-keys">
     <div style="flex:1;min-width:200px">
-      <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">OpenRouter API Key</label>
-      <input type="password" id="orKey" placeholder="sk-or-..." autocomplete="off">
-    </div>
-    <div style="flex:1;min-width:200px">
-      <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Oracle API Key (for search)</label>
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:3px">Oracle API Key</label>
       <input type="password" id="oracleKey" placeholder="oracle-..." autocomplete="off">
     </div>
   </div>
@@ -139,11 +137,11 @@
         <label>URL</label>
         <input type="text" id="articleUrl" placeholder="https://..." value="https://regnum.ru/article/1362313">
       </div>
-      <div style="min-width:150px">
+      <div style="min-width:160px">
         <label>Publication date</label>
         <input type="date" id="articleDate">
       </div>
-      <div style="padding-top:20px">
+      <div style="padding-top:22px">
         <button class="btn btn-primary" id="fetchBtn" onclick="fetchArticle()">Fetch</button>
       </div>
     </div>
@@ -180,9 +178,9 @@
       </div>
       <div id="s1error" style="display:none" class="error"></div>
       <div id="s1outputWrap" style="display:none">
-        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Output — edit freely before proceeding</label>
+        <label class="field-label">Output — edit freely before proceeding</label>
         <textarea id="s1output" rows="12"></textarea>
-        <div class="actions-row" style="margin-top:8px">
+        <div class="actions-row" style="margin-top:10px">
           <button class="btn btn-next" onclick="proceedToStage2()">Next → Consensus Search</button>
         </div>
       </div>
@@ -197,14 +195,14 @@
     </div>
     <div class="stage-body">
       <div>
-        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Search query (editable)</label>
+        <label class="field-label">Search query (editable)</label>
         <div class="row">
           <input type="text" id="s2query" style="flex:1">
           <button class="btn btn-secondary" onclick="runSearch()"><span id="s2searchSpinner"></span>Search</button>
         </div>
       </div>
       <div id="s2results" style="display:none">
-        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">Found articles — uncheck to exclude</label>
+        <label class="field-label" style="margin-bottom:6px">Found articles — uncheck to exclude</label>
         <div class="search-results" id="s2resultList"></div>
       </div>
       <div id="s2noResults" style="display:none" class="info">No results found. Try a different search query.</div>
@@ -229,9 +227,9 @@
       </div>
       <div id="s2error" style="display:none" class="error"></div>
       <div id="s2outputWrap" style="display:none">
-        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Consensus results — edit probability values freely</label>
+        <label class="field-label">Consensus results — edit probability values freely</label>
         <div class="search-results" id="s2analyzeResults"></div>
-        <div class="actions-row" style="margin-top:8px">
+        <div class="actions-row" style="margin-top:10px">
           <button class="btn btn-next" onclick="proceedToStage3()">Next → Compare</button>
         </div>
       </div>
@@ -269,15 +267,10 @@ const state = {
 
 // ── Persist API keys ──
 window.addEventListener('DOMContentLoaded', () => {
-  const orKey = localStorage.getItem('ibi_or_key')
   const oKey = localStorage.getItem('ibi_oracle_key')
-  if (orKey) document.getElementById('orKey').value = orKey
   if (oKey) document.getElementById('oracleKey').value = oKey
-
-  document.getElementById('orKey').addEventListener('change', e => localStorage.setItem('ibi_or_key', e.target.value.trim()))
   document.getElementById('oracleKey').addEventListener('change', e => localStorage.setItem('ibi_oracle_key', e.target.value.trim()))
 
-  // Set default prompts
   document.getElementById('s1prompt').value = EXTRACT_PROMPT
   document.getElementById('s2prompt').value = CONSENSUS_PROMPT
 })
@@ -348,10 +341,7 @@ async function fetchArticle() {
     document.getElementById('articleText').textContent = data.text.slice(0, 600) + (data.text.length > 600 ? '…' : '')
     document.getElementById('articlePreview').style.display = 'block'
 
-    // Update stage 1 prompt with article content
     updateS1Prompt()
-
-    // Unlock stage 1
     document.getElementById('stage1').classList.remove('locked')
     document.getElementById('s1status').textContent = data.title ? `"${data.title.slice(0, 60)}${data.title.length > 60 ? '…' : ''}"` : ''
   } catch (e) {
@@ -372,12 +362,10 @@ function updateS1Prompt() {
 
 // ── Stage 1: Extract ──
 async function runStage1() {
-  const orKey = document.getElementById('orKey').value.trim()
-  if (!orKey) return alert('Enter your OpenRouter API key first.')
   if (!state.articleText) return alert('Fetch an article first.')
 
-  const prompt = document.getElementById('s1prompt').value
   const model = getModel('s1')
+  const prompt = document.getElementById('s1prompt').value
   const spinner = document.getElementById('s1spinner')
   const errEl = document.getElementById('s1error')
 
@@ -385,7 +373,7 @@ async function runStage1() {
   errEl.style.display = 'none'
 
   try {
-    const result = await callLLM(orKey, model, prompt)
+    const result = await callLLM(model, prompt)
     document.getElementById('s1output').value = result
     document.getElementById('s1outputWrap').style.display = 'block'
     document.getElementById('s1status').innerHTML = '<span class="tag tag-ok">done</span>'
@@ -398,7 +386,6 @@ async function runStage1() {
 }
 
 function proceedToStage2() {
-  // Parse output
   const raw = document.getElementById('s1output').value.trim()
   try {
     const parsed = JSON.parse(raw)
@@ -411,13 +398,11 @@ function proceedToStage2() {
 
   document.getElementById('s1num').classList.add('done')
 
-  // Auto-generate search query from first claim
   const firstClaim = state.predictions[0]?.claim || ''
   const date = document.getElementById('articleDate').value
   const year = date ? date.slice(0, 4) : ''
   document.getElementById('s2query').value = firstClaim.slice(0, 120) + (year ? ` ${year}` : '')
 
-  // Unlock stage 2
   document.getElementById('stage2').classList.remove('locked')
   document.getElementById('stage2').scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -480,7 +465,7 @@ function renderSearchResults() {
       <div class="result-meta">
         <div class="result-title">${esc(r.title || r.url)}</div>
         <div class="result-source">${esc(r.source || '')} ${r.published_date ? '· ' + r.published_date : ''}</div>
-        ${r.snippet ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(r.snippet.slice(0, 120))}…</div>` : ''}
+        ${r.snippet ? `<div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(r.snippet.slice(0, 140))}…</div>` : ''}
       </div>`
     list.appendChild(item)
   })
@@ -488,8 +473,6 @@ function renderSearchResults() {
 
 // ── Stage 2: Analyze consensus ──
 async function runConsensus() {
-  const orKey = document.getElementById('orKey').value.trim()
-  if (!orKey) return alert('Enter your OpenRouter API key first.')
   if (!state.predictions.length) return alert('No predictions from Stage 1.')
 
   const checkedResults = state.searchResults.filter((_, i) =>
@@ -515,19 +498,15 @@ async function runConsensus() {
 
   const results = []
   for (const article of checkedResults) {
-    // Fetch article text if snippet too short
     let text = article.snippet || ''
     if (text.length < 200 && article.url) {
       try {
-        const oKey = document.getElementById('oracleKey').value.trim()
-        if (oKey || true) { // fetch is public
-          const r = await fetch(`${ORACLE}/fetch-url`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: article.url }),
-          })
-          if (r.ok) { const d = await r.json(); text = d.text?.slice(0, 3000) || text }
-        }
+        const r = await fetch(`${ORACLE}/fetch-url`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: article.url }),
+        })
+        if (r.ok) { const d = await r.json(); text = d.text?.slice(0, 3000) || text }
       } catch { /* use snippet */ }
     }
 
@@ -537,7 +516,7 @@ async function runConsensus() {
       .replace('{claim}', firstClaim)
 
     try {
-      const raw = await callLLM(orKey, model, prompt)
+      const raw = await callLLM(model, prompt)
       const parsed = JSON.parse(raw)
       results.push({ url: article.url, title: article.title, source: article.source, published_date: article.published_date, probability: parsed.probability, reasoning: parsed.reasoning })
     } catch {
@@ -563,11 +542,11 @@ function renderConsensusResults() {
       <div class="result-meta">
         <div class="result-title">${esc(r.title || r.url)}</div>
         <div class="result-source">${esc(r.source || '')} ${r.published_date ? '· ' + r.published_date : ''}</div>
-        ${r.reasoning ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;font-style:italic">${esc(r.reasoning)}</div>` : ''}
+        ${r.reasoning ? `<div style="font-size:12px;color:var(--muted);margin-top:3px;font-style:italic">${esc(r.reasoning)}</div>` : ''}
       </div>
       <div class="result-prob" style="color:${probColor}">
         <input type="number" min="0" max="100" value="${prob ?? ''}" placeholder="—"
-          style="width:60px;text-align:right;background:transparent;border:1px solid var(--border);border-radius:4px;color:${probColor};font-weight:700"
+          style="width:60px;text-align:right;background:transparent;border:1px solid var(--border);border-radius:4px;color:${probColor};font-weight:700;font-size:14px"
           onchange="state.consensusResults[${i}].probability = this.value === '' ? null : +this.value">%
       </div>`
     el.appendChild(item)
@@ -621,14 +600,16 @@ function renderCompare() {
   document.getElementById('s3num').classList.add('done')
 }
 
-// ── OpenRouter call ──
-async function callLLM(apiKey, model, prompt) {
-  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+// ── LLM call via oracle proxy ──
+async function callLLM(model, prompt) {
+  const oKey = document.getElementById('oracleKey').value.trim()
+  if (!oKey) throw new Error('Enter your Oracle API key first.')
+
+  const resp = await fetch(`${ORACLE}/llm`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://komapc.github.io/retro/ibi.html',
+      'x-api-key': oKey,
     },
     body: JSON.stringify({
       model,
@@ -638,11 +619,10 @@ async function callLLM(apiKey, model, prompt) {
   })
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}))
-    throw new Error(err?.error?.message || `OpenRouter HTTP ${resp.status}`)
+    throw new Error(err?.detail || `Oracle LLM HTTP ${resp.status}`)
   }
   const data = await resp.json()
-  const text = data.choices?.[0]?.message?.content || ''
-  // Strip markdown code fences if present
+  const text = data.content || ''
   return text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim()
 }
 

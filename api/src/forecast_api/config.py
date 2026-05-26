@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,6 +7,7 @@ class ApiSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     oracle_api_key: str  # required — startup fails with clear error if missing
+    openrouter_api_key: Optional[str] = None  # used by /llm proxy endpoint
 
     data_dir: Path = Path("/home/ubuntu/truthmachine/data")
     leaderboard_path: Path = Path("")  # empty = data_dir/leaderboard.json

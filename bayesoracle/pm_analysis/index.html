@@ -1153,7 +1153,6 @@
 
       recompute();
       refreshGraph(true);
-      if (_activeNodeId) showDetail(_activeNodeId);
 
       const ts = new Date().toLocaleTimeString();
       statusEl.className   = 'ok';
@@ -1176,10 +1175,21 @@
       cy.$('#' + n.id)
         .data('label', nodeLabel(n))
         .data('color', divColor(n.div));
+      if (n.primary) {
+        const inh = n.pN > n.pY ? 1 : 0;
+        cy.$('#ep_' + n.primary + '_' + n.id)
+          .data('label', `${inh ? '↓' : '↑'}✓${(n.pY*100).toFixed(0)}%  ✗${(n.pN*100).toFixed(0)}%`)
+          .data('inhibitory', inh);
+      }
+    });
+    EXTRA_EDGES.forEach((e, i) => {
+      const inh = e.pN > e.pY ? 1 : 0;
+      cy.$('#es_' + i)
+        .data('label', `${inh ? '↓' : '↑'}✓${(e.pY*100).toFixed(0)}%  ✗${(e.pN*100).toFixed(0)}%`)
+        .data('inhibitory', inh);
     });
     buildRanking();
     buildSumPanel();
-    // Re-render detail panel if open (avoids stale numbers after cascade)
     if (_activeNodeId && reopenDetail) showDetail(_activeNodeId);
   }
   </script>

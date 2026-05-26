@@ -52,8 +52,8 @@ Requires a GCP service-account JSON key stored in AWS Secrets Manager at:
 
 The key is loaded once at startup (same _secret() pattern as other providers) and
 used to construct a BigQuery client. When the secret is absent the provider is
-silently skipped. The table is date-sharded (gkg_YYYYMMDD); queries use the
-wildcard form gkg_* with _TABLE_SUFFIX for efficient shard pruning.
+silently skipped. Queries target gkg_partitioned (DAY-partitioned by ingestion
+time) so _PARTITIONTIME pruning works correctly.
 
 All keys are loaded from the environment first, then from AWS Secrets Manager
 (openclaw/* namespace) as a fallback. See _secret().
@@ -890,7 +890,7 @@ def _search_gdelt_bq(
     """Search GDELT GKG via BigQuery for historical coverage beyond the DOC API 3-month window.
 
     Matches against V2Persons, V2Locations, V2Organizations, and AllNames using
-    REGEXP_CONTAINS. Shard pruning via _TABLE_SUFFIX on gkg_* keeps scan costs low.
+    REGEXP_CONTAINS. Partition pruning via _PARTITIONTIME on gkg_partitioned keeps scan costs low.
     Article titles are synthesized from the URL slug since GKG stores no titles.
     """
     client = _get_bq_client()  # raises if not configured
@@ -908,9 +908,8 @@ def _search_gdelt_bq(
         for t in terms
     )
 
-    # gdelt-bq.gdeltv2.gkg is a date-sharded table (gkg_YYYYMMDD shards behind a
-    # wildcard view). Pseudo-columns for ingestion-time partitioning do not apply;
-    # use _TABLE_SUFFIX on the wildcard form `gkg_*` for efficient shard pruning.
+    # Use gkg_partitioned (DAY-partitioned by ingestion time) — not the legacy
+    # unpartitioned `gkg` table which lacks _PARTITIONTIME support.
     if date_from:
         shard_from = date_from.strftime("%Y%m%d")
     else:
@@ -923,8 +922,8 @@ def _search_gdelt_bq(
             DocumentIdentifier AS url,
             SourceCommonName   AS source,
             DATE               AS gkg_date
-        FROM `gdelt-bq.gdeltv2.gkg_*`
-        WHERE _TABLE_SUFFIX BETWEEN '{shard_from}' AND '{shard_to}'
+        FROM `gdelt-bq.gdeltv2.gkg_partitioned`
+        WHERE _PARTITIONTIME BETWEEN TIMESTAMP('{ts_from}') AND TIMESTAMP('{ts_to}')
           AND ({entity_conditions})
           AND DocumentIdentifier IS NOT NULL
           AND DocumentIdentifier != ''

@@ -108,6 +108,21 @@ class DebugInfo(BaseModel):
     extractor_prompt: str
 
 
+# ── Article fetch ─────────────────────────────────────────────────────────────
+
+class FetchUrlRequest(BaseModel):
+    url: str = Field(..., description="Article URL to fetch and extract")
+
+
+class FetchUrlResponse(BaseModel):
+    text: str
+    title: Optional[str] = None
+    date: Optional[str] = None   # ISO date string YYYY-MM-DD
+    source: Optional[str] = None
+
+
+# ── Forecast ──────────────────────────────────────────────────────────────────
+
 class ForecastResponse(BaseModel):
     question: str
     mean: float = Field(description="Credibility-weighted mean stance [-1, 1]. Convert to probability: (mean + 1) / 2")

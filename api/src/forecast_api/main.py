@@ -15,7 +15,7 @@ from .config import settings
 from .forecaster import run_forecast
 from .leaderboard import background_refresh_loop, leaderboard_size, refresh_cache
 from .limiter import limiter
-from .models import ForecastRequest, ForecastResponse, SearchRequest, SearchResponse, SearchHealthResponse
+from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, SearchRequest, SearchResponse, SearchHealthResponse
 from .searcher import run_search, run_search_health
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
@@ -138,6 +138,30 @@ async def search_health(_: None = Depends(verify_api_key)):
     count where the provider exposes a credit API (Serper, SerpAPI, ScrapingBee).
     """
     return await run_search_health()
+
+
+@app.post("/fetch-url", response_model=FetchUrlResponse, tags=["IBI"])
+async def fetch_url(body: FetchUrlRequest):
+    """
+    Fetch an article URL and extract its text, title, and publication date.
+    Uses trafilatura. No authentication required — public proxy endpoint.
+    """
+    import trafilatura
+    downloaded = trafilatura.fetch_url(body.url)
+    if not downloaded:
+        return JSONResponse({"detail": "Could not fetch URL"}, status_code=422)
+    metadata = trafilatura.extract_metadata(downloaded)
+    text = trafilatura.extract(downloaded, include_comments=False, include_tables=False) or ""
+    date_str: str | None = None
+    if metadata and metadata.date:
+        # trafilatura returns date as string already
+        date_str = str(metadata.date)[:10]
+    return FetchUrlResponse(
+        text=text,
+        title=metadata.title if metadata else None,
+        date=date_str,
+        source=metadata.sitename if metadata else None,
+    )
 
 
 _GAMMA_BASE = "https://gamma-api.polymarket.com"

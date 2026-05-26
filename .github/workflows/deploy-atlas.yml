@@ -7,6 +7,7 @@ on:
       - factum_atlas.html
       - oracle-test.html
       - duel.html
+      - ibi.html
       - bayesoracle/**
 
   # Allow manual trigger from GitHub UI
@@ -41,6 +42,8 @@ jobs:
           cp oracle-test.html _site/oracle-test.html
           # Copy duel report if it exists
           if [ -f duel.html ]; then cp duel.html _site/duel.html; fi
+          # Copy IBI analysis tool
+          if [ -f ibi.html ]; then cp ibi.html _site/ibi.html; fi
           # Copy BayesOracle pages and subdirectories
           if [ -d bayesoracle ]; then
             mkdir -p _site/bayesoracle

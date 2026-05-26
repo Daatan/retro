@@ -46,6 +46,7 @@ jobs:
             mkdir -p _site/bayesoracle
             cp bayesoracle/*.html _site/bayesoracle/ 2>/dev/null || true
             cp -r bayesoracle/pm_analysis _site/bayesoracle/ 2>/dev/null || true
+            cp -r bayesoracle/node_history _site/bayesoracle/ 2>/dev/null || true
           fi
 
       - name: Setup Pages

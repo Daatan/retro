@@ -794,6 +794,54 @@
     {
       "date": "2026-05-15",
       "probability": 0.0415
+    },
+    {
+      "date": "2026-05-16",
+      "probability": 0.0465
+    },
+    {
+      "date": "2026-05-17",
+      "probability": 0.024
+    },
+    {
+      "date": "2026-05-18",
+      "probability": 0.033
+    },
+    {
+      "date": "2026-05-19",
+      "probability": 0.043
+    },
+    {
+      "date": "2026-05-20",
+      "probability": 0.033
+    },
+    {
+      "date": "2026-05-21",
+      "probability": 0.0255
+    },
+    {
+      "date": "2026-05-22",
+      "probability": 0.032
+    },
+    {
+      "date": "2026-05-23",
+      "probability": 0.033
+    },
+    {
+      "date": "2026-05-24",
+      "probability": 0.0335
+    },
+    {
+      "date": "2026-05-25",
+      "probability": 0.0345
+    },
+    {
+      "date": "2026-05-26",
+      "probability": 0.0345
+    },
+    {
+      "date": "2026-05-27",
+      "probability": 0.0325
     }
   ]
 }

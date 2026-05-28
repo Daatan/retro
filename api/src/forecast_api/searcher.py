@@ -165,6 +165,7 @@ async def run_search_health() -> SearchHealthResponse:
         ("dataforseo", _check_dataforseo()),
         ("serpapi",    _check_serpapi()),
         ("serper",     _check_serper()),
+        ("tavily",     _check_simple(_ws.TAVILY_API_KEY, _ws._TAVILY_QUOTA_EXHAUSTED)),
         ("brave",      _check_simple(_ws.BRAVE_API_KEY, _ws._BRAVE_QUOTA_EXHAUSTED)),
         ("brightdata", _check_simple(_ws.BRIGHTDATA_API_KEY, _ws._BRIGHTDATA_QUOTA_EXHAUSTED)),
         ("nimbleway",  _check_simple(_ws.NIMBLEWAY_API_KEY, _ws._NIMBLEWAY_QUOTA_EXHAUSTED)),

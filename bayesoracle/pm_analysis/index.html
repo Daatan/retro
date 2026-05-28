@@ -193,16 +193,6 @@
     }
     .div-bar { height: 5px; border-radius: 3px; }
     .div-label { font-size: 11px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .div-signal {
-      font-size: 9px;
-      font-weight: 700;
-      padding: 1px 4px;
-      border-radius: 3px;
-      flex-shrink: 0;
-      letter-spacing: 0.3px;
-    }
-    .div-signal.buy  { background: rgba(63,185,80,0.15); color: #3fb950; }
-    .div-signal.sell { background: rgba(248,81,73,0.15); color: #f85149; }
     .div-prices {
       font-family: monospace;
       font-size: 10px;
@@ -767,7 +757,6 @@
     const maxDiv = ranked[0]?.div || 0.01;
 
     ranked.forEach(n => {
-      const buy = n.bayes > n.pm;
       const barW = Math.max(2, Math.round(n.div / maxDiv * 34));
       const pmPct  = Math.round(n.pm   * 100);
       const recPct = Math.round(n.bayes * 100);
@@ -782,7 +771,7 @@
         const hi = Math.round((meta.pY_ci[1] * pPrim + meta.pN_ci[1] * (1 - pPrim)) * 100);
         ciTip = ` · 90% CI: ${lo}%–${hi}%`;
       }
-      const tip = `${n.label}: market ${pmPct}%, recommended ${recPct}% (${buy ? 'BUY YES' : 'SELL/buy NO'})${ciTip}`;
+      const tip = `${n.label}: market ${pmPct}%, recommended ${recPct}%${ciTip}`;
 
       const row = document.createElement('div');
       row.className = 'div-item';
@@ -790,7 +779,6 @@
       row.innerHTML =
         `<div class="div-bar-wrap"><div class="div-bar" style="width:${barW}px;background:${divColor(n.div)}"></div></div>` +
         `<span class="div-label">${n.label}</span>` +
-        `<span class="div-signal ${buy ? 'buy' : 'sell'}">${buy ? 'BUY' : 'SELL'}</span>` +
         `<span class="div-prices">${pmPct}%→<span class="rec">${recPct}%</span></span>` +
         `<span class="div-num" style="color:${divColor(n.div)}">${(n.div*100).toFixed(1)}pp</span>` +
         `<a class="div-pm-link" href="https://polymarket.com/event/${n.slug}" target="_blank" rel="noopener" title="View on Polymarket" onclick="event.stopPropagation()">↗</a>`;

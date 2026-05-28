@@ -1,6 +1,6 @@
 """
 Multi-provider news search with fallback chain.
-Python equivalent of daatan's webSearch.ts utility.
+Used by the Oracle API (retro/api) and the pipeline (retro/pipeline).
 
 Fallback order:
   1. GDELT Doc API                  (free, no key — primary; news-only, reliable dates)
@@ -923,7 +923,7 @@ def _search_gdelt_bq(
             SourceCommonName   AS source,
             DATE               AS gkg_date
         FROM `gdelt-bq.gdeltv2.gkg_partitioned`
-        WHERE _PARTITIONTIME BETWEEN TIMESTAMP('{ts_from}') AND TIMESTAMP('{ts_to}')
+        WHERE _PARTITIONTIME BETWEEN TIMESTAMP('{shard_from}') AND TIMESTAMP('{shard_to}')
           AND ({entity_conditions})
           AND DocumentIdentifier IS NOT NULL
           AND DocumentIdentifier != ''

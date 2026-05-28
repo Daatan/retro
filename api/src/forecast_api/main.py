@@ -10,10 +10,11 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from slowapi.errors import RateLimitExceeded
 
 from .auth import verify_api_key
+from .bayesoracle import compute_nodes
 from .cache import forecast_cache
 from .config import settings
 from .forecaster import run_forecast
-from .leaderboard import background_refresh_loop, leaderboard_size, refresh_cache
+from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache
 from .limiter import limiter
 from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, LlmRequest, LlmResponse, SearchRequest, SearchResponse, SearchHealthResponse
 from .searcher import run_search, run_search_health
@@ -83,6 +84,49 @@ app.add_middleware(
 async def root():
     """Redirect to the interactive test console."""
     return RedirectResponse("https://komapc.github.io/retro/oracle-test.html")
+
+
+@app.get("/bayes/nodes", tags=["BayesOracle"])
+async def bayes_nodes(
+    observations: str = Query(
+        default="",
+        description=(
+            "Comma-separated node=probability overrides, e.g. "
+            "'ELECTIONS=0.95,TRUMP=0.70'. "
+            "Overrides are clamped to [0, 1]. Unlisted nodes are computed from the DAG."
+        ),
+    ),
+    _: None = Depends(verify_api_key),
+):
+    """
+    Return BayesOracle probabilities for all 21 Israeli-politics nodes.
+
+    Each node has a prior probability (from Polymarket prices).  The DAG
+    propagates log-odds perturbations from parent nodes to children using the
+    law of total probability.  Supply ``observations`` to lock specific nodes
+    and see how the rest of the graph shifts.
+    """
+    obs: dict[str, float] = {}
+    if observations:
+        for part in observations.split(","):
+            part = part.strip()
+            if "=" not in part:
+                continue
+            node_id, _, val = part.partition("=")
+            try:
+                obs[node_id.strip().upper()] = float(val.strip())
+            except ValueError:
+                pass
+    return {"nodes": compute_nodes(obs or None)}
+
+
+@app.get("/leaderboard", tags=["Meta"])
+async def leaderboard(_: None = Depends(verify_api_key)):
+    """
+    Return the live source credibility leaderboard, sorted by TrueSkill conservative score.
+    Refreshed every N seconds from leaderboard.json (no restart required).
+    """
+    return {"sources": get_leaderboard_data(), "count": leaderboard_size()}
 
 
 @app.get("/health", tags=["Meta"])

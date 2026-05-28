@@ -26,6 +26,7 @@ WorkingDirectory=/home/ubuntu/oracle-api/api
 #   --keep-alive 5                    matches nginx keepalive
 #   (no --preload)                    preload forks from master and breaks
 #                                     per-worker code reload on SIGHUP
+#   --access-logformat                adds response time in ms (%M) to access lines
 ExecStart=/home/ubuntu/.local/bin/uv run gunicorn forecast_api.main:app \
     -k uvicorn.workers.UvicornWorker \
     --workers 2 \
@@ -35,7 +36,8 @@ ExecStart=/home/ubuntu/.local/bin/uv run gunicorn forecast_api.main:app \
     --keep-alive 5 \
     --access-logfile - \
     --error-logfile - \
-    --log-level info
+    --log-level info \
+    --access-logformat '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s %(M)sms'
 
 # Zero-downtime deploy: `sudo systemctl reload oracle-api` after `uv sync`.
 # Gunicorn's master handles SIGHUP by spawning new workers with fresh imports

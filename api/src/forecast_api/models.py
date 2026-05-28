@@ -24,6 +24,8 @@ class SearchResponse(BaseModel):
     query: str
     results: list[SearchResultItem]
     count: int
+    provider: str = Field(default="", description="Provider that returned results (e.g. 'gdelt', 'brave', 'none')")
+    provider_chain: list[str] = Field(default_factory=list, description="Full fallback chain attempted in order")
 
 
 class ProviderStatus(BaseModel):

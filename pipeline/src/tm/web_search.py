@@ -911,11 +911,11 @@ def _search_gdelt_bq(
     # Use gkg_partitioned (DAY-partitioned by ingestion time) — not the legacy
     # unpartitioned `gkg` table which lacks _PARTITIONTIME support.
     if date_from:
-        shard_from = date_from.strftime("%Y%m%d")
+        ts_from = date_from.strftime("%Y-%m-%d")
     else:
         from datetime import timedelta
-        shard_from = (datetime.utcnow() - timedelta(days=_GDELT_DOC_WINDOW_DAYS)).strftime("%Y%m%d")
-    shard_to = date_to.strftime("%Y%m%d") if date_to else datetime.utcnow().strftime("%Y%m%d")
+        ts_from = (datetime.utcnow() - timedelta(days=_GDELT_DOC_WINDOW_DAYS)).strftime("%Y-%m-%d")
+    ts_to = date_to.strftime("%Y-%m-%d") if date_to else datetime.utcnow().strftime("%Y-%m-%d")
 
     sql = f"""
         SELECT
@@ -923,7 +923,7 @@ def _search_gdelt_bq(
             SourceCommonName   AS source,
             DATE               AS gkg_date
         FROM `gdelt-bq.gdeltv2.gkg_partitioned`
-        WHERE _PARTITIONTIME BETWEEN TIMESTAMP('{shard_from}') AND TIMESTAMP('{shard_to}')
+        WHERE _PARTITIONTIME BETWEEN TIMESTAMP('{ts_from}') AND TIMESTAMP('{ts_to}')
           AND ({entity_conditions})
           AND DocumentIdentifier IS NOT NULL
           AND DocumentIdentifier != ''

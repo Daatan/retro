@@ -4,6 +4,7 @@ Search endpoint logic — exposes web_search.py via async wrappers for /search a
 
 import asyncio
 import logging
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -24,11 +25,22 @@ async def run_search(req: SearchRequest) -> SearchResponse:
     if req.date_to:
         date_to = datetime.fromisoformat(req.date_to)
 
+    t0 = time.perf_counter()
     results = await asyncio.to_thread(
         _ws.search_articles, req.query, req.limit, date_from, date_to
     )
+    duration_ms = round((time.perf_counter() - t0) * 1000, 1)
+    provider = _ws.get_last_search_provider()
+    chain = _ws.get_last_search_provider_chain()
+
     if req.enrich_snippets:
         results = await asyncio.to_thread(_ws.enrich_snippets, results)
+
+    logger.info(
+        "event=search_done provider=%s chain=%s query=%r count=%d duration_ms=%s",
+        provider, chain, req.query[:60], len(results), duration_ms,
+    )
+
     return SearchResponse(
         query=req.query,
         results=[
@@ -42,6 +54,8 @@ async def run_search(req: SearchRequest) -> SearchResponse:
             for r in results
         ],
         count=len(results),
+        provider=provider,
+        provider_chain=chain,
     )
 
 

@@ -8,6 +8,7 @@ Fallback order:
   2. SerpAPI (serpapi.com)          SERPAPI_API_KEY
   3. Serper.dev /news endpoint      SERPER_API_KEY
   4. Brave News Search              BRAVE_API_KEY
+  4b. Tavily News Search            TAVILY_API_KEY       (after Brave: returns no published_date)
   5. BrightData SERP API            BRIGHTDATA_API_KEY
   6. Nimbleway SERP API             NIMBLEWAY_API_KEY
   7. ScrapingBee Google Search      SCRAPINGBEE_API_KEY
@@ -218,6 +219,8 @@ _GDELT_DOC_BREAK_SECS: float = 3600.0 # 1-hour circuit break
 
 _GDELT_LOCK_PATH = Path(tempfile.gettempdir()) / "gdelt_ratelimit.lock"
 _GDELT_TS_PATH   = Path(tempfile.gettempdir()) / "gdelt_ratelimit.ts"
+
+_SUBDOMAIN_STRIP_RE = re.compile(r"^(?:feeds|rss|m|amp|mobile)\.")
 
 
 class _GDELTSlotBusy(Exception):
@@ -509,7 +512,7 @@ def _search_serper_news(
             title=item.get("title", ""),
             url=item.get("link", ""),
             snippet=item.get("snippet", ""),
-            source=_extract_domain(item.get("link", "")),
+            source=_clean_source("", item.get("link", "")),
             published_date=item.get("date", ""),
         )
         for item in items[:limit]
@@ -561,7 +564,7 @@ def _search_brave_news(
             title=item.get("title", ""),
             url=item.get("url", ""),
             snippet=item.get("description", ""),
-            source=item.get("meta_url", {}).get("hostname", _extract_domain(item.get("url", ""))),
+            source=_clean_source(item.get("meta_url", {}).get("hostname", ""), item.get("url", "")),
             published_date=item.get("age", ""),
         )
         for item in items[:limit]
@@ -621,7 +624,7 @@ def _search_brightdata(
             title=title,
             url=url,
             snippet=snippets[i] if i < len(snippets) else "",
-            source=_extract_domain(url),
+            source=_clean_source("", url),
         )
         for i, (url, title) in enumerate(pairs[:limit])
     ]
@@ -664,7 +667,7 @@ def _search_nimbleway(
             title=item.get("title", ""),
             url=item.get("url", ""),
             snippet=item.get("snippet", ""),
-            source=item.get("cleaned_domain") or _extract_domain(item.get("url", "")),
+            source=_clean_source(item.get("cleaned_domain") or "", item.get("url", "")),
         )
         for item in items[:limit]
         if item.get("url")
@@ -712,7 +715,7 @@ def _search_scrapingbee(
             title=item.get("title", ""),
             url=item.get("url", ""),
             snippet=item.get("description", ""),
-            source=item.get("domain") or _extract_domain(item.get("url", "")),
+            source=_clean_source(item.get("domain") or "", item.get("url", "")),
             published_date=item.get("date_utc") or item.get("date") or "",
         )
         for item in items[:limit]
@@ -1016,9 +1019,8 @@ def _search_tavily(
             title=item.get("title", ""),
             url=item.get("url", ""),
             snippet=item.get("content", ""),
-            source=_extract_domain(item.get("url", "")),
-            # Tavily does not return published_date; date window enforced via start_date/end_date
-            published_date="",
+            source=_clean_source("", item.get("url", "")),
+            published_date=_date_from_url(item.get("url", "")),
         )
         for item in items[:limit]
         if item.get("url")
@@ -1103,7 +1105,7 @@ def _search_newsdata_io(
             title=item.get("title") or "",
             url=item.get("link") or "",
             snippet=item.get("description") or "",
-            source=item.get("source_id") or _extract_domain(item.get("link") or ""),
+            source=_clean_source(item.get("source_id") or "", item.get("link") or ""),
             published_date=(item.get("pubDate") or "")[:10],
         )
         for item in items[:limit]
@@ -1197,7 +1199,7 @@ def search_articles(
 
     Tries providers in order, skipping any without a configured key or with
     an exhausted quota flag set for this process lifetime:
-      GDELT → SerpAPI → Serper.dev → Tavily → Brave → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG
+      GDELT → SerpAPI → Serper.dev → Brave → Tavily → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG
 
     DDG is tried last; if AWS IPs are blocked by DDG/Yahoo it fails and is logged.
 
@@ -1229,18 +1231,19 @@ def search_articles(
             "GDELT skipped: 429 cooldown active for %.0fs more", _gdelt_cooldown_remaining
         )
     else:
+        _t0 = time.perf_counter()
         try:
             results = _search_gdelt(query, limit, date_from, date_to)
             if results:
                 _GDELT_DOC_FAIL_COUNT = 0
                 _provider_local.name = "gdelt"
                 return results
-            logger.warning("GDELT returned 0 results for: %s", query[:60])
+            logger.debug("gdelt empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
             _GDELT_DOC_FAIL_COUNT = 0  # empty result is not a connection failure
         except _GDELTSlotBusy as e:
             logger.info("GDELT skipped (slot busy): %s", e)
         except Exception as e:
-            logger.warning("GDELT failed: %s", e)
+            logger.warning("gdelt failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
             _GDELT_DOC_FAIL_COUNT += 1
             if _GDELT_DOC_FAIL_COUNT >= _GDELT_DOC_FAIL_THRESHOLD:
                 _GDELT_DOC_BROKEN_UNTIL = time.time() + _GDELT_DOC_BREAK_SECS
@@ -1250,144 +1253,154 @@ def search_articles(
                     _GDELT_DOC_BREAK_SECS / 60,
                 )
 
-    # 1b. GDELT BigQuery GKG — historical coverage beyond the 3-month DOC API window.
-    #     Entity-based matching; titles synthesised from URL slug; no rate limit.
-    #     Skipped for recent queries (date_from within last 90 days) where DOC API
-    #     should have succeeded — BQ is only valuable for truly historical searches.
+    # 1b. GDELT BigQuery GKG — historical coverage + fallback when Doc circuit is open.
     if GCP_SA_KEY_JSON:
-        _bq_query_is_historical = (
+        _gdelt_doc_unavailable = _GDELT_DOC_BROKEN_UNTIL > time.time() or _GDELT_COOLDOWN_UNTIL > time.time()
+        _bq_worthwhile = (
             date_from is None or
-            (datetime.utcnow() - date_from).days > _GDELT_DOC_WINDOW_DAYS
+            (datetime.utcnow() - date_from).days > _GDELT_DOC_WINDOW_DAYS or
+            _gdelt_doc_unavailable
         )
-        if _bq_query_is_historical:
+        if _bq_worthwhile:
             _provider_local.chain.append("gdelt_bq")
+            _t0 = time.perf_counter()
             try:
                 results = _search_gdelt_bq(query, limit, date_from, date_to)
                 if results:
                     _provider_local.name = "gdelt_bq"
                     return results
-                logger.warning("GDELT BQ returned 0 results for: %s", query[:60])
+                logger.debug("gdelt_bq empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
             except Exception as e:
-                logger.warning("GDELT BQ failed: %s", e)
+                logger.warning("gdelt_bq failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 2. SerpAPI
     if SERPAPI_API_KEY and not _SERPAPI_QUOTA_EXHAUSTED:
         _provider_local.chain.append("serpapi")
+        _t0 = time.perf_counter()
         try:
             results = _search_serpapi_news(query, limit, date_from, date_to)
             if results:
                 _provider_local.name = "serpapi"
                 return results
-            logger.warning("SerpAPI returned 0 results for: %s", query[:60])
+            logger.debug("serpapi empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
-            logger.warning("SerpAPI failed: %s", e)
+            logger.warning("serpapi failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 3. Serper.dev news
     if SERPER_API_KEY and not _SERPER_QUOTA_EXHAUSTED:
         _provider_local.chain.append("serper")
+        _t0 = time.perf_counter()
         try:
             results = _search_serper_news(query, limit, date_from, date_to)
             if results:
                 _provider_local.name = "serper"
                 return results
-            logger.warning("Serper returned 0 results for: %s", query[:60])
+            logger.debug("serper empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
-            logger.warning("Serper failed: %s", e)
+            logger.warning("serper failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
-    # 3b. Tavily news (1 credit/call; topic=news; start_date/end_date supported)
-    if TAVILY_API_KEY and not _TAVILY_QUOTA_EXHAUSTED:
-        _provider_local.chain.append("tavily")
-        try:
-            results = _search_tavily(query, limit, date_from, date_to)
-            if results:
-                _provider_local.name = "tavily"
-                return results
-            logger.warning("Tavily returned 0 results for: %s", query[:60])
-        except Exception as e:
-            logger.warning("Tavily failed: %s", e)
-
-    # 4. Brave News
+    # 4. Brave News (returns published_date; higher free quota than Tavily)
     if BRAVE_API_KEY and not _BRAVE_QUOTA_EXHAUSTED:
         _provider_local.chain.append("brave")
+        _t0 = time.perf_counter()
         try:
             results = _search_brave_news(query, limit, date_from, date_to)
             if results:
                 _provider_local.name = "brave"
                 return results
-            logger.warning("Brave returned 0 results for: %s", query[:60])
+            logger.debug("brave empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
-            logger.warning("Brave failed: %s", e)
+            logger.warning("brave failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
+
+    # 4b. Tavily news (after Brave: no published_date in API response; 1 credit/call)
+    if TAVILY_API_KEY and not _TAVILY_QUOTA_EXHAUSTED:
+        _provider_local.chain.append("tavily")
+        _t0 = time.perf_counter()
+        try:
+            results = _search_tavily(query, limit, date_from, date_to)
+            if results:
+                _provider_local.name = "tavily"
+                return results
+            logger.debug("tavily empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
+        except Exception as e:
+            logger.warning("tavily failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 5. BrightData SERP API
     if BRIGHTDATA_API_KEY and not _BRIGHTDATA_QUOTA_EXHAUSTED:
         _provider_local.chain.append("brightdata")
+        _t0 = time.perf_counter()
         try:
             results = _search_brightdata(query, limit, date_from, date_to)
             if results:
                 _provider_local.name = "brightdata"
                 return results
-            logger.warning("BrightData returned 0 results for: %s", query[:60])
+            logger.debug("brightdata empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
-            logger.warning("BrightData failed: %s", e)
+            logger.warning("brightdata failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 6. Nimbleway SERP API
     if NIMBLEWAY_API_KEY and not _NIMBLEWAY_QUOTA_EXHAUSTED:
         _provider_local.chain.append("nimbleway")
+        _t0 = time.perf_counter()
         try:
             results = _search_nimbleway(query, limit, date_from, date_to)
             if results:
                 _provider_local.name = "nimbleway"
                 return results
-            logger.warning("Nimbleway returned 0 results for: %s", query[:60])
+            logger.debug("nimbleway empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
-            logger.warning("Nimbleway failed: %s", e)
+            logger.warning("nimbleway failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 7. ScrapingBee Google Search
     if SCRAPINGBEE_API_KEY and not _SCRAPINGBEE_QUOTA_EXHAUSTED:
         _provider_local.chain.append("scrapingbee")
+        _t0 = time.perf_counter()
         try:
             results = _search_scrapingbee(query, limit, date_from, date_to)
             if results:
                 _provider_local.name = "scrapingbee"
                 return results
-            logger.warning("ScrapingBee returned 0 results for: %s", query[:60])
+            logger.debug("scrapingbee empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
-            logger.warning("ScrapingBee failed: %s", e)
+            logger.warning("scrapingbee failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 8. Newsdata.io
     if NEWSDATA_API_KEY and not _NEWSDATA_QUOTA_EXHAUSTED:
         _provider_local.chain.append("newsdata")
+        _t0 = time.perf_counter()
         try:
             results = _search_newsdata_io(query, limit, date_from, date_to)
             if results:
                 _provider_local.name = "newsdata"
                 return results
-            logger.warning("Newsdata.io returned 0 results for: %s", query[:60])
+            logger.debug("newsdata empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
-            logger.warning("Newsdata.io failed: %s", e)
+            logger.warning("newsdata failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 9. DataForSEO (paid — last-resort fallback only)
     if DATAFORSEO_API_KEY and not _DATAFORSEO_QUOTA_EXHAUSTED:
         _provider_local.chain.append("dataforseo")
+        _t0 = time.perf_counter()
         try:
             results = _search_dataforseo(query, limit, date_from, date_to)
             if results:
                 _provider_local.name = "dataforseo"
                 return results
-            logger.warning("DataForSEO returned 0 results for: %s", query[:60])
+            logger.debug("dataforseo empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
-            logger.warning("DataForSEO failed: %s", e)
+            logger.warning("dataforseo failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 10. DuckDuckGo (free, no key)
     _provider_local.chain.append("ddg")
+    _t0 = time.perf_counter()
     try:
         results = _search_ddg_news(query, limit, date_from, date_to)
         if results:
             _provider_local.name = "ddg"
             return results
-        logger.warning("DDG returned 0 results for: %s", query[:60])
+        logger.debug("ddg empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
     except Exception as e:
-        logger.warning("DDG failed: %s", e)
+        logger.warning("ddg failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     logger.error("All search providers exhausted — no articles found for: %s", query[:60])
     return []
@@ -1402,3 +1415,35 @@ def _extract_domain(url: str) -> str:
         return re.sub(r"^www\.", "", __import__("urllib.parse", fromlist=["urlparse"]).urlparse(url).netloc)
     except Exception:
         return ""
+
+
+_URL_DATE_RE = re.compile(r"[/_-](\d{4})[/_-](\d{1,2})[/_-](\d{1,2})(?:[/_\-.]|$)")
+
+
+def _date_from_url(url: str) -> str:
+    """Extract YYYY-MM-DD from common news URL date patterns (/2026/05/28/ etc.). Returns '' if not found."""
+    m = _URL_DATE_RE.search(url)
+    if not m:
+        return ""
+    try:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 2000 <= y <= 2100 and 1 <= mo <= 12 and 1 <= d <= 31:
+            return f"{y:04d}-{mo:02d}-{d:02d}"
+    except Exception:
+        pass
+    return ""
+
+
+def _clean_source(source: str, url: str = "") -> str:
+    """Normalise provider source strings: strip noisy subdomains (feeds., rss., m., amp.)."""
+    if not source:
+        source = _extract_domain(url) if url else ""
+    if not source:
+        return ""
+    # Proper names (contain space) and bare IDs (no dot): leave as-is
+    if " " in source or "." not in source:
+        return source
+    cleaned = source.lower()
+    while _SUBDOMAIN_STRIP_RE.match(cleaned):
+        cleaned = _SUBDOMAIN_STRIP_RE.sub("", cleaned)
+    return cleaned

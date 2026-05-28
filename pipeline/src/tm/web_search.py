@@ -296,6 +296,49 @@ _SCRAPINGBEE_QUOTA_EXHAUSTED: bool = False
 _NEWSDATA_QUOTA_EXHAUSTED: bool = False
 _TAVILY_QUOTA_EXHAUSTED: bool = False
 
+_QUOTA_STATE_PATH = Path(tempfile.gettempdir()) / "quota_exhausted.json"
+
+
+def _load_quota_state() -> None:
+    """Seed in-process quota flags from disk so a gunicorn SIGHUP reload doesn't forget exhausted providers."""
+    global _DATAFORSEO_QUOTA_EXHAUSTED, _SERPAPI_QUOTA_EXHAUSTED, _SERPER_QUOTA_EXHAUSTED
+    global _BRAVE_QUOTA_EXHAUSTED, _BRIGHTDATA_QUOTA_EXHAUSTED, _NIMBLEWAY_QUOTA_EXHAUSTED
+    global _SCRAPINGBEE_QUOTA_EXHAUSTED, _NEWSDATA_QUOTA_EXHAUSTED, _TAVILY_QUOTA_EXHAUSTED
+    try:
+        data = _json.loads(_QUOTA_STATE_PATH.read_text())
+        _DATAFORSEO_QUOTA_EXHAUSTED  = data.get("dataforseo",  False)
+        _SERPAPI_QUOTA_EXHAUSTED     = data.get("serpapi",     False)
+        _SERPER_QUOTA_EXHAUSTED      = data.get("serper",      False)
+        _BRAVE_QUOTA_EXHAUSTED       = data.get("brave",       False)
+        _BRIGHTDATA_QUOTA_EXHAUSTED  = data.get("brightdata",  False)
+        _NIMBLEWAY_QUOTA_EXHAUSTED   = data.get("nimbleway",   False)
+        _SCRAPINGBEE_QUOTA_EXHAUSTED = data.get("scrapingbee", False)
+        _NEWSDATA_QUOTA_EXHAUSTED    = data.get("newsdata",    False)
+        _TAVILY_QUOTA_EXHAUSTED      = data.get("tavily",      False)
+    except Exception:
+        pass
+
+
+def _persist_quota_state() -> None:
+    """Write current quota exhaustion flags to disk so they survive worker reloads."""
+    try:
+        _QUOTA_STATE_PATH.write_text(_json.dumps({
+            "dataforseo":  _DATAFORSEO_QUOTA_EXHAUSTED,
+            "serpapi":     _SERPAPI_QUOTA_EXHAUSTED,
+            "serper":      _SERPER_QUOTA_EXHAUSTED,
+            "brave":       _BRAVE_QUOTA_EXHAUSTED,
+            "brightdata":  _BRIGHTDATA_QUOTA_EXHAUSTED,
+            "nimbleway":   _NIMBLEWAY_QUOTA_EXHAUSTED,
+            "scrapingbee": _SCRAPINGBEE_QUOTA_EXHAUSTED,
+            "newsdata":    _NEWSDATA_QUOTA_EXHAUSTED,
+            "tavily":      _TAVILY_QUOTA_EXHAUSTED,
+        }))
+    except Exception:
+        pass
+
+
+_load_quota_state()
+
 
 @dataclass
 class SearchResult:
@@ -389,6 +432,7 @@ def _search_dataforseo(
     # 40101 = account suspended, 40201/40202/40203 = insufficient funds / billing
     if task_code in (40101, 40201, 40202, 40203):
         _DATAFORSEO_QUOTA_EXHAUSTED = True
+        _persist_quota_state()
         raise RuntimeError(f"DataForSEO billing/quota error: status_code={task_code}")
     items = ((api_task.get("result") or [{}])[0].get("items")) or []
     results = []
@@ -451,6 +495,7 @@ def _search_serpapi_news(
         body = r.text.lower()
         if "run out" in body or "quota" in body or "searches" in body:
             _SERPAPI_QUOTA_EXHAUSTED = True
+            _persist_quota_state()
             raise RuntimeError("SerpAPI quota exhausted")
         raise RuntimeError("SerpAPI rate-limited (429)")
     r.raise_for_status()
@@ -499,6 +544,7 @@ def _search_serper_news(
     )
     if r.status_code == 400 and "credits" in r.text.lower():
         _SERPER_QUOTA_EXHAUSTED = True
+        _persist_quota_state()
         raise RuntimeError("Serper quota exhausted (no credits)")
     r.raise_for_status()
     data = r.json()
@@ -552,6 +598,7 @@ def _search_brave_news(
     )
     if r.status_code == 402:
         _BRAVE_QUOTA_EXHAUSTED = True
+        _persist_quota_state()
         raise RuntimeError("Brave quota exhausted (402)")
     r.raise_for_status()
 
@@ -597,6 +644,7 @@ def _search_brightdata(
     )
     if r.status_code in (401, 402):
         _BRIGHTDATA_QUOTA_EXHAUSTED = True
+        _persist_quota_state()
         raise RuntimeError(f"BrightData quota/auth error ({r.status_code})")
     r.raise_for_status()
 
@@ -651,6 +699,7 @@ def _search_nimbleway(
     )
     if r.status_code == 402:
         _NIMBLEWAY_QUOTA_EXHAUSTED = True
+        _persist_quota_state()
         raise RuntimeError("Nimbleway quota exhausted (402)")
     r.raise_for_status()
 
@@ -694,9 +743,11 @@ def _search_scrapingbee(
     )
     if r.status_code == 402:
         _SCRAPINGBEE_QUOTA_EXHAUSTED = True
+        _persist_quota_state()
         raise RuntimeError("ScrapingBee quota exhausted (402)")
     if r.status_code == 401:
         _SCRAPINGBEE_QUOTA_EXHAUSTED = True
+        _persist_quota_state()
         raise RuntimeError("ScrapingBee unauthorized (401) — invalid key, disabling for session")
     r.raise_for_status()
 
@@ -1001,11 +1052,13 @@ def _search_tavily(
     if r.status_code == 432:
         # Tavily-specific: plan usage limit exceeded (non-standard HTTP code)
         _TAVILY_QUOTA_EXHAUSTED = True
+        _persist_quota_state()
         raise RuntimeError("Tavily usage limit exceeded (432) — disabling for session")
     if r.status_code in (401, 403, 429):
         body_text = r.text.lower()
         if any(x in body_text for x in ("quota", "credit", "limit", "exceeded", "invalid")):
             _TAVILY_QUOTA_EXHAUSTED = True
+            _persist_quota_state()
             raise RuntimeError(f"Tavily quota/key error ({r.status_code}) — disabling for session")
         raise RuntimeError(f"Tavily HTTP {r.status_code}")
     r.raise_for_status()
@@ -1088,6 +1141,7 @@ def _search_newsdata_io(
     r = httpx.get("https://newsdata.io/api/1/latest", params=params, timeout=10)
     if r.status_code == 429:
         _NEWSDATA_QUOTA_EXHAUSTED = True
+        _persist_quota_state()
         raise RuntimeError("Newsdata.io quota exhausted (rate limit)")
     r.raise_for_status()
     data = r.json()
@@ -1095,6 +1149,7 @@ def _search_newsdata_io(
         code = (data.get("results") or {}).get("code", "")
         if code in ("AccessDenied", "RateLimitExceeded"):
             _NEWSDATA_QUOTA_EXHAUSTED = True
+            _persist_quota_state()
         raise RuntimeError(f"Newsdata.io error: {data}")
 
     items = data.get("results") or []

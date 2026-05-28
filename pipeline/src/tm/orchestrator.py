@@ -9,6 +9,7 @@ from enum import Enum
 
 from rich.console import Console
 from .config import settings
+from .dedup import SimhashIndex
 from .models import CellStatus, ExtractionOutput, PredictionExtraction
 from .aggregator import aggregate_predictions, needs_aggregation, aggregate_article_predictions
 from .runner import run_article, ArticleInput, PipelineResult
@@ -40,6 +41,8 @@ class Orchestrator:
         
         for d in [self.vault_dir / "articles", self.vault_dir / "extractions", self.raw_ingest_dir]:
             d.mkdir(parents=True, exist_ok=True)
+
+        self._simhash_idx = SimhashIndex(self.vault_dir)
 
         # Use DDG as primary ingestor; Brave demoted to fallback (quota exhausted)
         self.ingestor = DDGIngestor()
@@ -217,11 +220,24 @@ class Orchestrator:
             console.print(f"    [dim]Skipping empty/stub article ({len(text)} chars)[/dim]")
             return None
         art_hash = self.get_article_hash(text)
-        
+
+        # Near-duplicate detection: if a semantically-similar article was already
+        # processed, reuse its extraction rather than calling the LLM again.
+        canonical_hash = self._simhash_idx.find_near_duplicate(text)
+        if canonical_hash and canonical_hash != art_hash:
+            console.print(f"    [dim]Near-duplicate of {canonical_hash[:8]} — reusing extraction[/dim]")
+            canonical_extract = self.vault_dir / "extractions" / f"{canonical_hash}_{event['id']}_v1.json"
+            if canonical_extract.exists():
+                self.create_atlas_link(event["id"], source["id"], canonical_hash, canonical_extract, raw_art, event.get("outcome_date", ""))
+                return None
+            # Canonical extraction doesn't exist yet for this event — fall through to normal processing
+
         vault_path = self.vault_dir / "articles" / f"{art_hash}.json"
         if not vault_path.exists():
             with open(vault_path, "w") as f:
                 json.dump(raw_art, f, indent=2)
+            self._simhash_idx.add(art_hash, text)
+            self._simhash_idx.save()
         
         model_v = "v1" 
         extract_path = self.vault_dir / "extractions" / f"{art_hash}_{event['id']}_{model_v}.json"

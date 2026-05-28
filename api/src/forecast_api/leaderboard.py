@@ -77,3 +77,10 @@ def get_credibility_weight(source_id: str) -> float:
 
 def leaderboard_size() -> int:
     return len(_cache)
+
+
+def get_leaderboard_data() -> list[dict]:
+    """Return a snapshot of all leaderboard entries, sorted by TrueSkill conservative score."""
+    entries = list(_cache.values())
+    entries.sort(key=lambda e: float(e.get("trueskill_conservative", 0.0)), reverse=True)
+    return entries

@@ -151,6 +151,9 @@ async def _check_scrapingbee() -> ProviderStatus:
         max_c = data.get("max_api_credit")
         used_c = data.get("used_api_credit")
         credits = (max_c - used_c) if (max_c is not None and used_c is not None) else None
+        if credits is not None and credits <= 0:
+            _ws._SCRAPINGBEE_QUOTA_EXHAUSTED = True
+            return ProviderStatus(configured=True, exhausted=True, status="exhausted", credits=credits)
         return ProviderStatus(configured=True, exhausted=False, status="ok", credits=credits)
     except Exception as e:
         return ProviderStatus(configured=True, exhausted=False, status="error", error=str(e))

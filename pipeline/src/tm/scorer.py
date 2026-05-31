@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import trueskill
+from openskill.models import PlackettLuce
 
 
 def stance_to_prob(stance: float) -> float:
@@ -170,16 +170,16 @@ class Scorer:
         global_stats: Dict[str, dict] = {}
         # category stats: sid → category → bucket
         category_stats: Dict[str, Dict[str, dict]] = defaultdict(dict)
-        # TrueSkill ratings: sid → Rating (μ=25, σ=25/3 by default)
-        ts_env = trueskill.TrueSkill(draw_probability=0.05)
-        ts_ratings: Dict[str, trueskill.Rating] = {}
+        # OpenSkill ratings: sid → Rating (μ=25, σ=25/3 by default)
+        skill_model = PlackettLuce()
+        skill_ratings: Dict[str, object] = {}
 
         # Initialise buckets for all sources
         for source_file in self.sources_dir.glob("*.json"):
             source = json.loads(source_file.read_text())
             sid = source["id"]
             global_stats[sid] = self._empty_bucket(source["name"])
-            ts_ratings[sid] = ts_env.create_rating()
+            skill_ratings[sid] = skill_model.rating()
 
         # Global (implied_p, outcome) pairs for calibration curve
         calib_pairs: list[tuple[float, float]] = []
@@ -264,10 +264,10 @@ class Scorer:
                     for cat in categories:
                         category_stats[sid][cat]["events_covered"] += 1
 
-            # ELO + TrueSkill updates (global only)
+            # ELO + OpenSkill updates (global only)
             if len(event_predictions) > 1:
                 self._update_elo(global_stats, event_predictions, outcome)
-                self._update_trueskill(ts_env, ts_ratings, event_predictions, outcome)
+                self._update_skill(skill_model, skill_ratings, event_predictions, outcome)
 
         # ── Build leaderboard ────────────────────
         leaderboard = []
@@ -277,7 +277,7 @@ class Scorer:
                 continue
 
             # Per-category scores for this source
-            ts_r = ts_ratings.get(sid)
+            skill_r = skill_ratings.get(sid)
             per_category = {}
             for cat, cstats in category_stats.get(sid, {}).items():
                 cn = cstats["prediction_count"]
@@ -305,16 +305,16 @@ class Scorer:
                 "time_decay_brier_score": time_decay_brier,
                 "log_score":              round(stats["log_score_total"] / n, 4),
                 "accuracy":               round(stats["correct_count"] / n, 4),
-                "elo":                    round(stats["elo"], 0),
-                "trueskill_mu":           round(ts_r.mu, 2) if ts_r else 25.0,
-                "trueskill_sigma":        round(ts_r.sigma, 2) if ts_r else 8.33,
-                "trueskill_conservative": round(ts_r.mu - 3 * ts_r.sigma, 2) if ts_r else 0.0,
+                "elo":                round(stats["elo"], 0),
+                "skill_mu":           round(skill_r.mu, 2) if skill_r else 25.0,
+                "skill_sigma":        round(skill_r.sigma, 2) if skill_r else 8.33,
+                "skill_conservative": round(skill_r.mu - 3 * skill_r.sigma, 2) if skill_r else 0.0,
                 "predictions":            n,
                 "events":                 stats["events_covered"],
                 "by_category":            per_category,
             })
 
-        leaderboard.sort(key=lambda x: x["trueskill_conservative"], reverse=True)
+        leaderboard.sort(key=lambda x: x["skill_conservative"], reverse=True)
 
         self.scores_path.write_text(json.dumps(leaderboard, indent=2))
         print(f"Scoring complete. {len(leaderboard)} sources scored → {self.scores_path}")
@@ -345,14 +345,14 @@ class Scorer:
             delta = K / len(predictions)
             stats[sid]["elo"] += delta if is_correct else -delta
 
-    def _update_trueskill(
+    def _update_skill(
         self,
-        env: trueskill.TrueSkill,
-        ratings: Dict[str, trueskill.Rating],
+        model: PlackettLuce,
+        ratings: Dict[str, object],
         predictions: list,
         outcome: bool,
     ) -> None:
-        """Update TrueSkill ratings: correct predictors beat incorrect ones."""
+        """Update OpenSkill ratings: correct predictors beat incorrect ones."""
         winners = [sid for sid, stance in predictions if (stance > 0) == outcome]
         losers  = [sid for sid, stance in predictions if (stance > 0) != outcome]
         if not winners or not losers:
@@ -361,7 +361,7 @@ class Scorer:
         winner_teams = [[ratings[sid]] for sid in winners]
         loser_teams  = [[ratings[sid]] for sid in losers]
         ranks = [0] * len(winner_teams) + [1] * len(loser_teams)
-        new_ratings = env.rate(winner_teams + loser_teams, ranks=ranks)
+        new_ratings = model.rate(winner_teams + loser_teams, ranks=ranks)
 
         for i, sid in enumerate(winners):
             ratings[sid] = new_ratings[i][0]

@@ -123,7 +123,7 @@ async def bayes_nodes(
 @app.get("/leaderboard", tags=["Meta"])
 async def leaderboard(_: None = Depends(verify_api_key)):
     """
-    Return the live source credibility leaderboard, sorted by TrueSkill conservative score.
+    Return the live source credibility leaderboard, sorted by skill conservative score (μ − 3σ).
     Refreshed every N seconds from leaderboard.json (no restart required).
     """
     return {"sources": get_leaderboard_data(), "count": leaderboard_size()}

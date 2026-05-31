@@ -48,12 +48,12 @@ async def background_refresh_loop(path: Path, interval_seconds: int) -> None:
 
 def get_credibility_weight(source_id: str) -> float:
     """
-    Credibility weight derived from TrueSkill conservative estimate (μ − 3σ).
-    Falls back to ELO/Brier if TrueSkill fields are absent.
+    Credibility weight derived from OpenSkill conservative estimate (μ − 3σ).
+    Falls back to ELO/Brier if skill fields are absent.
     Sources absent from leaderboard get neutral weight 1.0.
 
-    TrueSkill conservative score: higher = more trusted.
-    We normalise so that the default uninformed prior (μ=25, σ=8.33 → conservative≈0)
+    Conservative score: higher = more trusted.
+    Normalised so that the default uninformed prior (μ=25, σ=8.33 → conservative≈0)
     maps to weight 1.0.
 
     Formula: max(0.1, 1.0 + conservative / 25.0)
@@ -65,9 +65,10 @@ def get_credibility_weight(source_id: str) -> float:
     if entry is None:
         return 1.0
 
-    if "trueskill_conservative" in entry:
-        conservative = float(entry["trueskill_conservative"])
-        return max(0.1, 1.0 + conservative / 25.0)
+    # Support new field name (skill_conservative) and old (trueskill_conservative)
+    conservative_raw = entry.get("skill_conservative") or entry.get("trueskill_conservative")
+    if conservative_raw is not None:
+        return max(0.1, 1.0 + float(conservative_raw) / 25.0)
 
     # Fallback: ELO / Brier
     elo = float(entry.get("elo", 1200.0))
@@ -80,7 +81,10 @@ def leaderboard_size() -> int:
 
 
 def get_leaderboard_data() -> list[dict]:
-    """Return a snapshot of all leaderboard entries, sorted by TrueSkill conservative score."""
+    """Return a snapshot of all leaderboard entries, sorted by skill conservative score."""
     entries = list(_cache.values())
-    entries.sort(key=lambda e: float(e.get("trueskill_conservative", 0.0)), reverse=True)
+    entries.sort(
+        key=lambda e: float(e.get("skill_conservative") or e.get("trueskill_conservative") or 0.0),
+        reverse=True,
+    )
     return entries

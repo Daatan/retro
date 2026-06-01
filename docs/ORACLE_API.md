@@ -404,6 +404,10 @@ The Oracle is wired into two `daatan` routes, with automatic fallback to the exi
 
 Client: `daatan/src/lib/services/oracle.ts` — `getOracleProbability()` returns a probability in `[0, 1]` or `null` (never throws). `checkOracleHealth()` verifies the API is reachable and its version starts with `0.1`.
 
+### IBI analysis tool
+
+The IBI retro analysis tool (formerly `komapc.github.io/retro/ibi.html`) is hosted in daatan at **`/ibi`** (admin-only). It calls Oracle `/fetch-url`, `/search`, and `/llm` through three Daatan proxy routes (`/api/ibi/*`) so the Oracle key never reaches the browser. The static `ibi.html` remains available as a fallback but requires manual key entry.
+
 ### Secret management
 
 The shared `x-api-key` lives in AWS Secrets Manager at `openclaw/oracle-api-key` (region `eu-central-1`). The `openclaw/` prefix is legacy naming from the decommissioned OpenClaw stack and is retained for backwards compatibility with `ec2_bootstrap.sh`. Both sides read the key from there:

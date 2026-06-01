@@ -2075,8 +2075,8 @@
     "A03:reuters": {
       "event_id": "A03",
       "source_id": "reuters",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A03:toi": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-05-20T15:55:53.851065"
+  "last_updated": "2026-06-01T08:32:54.403451"
 }

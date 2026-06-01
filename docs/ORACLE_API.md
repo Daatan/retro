@@ -406,7 +406,7 @@ Client: `daatan/src/lib/services/oracle.ts` — `getOracleProbability()` returns
 
 ### IBI analysis tool
 
-The IBI retro analysis tool (formerly `komapc.github.io/retro/ibi.html`) is hosted in daatan at **`/ibi`** (admin-only). It calls Oracle `/fetch-url`, `/search`, and `/llm` through three Daatan proxy routes (`/api/ibi/*`) so the Oracle key never reaches the browser. The static `ibi.html` remains available as a fallback but requires manual key entry.
+The IBI retro analysis tool (formerly the static `komapc.github.io/retro/ibi.html`, now removed) is hosted in daatan at **`/ibi`** (admin-only). It calls Oracle `/fetch-url`, `/search`, and `/llm` through three Daatan proxy routes (`/api/ibi/*`) so the Oracle key never reaches the browser.
 
 ### Secret management
 

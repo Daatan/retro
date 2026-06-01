@@ -267,7 +267,13 @@ const state = {
 
 // ── Persist API keys ──
 window.addEventListener('DOMContentLoaded', () => {
-  const oKey = localStorage.getItem('ibi_oracle_key')
+  // Pre-fill from URL hash: ibi.html#key=oracle-... (never sent to any server)
+  const hashKey = new URLSearchParams(location.hash.slice(1)).get('key')
+  if (hashKey) {
+    localStorage.setItem('ibi_oracle_key', hashKey)
+    history.replaceState(null, '', location.pathname + location.search) // strip key from URL
+  }
+  const oKey = hashKey || localStorage.getItem('ibi_oracle_key')
   if (oKey) document.getElementById('oracleKey').value = oKey
   document.getElementById('oracleKey').addEventListener('change', e => localStorage.setItem('ibi_oracle_key', e.target.value.trim()))
 

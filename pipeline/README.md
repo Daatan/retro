@@ -29,7 +29,8 @@ pipeline/
 
     # Scoring & Output
     orchestrator.py        # Batch runner: events × sources → vault → atlas
-    scorer.py              # Brier score + calibration + per-category scoring
+    dedup.py               # SimHash near-duplicate detection (64-bit, Hamming ≤8) — deduplicates syndicated rewrites at ingest
+    scorer.py              # Brier score + ELO + OpenSkill + calibration + per-category scoring
     backtest.py            # LightGBM backtest vs Polymarket (see BACKTEST.md)
     render_atlas.py        # Renders factum_atlas.html from atlas/ data
     generate_pages.py      # Generates per-event/source static HTML pages

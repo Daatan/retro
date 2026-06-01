@@ -17,6 +17,14 @@ class ApiSettings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8001
 
+    # Hard ceiling on a single /forecast pipeline run. The pipeline has no
+    # natural deadline — slow article fetches plus Bedrock throttling/retries
+    # can stack past the client's own timeout (oracle-test.html aborts at 120s),
+    # leaving the caller hanging. When this fires we cancel the run and return a
+    # placeholder so the caller gets a fast, clean answer. Set below the client
+    # abort to guarantee we win the race.
+    forecast_timeout_seconds: int = 90
+
     # Cap article body fed to LLMs. News articles have the thesis in the lead;
     # beyond ~3000 chars we pay LLM latency and $$ for diminishing returns.
     max_article_chars: int = 3000

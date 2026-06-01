@@ -433,7 +433,24 @@ async def run_forecast(req: ForecastRequest) -> ForecastResponse:
     _inflight[cache_key] = event
 
     try:
-        return await _run_forecast_inner(req, cache_key, limit, total_start)
+        return await asyncio.wait_for(
+            _run_forecast_inner(req, cache_key, limit, total_start),
+            timeout=settings.forecast_timeout_seconds,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "event=forecast_timeout question_hash=%s timeout_s=%s",
+            _question_hash(req.question),
+            settings.forecast_timeout_seconds,
+        )
+        _log_phase(
+            "total",
+            (time.perf_counter() - total_start) * 1000,
+            question=req.question,
+            articles_used=0,
+            outcome="timeout",
+        )
+        return _empty_response(req.question)
     finally:
         event.set()
         _inflight.pop(cache_key, None)
@@ -538,8 +555,8 @@ async def _run_forecast_inner(
                 search_query=search_query,
                 search_provider=search_provider,
                 search_provider_chain=provider_chain,
-                gatekeeper_model=settings.gatekeeper_model,
-                extractor_model=settings.extractor_model,
+                gatekeeper_model=_pipeline_settings.gatekeeper_model,
+                extractor_model=_pipeline_settings.extractor_model,
                 articles_fetched=0,
                 articles_gate_passed=0,
                 articles_extracted=0,
@@ -668,8 +685,8 @@ async def _run_forecast_inner(
             search_query=search_query,
             search_provider=search_provider,
             search_provider_chain=provider_chain,
-            gatekeeper_model=settings.gatekeeper_model,
-            extractor_model=settings.extractor_model,
+            gatekeeper_model=_pipeline_settings.gatekeeper_model,
+            extractor_model=_pipeline_settings.extractor_model,
             articles_fetched=len(search_results),
             articles_gate_passed=sum(1 for d in article_debugs if d.gate_passed),
             articles_extracted=n,

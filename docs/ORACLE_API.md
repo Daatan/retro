@@ -200,6 +200,59 @@ No auth required. Returns:
 
 `version` allows clients to verify API compatibility before relying on `/forecast` responses.
 
+### `GET /leaderboard`
+
+**Auth:** `x-api-key` header required.
+
+Returns the live source credibility leaderboard sorted by OpenSkill conservative score. The data is read from `data/leaderboard.json` (refreshed every 5 minutes by the background loop — same file written by the scoring pipeline).
+
+```json
+{
+  "sources": [
+    {
+      "id": "haaretz",
+      "name": "Haaretz",
+      "skill_mu": 26.3,
+      "skill_sigma": 7.8,
+      "skill_conservative": 2.9,
+      "elo": 1247.0,
+      "brier_score": 0.2134,
+      "accuracy": 0.61,
+      "predictions": 47,
+      "events": 31
+    }
+  ],
+  "count": 27
+}
+```
+
+Used by daatan's `getOracleLeaderboard()` in `src/lib/services/oracle.ts` to display live source credibility.
+
+### `GET /bayes/nodes`
+
+**Auth:** `x-api-key` header required.
+
+Returns the BayesOracle node probabilities for the Israeli-politics DAG. Optionally accepts observations to propagate through the DAG via log-odds perturbation.
+
+**Query params:**
+
+| Param | Type | Description |
+|---|---|---|
+| `observations` | string | Optional. Comma-separated `NODE_ID=probability` pairs, e.g. `TRUMP=0.3,PM5=0.5` |
+
+```json
+// GET /bayes/nodes?observations=TRUMP=0.3
+[
+  { "id": "TRUMP",   "label": "Trump wins 2024",   "layer": 0, "prior": 0.85, "p": 0.3,  "delta": -0.55, "locked": true },
+  { "id": "PM5",     "label": "Netanyahu PM 2025", "layer": 2, "prior": 0.32, "p": 0.16, "delta": -0.16, "locked": false },
+  { "id": "OPP_PM",  "label": "Opposition PM",     "layer": 3, "prior": 0.38, "p": 0.69, "delta": +0.31, "locked": false }
+]
+```
+
+Fields: `id`, `label`, `layer` (topological depth), `prior` (base probability), `p` (current probability after propagation), `delta` (`p − prior`), `locked` (whether this node was pinned by an observation).
+
+The DAG covers 21 nodes and 33 edges across Israeli coalition politics, judicial reform, and regional geopolitics. Implemented in `api/src/forecast_api/bayesoracle.py`.
+
 ---
 
 ## Deployment
@@ -368,7 +421,7 @@ To rotate: update `openclaw/oracle-api-key` in Secrets Manager, then update both
 |---|---|
 | ✅ Phase 1 | API skeleton + auth + rate limiting |
 | ✅ Phase 2 | Live pipeline: `web_search.py` → gatekeeper → extractor → leaderboard weighting |
-| ✅ Phase 3 | Leaderboard credibility weighting (TrueSkill conservative score) |
+| ✅ Phase 3 | Leaderboard credibility weighting (OpenSkill PlackettLuce conservative score μ − 3σ) |
 | ✅ Phase 4 | `oracle.daatan.com` DNS + TLS + EC2 deploy |
 | ✅ Phase 5 | daatan integration — `oracle.ts` client wired into context + express guess routes (shipped in daatan v1.9.0) |
 | 🔲 Phase 6 | Async queue for >15s requests |

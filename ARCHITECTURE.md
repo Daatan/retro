@@ -516,7 +516,7 @@ POST /api/forecast
 2. `extractor.extract_predictions()` — LLM extraction: `stance`, `certainty`, `claim`, etc.
 
 **Stage 3 — Weight by Source Credibility**
-1. `leaderboard.get_credibility_weight(source_id)` — TrueSkill conservative score from `leaderboard.json`
+1. `leaderboard.get_credibility_weight(source_id)` — OpenSkill conservative score (μ − 3σ) from `leaderboard.json`
 2. `weight = credibility × certainty` per prediction
 
 **Stage 4 — Aggregate → Distribution**

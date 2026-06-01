@@ -18,7 +18,7 @@ dependencies = [
     "beautifulsoup4>=4.14.3",
     "ddgs>=9.0.0",
     "trafilatura>=2.0.0",
-    "trueskill>=0.4.0",
+    "openskill>=6.0.0",
     "pyyaml>=6.0.0",
     "google-cloud-bigquery>=3.0.0",
 ]

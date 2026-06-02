@@ -20,10 +20,24 @@ Both checkouts read the same `data/` directory — it lives in the pipeline's tr
 1. `git fetch origin main` in `/home/ubuntu/oracle-api`
 2. `git reset --hard <ref>` (defaults to `origin/main`, override with a SHA to pin)
 3. `uv sync --frozen` in `api/`
-4. `sudo systemctl reload oracle-api` — gunicorn SIGHUPs its workers, new code is imported into fresh workers, old workers drain gracefully. The listening socket on `:8001` is never closed, so there's no 502 window.
-5. Poll `/health` until 200 (up to 10s).
+4. `sudo systemctl reload-or-restart oracle-api` — gunicorn SIGHUPs its workers, new code is imported into fresh workers, old workers drain gracefully. The listening socket on `:8001` is never closed, so there's no 502 window.
+5. **Health gate (hardened 2026-06-02):** poll `/health` and require **5 consecutive** 200s over a window that spans the graceful-drain. If the reload is not durably healthy, **escalate to a full `systemctl restart`** and re-verify; only if *that* also fails does the script `exit 1` (deploy goes red).
 
 No-op fast-path: if `git reset` produces the same SHA as before, the script skips `uv sync` and the reload entirely.
+
+> **Why the consecutive-200 gate + restart escalation (incident 2026-06-02).** A
+> dependency upgrade took the live API down: every request returned `400 "Invalid
+> HTTP request received."` SIGHUP does **not** replace the long-lived gunicorn
+> master — it forks new workers that load an upgraded native extension (e.g.
+> `httptools`) from disk while inheriting the *old* `uvicorn` already imported in
+> the master → ABI mismatch → garbage HTTP parsing. The old health check exited on
+> the **first** 200, which a still-draining *old* (good) worker happily served, so
+> the deploy reported success while real traffic was broken. The hardened gate
+> requires sustained health (so a draining good worker can't mask broken new ones)
+> and, when a reload can't serve, does a full restart that brings up a fresh master
+> with the whole upgraded stack imported consistently. Net: native-dependency
+> upgrades self-heal, and a genuinely broken deploy fails **red** instead of
+> silently breaking production.
 
 ### Invocation
 
@@ -103,7 +117,7 @@ Three options, in order of preference:
 
 1. **Via GH Actions**: Actions → Deploy Oracle API → Run workflow → set `ref` to the last known-good SHA. Deploys it via the same path as a normal deploy.
 2. **Via SSM from a laptop**: `aws ssm send-command ... "commands=[\"sudo -u ubuntu bash /home/ubuntu/oracle-api/infra/deploy_oracle.sh <prev-sha>\"]"`
-3. **Hard-reset on the box**: `sudo systemctl restart oracle-api` (2-5s 502 window) — the escape hatch when the service is wedged and `reload` isn't enough.
+3. **Hard-reset on the box**: `sudo systemctl restart oracle-api` (2-5s 502 window) — the escape hatch when the service is wedged. Note the deploy script already auto-escalates to a full restart when a reload isn't durably healthy (see the health gate above), so this is rarely needed by hand.
 
 ## GitHub Actions → AWS auth
 

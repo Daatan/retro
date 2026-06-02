@@ -86,7 +86,9 @@ retro/
 │   ├── ec2_run_poc.sh           # PoC pipeline run script
 │   ├── snapshot_atlas.sh        # Tar data/atlas + data/vault2 → S3 (per-cycle + latest.tgz)
 │   ├── restore_atlas.sh         # Pull latest.tgz from S3 if data/atlas/ is empty (fresh boot only)
-│   ├── deploy_oracle.sh         # Zero-downtime API deploy: fetch → reset → uv sync → systemctl reload
+│   ├── deploy_oracle.sh         # Zero-downtime API deploy: fetch → reset → uv sync → reload, then a
+│   │                            # consecutive-200 health gate that escalates to a full restart if the
+│   │                            # reload isn't healthy (see docs/ORACLE_DEPLOY.md). Fails red on failure.
 │   ├── monitor.sh               # Local monitoring script (polls EC2 via SSM)
 │   ├── logs.sh                  # Tail EC2 pipeline logs via SSM
 │   ├── check_keys.sh            # Verify required AWS Secrets Manager keys exist

@@ -173,6 +173,25 @@ Progress: 3/250 (1.2%) | done: 2 | no_pred: 1 | failed: 0
 | 5 | `orchestrator.py` | — | batch across all events × sources |
 | 6 | `backtest.py` | LightGBM | compare predictions to Polymarket via Brier score |
 
+## Scoring contract (invariants)
+
+Two guarantees are enforced at the **scoring boundary** (`scorer.py`,
+`render_atlas.py`, `backtest.py`) so they hold regardless of how an article
+entered the atlas:
+
+- **Anti-lookahead** — a prediction is scored only if its `article_date` is on or
+  before the event's `outcome_date` (`utils.predates_outcome`). Post-outcome
+  entries are dropped, never scored — they would leak future knowledge into
+  `leaderboard.json` (and thus the live Oracle's credibility weights).
+- **Loud field validation** — `stance` and `certainty` are required. A prediction
+  missing either (corruption / schema regression) is **skipped with a warning**,
+  never silently defaulted to neutral (`utils.split_scored_predictions`). A
+  systemic regression therefore surfaces as warnings + a dropped-count summary,
+  not as quietly-wrong scores.
+
+Optional fields (`specificity`, `hedge_ratio`, …) are intentionally allowed to
+default — they're `Optional` and were dropped from the extractor in PR #102.
+
 ## Known issues
 
 - `data/vault/` created inside Docker is root-owned. Use `VAULT_DIR` env var to redirect writes

@@ -2,7 +2,23 @@
 
 Static calibration layer that applies the **law of total probability** to a DAG of Israeli-politics Polymarket events, producing Bayes-derived probabilities that can diverge from raw PM prices.
 
-> **Status: Phase 1 complete** — edge weights calibrated, two HTML viewers working. Oracle API integration and live DAG propagation are in `DESIGN.md` (not yet implemented).
+> ## ⚠️ Experimental — not in the production forecast
+>
+> The live Oracle (`POST /forecast`) does **not** use this DAG. It forecasts purely
+> via credibility-weighted aggregation in `api/src/forecast_api/forecaster.py`;
+> there is no BayesOracle code path in `/forecast`.
+>
+> **What *is* live:** the `GET /bayes/nodes` endpoint
+> (`api/src/forecast_api/bayesoracle.py`) serves node probabilities to the two
+> offline HTML viewers (`graph.html`, `pm_analysis/`). That's a visualization
+> feed, not a forecasting integration.
+>
+> **What's *not* built:** wiring the DAG into `/forecast` and validating it against
+> `data/duel_oracle/`. `DESIGN.md` describes an eventual hard cutover to a
+> Bayes-derived forecast — that is a **design goal, not implemented**. Don't treat
+> anything here as authoritative for live probabilities.
+>
+> _Status: Phase 1 — edge weights calibrated, viewers working._
 
 ---
 

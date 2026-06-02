@@ -253,6 +253,11 @@ Fields: `id`, `label`, `layer` (topological depth), `prior` (base probability), 
 
 The DAG covers 21 nodes and 33 edges across Israeli coalition politics, judicial reform, and regional geopolitics. Implemented in `api/src/forecast_api/bayesoracle.py`.
 
+> **Experimental / visualization only.** This endpoint feeds the offline BayesOracle
+> viewers (`bayesoracle/graph.html`, `pm_analysis/`). It is **not** used by
+> `POST /forecast`, which forecasts via credibility-weighted aggregation only. See
+> [`bayesoracle/README.md`](../bayesoracle/README.md).
+
 ---
 
 ## Deployment

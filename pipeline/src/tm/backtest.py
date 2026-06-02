@@ -178,7 +178,7 @@ def entry_to_features(entry: dict, source_scores: dict, domain: str) -> dict:
     stance = np.mean([p.get("stance", 0) for p in preds])
     certainty = np.mean([p.get("certainty", 0.5) for p in preds])
     specificity = np.mean([p.get("specificity", 0.5) for p in preds])
-    hedge_index = np.mean([p.get("hedge_index", 0.5) for p in preds])
+    hedge_ratio = np.mean([p.get("hedge_ratio", 0.5) for p in preds])
     conditionality = np.mean([p.get("conditionality", 0) for p in preds])
     magnitude = np.mean([p.get("magnitude", 0.5) for p in preds])
     source_authority = np.mean([p.get("source_authority", 0.5) for p in preds])
@@ -203,7 +203,7 @@ def entry_to_features(entry: dict, source_scores: dict, domain: str) -> dict:
         "stance": stance,
         "certainty": certainty,
         "specificity": specificity,
-        "hedge_index": hedge_index,
+        "hedge_ratio": hedge_ratio,
         "conditionality": conditionality,
         "magnitude": magnitude,
         "source_authority": source_authority,

@@ -187,7 +187,7 @@ def build_timeseries(cells: dict, events: dict, eid: str,
                     "date": art_date_str[:10],
                     "stance": round(p.get("stance", 0), 3),
                     "certainty": round(p.get("certainty", 0), 3),
-                    "hedge_index": round(p.get("hedge_index", p.get("hedge_ratio", 0)), 3),
+                    "hedge_index": round(p.get("hedge_ratio", 0), 3),
                     "quote": p.get("quote", "")[:120],
                     "claim": p.get("claim", ""),
                     "headline": entry.get("headline", ""),
@@ -307,6 +307,10 @@ def compute_competitive_scores(
         if not ev:
             continue
         outcome = 1.0 if ev.get("outcome") else 0.0
+        try:
+            outcome_dt = datetime.strptime(ev.get("outcome_date", "")[:10], "%Y-%m-%d")
+        except ValueError:
+            outcome_dt = None
 
         # Collect (date, sid, stance) for all predictions in this event
         raw: list[tuple[datetime, str, float]] = []
@@ -316,6 +320,9 @@ def compute_competitive_scores(
                 try:
                     art_dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
                 except ValueError:
+                    continue
+                # Anti-lookahead: skip predictions published after the outcome.
+                if outcome_dt is not None and art_dt > outcome_dt:
                     continue
                 for pred in entry.get("predictions", []):
                     raw.append((art_dt, sid, pred.get("stance", 0.0)))

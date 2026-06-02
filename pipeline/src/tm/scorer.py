@@ -7,6 +7,8 @@ from typing import Dict, List, Optional
 
 from openskill.models import PlackettLuce
 
+from .utils import predates_outcome
+
 
 def stance_to_prob(stance: float) -> float:
     """Convert stance [-1, 1] to probability [0, 1]."""
@@ -223,6 +225,12 @@ class Scorer:
                     if not preds:
                         continue
 
+                    # Anti-lookahead: never score a prediction published after the
+                    # outcome — it would leak future knowledge into the leaderboard.
+                    article_date = entry.get("article_date", "")
+                    if not predates_outcome(article_date, outcome_date):
+                        continue
+
                     stances     = [p.get("stance", 0.0) for p in preds]
                     certainties = [p.get("certainty", 0.5) for p in preds]
                     avg_stance    = sum(stances) / len(stances)
@@ -233,7 +241,6 @@ class Scorer:
                     ls  = self.calculate_log_score(avg_stance, outcome)
                     acc = self.calculate_accuracy(avg_stance, outcome)
 
-                    article_date: str = entry.get("article_date", "")
                     decay = time_decay_weight(article_date, outcome_date)
 
                     # Global bucket

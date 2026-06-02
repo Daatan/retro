@@ -161,7 +161,7 @@ class Orchestrator:
 
     async def search_articles(self, source: dict, event: dict, start: datetime, end: datetime) -> List[dict]:
         if self.mode == SearchMode.local_file:
-            return self.local_file_search(source["id"], event["id"])
+            return self.local_file_search(source["id"], event["id"], start, end)
         
         if self.mode == SearchMode.api:
             domain = (
@@ -190,7 +190,10 @@ class Orchestrator:
             
         return []
 
-    def local_file_search(self, source_id: str, event_id: str) -> List[dict]:
+    def local_file_search(
+        self, source_id: str, event_id: str,
+        start: Optional[datetime] = None, end: Optional[datetime] = None,
+    ) -> List[dict]:
         articles = []
         search_path = self.raw_ingest_dir / source_id / event_id
         if search_path.exists():
@@ -199,6 +202,22 @@ class Orchestrator:
                     art = json.load(f)
                 url = art.get("url", "")
                 text = art.get("text", "")
+                # Anti-lookahead: locally-staged articles bypass the web ingest's
+                # date filter, so enforce the predictive window here too. Drop any
+                # article published after the outcome (leak) or before the window.
+                pub = art.get("published_at", "")
+                if pub:
+                    try:
+                        pub_dt = datetime.fromisoformat(pub[:10])
+                    except (ValueError, TypeError):
+                        pub_dt = None
+                    if pub_dt is not None:
+                        if end is not None and pub_dt > end:
+                            console.print(f"    [yellow]Dropping post-outcome article ({pub[:10]}): {url[:60]}[/yellow]")
+                            continue
+                        if start is not None and pub_dt < start:
+                            console.print(f"    [dim]Skipping pre-window article ({pub[:10]}): {url[:60]}[/dim]")
+                            continue
                 # Skip liveblogs (day-long rolling updates starting with photo captions)
                 if "liveblog" in url.lower():
                     console.print(f"    [dim]Skipping liveblog: {url[:60]}[/dim]")

@@ -1,5 +1,10 @@
 # BayesOracle — Design Plan
 
+> ⚠️ **Design document — not implemented.** This describes the intended Bayes-derived
+> forecast and a future hard cutover from the base TM forecast. As of today the live
+> Oracle (`/forecast`) does **not** use this DAG (see `README.md`). Read this as the
+> plan, not the current behavior.
+
 ## Context
 
 TruthMachine currently predicts P(A) for each event via credibility-weighted aggregation of news signals. BayesOracle is the next generation: it models the **causal and probabilistic relationships between events**, using the law of total probability to produce a better-calibrated final forecast. Eventually BayesOracle replaces the base TM forecast entirely (hard cutover once validated). **Optimize for accuracy, not simplicity.**

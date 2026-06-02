@@ -19,7 +19,8 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install httpx scipy numpy
+        # Pinned so an upstream release can't silently break this daily job.
+        run: pip install httpx==0.28.1 scipy==1.17.1 numpy==2.4.6
 
       - name: Fetch node price history
         run: python bayesoracle/fetch_node_history.py

@@ -1,0 +1,38 @@
+name: Tests
+
+# Runs the api/ and pipeline/ pytest suites. Triggered directly on PRs for fast
+# feedback, and exposed via `workflow_call` so deploy-oracle.yml can require it
+# as a gate before shipping to the live Oracle box. No API keys or EC2 needed:
+# the suites mock external services, and api/tests/conftest.py supplies a dummy
+# ORACLE_API_KEY so settings validation passes.
+
+on:
+  pull_request:
+    paths:
+      - api/**
+      - pipeline/**
+      - .github/workflows/tests.yml
+  workflow_call:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [api, pipeline]
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run unit tests
+        run: uv run pytest tests/ -v --tb=short

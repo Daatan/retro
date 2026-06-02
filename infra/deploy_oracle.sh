@@ -48,26 +48,49 @@ log "uv sync --frozen..."
 cd "$API_DIR/api"
 $AS_UBUNTU $UV sync --frozen --quiet
 
-# ── 3. Zero-downtime reload ──────────────────────────────────────────────────
-# SIGHUP to gunicorn master spawns fresh workers with reimported modules and
-# gracefully drains the old ones. No socket close = no 502 window. If the
-# dep graph changed in a way that needs a new master (rare), a separate
-# `systemctl restart oracle-api` is the escape hatch.
-log "reloading oracle-api (SIGHUP, or restart if stopped)..."
+# ── 3. Health probe helper ───────────────────────────────────────────────────
+# Require N *consecutive* 200s rather than the first 200. A SIGHUP reload runs
+# new workers alongside gracefully-draining old ones; a single early 200 can be
+# served by an old (still-good) worker even when the new workers are broken
+# (e.g. a native-dep upgrade where SIGHUP swaps the httptools C-extension under
+# an already-imported uvicorn — the bug that took the API down on 2026-06-02).
+# Demanding consecutive 200s spanning the drain window catches that.
+GRACEFUL_DRAIN=30   # must exceed gunicorn --graceful-timeout so old workers are gone
+healthy() {
+  local need=5 streak=0 http
+  for _ in $(seq 1 "$((GRACEFUL_DRAIN + 12))"); do
+    http=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:8001/health || echo 000)
+    if [[ "$http" == "200" ]]; then
+      streak=$((streak + 1))
+      [[ "$streak" -ge "$need" ]] && return 0
+    else
+      streak=0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+# ── 4. Reload, then verify — escalate to full restart if unhealthy ────────────
+# SIGHUP first (zero-downtime: keeps the listening socket, no 502 window). If
+# the reloaded workers aren't durably healthy, a full restart gives a fresh
+# master that imports the whole upgraded stack consistently. Only if *that*
+# still fails do we go red.
+log "reloading oracle-api (SIGHUP)..."
 sudo /bin/systemctl reload-or-restart oracle-api
 
-# ── 4. Health check ──────────────────────────────────────────────────────────
-# Gunicorn's reload is async: the new workers take ~2-3s to import and start
-# serving. Poll /health until we get a 200 or give up.
-log "health probe..."
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  HTTP=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:8001/health || echo 000)
-  if [[ "$HTTP" == "200" ]]; then
-    log "ok — deployed ${AFTER:0:8} (healthy after ${i} probe$([ "$i" = 1 ] || echo s))"
-    exit 0
-  fi
-  sleep 1
-done
+if healthy; then
+  log "ok — deployed ${AFTER:0:8} (healthy after SIGHUP reload)"
+  exit 0
+fi
 
-log "FAIL: /health never returned 200 after 10s"
+log "reload unhealthy — full restart (SIGHUP can't swap native worker deps)..."
+sudo /bin/systemctl restart oracle-api
+
+if healthy; then
+  log "ok — deployed ${AFTER:0:8} (healthy after full restart)"
+  exit 0
+fi
+
+log "FAIL: /health not durably 200 after reload+restart — service is unhealthy"
 exit 1

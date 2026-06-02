@@ -41,7 +41,13 @@ env:
   ORACLE_INSTANCE_ID: ${{ vars.ORACLE_INSTANCE_ID || 'i-00ac444b94c5ff9b2' }}
 
 jobs:
+  # Gate: the api/ + pipeline/ suites must pass before we touch the live box.
+  # Runs against the workflow ref (main HEAD); a red suite blocks the deploy.
+  test:
+    uses: ./.github/workflows/tests.yml
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Resolve deploy ref

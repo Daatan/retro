@@ -3,6 +3,35 @@
 from datetime import datetime
 
 
+def _is_number(v) -> bool:
+    """True for a real numeric value. Excludes bool (a subclass of int)."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def split_scored_predictions(preds: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Partition predictions into (usable, malformed) for scoring.
+
+    Scoring requires a numeric ``stance`` and ``certainty`` on every prediction
+    — the extractor's Pydantic model (PredictionExtraction) guarantees them, so
+    a missing/non-numeric value here means upstream corruption or a schema
+    regression. Callers must NOT silently substitute a neutral default
+    (stance=0, certainty=0.5): that would score a broken prediction as a
+    legitimate neutral one and quietly poison the leaderboard. Instead they log
+    the malformed ones loudly and skip them.
+
+    Optional fields (specificity, hedge_ratio, …) are intentionally not checked
+    — they are declared Optional and a default for them is correct, not a bug.
+    """
+    usable: list[dict] = []
+    malformed: list[dict] = []
+    for p in preds:
+        if _is_number(p.get("stance")) and _is_number(p.get("certainty")):
+            usable.append(p)
+        else:
+            malformed.append(p)
+    return usable, malformed
+
+
 def predates_outcome(article_date: str, outcome_date: str) -> bool:
     """Anti-lookahead guard: True if the article is known to predate the outcome.
 

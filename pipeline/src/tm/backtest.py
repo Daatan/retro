@@ -23,6 +23,8 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 
+from .utils import split_scored_predictions
+
 try:
     import lightgbm as lgb
     HAS_LGB = True
@@ -174,9 +176,20 @@ def entry_to_features(entry: dict, source_scores: dict, domain: str) -> dict:
     if not preds:
         return {}
 
+    # Loud validation: stance/certainty are required. Skip (never neutral-default)
+    # any prediction missing them so a schema regression is visible, not silent.
+    preds, malformed = split_scored_predictions(preds)
+    if malformed:
+        console.print(
+            f"[yellow]⚠️  skipped {len(malformed)} prediction(s) missing numeric "
+            f"stance/certainty in a {domain} entry — not scored as neutral[/yellow]"
+        )
+    if not preds:
+        return {}
+
     # Aggregate across predictions in this article (mean)
-    stance = np.mean([p.get("stance", 0) for p in preds])
-    certainty = np.mean([p.get("certainty", 0.5) for p in preds])
+    stance = np.mean([p["stance"] for p in preds])
+    certainty = np.mean([p["certainty"] for p in preds])
     specificity = np.mean([p.get("specificity", 0.5) for p in preds])
     hedge_ratio = np.mean([p.get("hedge_ratio", 0.5) for p in preds])
     conditionality = np.mean([p.get("conditionality", 0) for p in preds])
@@ -228,7 +241,10 @@ def weighted_average_prediction(entries: list[dict], source_scores: dict, domain
         preds = entry.get("predictions", [])
         if not preds:
             continue
-        stance = np.mean([p.get("stance", 0) for p in preds])
+        preds, _ = split_scored_predictions(preds)  # skip malformed; never neutral-default
+        if not preds:
+            continue
+        stance = np.mean([p["stance"] for p in preds])
         source_id = entry.get("source_id", "")
         score = source_scores.get(source_id, {}).get(domain, 0.25)
         # Convert Brier score to weight: lower Brier = more accurate = higher weight

@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 from openskill.models import PlackettLuce
 
-from .utils import predates_outcome
+from .utils import predates_outcome, split_scored_predictions
 
 
 def stance_to_prob(stance: float) -> float:
@@ -175,6 +175,9 @@ class Scorer:
         # OpenSkill ratings: sid → Rating (μ=25, σ=25/3 by default)
         skill_model = PlackettLuce()
         skill_ratings: Dict[str, object] = {}
+        # Count predictions skipped for missing/non-numeric stance|certainty so a
+        # schema regression is loud (summary printed at the end), not silent.
+        malformed_total = 0
 
         # Initialise buckets for all sources
         for source_file in self.sources_dir.glob("*.json"):
@@ -231,8 +234,23 @@ class Scorer:
                     if not predates_outcome(article_date, outcome_date):
                         continue
 
-                    stances     = [p.get("stance", 0.0) for p in preds]
-                    certainties = [p.get("certainty", 0.5) for p in preds]
+                    # Loud validation: stance/certainty are required (the extractor
+                    # model guarantees them). Skip — never neutral-default — any
+                    # prediction missing them, so a schema regression is visible
+                    # instead of quietly scored as neutral.
+                    preds, malformed = split_scored_predictions(preds)
+                    if malformed:
+                        malformed_total += len(malformed)
+                        print(
+                            f"⚠️  WARNING: skipped {len(malformed)} prediction(s) missing "
+                            f"numeric stance/certainty in {entry_file.name} "
+                            f"(event={eid}, source={sid}) — not scored as neutral"
+                        )
+                    if not preds:
+                        continue
+
+                    stances     = [p["stance"] for p in preds]
+                    certainties = [p["certainty"] for p in preds]
                     avg_stance    = sum(stances) / len(stances)
                     avg_certainty = sum(certainties) / len(certainties)
 
@@ -325,6 +343,11 @@ class Scorer:
 
         self.scores_path.write_text(json.dumps(leaderboard, indent=2))
         print(f"Scoring complete. {len(leaderboard)} sources scored → {self.scores_path}")
+        if malformed_total:
+            print(
+                f"⚠️  WARNING: {malformed_total} prediction(s) were skipped for missing "
+                f"numeric stance/certainty — investigate the extractor/atlas for a schema regression"
+            )
 
         # ── Calibration curve ──────────────────────────────────────────────────
         calibration = compute_calibration_bins(calib_pairs)

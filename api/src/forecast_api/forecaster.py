@@ -171,6 +171,19 @@ async def _distill_query(question: str) -> str:
     return question
 
 
+def _search_capturing(query: str, limit: int) -> tuple[list, str, list[str]]:
+    """Run search_articles and capture the winning provider/chain *in the same
+    thread*.
+
+    ``get_last_search_provider()`` is thread-local; the forecaster runs search
+    via ``asyncio.to_thread``, so reading the provider in the caller's thread
+    always returned "none". Reading it here — inside the worker thread — fixes
+    that, so ``debug.search_provider`` actually names the provider.
+    """
+    results = search_articles(query, limit)
+    return results, get_last_search_provider(), get_last_search_provider_chain()
+
+
 def _fetch_article_text(url: str, fallback: str) -> str:
     """Fetch full article body with trafilatura; return fallback on error.
 
@@ -509,34 +522,37 @@ async def _run_forecast_inner(
                 provider=search_provider,
             )
         else:
+            # Distill the natural-language question to keywords BEFORE searching.
+            # The chain's keyword matchers (esp. GDELT, the usual winner) return
+            # off-topic junk when fed a verbose question like "Will X happen by
+            # 2027?"; distilling to e.g. "Russia Ukraine ceasefire" restores
+            # relevance. _distill_query returns the original on any error.
+            verbatim = search_query
+            search_query = await _distill_query(verbatim)
+            distilled = search_query != verbatim
             try:
-                search_results = await asyncio.to_thread(
-                    search_articles, search_query, limit
+                search_results, search_provider, provider_chain = await asyncio.to_thread(
+                    _search_capturing, search_query, limit
                 )
             except Exception as exc:
                 logger.error("Search failed: %s", exc)
-                search_results = []
-            # If verbatim question found nothing, try distilled keywords.
-            if not search_results:
-                distilled = await _distill_query(req.question)
-                if distilled != req.question:
-                    search_query = distilled
-                    try:
-                        search_results = await asyncio.to_thread(
-                            search_articles, search_query, limit
-                        )
-                    except Exception as exc:
-                        logger.error("Search (distilled) failed: %s", exc)
-                        search_results = []
-            search_provider = get_last_search_provider()
-            provider_chain = get_last_search_provider_chain()
+                search_results, search_provider, provider_chain = [], "none", []
+            # Recall safety: if distilled keywords found nothing, retry verbatim.
+            if not search_results and distilled:
+                try:
+                    search_results, search_provider, provider_chain = await asyncio.to_thread(
+                        _search_capturing, verbatim, limit
+                    )
+                    search_query = verbatim
+                except Exception as exc:
+                    logger.error("Search (verbatim fallback) failed: %s", exc)
             _log_phase(
                 "search",
                 (time.perf_counter() - search_start) * 1000,
                 question=req.question,
                 results=len(search_results),
                 provider=search_provider,
-                distilled=search_query != req.question,
+                distilled=distilled,
             )
             search_cache.set(search_key, search_results)
 

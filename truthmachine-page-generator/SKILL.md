@@ -11,7 +11,7 @@ This skill automates the consolidation of event metadata and forensic extraction
 
 1.  **Consolidate Data**: The skill reads from `data/events/` and `data/atlas/` to match predictions with their corresponding ground-truth outcomes.
 2.  **Generate JSON**: It creates or updates JSON files in `data/pages/` for every event.
-3.  **UI Sync**: These files are directly consumed by the web frontend to render the "Accurate" vs "Inaccurate" source columns.
+3.  **UI Sync**: These files are consumed by the web frontend to render the "Accurate" vs "Inaccurate" source columns.
 
 ## Usage
 
@@ -22,3 +22,14 @@ python3 scripts/generate_pages.py <path_to_data_dir>
 ```
 
 The script will iterate through all events and generate the necessary page data.
+
+## Where the output goes (and what it is *not*)
+
+- **Output:** `data/pages/{event_id}.json`. This directory is **gitignored** —
+  it's regeneratable build output, not source.
+- **Consumer:** the "TruthMachine / Daatan Next.js UI" lives in the **separate
+  Daatan app**, not in this repo. There is no Next.js project here.
+- **Not** the same as [`../ui-prototype/`](../ui-prototype/): that prototype reads
+  its own hand-authored `data.ts`, not this generator's `data/pages/*.json`. The
+  two are unrelated; don't expect one to reflect the other.
+

@@ -840,15 +840,36 @@
         </div>`
     }).join('')
 
-    const placeholderNotice = data.placeholder ? `
+    // Indicative reason for an empty/insufficient forecast (from the API's
+    // `reason` + `outcome_counts`). Distinguishes "search returned off-topic
+    // junk" from "extractor errored" from "timed out" — instead of a bland 0%.
+    const REASON_TEXT = {
+      no_search_results:     'Search returned no articles for this question.',
+      all_articles_off_topic:'Articles were found but all were judged off-topic by the gatekeeper — likely degraded search relevance (paid providers may be exhausted).',
+      all_fetches_failed:    'Articles were found but their full text could not be fetched (paywalls / blocked / dead links).',
+      extraction_errors:     'The extraction step errored on the articles found — the service is degraded, not "no data".',
+      timeout:               'The forecast timed out before producing a result.',
+      no_usable_predictions: 'Articles were found but none yielded a usable prediction.',
+      no_result:             'No result was produced.',
+    }
+    const countsStr = data.outcome_counts && Object.keys(data.outcome_counts).length
+      ? ' (' + Object.entries(data.outcome_counts).map(([k, v]) => `${k}: ${v}`).join(', ') + ')'
+      : ''
+    const insufficientNotice = (data.insufficient_data || data.articles_used === 0) ? `
+      <div class="notice warn">⚠ Couldn't produce a forecast — this is not a 0% estimate.<br>
+        <strong>${REASON_TEXT[data.reason] || 'No usable predictive articles found.'}</strong>
+        ${data.articles_found ? `Found ${data.articles_found} article(s)${countsStr}.` : ''}
+      </div>
+    ` : ''
+    // Legacy placeholder banner only when the API didn't send a structured reason.
+    const placeholderNotice = (data.placeholder && !data.insufficient_data) ? `
       <div class="notice warn">⚠ No usable results — all search providers exhausted or no predictive articles found for this question.</div>
     ` : ''
 
-    const noDataNotice = data.articles_used === 0 ? `
-      <div class="notice info">ℹ No predictive articles found. Try rephrasing the question or increasing max articles.</div>
-    ` : ''
+    const noDataNotice = ''
 
     $('result-area').innerHTML = `
+      ${insufficientNotice}
       ${placeholderNotice}
       ${noDataNotice}
 

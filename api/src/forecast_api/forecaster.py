@@ -427,7 +427,7 @@ async def run_forecast(req: ForecastRequest) -> ForecastResponse:
         result = forecast_cache.get(cache_key)
         if result is not None:
             return result
-        return _empty_response(req.question)
+        return _empty_response(req.question, reason="no_result")
 
     event = asyncio.Event()
     _inflight[cache_key] = event
@@ -450,7 +450,7 @@ async def run_forecast(req: ForecastRequest) -> ForecastResponse:
             articles_used=0,
             outcome="timeout",
         )
-        return _empty_response(req.question)
+        return _empty_response(req.question, reason="timeout")
     finally:
         event.set()
         _inflight.pop(cache_key, None)
@@ -549,7 +549,7 @@ async def _run_forecast_inner(
             articles_used=0,
             outcome="no_search_results",
         )
-        resp = _empty_response(req.question)
+        resp = _empty_response(req.question, reason="no_search_results", articles_found=0)
         if req.debug:
             resp.debug = DebugInfo(
                 search_query=search_query,
@@ -614,7 +614,13 @@ async def _run_forecast_inner(
     all_weights: list[float] = []
 
     for result, outcome in zip(search_results, outcomes):
-        if isinstance(outcome, Exception) or outcome is None:
+        if isinstance(outcome, Exception):
+            # Previously skipped silently — surface it so a systemic failure in
+            # _process_article isn't invisible, and record it in the histogram.
+            logger.warning("event=article_unhandled_error url=%s err=%r", result.url, outcome)
+            timings.append({"url": result.url, "outcome": "unhandled_error"})
+            continue
+        if outcome is None:
             continue
         _, predictions = outcome
 
@@ -645,9 +651,11 @@ async def _run_forecast_inner(
         for t in timings:
             key = str(t.get("outcome", "unknown"))
             outcome_counts[key] = outcome_counts.get(key, 0) + 1
+        reason = _reason_from_outcomes(outcome_counts)
         logger.warning(
-            "No usable predictions extracted from %d articles (outcomes=%s)",
+            "No usable predictions extracted from %d articles (reason=%s outcomes=%s)",
             len(search_results),
+            reason,
             outcome_counts,
         )
         _log_phase(
@@ -656,9 +664,34 @@ async def _run_forecast_inner(
             question=req.question,
             articles_used=0,
             outcome="no_usable_predictions",
+            reason=reason,
             **{f"n_{k}": v for k, v in outcome_counts.items()},
         )
-        return _empty_response(req.question)
+        empty_debug: Optional[DebugInfo] = None
+        if req.debug:
+            empty_debug = DebugInfo(
+                search_query=search_query,
+                search_provider=search_provider,
+                search_provider_chain=provider_chain,
+                gatekeeper_model=_pipeline_settings.gatekeeper_model,
+                extractor_model=_pipeline_settings.extractor_model,
+                articles_fetched=len(search_results),
+                articles_gate_passed=sum(1 for d in article_debugs if d.gate_passed),
+                articles_extracted=0,
+                total_prompt_tokens=0,
+                total_completion_tokens=0,
+                total_tokens=0,
+                per_article=article_debugs,
+                gatekeeper_prompt=GATEKEEPER_PROMPT,
+                extractor_prompt=EXTRACTOR_PROMPT,
+            )
+        return _empty_response(
+            req.question,
+            reason=reason,
+            articles_found=len(search_results),
+            outcome_counts=outcome_counts,
+            debug=empty_debug,
+        )
 
     # Step 4: weighted mean + 95% CI
     total_w = sum(all_weights)
@@ -708,6 +741,7 @@ async def _run_forecast_inner(
         ci_low=round(ci_low, 4),
         ci_high=round(ci_high, 4),
         articles_used=n,
+        articles_found=len(search_results),
         sources=source_signals,
         placeholder=False,
         debug=debug_info,
@@ -726,8 +760,39 @@ async def _run_forecast_inner(
     return response
 
 
-def _empty_response(question: str) -> ForecastResponse:
-    """Return a maximally uncertain response when no usable articles are found."""
+def _reason_from_outcomes(outcome_counts: dict[str, int]) -> str:
+    """Pick the dominant failure reason from the per-article outcome histogram.
+
+    Turns the (already-computed, previously-discarded) histogram into a single
+    actionable label so an empty forecast says *why* — search returned junk vs
+    the extractor is erroring vs fetches failed are very different problems.
+    """
+    if not outcome_counts:
+        return "no_usable_predictions"
+    errors = outcome_counts.get("gate_error", 0) + outcome_counts.get("extract_error", 0) + outcome_counts.get("unhandled_error", 0)
+    total = sum(outcome_counts.values())
+    if errors and errors >= total / 2:
+        return "extraction_errors"
+    if outcome_counts.get("gate_rejected", 0) >= total / 2:
+        return "all_articles_off_topic"
+    if outcome_counts.get("empty_text", 0) >= total / 2:
+        return "all_fetches_failed"
+    return "no_usable_predictions"
+
+
+def _empty_response(
+    question: str,
+    *,
+    reason: Optional[str] = None,
+    articles_found: int = 0,
+    outcome_counts: Optional[dict[str, int]] = None,
+    debug: Optional[DebugInfo] = None,
+) -> ForecastResponse:
+    """Return a maximally uncertain response when no usable articles are found.
+
+    Always carries ``insufficient_data=True`` and a ``reason`` so callers can
+    distinguish 'couldn't answer (and why)' from a real 0.5 probability.
+    """
     return ForecastResponse(
         question=question,
         mean=0.0,
@@ -737,6 +802,11 @@ def _empty_response(question: str) -> ForecastResponse:
         articles_used=0,
         sources=[],
         placeholder=True,
+        insufficient_data=True,
+        reason=reason,
+        articles_found=articles_found,
+        outcome_counts=outcome_counts or {},
+        debug=debug,
     )
 
 

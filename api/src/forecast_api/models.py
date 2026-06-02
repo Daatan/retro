@@ -152,4 +152,8 @@ class ForecastResponse(BaseModel):
     articles_used: int
     sources: list[SourceSignal]
     placeholder: bool = Field(default=False, description="True if this is a stub response (pipeline not yet wired)")
+    insufficient_data: bool = Field(default=False, description="True when the forecast could not be computed (no usable articles). mean/ci are NOT a real estimate — render 'couldn't answer', not 0%.")
+    reason: Optional[str] = Field(default=None, description="When insufficient_data: why. One of no_search_results | all_articles_off_topic | all_fetches_failed | extraction_errors | no_usable_predictions | timeout | no_result")
+    articles_found: int = Field(default=0, description="How many search results were considered before filtering")
+    outcome_counts: dict[str, int] = Field(default_factory=dict, description="Per-article outcome histogram (gate_rejected, gate_error, empty_text, extract_error, unhandled_error, ok, …) — explains an empty forecast")
     debug: Optional[DebugInfo] = Field(default=None, description="Debug telemetry — only present when request includes debug=true")

@@ -604,7 +604,7 @@
   <div class="main">
     <div class="topbar">
       <div class="question-wrap">
-        <textarea id="question" placeholder="Ask a binary yes/no question…" rows="2"></textarea>
+        <textarea id="question" dir="auto" placeholder="Ask a binary yes/no question…" rows="2"></textarea>
       </div>
       <div class="topbar-right">
         <div class="articles-input">
@@ -822,13 +822,13 @@
         : sp < .45
         ? `<span class="chip no" data-tip="${stanceTip}">NO ${Math.round((1-sp)*100)}%</span>`
         : `<span class="chip" data-tip="${stanceTip}">Neutral</span>`
-      const claims = s.claims.map(c => `<li>${escHtml(c)}</li>`).join('')
+      const claims = s.claims.map(c => `<li dir="auto">${escHtml(c)}</li>`).join('')
       const domain = (() => { try { return new URL(s.url).hostname.replace(/^www\./, '') } catch { return s.url } })()
       return `
         <div class="source-card">
           <div class="source-bar" style="background:${barColor}"></div>
           <div>
-            <div class="source-name">${escHtml(s.source_name)}</div>
+            <div class="source-name" dir="auto">${escHtml(s.source_name)}</div>
             <div class="source-url"><a href="${escHtml(s.url)}" target="_blank" rel="noopener">${escHtml(domain)}</a></div>
             ${claims ? `<ul class="source-claims">${claims}</ul>` : ''}
             <div class="source-chips">
@@ -900,7 +900,7 @@
 
           <div class="stat-row">
             <span class="stat-key">Question</span>
-            <span class="stat-val" style="font-size:.78rem;text-align:right;max-width:220px;word-break:break-word">${escHtml(question)}</span>
+            <span class="stat-val" dir="auto" style="font-size:.78rem;text-align:right;max-width:220px;word-break:break-word">${escHtml(question)}</span>
           </div>
           <div class="stat-row">
             <span class="stat-key" data-tip="Articles that passed the relevance filter and contained at least one extractable prediction">Articles used</span>
@@ -1040,7 +1040,7 @@
             <span class="adr-url"><a href="${escHtml(a.url)}" target="_blank" rel="noopener">${escHtml(domain)}</a></span>
           </div>
           ${chips.length ? `<div class="adr-chips">${chips.join('')}</div>` : ''}
-          ${a.gate_reason ? `<div class="adr-reason">"${escHtml(a.gate_reason)}"</div>` : ''}
+          ${a.gate_reason ? `<div class="adr-reason" dir="auto">"${escHtml(a.gate_reason)}"</div>` : ''}
         </div>`
     }).join('')
 

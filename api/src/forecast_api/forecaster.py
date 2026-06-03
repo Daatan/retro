@@ -25,6 +25,7 @@ from tm.gatekeeper import check_is_prediction, PROMPT as GATEKEEPER_PROMPT
 from tm.extractor import extract_predictions, PROMPT as EXTRACTOR_PROMPT
 from tm.web_search import search_articles, SearchResult, get_last_search_provider, get_last_search_provider_chain
 from tm.config import settings as _pipeline_settings
+from tm.llm import apply_routing
 
 from .cache import forecast_cache, search_cache
 from .leaderboard import get_credibility_weight
@@ -150,17 +151,12 @@ async def _distill_query(question: str) -> str:
         f"Question: {question}"
     )
     try:
-        kwargs: dict = dict(
+        kwargs = apply_routing(dict(
             model=_pipeline_settings.gatekeeper_model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=40,
             timeout=20,
-        )
-        if _pipeline_settings.model_api_base:
-            kwargs["api_base"] = _pipeline_settings.model_api_base
-            kwargs["api_key"] = _pipeline_settings.model_api_key
-        if _pipeline_settings.aws_region:
-            kwargs["aws_region_name"] = _pipeline_settings.aws_region
+        ))
         resp = await litellm.acompletion(**kwargs)
         keywords = resp.choices[0].message.content.strip()
         if keywords:

@@ -52,6 +52,7 @@ from rich.table import Table
 from .models import CellStatus
 from .progress import load_state, update_cell
 from .web_search import search_articles as _web_search
+from .article_text import BROWSER_HEADERS, extract_article_body
 
 console = Console()
 
@@ -104,14 +105,7 @@ MVP_EVENTS = [
     "F04", "F05",
 ]
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml",
-    "Accept-Language": "en-US,en;q=0.9",
-}
+HEADERS = BROWSER_HEADERS
 
 _DDG_LAST_CALL: float = 0.0
 DDG_MIN_INTERVAL = 2.0  # seconds between DDG calls
@@ -441,17 +435,7 @@ async def _scrape_html(html: str) -> str:
     )
     if text and len(text) > 300:
         return text
-    soup = BeautifulSoup(html, "html.parser")
-    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "iframe", "figure"]):
-        tag.extract()
-    for sel in ["article", "main", ".article-body", ".article-content", ".post-content",
-                '[class*="article"]', '[class*="story"]']:
-        el = soup.select_one(sel)
-        if el:
-            t = el.get_text(separator=" ", strip=True)
-            if len(t) > 300:
-                return t
-    return soup.get_text(separator=" ", strip=True)
+    return extract_article_body(BeautifulSoup(html, "html.parser"))
 
 
 async def _fetch_wayback(url: str, client: httpx.AsyncClient) -> str:

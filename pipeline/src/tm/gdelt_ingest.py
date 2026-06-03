@@ -46,6 +46,7 @@ MVP_EVENTS = [
 
 
 from .utils import _is_ascii
+from .article_text import extract_article_body
 
 
 async def _gdelt_query(
@@ -143,16 +144,7 @@ async def _fetch_text(url: str) -> str:
             r = await client.get(url)
             if r.status_code != 200:
                 return ""
-        soup = BeautifulSoup(r.text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header", "aside", "figure"]):
-            tag.extract()
-        for sel in ["article", "main", '[class*="article"]', '[class*="content"]']:
-            el = soup.select_one(sel)
-            if el:
-                text = el.get_text(separator=" ", strip=True)
-                if len(text) > 300:
-                    return text
-        return soup.get_text(separator=" ", strip=True)
+        return extract_article_body(BeautifulSoup(r.text, "html.parser"))
     except Exception:
         return ""
 

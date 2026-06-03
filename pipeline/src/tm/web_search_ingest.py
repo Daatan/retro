@@ -140,38 +140,22 @@ DUEL_EVENTS = [
     "C07", "C08", "C09", "E07", "E08",
 ]
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    ),
-}
-
-
 from .utils import _is_ascii
+from .article_text import BROWSER_HEADERS, extract_article_body
 
 
 
 async def _fetch_text(url: str) -> Tuple[str, Optional[str]]:
     """Return (visible_text, html_publish_date_or_None) for the page."""
     try:
-        async with httpx.AsyncClient(headers=HEADERS, timeout=25, follow_redirects=True) as c:
+        async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=25, follow_redirects=True) as c:
             r = await c.get(url)
             if r.status_code != 200:
                 return "", None
         full_soup = BeautifulSoup(r.text, "html.parser")
+        # Read the publish date before extract_article_body() strips boilerplate.
         html_date = _date_from_html(full_soup)
-        # Strip non-content elements before extracting body text
-        for tag in full_soup(["script", "style", "nav", "footer", "header", "aside", "iframe", "figure"]):
-            tag.extract()
-        for sel in ["article", "main", ".article-body", ".article-content",
-                    '[class*="article"]', '[class*="story"]']:
-            el = full_soup.select_one(sel)
-            if el:
-                t = el.get_text(separator=" ", strip=True)
-                if len(t) > 300:
-                    return t, html_date
-        return full_soup.get_text(separator=" ", strip=True), html_date
+        return extract_article_body(full_soup), html_date
     except Exception:
         return "", None
 

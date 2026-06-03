@@ -1,7 +1,6 @@
-import asyncio
 from .models import ExtractionOutput
 from .config import settings
-from .llm import client as _client, RATE_LIMIT_BACKOFF, apply_routing, extract_usage, is_rate_limit_error
+from .llm import complete_structured
 
 PROMPT = """\
 You are a forensic prediction analyst. Extract every distinct forward-looking prediction \
@@ -74,36 +73,14 @@ async def extract_predictions(
     journalist: str = "unknown",
 ) -> tuple["ExtractionOutput", dict]:
     """Returns (ExtractionOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens."""
-    last_exc: Exception = RuntimeError("no attempts")
-    for attempt, wait in enumerate([0] + RATE_LIMIT_BACKOFF):
-        if wait:
-            await asyncio.sleep(wait)
-        try:
-            kwargs = apply_routing(dict(
-                model=settings.extractor_model,
-                response_model=ExtractionOutput,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": PROMPT.format(
-                            article_text=article_text,
-                            source_name=source_name,
-                            journalist=journalist,
-                            article_date=article_date,
-                            event_name=event_name,
-                            event_description=event_description,
-                        ),
-                    }
-                ],
-                max_tokens=1200,
-                timeout=180,
-                max_retries=1,
-            ))
-            output, completion = await _client.chat.completions.create_with_completion(**kwargs)
-            return output, extract_usage(completion)
-        except Exception as e:
-            if is_rate_limit_error(e):
-                last_exc = e
-                continue
-            raise
-    raise last_exc
+    prompt = PROMPT.format(
+        article_text=article_text,
+        source_name=source_name,
+        journalist=journalist,
+        article_date=article_date,
+        event_name=event_name,
+        event_description=event_description,
+    )
+    return await complete_structured(
+        settings.extractor_model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
+    )

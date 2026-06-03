@@ -162,7 +162,7 @@ def _parse_date_from_url(url: str, fallback: str) -> str:
     return fallback
 
 
-from .utils import _is_ascii, existing_articles
+from .utils import _is_ascii, existing_articles, save_article
 
 
 def _in_window(date_str: str, start: datetime, end: datetime) -> bool:
@@ -197,7 +197,6 @@ async def ingest_cell(
     if not urls:
         return 0
 
-    cell_dir.mkdir(parents=True, exist_ok=True)
     saved = 0
 
     for i, url in enumerate(urls[:5]):
@@ -217,8 +216,7 @@ async def ingest_cell(
             "author": "Unknown",
             "url": url,
         }
-        out = cell_dir / f"article_{i+1:02d}.json"
-        out.write_text(json.dumps(article, indent=2, ensure_ascii=False))
+        save_article(cell_dir, i + 1, article)
         saved += 1
 
     return saved

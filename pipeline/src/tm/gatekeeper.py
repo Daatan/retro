@@ -1,7 +1,6 @@
-import asyncio
 from .models import GatekeeperOutput
 from .config import settings
-from .llm import client as _client, RATE_LIMIT_BACKOFF, apply_routing, extract_usage, is_rate_limit_error
+from .llm import complete_structured
 
 PROMPT = """\
 You are a topic-relevance screener for a forecasting system.
@@ -60,34 +59,12 @@ async def check_is_prediction(
     event_name: str,
 ) -> tuple["GatekeeperOutput", dict]:
     """Returns (GatekeeperOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens."""
-    last_exc: Exception = RuntimeError("no attempts")
-    for attempt, wait in enumerate([0] + RATE_LIMIT_BACKOFF):
-        if wait:
-            await asyncio.sleep(wait)
-        try:
-            kwargs = apply_routing(dict(
-                model=settings.gatekeeper_model,
-                response_model=GatekeeperOutput,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": PROMPT.format(
-                            article_text=article_text[200:2700],
-                            source_name=source_name,
-                            article_date=article_date,
-                            event_name=event_name,
-                        ),
-                    }
-                ],
-                max_tokens=200,
-                timeout=90,
-                max_retries=1,
-            ))
-            output, completion = await _client.chat.completions.create_with_completion(**kwargs)
-            return output, extract_usage(completion)
-        except Exception as e:
-            if is_rate_limit_error(e):
-                last_exc = e
-                continue
-            raise
-    raise last_exc
+    prompt = PROMPT.format(
+        article_text=article_text[200:2700],
+        source_name=source_name,
+        article_date=article_date,
+        event_name=event_name,
+    )
+    return await complete_structured(
+        settings.gatekeeper_model, GatekeeperOutput, prompt, max_tokens=200, timeout=90,
+    )

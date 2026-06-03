@@ -9,7 +9,6 @@ Two aggregation functions:
    Call needs_aggregation() first to check whether the LLM step is warranted.
 """
 
-import asyncio
 import json
 from statistics import median
 from collections import Counter
@@ -17,7 +16,7 @@ from typing import Optional
 
 from .models import PredictionExtraction, CellSignal
 from .config import settings
-from .llm import client as _client, RATE_LIMIT_BACKOFF, apply_routing, is_rate_limit_error
+from .llm import complete_structured
 
 STANCE_SPREAD_THRESHOLD = 0.4
 
@@ -97,26 +96,10 @@ async def aggregate_article_predictions(
         predictions_json=predictions_json,
     )
 
-    last_exc: Exception = RuntimeError("no attempts")
-    for _attempt, wait in enumerate([0] + RATE_LIMIT_BACKOFF):
-        if wait:
-            await asyncio.sleep(wait)
-        try:
-            kwargs = apply_routing(dict(
-                model=settings.extractor_model,
-                response_model=PredictionExtraction,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1000,
-                timeout=120,
-                max_retries=1,
-            ))
-            return await _client.chat.completions.create(**kwargs)
-        except Exception as e:
-            if is_rate_limit_error(e):
-                last_exc = e
-                continue
-            raise
-    raise last_exc
+    output, _usage = await complete_structured(
+        settings.extractor_model, PredictionExtraction, prompt, max_tokens=1000, timeout=120,
+    )
+    return output
 
 
 def _weighted_mean(values: list[float], weights: list[float]) -> float:

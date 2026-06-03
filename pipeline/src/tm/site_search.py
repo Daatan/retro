@@ -162,7 +162,7 @@ def _parse_date_from_url(url: str, fallback: str) -> str:
     return fallback
 
 
-from .utils import _is_ascii
+from .utils import _is_ascii, existing_articles
 
 
 def _in_window(date_str: str, start: datetime, end: datetime) -> bool:
@@ -180,7 +180,7 @@ async def ingest_cell(
     force: bool = False,
 ) -> int:
     cell_dir = raw_ingest_dir / source_id / event["id"]
-    existing = list(cell_dir.glob("article_*.json")) if cell_dir.exists() else []
+    existing = existing_articles(cell_dir)
     if existing and not force:
         return len(existing)
 

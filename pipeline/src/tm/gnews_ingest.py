@@ -53,6 +53,7 @@ from .models import CellStatus
 from .progress import load_state, update_cell
 from .web_search import search_articles as _web_search
 from .article_text import BROWSER_HEADERS, extract_article_body
+from .utils import existing_articles
 
 console = Console()
 
@@ -801,7 +802,7 @@ async def ingest_cell(
     Returns number of articles saved.
     """
     cell_dir = raw_ingest_dir / source_id / event["id"]
-    existing = list(cell_dir.glob("article_*.json")) if cell_dir.exists() else []
+    existing = existing_articles(cell_dir)
     if existing and not force:
         return len(existing)
 

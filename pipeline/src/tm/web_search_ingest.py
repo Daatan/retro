@@ -140,7 +140,7 @@ DUEL_EVENTS = [
     "C07", "C08", "C09", "E07", "E08",
 ]
 
-from .utils import _is_ascii
+from .utils import _is_ascii, existing_articles
 from .article_text import BROWSER_HEADERS, extract_article_body
 
 
@@ -169,7 +169,7 @@ async def ingest_event(
 ) -> int:
     eid = event["id"]
     cell_dir = raw_ingest_dir / "web_search" / eid
-    existing = list(cell_dir.glob("article_*.json")) if cell_dir.exists() else []
+    existing = existing_articles(cell_dir)
     if existing and not force:
         return len(existing)
 

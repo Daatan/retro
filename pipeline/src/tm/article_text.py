@@ -7,8 +7,11 @@ three near-identical copies (``gnews_ingest`` had a fourth, as the BeautifulSoup
 fallback after trafilatura). It now lives here once.
 
 The selector and strip-tag lists are the **union** of what those copies used, so
-every caller tries at least the selectors it tried before — the merge can only
-match a more specific content block, never fewer.
+every caller tries at least the selectors it tried before. The lists are ordered
+most-specific-first, so where the union adds a selector ahead of one a caller
+already had (e.g. gdelt now tries ``.article-body`` before ``[class*="content"]``)
+the result may be a *different, more specific* block than before — a deliberate
+improvement, not strict byte-for-byte preservation.
 """
 
 from bs4 import BeautifulSoup

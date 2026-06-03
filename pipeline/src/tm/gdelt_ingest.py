@@ -45,7 +45,7 @@ MVP_EVENTS = [
 ]
 
 
-from .utils import _is_ascii
+from .utils import _is_ascii, existing_articles
 from .article_text import extract_article_body
 
 
@@ -158,7 +158,7 @@ async def ingest_event(
     """Fetch and save GDELT articles for one event. Returns number saved."""
     eid = event["id"]
     cell_dir = raw_ingest_dir / "gdelt" / eid
-    existing = list(cell_dir.glob("article_*.json")) if cell_dir.exists() else []
+    existing = existing_articles(cell_dir)
     if existing and not force:
         return len(existing)
 

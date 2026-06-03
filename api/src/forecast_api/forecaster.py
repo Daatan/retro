@@ -18,14 +18,13 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
-import litellm
 import trafilatura
 
 from tm.gatekeeper import check_is_prediction, PROMPT as GATEKEEPER_PROMPT
 from tm.extractor import extract_predictions, PROMPT as EXTRACTOR_PROMPT
 from tm.web_search import search_articles, SearchResult, get_last_search_provider, get_last_search_provider_chain
 from tm.config import settings as _pipeline_settings
-from tm.llm import apply_routing
+from tm.llm import complete_text_once
 
 from .cache import forecast_cache, search_cache
 from .leaderboard import get_credibility_weight
@@ -151,14 +150,14 @@ async def _distill_query(question: str) -> str:
         f"Question: {question}"
     )
     try:
-        kwargs = apply_routing(dict(
-            model=_pipeline_settings.gatekeeper_model,
-            messages=[{"role": "user", "content": prompt}],
+        # Non-retrying variant: this runs inside the latency-bounded /forecast
+        # path, so it must not inherit complete_text's [30,60,120] backoff.
+        keywords = (await complete_text_once(
+            _pipeline_settings.gatekeeper_model,
+            prompt,
             max_tokens=40,
             timeout=20,
-        ))
-        resp = await litellm.acompletion(**kwargs)
-        keywords = resp.choices[0].message.content.strip()
+        )).strip()
         if keywords:
             logger.info("query_distilled original=%r distilled=%r", question[:60], keywords)
             return keywords

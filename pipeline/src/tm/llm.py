@@ -121,3 +121,45 @@ async def complete_structured(
     ))
     output, completion = await client.chat.completions.create_with_completion(**kwargs)
     return output, extract_usage(completion)
+
+
+async def complete_text_once(
+    model: str,
+    prompt: str | None = None,
+    *,
+    messages: list[dict] | None = None,
+    system: str | None = None,
+    max_tokens: int,
+    temperature: float | None = None,
+    response_format: dict | None = None,
+    timeout: int | None = None,
+) -> str:
+    """Make one plain-text LLM call (no structured-output schema) and return the text.
+
+    This is the single dispatch point for free-text / JSON-in-text completions
+    across retro — keyword extraction, edge calibration, the /llm proxy. It
+    routes through litellm to Bedrock (via :func:`apply_routing`). Pass either a
+    ``prompt`` (optionally with ``system``) or a pre-built ``messages`` list.
+
+    No retry: use this on latency-bounded paths (the /forecast keyword distill,
+    the interactive /llm endpoint). For batch/offline callers that should ride
+    out Bedrock throttling, use :func:`complete_text`.
+    """
+    if messages is None:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+    kwargs = apply_routing(dict(model=model, messages=messages, max_tokens=max_tokens))
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    if response_format is not None:
+        kwargs["response_format"] = response_format
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    resp = await litellm.acompletion(**kwargs)
+    return resp.choices[0].message.content
+
+
+# Retrying variant for batch/offline callers (keyword scripts, calibration).
+complete_text = retry_on_rate_limit(complete_text_once)

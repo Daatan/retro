@@ -6,10 +6,13 @@ Run: DATA_DIR=/path/to/data uv run --project /path/to/pipeline python scripts/im
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 
-import litellm
 from rich.console import Console
+
+from tm.config import settings
+from tm.llm import complete_text
 
 console = Console()
 
@@ -64,19 +67,20 @@ BEFORE {event["outcome_date"]} that were anticipating or predicting this event.
 
 Return JSON: {{"search_keywords": ["kw1", "kw2", ...]}}"""
 
-    response = await litellm.acompletion(
-        model="openrouter/google/gemini-2.0-flash-001",
-        messages=[
-            {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": prompt},
-        ],
+    content = await complete_text(
+        settings.gatekeeper_model,
+        prompt,
+        system=SYSTEM,
         max_tokens=300,
-        response_format={"type": "json_object"},
-        api_key=os.environ.get("OPENROUTER_API_KEY"),
     )
-
-    content = response.choices[0].message.content
-    data = json.loads(content)
+    # Nova returns the JSON as plain text (no response_format on Bedrock);
+    # strip any code fences and tolerate trailing prose before parsing.
+    content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip())
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", content, re.DOTALL)
+        data = json.loads(match.group()) if match else {}
     return data.get("search_keywords", [])
 
 
@@ -84,10 +88,6 @@ async def main():
     from sys import argv
     data_dir = Path(os.environ.get("DATA_DIR", "/app/data"))
     events_dir = data_dir / "events"
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        console.print("[red]OPENROUTER_API_KEY not set[/red]")
-        return
 
     event_files = sorted(events_dir.glob("*.json"))
     console.print(f"[bold]Improving keywords for {len(event_files)} events...[/bold]\n")

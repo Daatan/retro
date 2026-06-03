@@ -209,12 +209,23 @@ async def _check_gdelt_bq() -> ProviderStatus:
     return ProviderStatus(configured=True, exhausted=False, status="ok")
 
 
+async def _check_google_cse() -> ProviderStatus:
+    # Needs BOTH an API key and a search-engine id (cx). No live credit-check API,
+    # so we report configured + the in-process quota flag (like _check_simple).
+    if not (_ws.GOOGLE_CSE_API_KEY and _ws.GOOGLE_CSE_CX):
+        return ProviderStatus(configured=False, exhausted=False, status="not_configured")
+    if _ws._GOOGLE_CSE_QUOTA_EXHAUSTED:
+        return ProviderStatus(configured=True, exhausted=True, status="exhausted")
+    return ProviderStatus(configured=True, exhausted=False, status="ok")
+
+
 async def run_search_health() -> SearchHealthResponse:
     _ws._refresh_keys_if_stale()
 
     # Each entry: (provider_name, check_coroutine)
     provider_checks = [
         ("dataforseo", _check_dataforseo()),
+        ("google_cse", _check_google_cse()),
         ("serpapi",    _check_serpapi()),
         ("serper",     _check_serper()),
         ("tavily",     _check_simple(_ws.TAVILY_API_KEY, _ws._TAVILY_QUOTA_EXHAUSTED)),

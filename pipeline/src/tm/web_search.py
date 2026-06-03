@@ -5,6 +5,9 @@ Used by the Oracle API (retro/api) and the pipeline (retro/pipeline).
 Fallback order:
   1. GDELT Doc API                  (free, no key — primary; news-only, reliable dates)
   1b. GDELT BigQuery GKG            (free tier; historical coverage >3 months; entity-based)
+  1c. Google Custom Search JSON     GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX  (relevance-ranked;
+                                    100 queries/day free then paid; intended primary once
+                                    Google credits land — see _search_google_cse)
   2. SerpAPI (serpapi.com)          SERPAPI_API_KEY
   3. Serper.dev /news endpoint      SERPER_API_KEY
   4. Brave News Search              BRAVE_API_KEY
@@ -147,6 +150,10 @@ NIMBLEWAY_API_KEY: Optional[str] = _secret("NIMBLEWAY_API_KEY", "openclaw/nimble
 SCRAPINGBEE_API_KEY: Optional[str] = _secret("SCRAPINGBEE_API_KEY", "openclaw/scrapingbee-api-key")
 NEWSDATA_API_KEY: Optional[str] = _secret("NEWSDATA_API_KEY", "openclaw/newsdata-api-key")
 TAVILY_API_KEY: Optional[str] = _secret("TAVILY_API_KEY", "openclaw/tavily-api-key")
+# Google Programmable Search (Custom Search JSON API). Needs BOTH an API key and a
+# search-engine id (cx). Inert until both are configured — see _search_google_cse.
+GOOGLE_CSE_API_KEY: Optional[str] = _secret("GOOGLE_CSE_API_KEY", "openclaw/google-cse-api-key")
+GOOGLE_CSE_CX: Optional[str] = _secret("GOOGLE_CSE_CX", "openclaw/google-cse-cx")
 GCP_SA_KEY_JSON: Optional[str] = _secret("GCP_SA_KEY_JSON", "openclaw/gcp-service-account-key")
 
 _KEY_LOADED_AT: float = time.time()
@@ -183,7 +190,7 @@ def _refresh_keys_if_stale() -> None:
     """
     global DATAFORSEO_API_KEY, SERPAPI_API_KEY, SERPER_API_KEY, BRAVE_API_KEY
     global BRIGHTDATA_API_KEY, NIMBLEWAY_API_KEY, SCRAPINGBEE_API_KEY, NEWSDATA_API_KEY
-    global TAVILY_API_KEY
+    global TAVILY_API_KEY, GOOGLE_CSE_API_KEY, GOOGLE_CSE_CX
     global GCP_SA_KEY_JSON, _BQ_CLIENT, _KEY_LOADED_AT
     if time.time() - _KEY_LOADED_AT < _KEY_MAX_AGE_SECONDS:
         return
@@ -197,6 +204,8 @@ def _refresh_keys_if_stale() -> None:
     SCRAPINGBEE_API_KEY = _secret("SCRAPINGBEE_API_KEY", "openclaw/scrapingbee-api-key")
     NEWSDATA_API_KEY = _secret("NEWSDATA_API_KEY", "openclaw/newsdata-api-key")
     TAVILY_API_KEY = _secret("TAVILY_API_KEY", "openclaw/tavily-api-key")
+    GOOGLE_CSE_API_KEY = _secret("GOOGLE_CSE_API_KEY", "openclaw/google-cse-api-key")
+    GOOGLE_CSE_CX = _secret("GOOGLE_CSE_CX", "openclaw/google-cse-cx")
     new_gcp = _secret("GCP_SA_KEY_JSON", "openclaw/gcp-service-account-key")
     if new_gcp != GCP_SA_KEY_JSON:
         GCP_SA_KEY_JSON = new_gcp
@@ -298,6 +307,7 @@ _NIMBLEWAY_QUOTA_EXHAUSTED: bool = False
 _SCRAPINGBEE_QUOTA_EXHAUSTED: bool = False
 _NEWSDATA_QUOTA_EXHAUSTED: bool = False
 _TAVILY_QUOTA_EXHAUSTED: bool = False
+_GOOGLE_CSE_QUOTA_EXHAUSTED: bool = False
 
 _QUOTA_STATE_PATH = Path(tempfile.gettempdir()) / "quota_exhausted.json"
 
@@ -307,6 +317,7 @@ def _load_quota_state() -> None:
     global _DATAFORSEO_QUOTA_EXHAUSTED, _SERPAPI_QUOTA_EXHAUSTED, _SERPER_QUOTA_EXHAUSTED
     global _BRAVE_QUOTA_EXHAUSTED, _BRIGHTDATA_QUOTA_EXHAUSTED, _NIMBLEWAY_QUOTA_EXHAUSTED
     global _SCRAPINGBEE_QUOTA_EXHAUSTED, _NEWSDATA_QUOTA_EXHAUSTED, _TAVILY_QUOTA_EXHAUSTED
+    global _GOOGLE_CSE_QUOTA_EXHAUSTED
     try:
         data = _json.loads(_QUOTA_STATE_PATH.read_text())
         _DATAFORSEO_QUOTA_EXHAUSTED  = data.get("dataforseo",  False)
@@ -318,6 +329,7 @@ def _load_quota_state() -> None:
         _SCRAPINGBEE_QUOTA_EXHAUSTED = data.get("scrapingbee", False)
         _NEWSDATA_QUOTA_EXHAUSTED    = data.get("newsdata",    False)
         _TAVILY_QUOTA_EXHAUSTED      = data.get("tavily",      False)
+        _GOOGLE_CSE_QUOTA_EXHAUSTED  = data.get("google_cse",  False)
     except Exception:
         pass
 
@@ -335,6 +347,7 @@ def _persist_quota_state() -> None:
             "scrapingbee": _SCRAPINGBEE_QUOTA_EXHAUSTED,
             "newsdata":    _NEWSDATA_QUOTA_EXHAUSTED,
             "tavily":      _TAVILY_QUOTA_EXHAUSTED,
+            "google_cse":  _GOOGLE_CSE_QUOTA_EXHAUSTED,
         }))
     except Exception:
         pass
@@ -564,6 +577,83 @@ def _search_serper_news(
         for item in items[:limit]
         if item.get("link")
     ]
+    return _filter_by_date(results, date_from, date_to)
+
+
+# ──────────────────────────────────────────────
+# Provider: Google Programmable Search (Custom Search JSON API)
+# ──────────────────────────────────────────────
+
+def _cse_published_date(item: dict) -> str:
+    """Best-effort publish date from a CSE result's pagemap metatags. '' if absent."""
+    pagemap = item.get("pagemap") or {}
+    metatags = (pagemap.get("metatags") or [{}])[0] if isinstance(pagemap.get("metatags"), list) else {}
+    for key in ("article:published_time", "og:updated_time", "datepublished", "date"):
+        val = metatags.get(key)
+        if val:
+            return str(val)[:10]
+    return ""
+
+
+def _search_google_cse(
+    query: str,
+    limit: int,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+) -> List[SearchResult]:
+    """Google Custom Search JSON API (Programmable Search Engine).
+
+    Requires BOTH GOOGLE_CSE_API_KEY and a search-engine id GOOGLE_CSE_CX; the
+    caller (search_articles) only invokes this when both are set, so it is inert
+    until configured. The engine (cx) is configured in Google's panel — set it to
+    "search the entire web" or scope it to news sites.
+
+    NOTE (unverified against the live API — no key until Google credits land):
+    the response shape and 429 quota behaviour are assumed from CSE docs and need
+    one live call to confirm before being trusted. Defensive parsing keeps a shape
+    surprise degrading to empty results rather than raising.
+
+    Caveats / follow-ups:
+      - CSE returns at most 10 results per request; `limit > 10` under-delivers
+        (pagination via `start` is a follow-up).
+      - No server-side date filtering: a malformed `sort=date:r:…` makes CSE 400
+        and silently kills the provider, so we send no date param and rely on
+        `_filter_by_date` post-hoc. Date-aware CSE is a follow-up once testable.
+      - Free tier is 100 queries/day, then HTTP 429 → quota-exhausted for the day.
+    """
+    global _GOOGLE_CSE_QUOTA_EXHAUSTED
+    if not (GOOGLE_CSE_API_KEY and GOOGLE_CSE_CX):
+        raise RuntimeError("GOOGLE_CSE_API_KEY / GOOGLE_CSE_CX not set")
+
+    r = httpx.get(
+        "https://www.googleapis.com/customsearch/v1",
+        params={
+            "key": GOOGLE_CSE_API_KEY,
+            "cx": GOOGLE_CSE_CX,
+            "q": query,
+            "num": min(limit, 10),  # CSE hard cap is 10 per request
+        },
+        timeout=10,
+    )
+    if r.status_code == 429:
+        _GOOGLE_CSE_QUOTA_EXHAUSTED = True
+        _persist_quota_state()
+        raise RuntimeError("Google CSE quota exhausted (429)")
+    r.raise_for_status()
+    data = r.json()
+
+    results = []
+    for item in (data.get("items") or [])[:limit]:
+        link = item.get("link") or ""
+        if not link:
+            continue
+        results.append(SearchResult(
+            title=item.get("title", "") or "",
+            url=link,
+            snippet=item.get("snippet", "") or "",
+            source=_clean_source(item.get("displayLink", "") or "", link),
+            published_date=_cse_published_date(item),
+        ))
     return _filter_by_date(results, date_from, date_to)
 
 
@@ -1340,6 +1430,22 @@ def search_articles(
         _bq_results = _try_gdelt_bq()
         if _bq_results:
             return _bq_results
+
+    # 1c. Google Custom Search — relevance-ranked, independent quota. Placed right
+    # after GDELT so it is the primary keyed provider once configured (intended to
+    # be the workhorse when Google startup credits supply paid quota; on the free
+    # 100/day tier it will 429 and fall through). Inert until both keys are set.
+    if GOOGLE_CSE_API_KEY and GOOGLE_CSE_CX and not _GOOGLE_CSE_QUOTA_EXHAUSTED:
+        _provider_local.chain.append("google_cse")
+        _t0 = time.perf_counter()
+        try:
+            results = _search_google_cse(query, limit, date_from, date_to)
+            if results:
+                _provider_local.name = "google_cse"
+                return results
+            logger.debug("google_cse empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
+        except Exception as e:
+            logger.warning("google_cse failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 2. SerpAPI
     if SERPAPI_API_KEY and not _SERPAPI_QUOTA_EXHAUSTED:

@@ -77,7 +77,7 @@ grounding likely **augments** (fast first-pass answer, or a search-provider that
 returns the grounded citation URLs) rather than **replaces** the pipeline — unless
 we accept losing per-source credibility weighting for grounded answers.
 
-## Option 2 — Google Custom Search JSON API
+## Option 2 — Google Custom Search JSON API  ✅ implemented (inert pending credentials)
 
 `customsearch/v1` with an API key + a Programmable Search Engine `cx` id. Returns
 title/link/snippet like the other providers.
@@ -86,6 +86,26 @@ title/link/snippet like the other providers.
   lowest-friction option, fits the existing architecture exactly.
 - Caveats: 100 free queries/day, then paid; 10k/day hard cap; general-web (the `cx`
   can be scoped to news sites).
+
+**Status:** the provider is built — `_search_google_cse` in `pipeline/src/tm/web_search.py`,
+slotted at position **1c** (right after GDELT Doc, before SerpAPI, so it's the primary
+keyed provider once enabled), with a `/search/health` entry. It is **inert** until both
+credentials are set, so it ships with zero behavior change.
+
+**To activate (once Google startup credits land):**
+1. Create a Programmable Search Engine; set it to "search the entire web" (or scope to
+   news sites). Note its `cx`.
+2. Set both secrets (env vars on the box, or AWS Secrets Manager):
+   `GOOGLE_CSE_API_KEY` (= `openclaw/google-cse-api-key`) and
+   `GOOGLE_CSE_CX` (= `openclaw/google-cse-cx`). Restart/reload the Oracle.
+3. Verify: `GET /search/health` shows `google_cse: ok`; a `/search` returns
+   `provider: "google_cse"`.
+
+**Known limitations (deliberate v1, see code comments):** ≤10 results/request
+(`limit>10` under-delivers; paginate later); **no server-side date filtering** (relies
+on the post-hoc `_filter_by_date`, to avoid a malformed-`sort` 400); response shape +
+429 behaviour are assumed from the docs and **need one live call to confirm** before
+they're trusted.
 
 These options are not exclusive — CSE as a `tm.web_search` provider is independent
 of whether daatan uses Gemini grounding for a fast research answer.

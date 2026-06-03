@@ -217,6 +217,20 @@ def _refresh_keys_if_stale() -> None:
 _DDG_LAST_CALL: float = 0.0
 DDG_MIN_INTERVAL = 2.0
 
+# Curated credible news domains for the last-resort "trusted sites" fallback
+# (_search_trusted_sites). Mirrors gnews_ingest.SOURCES_CONFIG; duplicated here
+# rather than imported because gnews_ingest imports this module (would be a
+# circular import). TODO: unify to one source-of-truth in a neutral tm module.
+TRUSTED_SEARCH_DOMAINS: list[str] = [
+    "reuters.com", "apnews.com", "bbc.com", "nytimes.com", "ft.com",
+    "theguardian.com", "washingtonpost.com", "bloomberg.com", "axios.com",
+    "aljazeera.com", "timesofisrael.com", "jpost.com", "haaretz.com",
+    "haaretz.co.il", "en.globes.co.il", "ynetnews.com", "israelhayom.com",
+    "news.walla.co.il", "mako.co.il", "maariv.co.il", "13tv.co.il", "calcalist.co.il",
+]
+_TRUSTED_SITES_BATCH_SIZE = 5   # domains OR'd into one DDG query
+_TRUSTED_SITES_MAX_BATCHES = 3  # cap DDG calls (bounded vs DDG_MIN_INTERVAL + /forecast budget)
+
 # ── GDELT cross-process rate limiting ────────────────────────────────────────
 GDELT_MIN_INTERVAL = 10.0   # documented GDELT rate limit: 1 req / 10 s
 _GDELT_SLOT_WAIT   = 1.5    # max seconds we're willing to wait for a slot before skipping
@@ -1206,6 +1220,46 @@ def _search_ddg_news(
 
 
 # ──────────────────────────────────────────────
+# Last-resort fallback: trusted-site DDG search
+# ──────────────────────────────────────────────
+
+def _search_trusted_sites(
+    query: str,
+    limit: int,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+) -> List[SearchResult]:
+    """Quota-free last resort: re-query DDG restricted to a curated list of
+    credible news domains (batched ``site:`` OR groups). Runs only when the rest
+    of the chain returned nothing, so it biases results toward trusted sources
+    instead of falling to low-relevance GDELT BigQuery.
+
+    Bounded: at most ``_TRUSTED_SITES_MAX_BATCHES`` DDG calls; stops early once it
+    has ``limit`` results. A failing batch is skipped, not fatal.
+    """
+    # Drop any caller-supplied site: filter so we don't double-restrict.
+    base = re.sub(r"\bsite:\S+\s*", "", query).strip()
+    collected: List[SearchResult] = []
+    seen: set = set()
+    for i in range(_TRUSTED_SITES_MAX_BATCHES):
+        batch = TRUSTED_SEARCH_DOMAINS[i * _TRUSTED_SITES_BATCH_SIZE:(i + 1) * _TRUSTED_SITES_BATCH_SIZE]
+        if not batch:
+            break
+        site_clause = " OR ".join(f"site:{d}" for d in batch)
+        batch_query = f"{base} ({site_clause})"
+        try:
+            for r in _search_ddg_news(batch_query, limit, date_from, date_to):
+                if r.url and r.url not in seen:
+                    seen.add(r.url)
+                    collected.append(r)
+        except Exception as e:
+            logger.warning("trusted_sites batch %d failed: %s", i, e)
+        if len(collected) >= limit:
+            break
+    return collected[:limit]
+
+
+# ──────────────────────────────────────────────
 # Provider: Newsdata.io
 # ──────────────────────────────────────────────
 
@@ -1575,6 +1629,22 @@ def search_articles(
         logger.debug("ddg empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
     except Exception as e:
         logger.warning("ddg failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
+
+    # 10b. Trusted-sites fallback — quota-free, last resort. When the whole chain
+    # came back empty, re-query DDG restricted to a curated list of credible news
+    # domains. Biases to trusted sources and beats the low-relevance gdelt_bq junk
+    # that would otherwise serve. Always available (no key); only reached when
+    # everything above returned nothing.
+    _provider_local.chain.append("trusted_sites")
+    _t0 = time.perf_counter()
+    try:
+        results = _search_trusted_sites(query, limit, date_from, date_to)
+        if results:
+            _provider_local.name = "trusted_sites"
+            return results
+        logger.debug("trusted_sites empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
+    except Exception as e:
+        logger.warning("trusted_sites failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 11. GDELT BigQuery — absolute last resort for live/recent queries, AFTER DDG.
     # Its URL-slug, recency-ranked results are low-relevance, so it must not

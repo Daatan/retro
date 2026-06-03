@@ -26,12 +26,16 @@ async def run_search(req: SearchRequest) -> SearchResponse:
         date_to = datetime.fromisoformat(req.date_to)
 
     t0 = time.perf_counter()
-    results = await asyncio.to_thread(
-        _ws.search_articles, req.query, req.limit, date_from, date_to
-    )
+    # Provider attribution is thread-local: search runs in a worker thread via
+    # asyncio.to_thread, so we must read get_last_search_provider() *inside that
+    # same thread*. Reading it here in the event-loop thread always returned
+    # "none" (same bug the forecaster fixed with _search_capturing).
+    def _search_capturing():
+        results = _ws.search_articles(req.query, req.limit, date_from, date_to)
+        return results, _ws.get_last_search_provider(), _ws.get_last_search_provider_chain()
+
+    results, provider, chain = await asyncio.to_thread(_search_capturing)
     duration_ms = round((time.perf_counter() - t0) * 1000, 1)
-    provider = _ws.get_last_search_provider()
-    chain = _ws.get_last_search_provider_chain()
 
     if req.enrich_snippets:
         results = await asyncio.to_thread(_ws.enrich_snippets, results)
@@ -160,8 +164,22 @@ async def _check_scrapingbee() -> ProviderStatus:
 
 
 async def _check_gdelt() -> ProviderStatus:
-    # GDELT needs no API key and has no credit quota — always configured and available.
-    # A live probe would consume the shared 10s rate limit and degrade real searches.
+    # GDELT needs no API key and has no credit quota. We deliberately do NOT fire
+    # a live probe — that would consume the shared 1-req/10s slot and degrade real
+    # searches. Instead we surface the Doc API's runtime circuit/cooldown state,
+    # which web_search maintains on 429s and repeated failures. This is the signal
+    # that actually mattered ("ok" was misleading while GDELT was throttled and the
+    # chain was silently degrading to BigQuery). Note: these flags are per-process
+    # (per gunicorn worker), so this reflects the health worker's view of GDELT.
+    now = time.time()
+    broken_remaining = _ws._GDELT_DOC_BROKEN_UNTIL - now
+    cooldown_remaining = _ws._GDELT_COOLDOWN_UNTIL - now
+    if broken_remaining > 0:
+        return ProviderStatus(configured=True, exhausted=True, status="circuit_open",
+                              error=f"Doc API circuit open for {int(broken_remaining)}s after repeated failures")
+    if cooldown_remaining > 0:
+        return ProviderStatus(configured=True, exhausted=True, status="cooldown",
+                              error=f"429 rate-limit cooldown for {int(cooldown_remaining)}s")
     return ProviderStatus(configured=True, exhausted=False, status="ok")
 
 

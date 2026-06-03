@@ -1308,25 +1308,38 @@ def search_articles(
                     _GDELT_DOC_BREAK_SECS / 60,
                 )
 
-    # 1b. GDELT BigQuery GKG — historical coverage + fallback when Doc circuit is open.
-    if GCP_SA_KEY_JSON:
-        _gdelt_doc_unavailable = _GDELT_DOC_BROKEN_UNTIL > time.time() or _GDELT_COOLDOWN_UNTIL > time.time()
-        _bq_worthwhile = (
-            date_from is None or
-            (datetime.utcnow() - date_from).days > _GDELT_DOC_WINDOW_DAYS or
-            _gdelt_doc_unavailable
-        )
-        if _bq_worthwhile:
-            _provider_local.chain.append("gdelt_bq")
-            _t0 = time.perf_counter()
-            try:
-                results = _search_gdelt_bq(query, limit, date_from, date_to)
-                if results:
-                    _provider_local.name = "gdelt_bq"
-                    return results
-                logger.debug("gdelt_bq empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-            except Exception as e:
-                logger.warning("gdelt_bq failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
+    # GDELT BigQuery GKG. It is the historical specialist (full-history entity
+    # match), but its results are URL-slug-titled and recency-ranked, i.e.
+    # low-relevance for a topical query. So it runs EARLY only for genuinely
+    # historical queries (older than the Doc API's ~3-month window), where the
+    # SERP providers have poor coverage; for live/recent queries it is a LAST
+    # resort (see below, after DataForSEO). Running it early for live queries
+    # short-circuited the chain with off-topic articles that the relevance
+    # gatekeeper then discarded — leaving forecasts with no usable articles.
+    _bq_tried = False
+
+    def _try_gdelt_bq() -> Optional[List[SearchResult]]:
+        nonlocal _bq_tried
+        if not GCP_SA_KEY_JSON or _bq_tried:
+            return None
+        _bq_tried = True
+        _provider_local.chain.append("gdelt_bq")
+        _t0 = time.perf_counter()
+        try:
+            results = _search_gdelt_bq(query, limit, date_from, date_to)
+            if results:
+                _provider_local.name = "gdelt_bq"
+                return results
+            logger.debug("gdelt_bq empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
+        except Exception as e:
+            logger.warning("gdelt_bq failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
+        return None
+
+    # 1b. Early BigQuery — historical queries only (Doc API covers ~3 months).
+    if date_from is not None and (datetime.utcnow() - date_from).days > _GDELT_DOC_WINDOW_DAYS:
+        _bq_results = _try_gdelt_bq()
+        if _bq_results:
+            return _bq_results
 
     # 2. SerpAPI
     if SERPAPI_API_KEY and not _SERPAPI_QUOTA_EXHAUSTED:
@@ -1444,6 +1457,13 @@ def search_articles(
             logger.debug("dataforseo empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
             logger.warning("dataforseo failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
+
+    # 9b. GDELT BigQuery — last resort for live/recent queries when every news
+    # provider above failed or is exhausted. Low-relevance, but better than
+    # nothing. (Skipped here if already tried as the historical early path.)
+    _bq_results = _try_gdelt_bq()
+    if _bq_results:
+        return _bq_results
 
     # 10. DuckDuckGo (free, no key)
     _provider_local.chain.append("ddg")

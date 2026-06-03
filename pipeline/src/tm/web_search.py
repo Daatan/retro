@@ -1458,13 +1458,6 @@ def search_articles(
         except Exception as e:
             logger.warning("dataforseo failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
-    # 9b. GDELT BigQuery — last resort for live/recent queries when every news
-    # provider above failed or is exhausted. Low-relevance, but better than
-    # nothing. (Skipped here if already tried as the historical early path.)
-    _bq_results = _try_gdelt_bq()
-    if _bq_results:
-        return _bq_results
-
     # 10. DuckDuckGo (free, no key)
     _provider_local.chain.append("ddg")
     _t0 = time.perf_counter()
@@ -1476,6 +1469,15 @@ def search_articles(
         logger.debug("ddg empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
     except Exception as e:
         logger.warning("ddg failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
+
+    # 11. GDELT BigQuery — absolute last resort for live/recent queries, AFTER DDG.
+    # Its URL-slug, recency-ranked results are low-relevance, so it must not
+    # short-circuit the chain before a real news provider (DDG returns relevant
+    # results, incl. Hebrew). It runs here only when everything else came back
+    # empty. (Skipped if already tried as the historical early path.)
+    _bq_results = _try_gdelt_bq()
+    if _bq_results:
+        return _bq_results
 
     logger.error("All search providers exhausted — no articles found for: %s", query[:60])
     return []

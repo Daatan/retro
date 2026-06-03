@@ -5,7 +5,7 @@ Calibrate Bayesian edge weights using live news search + LLM.
 For each edge A→B in the PM analysis graph:
   1. Search Brave News for 3 queries covering the causal relationship
   2. Fetch full article text (≥4 articles)
-  3. Ask Claude to estimate P(B|A=1) and P(B|A=0), anchored to live PM prices
+  3. Ask the LLM (Bedrock Nova Lite, via tm.llm) to estimate P(B|A=1) and P(B|A=0), anchored to live PM prices
   4. Save to edge_weights.json (resumable — already-done edges are skipped)
 
 Usage:
@@ -14,6 +14,7 @@ Usage:
     python bayesoracle/calibrate_edges.py
 """
 
+import asyncio
 import json
 import os
 import re
@@ -43,12 +44,7 @@ def _load_env(path: Path) -> None:
 
 _load_env(_ENV_FILE)
 
-OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-LLM_MODEL      = "anthropic/claude-haiku-4.5"
-OUTPUT         = Path(__file__).parent / "edge_weights.json"
-
-if not OPENROUTER_KEY:
-    sys.exit("OPENROUTER_API_KEY not set")
+OUTPUT = Path(__file__).parent / "edge_weights.json"
 
 # ─── Node metadata (labels match Polymarket question text; pm = current price) ─
 NODES: dict[str, dict] = {
@@ -172,6 +168,8 @@ import logging
 logging.getLogger("tm.web_search").setLevel(logging.ERROR)  # suppress provider-quota noise
 
 from tm.web_search import search_articles as _tm_search, SearchResult
+from tm.config import settings as _tm_settings
+from tm.llm import complete_text
 
 
 def _search_articles(src_label: str, tgt_label: str) -> list[dict]:
@@ -230,36 +228,26 @@ def _collect_articles(candidates: list[dict], target: int = 4) -> list[dict]:
 # ─── LLM call ────────────────────────────────────────────────────────────────
 
 def _llm(prompt: str) -> Optional[dict]:
-    for attempt in range(2):
-        try:
-            r = httpx.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_KEY}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://github.com/komapc/retro",
-                    "X-Title": "BayesOracle edge calibration",
-                },
-                json={
-                    "model": LLM_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 350,
-                    "temperature": 0.15,
-                },
-                timeout=40,
-            )
-            r.raise_for_status()
-            raw = r.json()["choices"][0]["message"]["content"]
-            # Strip markdown code fences if model wraps JSON in them
-            raw = re.sub(r"^```(?:json)?\s*", "", raw.strip())
-            raw = re.sub(r"\s*```$", "", raw.strip())
-            # Use raw_decode to tolerate trailing text after the JSON object
-            obj, _ = json.JSONDecoder().raw_decode(raw)
-            return obj
-        except Exception as exc:
-            print(f"      LLM attempt {attempt+1} failed: {exc}")
-            time.sleep(2)
-    return None
+    # Routed through tm.llm → Bedrock Nova Lite (complete_text handles routing and
+    # rate-limit retry). asyncio.run is fine here: this is a synchronous batch
+    # script, one short-lived event loop per edge.
+    try:
+        raw = asyncio.run(complete_text(
+            _tm_settings.extractor_model,
+            prompt,
+            max_tokens=350,
+            temperature=0.15,
+            timeout=40,
+        ))
+        # Strip markdown code fences if the model wraps JSON in them
+        raw = re.sub(r"^```(?:json)?\s*", "", raw.strip())
+        raw = re.sub(r"\s*```$", "", raw.strip())
+        # Use raw_decode to tolerate trailing text after the JSON object
+        obj, _ = json.JSONDecoder().raw_decode(raw)
+        return obj
+    except Exception as exc:
+        print(f"      LLM call failed: {exc}")
+        return None
 
 
 # ─── Per-edge calibration ─────────────────────────────────────────────────────

@@ -118,7 +118,10 @@ class LlmMessage(BaseModel):
 
 
 class LlmRequest(BaseModel):
-    model: str = Field(default="google/gemini-2.5-flash", description="OpenRouter model ID")
+    model: Optional[str] = Field(
+        default=None,
+        description="litellm model ID (e.g. bedrock/amazon.nova-lite-v1:0); defaults to the server's configured Bedrock model",
+    )
     messages: list[LlmMessage]
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
 

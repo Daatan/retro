@@ -16,16 +16,14 @@ import logging
 import re
 from pathlib import Path
 
-import litellm
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, MofNCompleteColumn
 
 from .config import Settings
+from .llm import complete_text
 
 logger = logging.getLogger(__name__)
 console = Console()
-
-KEYWORD_MODEL = "bedrock/amazon.nova-micro-v1:0"
 
 KEYWORD_PROMPT = """\
 You are helping build a news search system. Given a Polymarket prediction market question, \
@@ -45,21 +43,14 @@ Return format: ["phrase1", "phrase2", "phrase3", "phrase4", "phrase5"]
 
 
 async def _generate_keywords(question: str, settings: Settings) -> list[str]:
-    """Call Nova Micro to generate search keywords for a question."""
-    kwargs: dict = {}
-    if settings.model_api_base:
-        kwargs["api_base"] = settings.model_api_base
-        kwargs["api_key"] = settings.model_api_key
-
+    """Generate search keywords for a question via Bedrock Nova (tm.llm)."""
     try:
-        response = await litellm.acompletion(
-            model=KEYWORD_MODEL,
-            messages=[{"role": "user", "content": KEYWORD_PROMPT.format(question=question)}],
+        text = (await complete_text(
+            settings.gatekeeper_model,
+            KEYWORD_PROMPT.format(question=question),
             max_tokens=150,
             temperature=0.3,
-            **kwargs,
-        )
-        text = response.choices[0].message.content.strip()
+        )).strip()
         # Extract JSON array from response
         match = re.search(r'\[.*?\]', text, re.DOTALL)
         if match:

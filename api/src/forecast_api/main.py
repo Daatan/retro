@@ -18,6 +18,8 @@ from .cache import forecast_cache
 from .config import settings
 from .forecaster import run_forecast
 from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache
+from tm.config import settings as _pipeline_settings
+from tm.llm import complete_text_once
 from .limiter import limiter
 from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, LlmRequest, LlmResponse, SearchRequest, SearchResponse, SearchHealthResponse
 from .searcher import run_search, run_search_health
@@ -195,34 +197,28 @@ async def llm_proxy(
     _: None = Depends(verify_api_key),
 ):
     """
-    Proxy LLM calls to OpenRouter using the server-side API key.
-    Accepts model + messages, returns the assistant's text content.
+    Proxy LLM calls to Bedrock (via tm.llm → litellm) using the server's AWS creds.
+    Accepts model + messages, returns the assistant's text content. ``model`` is a
+    litellm ID and defaults to the server's configured Bedrock model; callers may
+    override it (e.g. bedrock/amazon.nova-micro-v1:0).
+
+    Uses the non-retrying complete_text_once: this is an interactive endpoint and
+    daatan's caller times out at 60s, so we don't want the [30,60,120] backoff.
     """
-    if not settings.openrouter_api_key:
-        return JSONResponse({"detail": "OpenRouter API key not configured on server"}, status_code=503)
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.openrouter_api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://oracle.daatan.com",
-            },
-            json={
-                "model": body.model,
-                "messages": [{"role": m.role, "content": m.content} for m in body.messages],
-                "temperature": body.temperature,
-            },
+    model = body.model or _pipeline_settings.extractor_model
+    messages = [{"role": m.role, "content": m.content} for m in body.messages]
+    try:
+        content = await complete_text_once(
+            model,
+            messages=messages,
+            max_tokens=1024,
+            temperature=body.temperature,
+            timeout=55,
         )
-    if not resp.is_success:
-        err = resp.json().get("error", {})
-        return JSONResponse(
-            {"detail": err.get("message", f"OpenRouter HTTP {resp.status_code}")},
-            status_code=resp.status_code,
-        )
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"]
-    return LlmResponse(content=content, model=data.get("model", body.model))
+    except Exception as exc:
+        logger.warning("llm proxy failed model=%s err=%s", model, exc)
+        return JSONResponse({"detail": f"LLM call failed: {exc}"}, status_code=502)
+    return LlmResponse(content=content, model=model)
 
 
 def _is_safe_url(url: str) -> bool:

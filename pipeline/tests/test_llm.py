@@ -137,6 +137,67 @@ class TestExtractUsage:
 
 # ── caller delegation (the inline-kwargs → args refactor risk) ───────────────
 
+class TestCompleteText:
+    @staticmethod
+    def _resp(text):
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=text))])
+
+    async def test_builds_messages_from_prompt_and_system(self, monkeypatch):
+        acompletion = AsyncMock(return_value=self._resp("hello"))
+        monkeypatch.setattr(llm.litellm, "acompletion", acompletion)
+
+        out = await llm.complete_text_once("bedrock/x", "the prompt", system="be terse", max_tokens=10)
+        assert out == "hello"
+        kw = acompletion.await_args.kwargs
+        assert kw["model"] == "bedrock/x"
+        assert kw["messages"] == [
+            {"role": "system", "content": "be terse"},
+            {"role": "user", "content": "the prompt"},
+        ]
+        assert kw["max_tokens"] == 10
+        # Optional params omitted when not supplied.
+        assert "temperature" not in kw and "response_format" not in kw
+
+    async def test_passes_through_optional_params_and_messages(self, monkeypatch):
+        acompletion = AsyncMock(return_value=self._resp("x"))
+        monkeypatch.setattr(llm.litellm, "acompletion", acompletion)
+
+        msgs = [{"role": "user", "content": "hi"}]
+        await llm.complete_text_once(
+            "bedrock/x", messages=msgs, max_tokens=5,
+            temperature=0.15, response_format={"type": "json_object"}, timeout=30,
+        )
+        kw = acompletion.await_args.kwargs
+        assert kw["messages"] == msgs
+        assert kw["temperature"] == 0.15
+        assert kw["response_format"] == {"type": "json_object"}
+        assert kw["timeout"] == 30
+
+    async def test_complete_text_once_does_not_retry(self, monkeypatch):
+        acompletion = AsyncMock(side_effect=RuntimeError("429 rate limit"))
+        monkeypatch.setattr(llm.litellm, "acompletion", acompletion)
+        monkeypatch.setattr(llm.asyncio, "sleep", AsyncMock())
+
+        with pytest.raises(RuntimeError, match="429"):
+            await llm.complete_text_once("bedrock/x", "p", max_tokens=5)
+        assert acompletion.await_count == 1  # no retry
+        llm.asyncio.sleep.assert_not_awaited()
+
+    async def test_complete_text_retries_on_rate_limit(self, monkeypatch):
+        calls = {"n": 0}
+        async def flaky(**_kw):
+            calls["n"] += 1
+            if calls["n"] < 2:
+                raise RuntimeError("429 rate limit")
+            return self._resp("recovered")
+        monkeypatch.setattr(llm.litellm, "acompletion", flaky)
+        monkeypatch.setattr(llm.asyncio, "sleep", AsyncMock())
+
+        out = await llm.complete_text("bedrock/x", "p", max_tokens=5)
+        assert out == "recovered"
+        assert calls["n"] == 2  # retried once
+
+
 class TestCallerDelegation:
     async def test_gatekeeper_delegates_with_exact_params(self, monkeypatch):
         from tm import gatekeeper

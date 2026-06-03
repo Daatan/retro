@@ -208,6 +208,101 @@ class TestTavily432:
 
 
 # ---------------------------------------------------------------------------
+# Google Custom Search provider (requires import)
+# ---------------------------------------------------------------------------
+
+class _FakeResp:
+    def __init__(self, status_code=200, payload=None):
+        self.status_code = status_code
+        self._payload = payload or {}
+    def raise_for_status(self):
+        pass
+    def json(self):
+        return self._payload
+
+
+@needs_deps
+class TestGoogleCseProvider:
+    def test_inert_when_unconfigured(self):
+        """Keys absent → _search_google_cse is never called and not in the chain.
+        This is the load-bearing guarantee: shipping CSE changes nothing until the
+        Google credentials are configured."""
+        ws = _fresh_ws()
+        ws.GOOGLE_CSE_API_KEY = None
+        ws.GOOGLE_CSE_CX = None
+        cse = MagicMock(return_value=[])
+        skip = RuntimeError("skip")
+        with patch.multiple(ws,
+            _search_google_cse=cse,
+            _search_gdelt=MagicMock(side_effect=skip),
+            _search_gdelt_bq=MagicMock(side_effect=skip),
+            _search_serpapi_news=MagicMock(side_effect=skip),
+            _search_serper_news=MagicMock(side_effect=skip),
+            _search_brave_news=MagicMock(side_effect=skip),
+            _search_tavily=MagicMock(side_effect=skip),
+            _search_brightdata=MagicMock(side_effect=skip),
+            _search_nimbleway=MagicMock(side_effect=skip),
+            _search_scrapingbee=MagicMock(side_effect=skip),
+            _search_newsdata_io=MagicMock(side_effect=skip),
+            _search_dataforseo=MagicMock(side_effect=skip),
+            _search_ddg_news=MagicMock(return_value=[]),
+        ):
+            ws.search_articles("test query")
+        assert not cse.called, "_search_google_cse must not run when unconfigured"
+        assert "google_cse" not in ws.get_last_search_provider_chain()
+
+    def test_runs_before_serpapi_when_configured(self):
+        ws = _fresh_ws()
+        ws.GOOGLE_CSE_API_KEY = "k"
+        ws.GOOGLE_CSE_CX = "cx"
+        ws._GOOGLE_CSE_QUOTA_EXHAUSTED = False
+        ws.SERPAPI_API_KEY = "s"
+        ws._SERPAPI_QUOTA_EXHAUSTED = False
+        from tm.web_search import SearchResult
+        hit = [SearchResult(title="t", url="http://x", snippet="s")]
+        serp_spy = MagicMock(return_value=hit)
+        with patch.multiple(ws,
+            _search_gdelt=MagicMock(return_value=[]),
+            _search_gdelt_bq=MagicMock(side_effect=RuntimeError("skip")),
+            _search_google_cse=MagicMock(return_value=hit),
+            _search_serpapi_news=serp_spy,
+            _search_ddg_news=MagicMock(return_value=[]),
+        ):
+            res = ws.search_articles("Some live query")
+        assert res
+        assert ws.get_last_search_provider() == "google_cse"
+        assert not serp_spy.called, "CSE must short-circuit before SerpAPI"
+        chain = ws.get_last_search_provider_chain()
+        assert chain.index("google_cse") < chain.index("serpapi") if "serpapi" in chain else True
+
+    def test_parses_response_defensively(self, monkeypatch):
+        ws = _fresh_ws()
+        ws.GOOGLE_CSE_API_KEY = "k"
+        ws.GOOGLE_CSE_CX = "cx"
+        payload = {"items": [
+            {"title": "T1", "link": "https://a.com/1", "snippet": "S1", "displayLink": "a.com",
+             "pagemap": {"metatags": [{"article:published_time": "2026-06-01T10:00:00Z"}]}},
+            {"title": "T2", "link": "https://b.com/2", "snippet": "S2"},  # no pagemap/displayLink
+            {"title": "no link — dropped"},
+        ]}
+        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(200, payload))
+        out = ws._search_google_cse("q", 5)
+        assert [r.url for r in out] == ["https://a.com/1", "https://b.com/2"]
+        assert out[0].published_date == "2026-06-01"
+        assert out[1].snippet == "S2"
+
+    def test_429_sets_quota_exhausted(self, monkeypatch):
+        ws = _fresh_ws()
+        ws.GOOGLE_CSE_API_KEY = "k"
+        ws.GOOGLE_CSE_CX = "cx"
+        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(429))
+        monkeypatch.setattr(ws, "_persist_quota_state", lambda: None)
+        with pytest.raises(RuntimeError, match="quota"):
+            ws._search_google_cse("q", 5)
+        assert ws._GOOGLE_CSE_QUOTA_EXHAUSTED is True
+
+
+# ---------------------------------------------------------------------------
 # GDELT BigQuery fallback ordering (requires import)
 # ---------------------------------------------------------------------------
 

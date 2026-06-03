@@ -120,3 +120,25 @@ class TestCheckGdeltHealth:
         st = await searcher._check_gdelt()
         assert st.status == "ok"
         assert st.exhausted is False
+
+
+class TestCheckGoogleCse:
+    async def test_not_configured_without_both_keys(self, monkeypatch):
+        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_API_KEY", "k")
+        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_CX", None)  # cx missing
+        st = await searcher._check_google_cse()
+        assert st.configured is False and st.status == "not_configured"
+
+    async def test_ok_when_both_configured(self, monkeypatch):
+        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_API_KEY", "k")
+        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_CX", "cx")
+        monkeypatch.setattr(searcher._ws, "_GOOGLE_CSE_QUOTA_EXHAUSTED", False)
+        st = await searcher._check_google_cse()
+        assert st.configured is True and st.status == "ok"
+
+    async def test_exhausted(self, monkeypatch):
+        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_API_KEY", "k")
+        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_CX", "cx")
+        monkeypatch.setattr(searcher._ws, "_GOOGLE_CSE_QUOTA_EXHAUSTED", True)
+        st = await searcher._check_google_cse()
+        assert st.exhausted is True and st.status == "exhausted"

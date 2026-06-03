@@ -208,6 +208,105 @@ class TestTavily432:
 
 
 # ---------------------------------------------------------------------------
+# Trusted-sites last-resort fallback (requires import)
+# ---------------------------------------------------------------------------
+
+@needs_deps
+class TestTrustedSitesFallback:
+    def test_builds_batched_site_queries_and_dedups(self, monkeypatch):
+        ws = _fresh_ws()
+        from tm.web_search import SearchResult
+        calls = []
+
+        def fake_ddg(q, limit, date_from=None, date_to=None):
+            calls.append(q)
+            n = len(calls)
+            # a unique result per batch + one shared URL across batches (dedup probe)
+            return [SearchResult(title=f"t{n}", url=f"http://x/{n}", snippet="s"),
+                    SearchResult(title="dup", url="http://dup", snippet="s")]
+
+        monkeypatch.setattr(ws, "_search_ddg_news", fake_ddg)
+        out = ws._search_trusted_sites("ceasefire talks", limit=5)
+
+        assert all(q.startswith("ceasefire talks (") and "site:" in q and " OR " in q for q in calls)
+        urls = [r.url for r in out]
+        assert urls.count("http://dup") == 1, "results must be deduped across batches"
+        assert len(out) <= 5
+
+    def test_stops_early_once_limit_reached(self, monkeypatch):
+        ws = _fresh_ws()
+        from tm.web_search import SearchResult
+        calls = []
+
+        def fake_ddg(q, limit, date_from=None, date_to=None):
+            calls.append(q)
+            n = len(calls)
+            return [SearchResult(title=f"{n}-{i}", url=f"http://x/{n}/{i}", snippet="s") for i in range(5)]
+
+        monkeypatch.setattr(ws, "_search_ddg_news", fake_ddg)
+        out = ws._search_trusted_sites("q", limit=5)
+        assert len(calls) == 1, "first batch already met the limit → no further DDG calls"
+        assert len(out) == 5
+
+    def test_respects_max_batches(self, monkeypatch):
+        ws = _fresh_ws()
+        calls = {"n": 0}
+
+        def fake_ddg(q, limit, date_from=None, date_to=None):
+            calls["n"] += 1
+            return []
+
+        monkeypatch.setattr(ws, "_search_ddg_news", fake_ddg)
+        out = ws._search_trusted_sites("q", limit=5)
+        assert calls["n"] == ws._TRUSTED_SITES_MAX_BATCHES
+        assert out == []
+
+    def test_runs_after_ddg_before_gdelt_bq_when_all_empty(self):
+        ws = _fresh_ws()
+        ws.GCP_SA_KEY_JSON = "fake"  # so gdelt_bq would otherwise be tried
+        from tm.web_search import SearchResult
+        hit = [SearchResult(title="t", url="http://x", snippet="s")]
+        bq_spy = MagicMock(return_value=hit)
+        # Patch the FULL provider set empty (real keys may be loaded from secrets,
+        # so an unpatched provider could actually serve and pre-empt the fallback).
+        with patch.multiple(ws,
+            _search_gdelt=MagicMock(return_value=[]),
+            _search_google_cse=MagicMock(return_value=[]),
+            _search_serpapi_news=MagicMock(return_value=[]),
+            _search_serper_news=MagicMock(return_value=[]),
+            _search_brave_news=MagicMock(return_value=[]),
+            _search_tavily=MagicMock(return_value=[]),
+            _search_brightdata=MagicMock(return_value=[]),
+            _search_nimbleway=MagicMock(return_value=[]),
+            _search_scrapingbee=MagicMock(return_value=[]),
+            _search_newsdata_io=MagicMock(return_value=[]),
+            _search_dataforseo=MagicMock(return_value=[]),
+            _search_ddg_news=MagicMock(return_value=[]),       # plain DDG empty
+            _search_trusted_sites=MagicMock(return_value=hit),  # trusted serves
+            _search_gdelt_bq=bq_spy,
+        ):
+            res = ws.search_articles("live query")
+        assert res
+        assert ws.get_last_search_provider() == "trusted_sites"
+        assert not bq_spy.called, "trusted_sites must short-circuit before gdelt_bq"
+        chain = ws.get_last_search_provider_chain()
+        assert chain.index("trusted_sites") > chain.index("ddg")
+
+    def test_skipped_when_earlier_provider_serves(self):
+        ws = _fresh_ws()
+        from tm.web_search import SearchResult
+        hit = [SearchResult(title="t", url="http://x", snippet="s")]
+        ts_spy = MagicMock(return_value=hit)
+        with patch.multiple(ws,
+            _search_gdelt=MagicMock(return_value=hit),  # serves first
+            _search_ddg_news=MagicMock(return_value=[]),
+            _search_trusted_sites=ts_spy,
+        ):
+            ws.search_articles("q")
+        assert not ts_spy.called
+
+
+# ---------------------------------------------------------------------------
 # Google Custom Search provider (requires import)
 # ---------------------------------------------------------------------------
 

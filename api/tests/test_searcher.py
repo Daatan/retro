@@ -12,7 +12,7 @@ import time
 import pytest
 
 from forecast_api import searcher
-from forecast_api.models import SearchRequest
+from forecast_api.models import ProviderStatus, SearchRequest
 from tm.web_search import SearchResult
 
 
@@ -142,3 +142,31 @@ class TestCheckGoogleCse:
         monkeypatch.setattr(searcher._ws, "_GOOGLE_CSE_QUOTA_EXHAUSTED", True)
         st = await searcher._check_google_cse()
         assert st.exhausted is True and st.status == "exhausted"
+
+
+class TestHealthIncludesTrustedSites:
+    async def test_trusted_sites_present_and_not_counted_as_usable(self, monkeypatch):
+        # Avoid network: stub the providers that would hit live credit APIs, and
+        # null the key-only providers so they report not_configured fast.
+        async def _na():
+            return ProviderStatus(configured=False, exhausted=False, status="not_configured")
+        for fn in ("_check_dataforseo", "_check_serpapi", "_check_serper",
+                   "_check_scrapingbee", "_check_google_cse"):
+            monkeypatch.setattr(searcher, fn, _na)
+        for k in ("TAVILY_API_KEY", "BRAVE_API_KEY", "BRIGHTDATA_API_KEY",
+                  "NIMBLEWAY_API_KEY", "NEWSDATA_API_KEY", "GCP_SA_KEY_JSON"):
+            monkeypatch.setattr(searcher._ws, k, None)
+        # GDELT circuit/cooldown clear → its check is local (no network).
+        monkeypatch.setattr(searcher._ws, "_GDELT_DOC_BROKEN_UNTIL", 0.0)
+        monkeypatch.setattr(searcher._ws, "_GDELT_COOLDOWN_UNTIL", 0.0)
+
+        resp = await searcher.run_search_health()
+
+        assert "trusted_sites" in resp.providers
+        assert resp.providers["trusted_sites"].status == "ok"
+        # The key-less last-resort fallbacks must not inflate usable_count.
+        assert "ddg" in resp.providers
+        assert resp.usable_count == sum(
+            1 for k, p in resp.providers.items()
+            if k not in ("ddg", "trusted_sites") and p.configured and not p.exhausted and p.status == "ok"
+        )

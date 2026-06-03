@@ -241,11 +241,14 @@ async def run_search_health() -> SearchHealthResponse:
     results = await asyncio.gather(*coros)
     providers: dict[str, ProviderStatus] = dict(zip(names, results))
     providers["ddg"] = ProviderStatus(configured=True, exhausted=False, status="ok")
+    # Last-resort, key-less fallback (batched site: DDG over trusted domains) — always available.
+    providers["trusted_sites"] = ProviderStatus(configured=True, exhausted=False, status="ok")
 
-    # Usable = configured + not exhausted + status ok, excluding DDG (blocked on EC2)
+    # Usable = configured + not exhausted + status ok, excluding the key-less
+    # last-resort fallbacks (ddg, trusted_sites) so they don't mask a real drought.
     usable = sum(
         1 for k, p in providers.items()
-        if k != "ddg" and p.configured and not p.exhausted and p.status == "ok"
+        if k not in ("ddg", "trusted_sites") and p.configured and not p.exhausted and p.status == "ok"
     )
     overall = "ok" if usable >= 2 else ("degraded" if usable == 1 else "down")
 

@@ -161,4 +161,7 @@ class ForecastResponse(BaseModel):
     reason: Optional[str] = Field(default=None, description="When insufficient_data: why. One of no_search_results | all_articles_off_topic | all_fetches_failed | extraction_errors | no_usable_predictions | timeout | no_result")
     articles_found: int = Field(default=0, description="How many search results were considered before filtering")
     outcome_counts: dict[str, int] = Field(default_factory=dict, description="Per-article outcome histogram (gate_rejected, gate_error, empty_text, extract_error, unhandled_error, ok, …) — explains an empty forecast")
+    provider: str = Field(default="", description="Search provider that served the underlying article search. May be a pseudo-provider: 'caller' (articles supplied by the request), 'search_cache', or 'none'.")
+    provider_chain: list[str] = Field(default_factory=list, description="Full search fallback chain attempted, in order")
+    distilled_query: Optional[str] = Field(default=None, description="Keywords the question was distilled to before searching; null when no distillation was applied")
     debug: Optional[DebugInfo] = Field(default=None, description="Debug telemetry — only present when request includes debug=true")

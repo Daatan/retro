@@ -11,17 +11,13 @@ Two aggregation functions:
 
 import asyncio
 import json
-import instructor
-import litellm
 from statistics import median
 from collections import Counter
 from typing import Optional
 
 from .models import PredictionExtraction, CellSignal
 from .config import settings
-
-litellm.api_key = settings.openrouter_api_key
-_client = instructor.from_litellm(litellm.acompletion, mode=instructor.Mode.MD_JSON)
+from .llm import client as _client, RATE_LIMIT_BACKOFF, apply_routing, is_rate_limit_error
 
 STANCE_SPREAD_THRESHOLD = 0.4
 
@@ -101,29 +97,22 @@ async def aggregate_article_predictions(
         predictions_json=predictions_json,
     )
 
-    _BACKOFF = [30, 60, 120]
     last_exc: Exception = RuntimeError("no attempts")
-    for _attempt, wait in enumerate([0] + _BACKOFF):
+    for _attempt, wait in enumerate([0] + RATE_LIMIT_BACKOFF):
         if wait:
             await asyncio.sleep(wait)
         try:
-            kwargs: dict = dict(
+            kwargs = apply_routing(dict(
                 model=settings.extractor_model,
                 response_model=PredictionExtraction,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1000,
                 timeout=120,
                 max_retries=1,
-            )
-            if settings.model_api_base:
-                kwargs["api_base"] = settings.model_api_base
-                kwargs["api_key"] = settings.model_api_key
-            if settings.aws_region:
-                kwargs["aws_region_name"] = settings.aws_region
+            ))
             return await _client.chat.completions.create(**kwargs)
         except Exception as e:
-            err = str(e).lower()
-            if "rate" in err or "429" in err or "limit" in err or "temporarily" in err:
+            if is_rate_limit_error(e):
                 last_exc = e
                 continue
             raise

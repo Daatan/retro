@@ -1,6 +1,19 @@
 """Shared utilities used across tm.* modules."""
 
 from datetime import datetime
+from pathlib import Path
+
+
+def existing_articles(cell_dir: Path) -> list[Path]:
+    """List already-ingested ``article_*.json`` files in a cell directory.
+
+    Every batch ingestor (gdelt, gnews, site_search, web_search) opens with the
+    same cache-check idiom — ``if existing and not force: return len(existing)``
+    — and several reuse the count to continue article numbering. This centralises
+    the glob (and the missing-directory guard); callers keep their own
+    force/numbering logic, which legitimately differs between ingestors.
+    """
+    return list(cell_dir.glob("article_*.json")) if cell_dir.exists() else []
 
 
 def _is_number(v) -> bool:

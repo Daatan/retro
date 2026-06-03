@@ -1,11 +1,7 @@
 import asyncio
-import instructor
-import litellm
 from .models import GatekeeperOutput
 from .config import settings
-
-litellm.api_key = settings.openrouter_api_key
-_client = instructor.from_litellm(litellm.acompletion, mode=instructor.Mode.MD_JSON)
+from .llm import client as _client, RATE_LIMIT_BACKOFF, apply_routing, extract_usage, is_rate_limit_error
 
 PROMPT = """\
 You are a topic-relevance screener for a forecasting system.
@@ -64,13 +60,12 @@ async def check_is_prediction(
     event_name: str,
 ) -> tuple["GatekeeperOutput", dict]:
     """Returns (GatekeeperOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens."""
-    _BACKOFF = [30, 60, 120]
     last_exc: Exception = RuntimeError("no attempts")
-    for attempt, wait in enumerate([0] + _BACKOFF):
+    for attempt, wait in enumerate([0] + RATE_LIMIT_BACKOFF):
         if wait:
             await asyncio.sleep(wait)
         try:
-            kwargs: dict = dict(
+            kwargs = apply_routing(dict(
                 model=settings.gatekeeper_model,
                 response_model=GatekeeperOutput,
                 messages=[
@@ -87,25 +82,11 @@ async def check_is_prediction(
                 max_tokens=200,
                 timeout=90,
                 max_retries=1,
-            )
-            if settings.model_api_base:
-                kwargs["api_base"] = settings.model_api_base
-                kwargs["api_key"] = settings.model_api_key
-            if settings.aws_region:
-                kwargs["aws_region_name"] = settings.aws_region
+            ))
             output, completion = await _client.chat.completions.create_with_completion(**kwargs)
-            usage = {}
-            if completion and hasattr(completion, "usage") and completion.usage:
-                u = completion.usage
-                usage = {
-                    "prompt_tokens": getattr(u, "prompt_tokens", 0),
-                    "completion_tokens": getattr(u, "completion_tokens", 0),
-                    "total_tokens": getattr(u, "total_tokens", 0),
-                }
-            return output, usage
+            return output, extract_usage(completion)
         except Exception as e:
-            err = str(e).lower()
-            if "rate" in err or "429" in err or "limit" in err or "temporarily" in err:
+            if is_rate_limit_error(e):
                 last_exc = e
                 continue
             raise

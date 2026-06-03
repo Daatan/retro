@@ -44,20 +44,13 @@ MVP_EVENTS = [
     "F05",
 ]
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml",
-    "Accept-Language": "en-US,en;q=0.9",
-}
+from .article_text import BROWSER_HEADERS, extract_article_body
 
 
 async def _get(url: str, timeout: int = 20) -> Optional[BeautifulSoup]:
     try:
         async with httpx.AsyncClient(
-            headers=HEADERS, timeout=timeout, follow_redirects=True
+            headers=BROWSER_HEADERS, timeout=timeout, follow_redirects=True
         ) as client:
             r = await client.get(url)
             if r.status_code == 200:
@@ -158,17 +151,7 @@ async def fetch_article_text(url: str) -> str:
     soup = await _get(url, timeout=25)
     if not soup:
         return ""
-    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "iframe", "figure"]):
-        tag.extract()
-    # Prefer <article> element
-    for sel in ["article", "main", ".article-body", ".article-content", ".post-content",
-                '[class*="article"]', '[class*="story"]']:
-        el = soup.select_one(sel)
-        if el:
-            t = el.get_text(separator=" ", strip=True)
-            if len(t) > 300:
-                return t
-    return soup.get_text(separator=" ", strip=True)
+    return extract_article_body(soup)
 
 
 def _parse_date_from_url(url: str, fallback: str) -> str:
@@ -179,7 +162,7 @@ def _parse_date_from_url(url: str, fallback: str) -> str:
     return fallback
 
 
-from .utils import _is_ascii
+from .utils import _is_ascii, existing_articles
 
 
 def _in_window(date_str: str, start: datetime, end: datetime) -> bool:
@@ -197,7 +180,7 @@ async def ingest_cell(
     force: bool = False,
 ) -> int:
     cell_dir = raw_ingest_dir / source_id / event["id"]
-    existing = list(cell_dir.glob("article_*.json")) if cell_dir.exists() else []
+    existing = existing_articles(cell_dir)
     if existing and not force:
         return len(existing)
 

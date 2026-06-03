@@ -45,7 +45,8 @@ MVP_EVENTS = [
 ]
 
 
-from .utils import _is_ascii
+from .utils import _is_ascii, existing_articles
+from .article_text import extract_article_body
 
 
 async def _gdelt_query(
@@ -143,16 +144,7 @@ async def _fetch_text(url: str) -> str:
             r = await client.get(url)
             if r.status_code != 200:
                 return ""
-        soup = BeautifulSoup(r.text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header", "aside", "figure"]):
-            tag.extract()
-        for sel in ["article", "main", '[class*="article"]', '[class*="content"]']:
-            el = soup.select_one(sel)
-            if el:
-                text = el.get_text(separator=" ", strip=True)
-                if len(text) > 300:
-                    return text
-        return soup.get_text(separator=" ", strip=True)
+        return extract_article_body(BeautifulSoup(r.text, "html.parser"))
     except Exception:
         return ""
 
@@ -166,7 +158,7 @@ async def ingest_event(
     """Fetch and save GDELT articles for one event. Returns number saved."""
     eid = event["id"]
     cell_dir = raw_ingest_dir / "gdelt" / eid
-    existing = list(cell_dir.glob("article_*.json")) if cell_dir.exists() else []
+    existing = existing_articles(cell_dir)
     if existing and not force:
         return len(existing)
 

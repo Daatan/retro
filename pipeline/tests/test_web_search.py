@@ -208,6 +208,83 @@ class TestTavily432:
 
 
 # ---------------------------------------------------------------------------
+# GDELT BigQuery fallback ordering (requires import)
+# ---------------------------------------------------------------------------
+
+@needs_deps
+class TestGdeltBqFallbackOrder:
+    """gdelt_bq is low-relevance (URL-slug, recency-ranked). It must run EARLY
+    only for historical queries and as a LAST resort for live/recent ones, so it
+    doesn't short-circuit the chain before the real news providers."""
+
+    def _ws_with_one_result_provider(self, ws, winner: str):
+        """Configure keys and patch the chain so only *winner* returns a result;
+        every other provider returns []. Returns the SearchResult list it yields."""
+        from tm.web_search import SearchResult
+        ws.GCP_SA_KEY_JSON = "fake"
+        ws.SERPAPI_API_KEY = "fake"
+        ws._SERPAPI_QUOTA_EXHAUSTED = False
+        hit = [SearchResult(title="t", url="http://x", snippet="s")]
+
+        def mk(name):
+            return MagicMock(return_value=(hit if name == winner else []))
+
+        return patch.multiple(ws,
+            _search_gdelt=mk("gdelt"),
+            _search_gdelt_bq=mk("gdelt_bq"),
+            _search_serpapi_news=mk("serpapi"),
+            _search_serper_news=mk("serper"),
+            _search_tavily=mk("tavily"),
+            _search_brave_news=mk("brave"),
+            _search_brightdata=mk("brightdata"),
+            _search_nimbleway=mk("nimbleway"),
+            _search_scrapingbee=mk("scrapingbee"),
+            _search_newsdata_io=mk("newsdata"),
+            _search_dataforseo=mk("dataforseo"),
+            _search_ddg_news=mk("ddg"),
+        )
+
+    def test_live_query_tries_serpapi_before_gdelt_bq(self):
+        """date_from=None (live forecast): gdelt_bq must be a last resort, so the
+        SERP providers are tried first and gdelt_bq appears late in the chain."""
+        ws = _fresh_ws()
+        with self._ws_with_one_result_provider(ws, winner="gdelt_bq"):
+            results = ws.search_articles("Israel Hamas ceasefire")
+        assert results  # gdelt_bq still serves as the last resort
+        chain = ws.get_last_search_provider_chain()
+        assert ws.get_last_search_provider() == "gdelt_bq"
+        assert "serpapi" in chain, "SERP providers must be attempted on a live query"
+        assert chain.index("gdelt_bq") > chain.index("serpapi"), \
+            "gdelt_bq must come AFTER the SERP providers for live queries"
+
+    def test_historical_query_uses_gdelt_bq_before_serp(self):
+        """date_from older than the Doc window: gdelt_bq is the historical
+        specialist and runs early, short-circuiting before the SERP providers."""
+        from datetime import datetime, timedelta
+        ws = _fresh_ws()
+        old = datetime.utcnow() - timedelta(days=ws._GDELT_DOC_WINDOW_DAYS + 60)
+        with self._ws_with_one_result_provider(ws, winner="gdelt_bq"):
+            results = ws.search_articles("Assad regime falls", date_from=old)
+        assert results
+        chain = ws.get_last_search_provider_chain()
+        assert ws.get_last_search_provider() == "gdelt_bq"
+        assert "serpapi" not in chain, \
+            "historical early gdelt_bq must short-circuit before the SERP providers"
+
+    def test_gdelt_bq_not_tried_twice(self):
+        """When the historical early path runs and returns empty, the late
+        last-resort path must not call gdelt_bq again."""
+        from datetime import datetime, timedelta
+        ws = _fresh_ws()
+        old = datetime.utcnow() - timedelta(days=ws._GDELT_DOC_WINDOW_DAYS + 60)
+        # No provider returns anything → chain runs to the end.
+        with self._ws_with_one_result_provider(ws, winner="__none__"):
+            ws.search_articles("nothing matches", date_from=old)
+        chain = ws.get_last_search_provider_chain()
+        assert chain.count("gdelt_bq") == 1, "gdelt_bq must be attempted at most once"
+
+
+# ---------------------------------------------------------------------------
 # GDELT Doc circuit breaker (requires import)
 # ---------------------------------------------------------------------------
 

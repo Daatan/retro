@@ -1,5 +1,13 @@
 # Plan: expose the search provider in the `/forecast` response
 
+> **Status: implemented.** Resolved decisions: field names **`provider` / `provider_chain`**
+> (consistent with `/search`); **also expose `distilled_query`**; on a forecast-cache
+> hit report the **original engine** (cached response kept as-is). Correction applied:
+> the empty/insufficient response is built by the separate helper `_empty_response(...)`,
+> so `provider`/`provider_chain`/`distilled_query` are **threaded into it** at the
+> post-search call sites (not "rely on the default"). Required daatan follow-up (1 line,
+> separate PR): reader → `data.provider ?? data.provider_chain?.join(', ') ?? null`.
+
 ## Context
 
 Daatan (the Oracle's main client) now logs every Oracle call with the search engine

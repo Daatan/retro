@@ -474,6 +474,7 @@ async def _run_forecast_inner(
     search_start = time.perf_counter()
     search_provider: str
     provider_chain: list[str]
+    distilled_query: Optional[str] = None
     # Strip leading emoji/markers the frontend may prepend (e.g. "🤖 Question…")
     # before any provider sees the query; supplementary-plane chars (U+10000+) cover
     # virtually all emoji while leaving ordinary punctuation and non-ASCII text intact.
@@ -525,6 +526,9 @@ async def _run_forecast_inner(
             verbatim = search_query
             search_query = await _distill_query(verbatim)
             distilled = search_query != verbatim
+            # Capture the distilled keywords now, before the verbatim fallback
+            # below can overwrite search_query.
+            distilled_query = search_query if distilled else None
             try:
                 search_results, search_provider, provider_chain = await asyncio.to_thread(
                     _search_capturing, search_query, limit
@@ -560,7 +564,14 @@ async def _run_forecast_inner(
             articles_used=0,
             outcome="no_search_results",
         )
-        resp = _empty_response(req.question, reason="no_search_results", articles_found=0)
+        resp = _empty_response(
+            req.question,
+            reason="no_search_results",
+            articles_found=0,
+            provider=search_provider,
+            provider_chain=provider_chain,
+            distilled_query=distilled_query,
+        )
         if req.debug:
             resp.debug = DebugInfo(
                 search_query=search_query,
@@ -701,6 +712,9 @@ async def _run_forecast_inner(
             reason=reason,
             articles_found=len(search_results),
             outcome_counts=outcome_counts,
+            provider=search_provider,
+            provider_chain=provider_chain,
+            distilled_query=distilled_query,
             debug=empty_debug,
         )
 
@@ -755,6 +769,9 @@ async def _run_forecast_inner(
         articles_found=len(search_results),
         sources=source_signals,
         placeholder=False,
+        provider=search_provider,
+        provider_chain=provider_chain,
+        distilled_query=distilled_query,
         debug=debug_info,
     )
 
@@ -797,12 +814,17 @@ def _empty_response(
     reason: Optional[str] = None,
     articles_found: int = 0,
     outcome_counts: Optional[dict[str, int]] = None,
+    provider: str = "",
+    provider_chain: Optional[list[str]] = None,
+    distilled_query: Optional[str] = None,
     debug: Optional[DebugInfo] = None,
 ) -> ForecastResponse:
     """Return a maximally uncertain response when no usable articles are found.
 
     Always carries ``insufficient_data=True`` and a ``reason`` so callers can
     distinguish 'couldn't answer (and why)' from a real 0.5 probability.
+    ``provider``/``provider_chain`` surface which engine served (or failed to
+    serve) the search, so an empty forecast still says where it looked.
     """
     return ForecastResponse(
         question=question,
@@ -817,6 +839,9 @@ def _empty_response(
         reason=reason,
         articles_found=articles_found,
         outcome_counts=outcome_counts or {},
+        provider=provider,
+        provider_chain=provider_chain or [],
+        distilled_query=distilled_query,
         debug=debug,
     )
 

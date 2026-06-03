@@ -10,6 +10,7 @@ class SearchRequest(BaseModel):
     date_from: Optional[str] = Field(default=None, description="ISO date lower bound YYYY-MM-DD")
     date_to: Optional[str] = Field(default=None, description="ISO date upper bound YYYY-MM-DD")
     enrich_snippets: bool = Field(default=False, description="Scrape article URLs to fill empty snippets (adds latency)")
+    distill: bool = Field(default=True, description="On 0 verbatim results, distill the query to keywords (LLM; also translates non-Latin questions) and retry once")
 
 
 class SearchResultItem(BaseModel):
@@ -26,6 +27,7 @@ class SearchResponse(BaseModel):
     count: int
     provider: str = Field(default="", description="Provider that returned results (e.g. 'gdelt', 'brave', 'none')")
     provider_chain: list[str] = Field(default_factory=list, description="Full fallback chain attempted in order")
+    distilled_query: Optional[str] = Field(default=None, description="Keywords actually searched when the verbatim query returned 0 and distillation kicked in; null otherwise")
 
 
 class ProviderStatus(BaseModel):

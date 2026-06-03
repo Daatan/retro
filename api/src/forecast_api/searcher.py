@@ -12,6 +12,7 @@ import httpx
 
 from tm import web_search as _ws
 
+from .forecaster import _distill_query
 from .models import ProviderStatus, SearchHealthResponse, SearchRequest, SearchResponse, SearchResultItem
 
 logger = logging.getLogger(__name__)
@@ -30,19 +31,34 @@ async def run_search(req: SearchRequest) -> SearchResponse:
     # asyncio.to_thread, so we must read get_last_search_provider() *inside that
     # same thread*. Reading it here in the event-loop thread always returned
     # "none" (same bug the forecaster fixed with _search_capturing).
-    def _search_capturing():
-        results = _ws.search_articles(req.query, req.limit, date_from, date_to)
+    def _search_capturing(q: str):
+        results = _ws.search_articles(q, req.limit, date_from, date_to)
         return results, _ws.get_last_search_provider(), _ws.get_last_search_provider_chain()
 
-    results, provider, chain = await asyncio.to_thread(_search_capturing)
+    results, provider, chain = await asyncio.to_thread(_search_capturing, req.query)
+
+    # On 0 verbatim results, distill the query to keywords and retry once. Reuses
+    # the same _distill_query the /forecast pipeline uses (Nova Micro; it also
+    # translates non-Latin questions to English keywords). This lets /search
+    # consumers — e.g. daatan forecast-creation, which sends sentence-style or
+    # Hebrew queries — recover without re-implementing distillation. _distill_query
+    # is fail-open (returns the original question on error) and non-retrying, so
+    # the added cost is bounded to ~one LLM call + one more search.
+    distilled_query: Optional[str] = None
+    if not results and req.distill:
+        distilled = await _distill_query(req.query)
+        if distilled and distilled != req.query:
+            distilled_query = distilled
+            results, provider, chain = await asyncio.to_thread(_search_capturing, distilled)
+
     duration_ms = round((time.perf_counter() - t0) * 1000, 1)
 
     if req.enrich_snippets:
         results = await asyncio.to_thread(_ws.enrich_snippets, results)
 
     logger.info(
-        "event=search_done provider=%s chain=%s query=%r count=%d duration_ms=%s",
-        provider, chain, req.query[:60], len(results), duration_ms,
+        "event=search_done provider=%s chain=%s query=%r distilled=%r count=%d duration_ms=%s",
+        provider, chain, req.query[:60], (distilled_query or "")[:60], len(results), duration_ms,
     )
 
     return SearchResponse(
@@ -60,6 +76,7 @@ async def run_search(req: SearchRequest) -> SearchResponse:
         count=len(results),
         provider=provider,
         provider_chain=chain,
+        distilled_query=distilled_query,
     )
 
 

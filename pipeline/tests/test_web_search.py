@@ -244,18 +244,23 @@ class TestGdeltBqFallbackOrder:
             _search_ddg_news=mk("ddg"),
         )
 
-    def test_live_query_tries_serpapi_before_gdelt_bq(self):
-        """date_from=None (live forecast): gdelt_bq must be a last resort, so the
-        SERP providers are tried first and gdelt_bq appears late in the chain."""
+    def test_live_query_runs_gdelt_bq_after_ddg(self):
+        """date_from=None (live forecast): gdelt_bq must be the absolute last
+        resort — after the SERP providers AND after DDG, which returns relevant
+        results (incl. Hebrew). gdelt_bq's low-relevance results must not
+        short-circuit the chain before DDG."""
         ws = _fresh_ws()
         with self._ws_with_one_result_provider(ws, winner="gdelt_bq"):
             results = ws.search_articles("Israel Hamas ceasefire")
-        assert results  # gdelt_bq still serves as the last resort
+        assert results  # gdelt_bq still serves as the last resort when all else is empty
         chain = ws.get_last_search_provider_chain()
         assert ws.get_last_search_provider() == "gdelt_bq"
         assert "serpapi" in chain, "SERP providers must be attempted on a live query"
+        assert "ddg" in chain, "DDG must be attempted on a live query"
         assert chain.index("gdelt_bq") > chain.index("serpapi"), \
-            "gdelt_bq must come AFTER the SERP providers for live queries"
+            "gdelt_bq must come AFTER the SERP providers"
+        assert chain.index("gdelt_bq") > chain.index("ddg"), \
+            "gdelt_bq must come AFTER DDG (it is the absolute last resort)"
 
     def test_historical_query_uses_gdelt_bq_before_serp(self):
         """date_from older than the Doc window: gdelt_bq is the historical

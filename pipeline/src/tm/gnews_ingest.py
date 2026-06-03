@@ -53,7 +53,7 @@ from .models import CellStatus
 from .progress import load_state, update_cell
 from .web_search import search_articles as _web_search
 from .article_text import BROWSER_HEADERS, extract_article_body
-from .utils import existing_articles
+from .utils import existing_articles, save_article
 
 console = Console()
 
@@ -826,7 +826,6 @@ async def ingest_cell(
         lang=lang,
     )
 
-    cell_dir.mkdir(parents=True, exist_ok=True)
     saved = 0
 
     for art in candidates[:5]:
@@ -852,8 +851,7 @@ async def ingest_cell(
             "author":   "Unknown",
             "url":      url,
         }
-        out = cell_dir / f"article_{saved+1:02d}.json"
-        out.write_text(json.dumps(article, indent=2, ensure_ascii=False))
+        save_article(cell_dir, saved + 1, article)
         saved += 1
 
     if saved == 0:
@@ -883,8 +881,7 @@ async def ingest_cell(
                     "author":   "Unknown",
                     "url":      ws.url,
                 }
-                out = cell_dir / f"article_{saved+1:02d}.json"
-                out.write_text(json.dumps(article, indent=2, ensure_ascii=False))
+                save_article(cell_dir, saved + 1, article)
                 saved += 1
 
     if saved == 0:
@@ -901,8 +898,7 @@ async def ingest_cell(
                 "author":   "Unknown",
                 "url":      art["url"],
             }
-            out = cell_dir / f"article_{saved+1:02d}.json"
-            out.write_text(json.dumps(article, indent=2, ensure_ascii=False))
+            save_article(cell_dir, saved + 1, article)
             saved += 1
 
     if saved == 0:
@@ -919,8 +915,7 @@ async def ingest_cell(
                 "author":   "Unknown",
                 "url":      art["url"],
             }
-            out = cell_dir / f"article_{saved+1:02d}.json"
-            out.write_text(json.dumps(article, indent=2, ensure_ascii=False))
+            save_article(cell_dir, saved + 1, article)
             saved += 1
 
     if saved == 0:
@@ -940,8 +935,7 @@ async def ingest_cell(
                 "author":   "Unknown",
                 "url":      art["url"],
             }
-            out = cell_dir / f"article_{saved+1:02d}.json"
-            out.write_text(json.dumps(article, indent=2, ensure_ascii=False))
+            save_article(cell_dir, saved + 1, article)
             saved += 1
 
     return saved

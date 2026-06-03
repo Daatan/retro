@@ -1,5 +1,6 @@
 """Shared utilities used across tm.* modules."""
 
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +15,20 @@ def existing_articles(cell_dir: Path) -> list[Path]:
     force/numbering logic, which legitimately differs between ingestors.
     """
     return list(cell_dir.glob("article_*.json")) if cell_dir.exists() else []
+
+
+def save_article(cell_dir: Path, idx: int, article: dict) -> Path:
+    """Write one article to ``cell_dir/article_{idx:02d}.json`` and return its path.
+
+    Creates ``cell_dir`` if needed. The pretty-printed, ``ensure_ascii=False``
+    JSON dump was repeated at every ingestor save site (gnews alone had five);
+    the per-ingestor index logic stays with the caller, which is where it
+    legitimately differs.
+    """
+    cell_dir.mkdir(parents=True, exist_ok=True)
+    out = cell_dir / f"article_{idx:02d}.json"
+    out.write_text(json.dumps(article, indent=2, ensure_ascii=False))
+    return out
 
 
 def _is_number(v) -> bool:

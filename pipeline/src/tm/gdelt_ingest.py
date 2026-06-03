@@ -45,7 +45,7 @@ MVP_EVENTS = [
 ]
 
 
-from .utils import _is_ascii, existing_articles
+from .utils import _is_ascii, existing_articles, save_article
 from .article_text import extract_article_body
 
 
@@ -185,7 +185,6 @@ async def ingest_event(
     if not candidates:
         return 0
 
-    cell_dir.mkdir(parents=True, exist_ok=True)
     saved = 0
     article_idx = len(existing)
 
@@ -206,8 +205,7 @@ async def ingest_event(
             "source_domain": art["domain"],
         }
         article_idx += 1
-        out = cell_dir / f"article_{article_idx:02d}.json"
-        out.write_text(json.dumps(article, indent=2, ensure_ascii=False))
+        save_article(cell_dir, article_idx, article)
         saved += 1
 
     return saved

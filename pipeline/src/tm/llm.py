@@ -13,6 +13,9 @@ They now live here once. ``forecaster.py`` (in the API) also reuses
 ``apply_routing`` for its keyword-distillation call.
 """
 
+import asyncio
+import functools
+
 import instructor
 import litellm
 
@@ -66,3 +69,55 @@ def extract_usage(completion) -> dict:
             "total_tokens": getattr(u, "total_tokens", 0),
         }
     return {}
+
+
+def retry_on_rate_limit(func):
+    """Retry an async call on transient rate-limit / throttle errors.
+
+    Tries once, then waits ``RATE_LIMIT_BACKOFF`` seconds between further
+    attempts. Non-rate-limit exceptions propagate immediately; if every attempt
+    is rate-limited the last such exception is raised.
+    """
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        last_exc: Exception = RuntimeError("no attempts")
+        for wait in [0] + RATE_LIMIT_BACKOFF:
+            if wait:
+                await asyncio.sleep(wait)
+            try:
+                return await func(*args, **kwargs)
+            except Exception as exc:
+                if is_rate_limit_error(exc):
+                    last_exc = exc
+                    continue
+                raise
+        raise last_exc
+    return wrapper
+
+
+@retry_on_rate_limit
+async def complete_structured(
+    model: str,
+    response_model,
+    prompt: str,
+    *,
+    max_tokens: int,
+    timeout: int,
+):
+    """Make one structured-output LLM call and return ``(output, usage)``.
+
+    Centralises the kwargs assembly (``apply_routing``), the instructor call and
+    token-usage extraction shared by the gatekeeper, extractor and aggregator.
+    Wrapped in :func:`retry_on_rate_limit`, so callers get the shared backoff for
+    free. ``usage`` is ``{}`` when the backend reports none.
+    """
+    kwargs = apply_routing(dict(
+        model=model,
+        response_model=response_model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens,
+        timeout=timeout,
+        max_retries=1,
+    ))
+    output, completion = await client.chat.completions.create_with_completion(**kwargs)
+    return output, extract_usage(completion)

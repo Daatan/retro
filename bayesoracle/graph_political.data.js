@@ -1,0 +1,485 @@
+// AUTO-GENERATED from graph_political.json by gen_viewers.py — do not edit.
+window.GRAPH_POLITICAL = {
+  "name": "Israeli Politics 2026 \u2014 narrative DAG (re-noded)",
+  "as_of": "2026-06",
+  "notes": "Re-noded per RETHINK.md \u00a75: RIGHT_BLOC_61 is the hinge (not 'Likud largest'); SICK/DEAD/CONVICTED collapsed into BIBI_OUT; government modelled as a mutually-exclusive group; HAREDI_CRISIS added as a coalition-collapse trigger. Priors are expert/poll-based, not Polymarket-backed (this graph has no PM markets; see graph_pm.json for the data-backed graph).",
+  "nodes": [
+    {
+      "id": "TRUMP_BACK",
+      "label": "Trump backs Bibi",
+      "layer": 0,
+      "prior": 0.85,
+      "ci": [
+        0.76,
+        0.92
+      ]
+    },
+    {
+      "id": "IRAN_REB",
+      "label": "Iran rebuilds nukes",
+      "layer": 0,
+      "prior": 0.44,
+      "ci": [
+        0.3,
+        0.59
+      ]
+    },
+    {
+      "id": "BEYACHAD",
+      "label": "Beyachad (opp.) stays unified",
+      "layer": 0,
+      "prior": 0.68,
+      "ci": [
+        0.54,
+        0.8
+      ]
+    },
+    {
+      "id": "LIKUD_UNITY",
+      "label": "Likud stays unified",
+      "layer": 0,
+      "prior": 0.68,
+      "ci": [
+        0.54,
+        0.8
+      ]
+    },
+    {
+      "id": "HAREDI_CRISIS",
+      "label": "Haredi draft-law crisis live",
+      "layer": 0,
+      "prior": 0.55,
+      "ci": [
+        0.4,
+        0.7
+      ]
+    },
+    {
+      "id": "BIBI_OUT",
+      "label": "Bibi out (ill/dies/convicted)",
+      "layer": 0,
+      "prior": 0.15,
+      "ci": [
+        0.08,
+        0.25
+      ]
+    },
+    {
+      "id": "EARLY_ELECTION",
+      "label": "Early election held",
+      "layer": 1,
+      "prior": 0.9,
+      "ci": [
+        0.8,
+        0.97
+      ],
+      "outcome_date": "2026-10-01"
+    },
+    {
+      "id": "POLL_LEAD",
+      "label": "Right bloc leads polls",
+      "layer": 1,
+      "prior": 0.45,
+      "ci": [
+        0.32,
+        0.58
+      ]
+    },
+    {
+      "id": "RIGHT_BLOC_61",
+      "label": "Right/Bibi bloc reaches 61",
+      "layer": 2,
+      "prior": 0.42,
+      "ci": [
+        0.3,
+        0.55
+      ],
+      "outcome_date": "2026-10-15"
+    },
+    {
+      "id": "LIKUD_LARGEST",
+      "label": "Likud largest party",
+      "layer": 2,
+      "prior": 0.46,
+      "ci": [
+        0.34,
+        0.58
+      ]
+    },
+    {
+      "id": "HAREDI_J",
+      "label": "Haredi parties join coalition",
+      "layer": 3,
+      "prior": 0.74,
+      "ci": [
+        0.6,
+        0.85
+      ]
+    },
+    {
+      "id": "FARRIGHT_J",
+      "label": "Ben Gvir / Smotrich join",
+      "layer": 3,
+      "prior": 0.6,
+      "ci": [
+        0.45,
+        0.73
+      ]
+    },
+    {
+      "id": "COAL_FORMED",
+      "label": "Bibi forms government",
+      "layer": 3,
+      "prior": 0.4,
+      "ci": [
+        0.28,
+        0.53
+      ]
+    },
+    {
+      "id": "BIBI_PM",
+      "label": "Bibi: PM again",
+      "layer": 4,
+      "prior": 0.36,
+      "ci": [
+        0.24,
+        0.48
+      ]
+    },
+    {
+      "id": "OPP_GOVT",
+      "label": "Bennett/Lapid government",
+      "layer": 4,
+      "prior": 0.34,
+      "ci": [
+        0.22,
+        0.47
+      ]
+    },
+    {
+      "id": "OTHER_LIKUD_PM",
+      "label": "Another Likud PM",
+      "layer": 4,
+      "prior": 0.12,
+      "ci": [
+        0.05,
+        0.22
+      ]
+    },
+    {
+      "id": "PARDON",
+      "label": "Pardon granted",
+      "layer": 5,
+      "prior": 0.14,
+      "ci": [
+        0.07,
+        0.24
+      ]
+    },
+    {
+      "id": "JUDICIAL",
+      "label": "Judicial overhaul resumes",
+      "layer": 5,
+      "prior": 0.25,
+      "ci": [
+        0.14,
+        0.37
+      ]
+    },
+    {
+      "id": "HAREDI_LAW",
+      "label": "Haredi draft exemption law",
+      "layer": 5,
+      "prior": 0.28,
+      "ci": [
+        0.17,
+        0.41
+      ]
+    },
+    {
+      "id": "SAUDI",
+      "label": "Saudi normalization",
+      "layer": 5,
+      "prior": 0.17,
+      "ci": [
+        0.08,
+        0.28
+      ]
+    },
+    {
+      "id": "IRAN2",
+      "label": "2nd Iran operation",
+      "layer": 5,
+      "prior": 0.19,
+      "ci": [
+        0.1,
+        0.31
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "HAREDI_CRISIS",
+      "target": "EARLY_ELECTION",
+      "pYes": 0.97,
+      "pNo": 0.8,
+      "type": "primary"
+    },
+    {
+      "source": "BIBI_OUT",
+      "target": "EARLY_ELECTION",
+      "pYes": 0.97,
+      "pNo": 0.9,
+      "type": "secondary"
+    },
+    {
+      "source": "TRUMP_BACK",
+      "target": "POLL_LEAD",
+      "pYes": 0.52,
+      "pNo": 0.34,
+      "type": "primary"
+    },
+    {
+      "source": "LIKUD_UNITY",
+      "target": "POLL_LEAD",
+      "pYes": 0.55,
+      "pNo": 0.28,
+      "type": "primary"
+    },
+    {
+      "source": "BEYACHAD",
+      "target": "POLL_LEAD",
+      "pYes": 0.36,
+      "pNo": 0.56,
+      "type": "primary"
+    },
+    {
+      "source": "BIBI_OUT",
+      "target": "POLL_LEAD",
+      "pYes": 0.34,
+      "pNo": 0.48,
+      "type": "secondary"
+    },
+    {
+      "source": "POLL_LEAD",
+      "target": "RIGHT_BLOC_61",
+      "pYes": 0.72,
+      "pNo": 0.18,
+      "type": "primary"
+    },
+    {
+      "source": "LIKUD_UNITY",
+      "target": "RIGHT_BLOC_61",
+      "pYes": 0.5,
+      "pNo": 0.28,
+      "type": "primary"
+    },
+    {
+      "source": "BEYACHAD",
+      "target": "RIGHT_BLOC_61",
+      "pYes": 0.34,
+      "pNo": 0.55,
+      "type": "primary"
+    },
+    {
+      "source": "BIBI_OUT",
+      "target": "RIGHT_BLOC_61",
+      "pYes": 0.36,
+      "pNo": 0.45,
+      "type": "secondary"
+    },
+    {
+      "source": "POLL_LEAD",
+      "target": "LIKUD_LARGEST",
+      "pYes": 0.7,
+      "pNo": 0.22,
+      "type": "primary"
+    },
+    {
+      "source": "LIKUD_UNITY",
+      "target": "LIKUD_LARGEST",
+      "pYes": 0.55,
+      "pNo": 0.3,
+      "type": "primary"
+    },
+    {
+      "source": "RIGHT_BLOC_61",
+      "target": "HAREDI_J",
+      "pYes": 0.82,
+      "pNo": 0.55,
+      "type": "primary"
+    },
+    {
+      "source": "RIGHT_BLOC_61",
+      "target": "FARRIGHT_J",
+      "pYes": 0.7,
+      "pNo": 0.38,
+      "type": "primary"
+    },
+    {
+      "source": "RIGHT_BLOC_61",
+      "target": "COAL_FORMED",
+      "pYes": 0.88,
+      "pNo": 0.06,
+      "type": "primary"
+    },
+    {
+      "source": "HAREDI_J",
+      "target": "COAL_FORMED",
+      "pYes": 0.62,
+      "pNo": 0.3,
+      "type": "primary"
+    },
+    {
+      "source": "FARRIGHT_J",
+      "target": "COAL_FORMED",
+      "pYes": 0.58,
+      "pNo": 0.3,
+      "type": "secondary"
+    },
+    {
+      "source": "BIBI_OUT",
+      "target": "COAL_FORMED",
+      "pYes": 0.3,
+      "pNo": 0.45,
+      "type": "secondary"
+    },
+    {
+      "source": "COAL_FORMED",
+      "target": "BIBI_PM",
+      "pYes": 0.9,
+      "pNo": 0.05,
+      "type": "primary"
+    },
+    {
+      "source": "BIBI_OUT",
+      "target": "BIBI_PM",
+      "pYes": 0.02,
+      "pNo": 0.42,
+      "type": "primary"
+    },
+    {
+      "source": "BEYACHAD",
+      "target": "OPP_GOVT",
+      "pYes": 0.5,
+      "pNo": 0.2,
+      "type": "primary"
+    },
+    {
+      "source": "RIGHT_BLOC_61",
+      "target": "OPP_GOVT",
+      "pYes": 0.1,
+      "pNo": 0.55,
+      "type": "primary"
+    },
+    {
+      "source": "BIBI_OUT",
+      "target": "OTHER_LIKUD_PM",
+      "pYes": 0.45,
+      "pNo": 0.06,
+      "type": "primary"
+    },
+    {
+      "source": "RIGHT_BLOC_61",
+      "target": "OTHER_LIKUD_PM",
+      "pYes": 0.2,
+      "pNo": 0.08,
+      "type": "primary"
+    },
+    {
+      "source": "BIBI_PM",
+      "target": "PARDON",
+      "pYes": 0.36,
+      "pNo": 0.05,
+      "type": "primary"
+    },
+    {
+      "source": "TRUMP_BACK",
+      "target": "PARDON",
+      "pYes": 0.2,
+      "pNo": 0.07,
+      "type": "secondary"
+    },
+    {
+      "source": "BIBI_PM",
+      "target": "JUDICIAL",
+      "pYes": 0.8,
+      "pNo": 0.05,
+      "type": "primary"
+    },
+    {
+      "source": "BIBI_PM",
+      "target": "HAREDI_LAW",
+      "pYes": 0.58,
+      "pNo": 0.12,
+      "type": "primary"
+    },
+    {
+      "source": "HAREDI_J",
+      "target": "HAREDI_LAW",
+      "pYes": 0.48,
+      "pNo": 0.15,
+      "type": "secondary"
+    },
+    {
+      "source": "HAREDI_CRISIS",
+      "target": "HAREDI_LAW",
+      "pYes": 0.4,
+      "pNo": 0.2,
+      "type": "secondary"
+    },
+    {
+      "source": "TRUMP_BACK",
+      "target": "SAUDI",
+      "pYes": 0.26,
+      "pNo": 0.07,
+      "type": "primary"
+    },
+    {
+      "source": "BIBI_PM",
+      "target": "SAUDI",
+      "pYes": 0.2,
+      "pNo": 0.12,
+      "type": "secondary"
+    },
+    {
+      "source": "OPP_GOVT",
+      "target": "SAUDI",
+      "pYes": 0.34,
+      "pNo": 0.12,
+      "type": "secondary"
+    },
+    {
+      "source": "IRAN_REB",
+      "target": "IRAN2",
+      "pYes": 0.52,
+      "pNo": 0.06,
+      "type": "primary"
+    },
+    {
+      "source": "TRUMP_BACK",
+      "target": "IRAN2",
+      "pYes": 0.3,
+      "pNo": 0.1,
+      "type": "secondary"
+    },
+    {
+      "source": "BIBI_PM",
+      "target": "IRAN2",
+      "pYes": 0.34,
+      "pNo": 0.12,
+      "type": "secondary"
+    }
+  ],
+  "exclusive_groups": [
+    {
+      "id": "next_government",
+      "members": [
+        "BIBI_PM",
+        "OPP_GOVT",
+        "OTHER_LIKUD_PM"
+      ],
+      "allow_other": true
+    }
+  ]
+};

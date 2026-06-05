@@ -104,12 +104,13 @@ async def bayes_nodes(
     _: None = Depends(verify_api_key),
 ):
     """
-    Return BayesOracle probabilities for all 21 Israeli-politics nodes.
+    Return BayesOracle probabilities for the Israeli-politics DAG.
 
-    Each node has a prior probability (from Polymarket prices).  The DAG
-    propagates log-odds perturbations from parent nodes to children using the
-    law of total probability.  Supply ``observations`` to lock specific nodes
-    and see how the rest of the graph shifts.
+    Each node has a prior; children are computed from their parents via a
+    fitted-intercept logistic CPT (exact enumeration over parent states), so
+    baseline reproduces the priors and mutually-exclusive outcome groups stay on
+    the probability simplex.  The graph lives in ``bayesoracle/graph_political.json``.
+    Supply ``observations`` to lock specific nodes and see how the rest shifts.
     """
     obs: dict[str, float] = {}
     if observations:

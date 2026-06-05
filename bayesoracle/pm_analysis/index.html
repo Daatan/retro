@@ -6,6 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Israel Politics — PM × BayesOracle</title>
   <script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+  <!-- Shared inference engine + PM exclusive-group definitions (single source of truth) -->
+  <script src="../core.js"></script>
+  <script src="../graph_pm.data.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
@@ -518,32 +521,32 @@
     secondaryByTarget[e.target].push(e);
   });
 
-  function computeBayes(n) {
-    if (!n.primary) return null;
-
-    // Primary parent contribution (weight 1.0)
-    const pPrim = nodeMap[n.primary].bayes ?? nodeMap[n.primary].pm;
-    const pFromPrim = n.pY * pPrim + n.pN * (1 - pPrim);
-
-    // Secondary parent contributions (weight 0.5 each)
-    const secs = secondaryByTarget[n.id] || [];
-    let weightedSum = 1.0 * pFromPrim;
-    let totalWeight = 1.0;
-    secs.forEach(e => {
-      const pSrc = nodeMap[e.source].bayes ?? nodeMap[e.source].pm;
-      weightedSum += 0.5 * (e.pY * pSrc + e.pN * (1 - pSrc));
-      totalWeight += 0.5;
+  // Build an engine spec from the *current* node prices + edges, so live PM
+  // updates (poll / refresh) flow straight through. Primary edges weight 1,
+  // secondary 0.5; the PM-candidate mutually-exclusive group comes from the
+  // shared graph_pm.json definition and is renormalised onto the simplex.
+  function buildSpec() {
+    const spec = {
+      name: 'pm',
+      nodes: NODES.map(n => ({ id: n.id, prior: n.pm, layer: n.layer })),
+      edges: [],
+      exclusive_groups: (window.GRAPH_PM && window.GRAPH_PM.exclusive_groups) || [],
+    };
+    NODES.forEach(n => {
+      if (n.primary) spec.edges.push({ source: n.primary, target: n.id, pYes: n.pY, pNo: n.pN, type: 'primary' });
     });
-
-    return weightedSum / totalWeight;
+    EXTRA_EDGES.forEach(e => spec.edges.push({ source: e.source, target: e.target, pYes: e.pY, pNo: e.pN, type: 'secondary' }));
+    return spec;
   }
 
+  // recompute() now delegates to the shared core.js engine (reconcile mode):
+  // predict each node from its parents (no self-anchoring) → divergence vs PM.
   function recompute() {
-    const byLayer = [0,1,2,3,4].map(l => NODES.filter(n => n.layer === l));
-    byLayer.forEach(layer => layer.forEach(n => {
-      n.bayes = computeBayes(n);
+    const p = new BayesGraph(buildSpec()).reconcile();
+    NODES.forEach(n => {
+      n.bayes = n.primary ? p[n.id] : null;          // roots have no parent-implied value
       n.div   = (n.bayes !== null) ? Math.abs(n.pm - n.bayes) : null;
-    }));
+    });
   }
   recompute();
 

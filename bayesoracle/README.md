@@ -26,13 +26,26 @@ Static calibration layer that applies the **law of total probability** to a DAG 
 
 | File | Purpose |
 |---|---|
+| `core.py` | **Single inference engine** — load/validate a JSON graph, fitted-intercept logistic-CPT propagation, exclusive-group normalization |
+| `graph_political.json` | Re-noded narrative DAG (expert priors); served by the API |
+| `graph_pm.json` | Polymarket-backed DAG (auto-generated; backtestable) |
+| `build_pm_graph.py` | Generate `graph_pm.json` from `edge_weights.json` + `node_history/` |
+| `backtest.py` | Score the PM graph against realised prices vs persistence (Brier) |
+| `tests/test_core.py` | 15 unit tests for the engine |
 | `fetch_node_history.py` | Pull daily Polymarket CLOB price history for all 24 DAG nodes |
 | `calibrate_edges.py` | Estimate P(B\|A), P(B\|¬A) for each edge via LLM + news search |
 | `compute_edge_probs.py` | Blend LLM estimates with empirical price-correlation regression |
 | `edge_weights.json` | Output: 28 calibrated edges with pY/pN/blend fields |
 | `node_history/` | 24 JSON files — daily price history per node |
-| `graph.html` | Interactive what-if slider: drag any node → cascade downstream |
+| `graph.html` | Interactive what-if slider (legacy embedded model — see RETHINK.md) |
 | `pm_analysis/index.html` | BayesOracle vs PM divergence view, ranked by surprise |
+
+> **Architecture note (2026-06):** `core.py` is now the one engine. The API
+> (`/bayes/nodes`) loads `graph_political.json` through it; the backtest loads
+> `graph_pm.json` through it. The two HTML viewers still embed their own legacy
+> data + propagation — porting them to fetch the JSON specs is the remaining
+> follow-up. See `RETHINK.md` for the full critique and `backtest.py` output for
+> the current (modest, honest) skill vs a no-change baseline.
 
 ---
 

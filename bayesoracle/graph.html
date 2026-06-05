@@ -2,8 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>BayesOracle — Israeli Politics 2026</title>
+<title>BayesOracle — Israeli Politics 2026 (re-noded)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+<!-- Single source of truth: engine = core.js, data = graph_political.json (via gen_viewers.py) -->
+<script src="core.js"></script>
+<script src="graph_political.data.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: system-ui, sans-serif; background: #12131f; color: #eee; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -18,7 +21,7 @@ header p  { font-size: 11px; color: #778; margin-top: 2px; }
 #cy   { flex: 1; }
 
 #sidebar {
-  width: 222px; background: #16213e; border-left: 1px solid #0f3460;
+  width: 230px; background: #16213e; border-left: 1px solid #0f3460;
   display: flex; flex-direction: column; font-size: 11.5px; flex-shrink: 0;
 }
 #sidebar-inner { padding: 13px; overflow-y: auto; flex: 1; }
@@ -26,14 +29,11 @@ header p  { font-size: 11px; color: #778; margin-top: 2px; }
 .legend-row { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; color: #aaa; }
 .swatch { width: 11px; height: 11px; border-radius: 2px; flex-shrink: 0; }
 .s-sep { border: none; border-top: 1px solid #1e3050; margin: 11px 0; }
-.corr-table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
-.corr-table td { padding: 2px 0; color: #889; }
-.corr-table td:last-child { text-align: right; font-weight: 600; }
 
 #panel {
   position: absolute; bottom: 16px; left: 16px;
   background: #0d1628; border: 1px solid #2a4070; border-radius: 9px;
-  padding: 14px 16px; width: 300px;
+  padding: 14px 16px; width: 308px;
   display: none; z-index: 20; box-shadow: 0 6px 30px rgba(0,0,0,0.6);
 }
 #panel-title { font-size: 13.5px; font-weight: 600; color: #e2b96f; margin-bottom: 10px; line-height: 1.3; }
@@ -69,15 +69,15 @@ header p  { font-size: 11px; color: #778; margin-top: 2px; }
 .cond-lbl { color: #667; }
 .cond-val { color: #8abbe0; font-weight: 600; }
 
-.hint { position: absolute; bottom: 14px; right: 232px; font-size: 10px; color: #333; pointer-events: none; }
+.hint { position: absolute; bottom: 14px; right: 240px; font-size: 10px; color: #333; pointer-events: none; }
 </style>
 </head>
 <body>
 
 <header>
   <div>
-    <h1>BayesOracle — Israeli Politics 2026</h1>
-    <p>Click any node → drag slider to adjust probability → cascade updates live · May 2026</p>
+    <h1>BayesOracle — Israeli Politics 2026 <span style="color:#5aaa72;font-size:11px">· re-noded</span></h1>
+    <p>Click a node → drag slider → cascade updates live · hinge = right bloc ≥ 61 · engine: core.js</p>
   </div>
   <button id="reset-all">↺ Reset all</button>
 </header>
@@ -89,44 +89,36 @@ header p  { font-size: 11px; color: #778; margin-top: 2px; }
       <div class="s-head">Layers</div>
       <div class="legend-row"><div class="swatch" style="background:#5b9bd5"></div>Exogenous (roots)</div>
       <div class="legend-row"><div class="swatch" style="background:#f4a460"></div>Pre-election dynamics</div>
-      <div class="legend-row"><div class="swatch" style="background:#e06080"></div>The election (A)</div>
+      <div class="legend-row"><div class="swatch" style="background:#e06080"></div>The pivot — bloc ≥ 61</div>
       <div class="legend-row"><div class="swatch" style="background:#a78bc0"></div>Coalition formation</div>
-      <div class="legend-row"><div class="swatch" style="background:#5aaa72"></div>Government (Layer 4)</div>
+      <div class="legend-row"><div class="swatch" style="background:#5aaa72"></div>Government (exclusive)</div>
       <div class="legend-row"><div class="swatch" style="background:#7a8a9a"></div>Downstream outcomes</div>
 
       <hr class="s-sep">
       <div class="s-head">Edge labels</div>
       <div style="color:#889;line-height:1.6">
         <span style="color:#6aabdf">✓ XX%</span> P(child | parent ✓)<br>
-        <span style="color:#c09060">✗ XX%</span> P(child | parent ✗)
+        <span style="color:#c09060">✗ XX%</span> P(child | parent ✗)<br>
+        <span style="color:#556">dashed = secondary (½ weight)</span>
       </div>
 
       <hr class="s-sep">
-      <div class="s-head">Key correlations (ρ)</div>
-      <table class="corr-table">
-        <tr><td>Bibi lead ↔ Likud unity</td>   <td style="color:#f4a460">+0.65</td></tr>
-        <tr><td>Convicted ↔ Likud unity</td>   <td style="color:#5b9bd5">−0.50</td></tr>
-        <tr><td>Beyachad ↔ Opp governs</td>    <td style="color:#f4a460">+0.55</td></tr>
-        <tr><td>Iran rebuilds ↔ 2nd strike</td><td style="color:#e06080">+0.75</td></tr>
-        <tr><td>Bibi PM ↔ Opp governs</td>     <td style="color:#5b9bd5">−0.95</td></tr>
-      </table>
-
-      <hr class="s-sep">
-      <div class="s-head">Context — May 2026</div>
-      <div style="color:#667;line-height:1.7;font-size:10.5px">
-        🔫 <b style="color:#889">Iran war done</b> Feb 28 — "Op. Roaring Lion", Khamenei killed<br>
-        🏛️ <b style="color:#889">Dissolution bill</b> filed May 13 by Bibi coalition<br>
-        🤝 <b style="color:#889">Beyachad</b> = Bennett + Lapid (formed Apr 26)<br>
-        📊 <b style="color:#889">Polls</b>: Likud 28 vs Beyachad 25; blocs: 50 vs 60<br>
-        ⚖️ <b style="color:#889">Trial verdict</b> expected 2027; pardon rejected by MoJ<br>
-        🕊️ <b style="color:#889">Gaza ceasefire</b> Oct 2025 — all hostages recovered, stalled
+      <div class="s-head">What changed vs. the old graph</div>
+      <div style="color:#778;line-height:1.6;font-size:10.5px">
+        • <b style="color:#9ab">RIGHT_BLOC_61</b> is the hinge — largest party ≠ forms government.<br>
+        • <b style="color:#9ab">BIBI_OUT</b> merges ill / dies / convicted.<br>
+        • Government is a <b style="color:#9ab">mutually-exclusive</b> group (Σ ≤ 1) — no edge hacks.<br>
+        • <b style="color:#9ab">HAREDI_CRISIS</b> can trigger early elections.
       </div>
 
       <hr class="s-sep">
       <div class="s-head">How it works</div>
       <div style="color:#556;line-height:1.6;font-size:10.5px">
-        Changes propagate via <b style="color:#778">law of total probability</b> using a log-odds model.
-        🔒 pins a node; ↺ resets to prior.
+        Each child is a <b style="color:#778">fitted-intercept logistic CPT</b>, marginalised
+        exactly over parent states (core.js). Baseline reproduces the priors; mutually-exclusive
+        outcomes are renormalised to the simplex. 🔒 pins a node; ↺ resets to prior.
+        <br><br><i style="color:#445">Priors are expert/poll estimates — this graph is not
+        Polymarket-backed (see graph_pm).</i>
       </div>
     </div>
   </div>
@@ -159,6 +151,17 @@ header p  { font-size: 11px; color: #778; margin-top: 2px; }
 <div class="hint">BayesOracle · Israeli elections 2026 · probabilistic cascade</div>
 
 <script>
+// ── Engine + data (single source of truth) ───────────────────────────────────
+const SPEC = window.GRAPH_POLITICAL;
+const g = new BayesGraph(SPEC);
+const NODE = {};
+SPEC.nodes.forEach(n => NODE[n.id] = n);
+const priorP = g.prior;
+
+// obs = user overrides / locked nodes; everything else is computed by the engine
+let obs = {};
+let currentP = g.propagate(obs);
+
 const LC = {
   0: { bg:[28,56,90],  border:'#5b9bd5', text:'#9ccbf0' },
   1: { bg:[60,40,12],  border:'#f4a460', text:'#f4c890' },
@@ -167,7 +170,6 @@ const LC = {
   4: { bg:[14,44,24],  border:'#5aaa72', text:'#90d0a0' },
   5: { bg:[36,36,36],  border:'#7a8a9a', text:'#aabbc0' },
 };
-const LAYER_NAMES = ['Exogenous','Pre-election','The election','Coalition','Government','Outcome'];
 
 function rgbHex(r,g,b){ return '#'+[r,g,b].map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join(''); }
 function blendBg(base, delta) {
@@ -176,139 +178,32 @@ function blendBg(base, delta) {
   return rgbHex(base[0]*(1-t)+tgt[0]*t, base[1]*(1-t)+tgt[1]*t, base[2]*(1-t)+tgt[2]*t);
 }
 
-const NODES = [
-  // Layer 0 — Exogenous
-  { id:'ELECTIONS',   l1:'🏛️ Oct 2026 elections',    l2:'dissolution bill filed May 13',  layer:0, p:0.93, ci:[0.85,0.98] },
-  { id:'TRUMP',       l1:'🇺🇸 Trump backs Bibi',      l2:'active support & pardon push',   layer:0, p:0.85, ci:[0.76,0.92] },
-  { id:'BEYACHAD',    l1:'🤝 Beyachad stays unified', l2:'Bennett + Lapid bloc holds',     layer:0, p:0.68, ci:[0.54,0.80] },
-  { id:'IRAN_REB',    l1:'☢️ Iran rebuilds nukes',    l2:'post-Feb 2026 strike',            layer:0, p:0.44, ci:[0.30,0.59] },
-  { id:'LIKUD_UNITY', l1:'🫂 Likud stays unified',    l2:'no major defections',             layer:0, p:0.68, ci:[0.54,0.80] },
+// Hand-placed positions — one column band per layer.
+const POSITIONS = {
+  TRUMP_BACK:{x:80,y:70}, HAREDI_CRISIS:{x:250,y:70}, LIKUD_UNITY:{x:430,y:70},
+  BEYACHAD:{x:610,y:70}, BIBI_OUT:{x:780,y:70}, IRAN_REB:{x:950,y:70},
+  EARLY_ELECTION:{x:170,y:200}, POLL_LEAD:{x:470,y:200},
+  RIGHT_BLOC_61:{x:400,y:335}, LIKUD_LARGEST:{x:640,y:335},
+  HAREDI_J:{x:260,y:460}, FARRIGHT_J:{x:450,y:460}, COAL_FORMED:{x:650,y:460},
+  BIBI_PM:{x:300,y:590}, OTHER_LIKUD_PM:{x:500,y:590}, OPP_GOVT:{x:710,y:590},
+  PARDON:{x:90,y:720}, JUDICIAL:{x:280,y:720}, HAREDI_LAW:{x:470,y:720},
+  SAUDI:{x:660,y:720}, IRAN2:{x:880,y:720},
+};
 
-  // Layer 1 — Pre-election
-  { id:'BIBI_LEAD',  l1:'📊 Likud leads polls',      l2:'on election day',                 layer:1, p:0.44, ci:[0.32,0.57] },
-  { id:'CONVICTED',  l1:'🔒 Bibi convicted',          l2:'before Oct 2026 elections',       layer:1, p:0.08, ci:[0.03,0.16] },
-  { id:'SICK',       l1:'🏥 Bibi health crisis',      l2:'serious illness',                 layer:1, p:0.13, ci:[0.07,0.22] },
-  { id:'DEAD',       l1:'💀 Bibi dies',               l2:'before elections',                layer:1, p:0.04, ci:[0.01,0.09] },
-
-  // Layer 2 — Key event
-  { id:'A', l1:'⭐ Likud wins most seats', l2:'largest party in Knesset', layer:2, p:0.46, ci:[0.34,0.58] },
-
-  // Layer 3 — Coalition
-  { id:'MANDATE',    l1:'📜 Bibi gets mandate',       l2:'to form coalition',               layer:3, p:0.44, ci:[0.32,0.56] },
-  { id:'HAREDI_J',   l1:'🕍 Haredi parties join',     l2:'UTJ + Shas in coalition',         layer:3, p:0.74, ci:[0.60,0.85] },
-  { id:'FARRIGHT_J', l1:'🦅 Ben Gvir / Smotrich',     l2:'join coalition',                  layer:3, p:0.60, ci:[0.45,0.73] },
-  { id:'COAL_61',    l1:'✅ Coalition hits 61',        l2:'seats — majority secured',        layer:3, p:0.34, ci:[0.22,0.47] },
-
-  // Layer 4 — Government
-  { id:'PM5',    l1:'👑 Bibi: 5th term PM',        l2:'Netanyahu governs again',         layer:4, p:0.32, ci:[0.21,0.44] },
-  { id:'OPP_PM', l1:'🔄 Bennett / Lapid PM',       l2:'opposition forms government',     layer:4, p:0.38, ci:[0.26,0.50] },
-
-  // Layer 5 — Outcomes
-  { id:'PARDON',     l1:'📄 Pardon granted',          l2:'presidential pardon for Bibi',    layer:5, p:0.14, ci:[0.07,0.24] },
-  { id:'JUDICIAL',   l1:'⚖️ Judicial overhaul',       l2:'resumes under new govt',          layer:5, p:0.25, ci:[0.14,0.37] },
-  { id:'HAREDI_LAW', l1:'📋 Haredi draft exemption',  l2:'law passed',                      layer:5, p:0.28, ci:[0.17,0.41] },
-  { id:'SAUDI',      l1:'🌙 Saudi normalization',     l2:'deal signed 2026–27',             layer:5, p:0.17, ci:[0.08,0.28] },
-  { id:'IRAN2',      l1:'💥 2nd Iran operation',      l2:'strikes resume 2027',             layer:5, p:0.19, ci:[0.10,0.31] },
-];
-
-const EDGES = [
-  // Pre-election dynamics
-  ['TRUMP',       'BIBI_LEAD',   0.56, 0.30],
-  ['BEYACHAD',    'BIBI_LEAD',   0.36, 0.58],
-  ['LIKUD_UNITY', 'BIBI_LEAD',   0.54, 0.28],
-  ['SICK',        'DEAD',        0.28, 0.03],
-
-  // Into A
-  ['ELECTIONS',   'A',           0.46, 0.01],
-  ['TRUMP',       'A',           0.54, 0.32],
-  ['BEYACHAD',    'A',           0.34, 0.62],
-  ['BIBI_LEAD',   'A',           0.78, 0.20],
-  ['CONVICTED',   'A',           0.16, 0.50],
-  ['LIKUD_UNITY', 'A',           0.54, 0.28],
-  ['SICK',        'A',           0.30, 0.48],
-  ['DEAD',        'A',           0.05, 0.48],
-
-  // Coalition
-  ['A',           'MANDATE',     0.96, 0.05],
-  ['A',           'HAREDI_J',    0.78, 0.56],
-  ['A',           'FARRIGHT_J',  0.64, 0.38],
-  ['A',           'OPP_PM',      0.06, 0.58],
-  ['MANDATE',     'COAL_61',     0.54, 0.07],
-  ['HAREDI_J',    'COAL_61',     0.62, 0.22],
-  ['FARRIGHT_J',  'COAL_61',     0.56, 0.19],
-  ['BEYACHAD',    'OPP_PM',      0.48, 0.22],
-
-  // Government
-  ['COAL_61',     'PM5',         0.93, 0.04],
-  ['PM5',         'OPP_PM',      0.02, 0.56],
-
-  // Outcomes
-  ['PM5',         'PARDON',      0.38, 0.04],
-  ['TRUMP',       'PARDON',      0.22, 0.07],
-  ['PM5',         'JUDICIAL',    0.80, 0.04],
-  ['PM5',         'HAREDI_LAW',  0.58, 0.11],
-  ['HAREDI_J',    'HAREDI_LAW',  0.46, 0.14],
-  ['PM5',         'SAUDI',       0.04, 0.24],
-  ['OPP_PM',      'SAUDI',       0.36, 0.05],
-  ['TRUMP',       'SAUDI',       0.24, 0.08],
-  ['PM5',         'IRAN2',       0.36, 0.09],
-  ['IRAN_REB',    'IRAN2',       0.52, 0.05],
-  ['TRUMP',       'IRAN2',       0.32, 0.09],
-];
-
-const priorP  = Object.fromEntries(NODES.map(n => [n.id, n.p]));
-const currentP = { ...priorP };
-const locked   = new Set();
-
-const parentIdx = {}, childIdx = {}, condByTgt = {};
-EDGES.forEach(([s,t,pY,pN]) => {
-  (parentIdx[t]  = parentIdx[t]  ||[]).push({ source:s, pYes:pY, pNo:pN });
-  (childIdx[s]   = childIdx[s]   ||[]).push(t);
-  (condByTgt[t]  = condByTgt[t]  ||[]).push({ source:s, pYes:pY, pNo:pN });
-});
-
-const TOPO = [...NODES].sort((a,b) => a.layer - b.layer).map(n => n.id);
-
-function logit(p) { p = Math.max(0.001, Math.min(0.999, p)); return Math.log(p/(1-p)); }
-function sigmoid(x) { return 1/(1+Math.exp(-x)); }
-
-function computeP(id) {
-  const parents = parentIdx[id];
-  if (!parents || locked.has(id)) return currentP[id];
-  let lo = logit(priorP[id]);
-  for (const { source, pYes, pNo } of parents)
-    lo += (logit(pYes) - logit(pNo)) * (currentP[source] - priorP[source]);
-  return Math.max(0.01, Math.min(0.99, sigmoid(lo)));
-}
-
-function propagate(startId) {
-  const seen = new Set([startId]), q = [startId], order = [];
-  while (q.length) {
-    const id = q.shift();
-    for (const c of (childIdx[id]||[]))
-      if (!seen.has(c)) { seen.add(c); q.push(c); order.push(c); }
-  }
-  order.sort((a,b) => TOPO.indexOf(a) - TOPO.indexOf(b));
-  for (const id of order) currentP[id] = computeP(id);
-  for (const id of [startId, ...order]) refreshNode(id);
-  if (selectedId) refreshPanel(selectedId);
-}
+function recompute() { currentP = g.propagate(obs); }
 
 function nodeLabel(id) {
-  const n = NODES.find(x => x.id === id);
-  const p = currentP[id], delta = p - priorP[id];
+  const n = NODE[id], p = currentP[id], delta = p - priorP[id];
   let dStr = '';
   if (Math.abs(delta) >= 0.005)
     dStr = (delta > 0 ? ' ▲' : ' ▼') + Math.abs(delta*100).toFixed(0) + '%';
-  return `${n.l1}\n${(p*100).toFixed(0)}%${dStr}${locked.has(id)?' 🔒':''}\n${n.l2}`;
+  return `${n.label}\n${(p*100).toFixed(0)}%${dStr}${id in obs ? ' 🔒' : ''}`;
 }
 
 function refreshNode(id) {
   const el = cy.getElementById(id);
   if (!el.length) return;
-  const n = NODES.find(x => x.id === id);
-  const delta = currentP[id] - priorP[id];
-  const isLocked = locked.has(id);
+  const n = NODE[id], delta = currentP[id] - priorP[id], isLocked = id in obs;
   el.data('label', nodeLabel(id));
   el.data('bgColor', blendBg(LC[n.layer].bg, delta));
   el.data('borderColor',
@@ -317,21 +212,18 @@ function refreshNode(id) {
     delta < -0.04 ? '#d06060' :
     LC[n.layer].border);
   el.style({
-    'border-width': isLocked ? 3.5 : (['A','PM5','OPP_PM'].includes(id) ? 3 : 2),
+    'border-width': isLocked ? 3.5 : (id === 'RIGHT_BLOC_61' ? 3 : 2),
     'border-style': isLocked ? 'double' : 'solid',
   });
 }
-
-function refreshAll() { NODES.forEach(n => refreshNode(n.id)); }
+function refreshAll() { SPEC.nodes.forEach(n => refreshNode(n.id)); }
 
 let selectedId = null;
 
 function refreshPanel(id) {
   if (!id) return;
-  const n = NODES.find(x => x.id === id);
-  const p = currentP[id], pr = priorP[id], delta = p - pr;
-
-  document.getElementById('panel-title').textContent = n.l1 + ' — ' + n.l2;
+  const n = NODE[id], p = currentP[id], pr = priorP[id], delta = p - pr;
+  document.getElementById('panel-title').textContent = n.label;
   document.getElementById('p-cur').textContent   = (p*100).toFixed(1) + '%';
   document.getElementById('p-prior').textContent = (pr*100).toFixed(1) + '%';
 
@@ -343,18 +235,17 @@ function refreshPanel(id) {
   document.getElementById('pslider-pct').textContent = Math.round(p*100)+'%';
 
   const bl = document.getElementById('btn-lock');
-  if (locked.has(id)) { bl.textContent='🔓 Unlock'; bl.classList.add('active'); }
-  else                { bl.textContent='🔒 Lock';   bl.classList.remove('active'); }
+  if (id in obs) { bl.textContent='🔓 Unlock'; bl.classList.add('active'); }
+  else           { bl.textContent='🔒 Lock';   bl.classList.remove('active'); }
 
-  const conds = condByTgt[id]||[];
+  const conds = SPEC.edges.filter(e => e.target === id);
   const cb = document.getElementById('cond-block');
   if (conds.length) {
     document.getElementById('cond-rows').innerHTML = conds.map(r => {
-      const sName = NODES.find(x=>x.id===r.source)?.l1.replace(/^\S+\s/,'') || r.source;
-      const implied = r.pYes*currentP[r.source] + r.pNo*(1-currentP[r.source]);
-      return `<div class="cond-row"><span class="cond-lbl">${sName} ✓</span><span class="cond-val">${(r.pYes*100).toFixed(0)}%</span></div>
-              <div class="cond-row"><span class="cond-lbl">${sName} ✗</span><span class="cond-val">${(r.pNo*100).toFixed(0)}%</span></div>
-              <div class="cond-row" style="margin-bottom:5px"><span class="cond-lbl" style="color:#446">→ LToTP now</span><span class="cond-val" style="color:#7aad9a">${(implied*100).toFixed(0)}%</span></div>`;
+      const sName = (NODE[r.source] ? NODE[r.source].label : r.source);
+      const tag = r.type === 'secondary' ? ' <span style="color:#556">(½)</span>' : '';
+      return `<div class="cond-row"><span class="cond-lbl">${sName} ✓${tag}</span><span class="cond-val">${(r.pYes*100).toFixed(0)}%</span></div>
+              <div class="cond-row" style="margin-bottom:4px"><span class="cond-lbl">${sName} ✗</span><span class="cond-val">${(r.pNo*100).toFixed(0)}%</span></div>`;
     }).join('');
     cb.style.display = 'block';
   } else cb.style.display = 'none';
@@ -363,50 +254,20 @@ function refreshPanel(id) {
   document.getElementById('p-children').textContent = cy.getElementById(id).outgoers('node').map(x=>x.data('id')).join(', ')||'—';
 }
 
-// Hand-placed positions — one column per layer, nodes ordered to minimise edge crossings
-const POSITIONS = {
-  // Layer 0 — Exogenous (y 70)
-  ELECTIONS:   { x: 85,  y: 70  },
-  TRUMP:       { x: 275, y: 70  },
-  LIKUD_UNITY: { x: 465, y: 70  },
-  BEYACHAD:    { x: 665, y: 70  },
-  IRAN_REB:    { x: 870, y: 70  },
-  // Layer 1 — Pre-election (y 200)
-  CONVICTED:   { x: 130, y: 200 },
-  BIBI_LEAD:   { x: 380, y: 200 },
-  SICK:        { x: 590, y: 200 },
-  DEAD:        { x: 775, y: 200 },
-  // Layer 2 — The election (y 335)
-  A:           { x: 420, y: 335 },
-  // Layer 3 — Coalition inputs (y 460) + result (y 560)
-  MANDATE:     { x: 185, y: 460 },
-  HAREDI_J:    { x: 370, y: 460 },
-  FARRIGHT_J:  { x: 560, y: 460 },
-  COAL_61:     { x: 378, y: 558 },
-  // Layer 4 — Government (y 650)
-  PM5:         { x: 295, y: 650 },
-  OPP_PM:      { x: 648, y: 650 },
-  // Layer 5 — Outcomes (y 775)
-  PARDON:      { x: 100, y: 775 },
-  JUDICIAL:    { x: 278, y: 775 },
-  HAREDI_LAW:  { x: 460, y: 775 },
-  SAUDI:       { x: 648, y: 775 },
-  IRAN2:       { x: 850, y: 775 },
-};
-
-const cyNodes = NODES.map(n => ({
+const cyNodes = SPEC.nodes.map(n => ({
   data: {
-    id:n.id, label:nodeLabel(n.id), l1:n.l1, l2:n.l2, layer:n.layer,
+    id:n.id, label:nodeLabel(n.id), layer:n.layer,
     bgColor: blendBg(LC[n.layer].bg, 0),
     borderColor: LC[n.layer].border,
     textColor: LC[n.layer].text,
   },
-  position: POSITIONS[n.id],
+  position: POSITIONS[n.id] || {x:0,y:0},
 }));
 
-const cyEdges = EDGES.map(([s,t,pY,pN],i) => ({
-  data:{ id:`e${i}`, source:s, target:t, pYes:pY, pNo:pN,
-         label:`✓${(pY*100).toFixed(0)}%  ✗${(pN*100).toFixed(0)}%` }
+const cyEdges = SPEC.edges.map((e,i) => ({
+  data:{ id:`e${i}`, source:e.source, target:e.target,
+         label:`✓${(e.pYes*100).toFixed(0)}%  ✗${(e.pNo*100).toFixed(0)}%`,
+         secondary: e.type === 'secondary' ? 1 : 0 }
 }));
 
 const cy = cytoscape({
@@ -414,16 +275,14 @@ const cy = cytoscape({
   elements: { nodes: cyNodes, edges: cyEdges },
   style: [
     { selector:'node', style:{
-        shape:'round-rectangle', width:162, height:62,
+        shape:'round-rectangle', width:150, height:48,
         'background-color':'data(bgColor)', 'border-color':'data(borderColor)', 'border-width':2,
         color:'data(textColor)', 'font-size':10.5,
         'text-valign':'center', 'text-halign':'center',
-        label:'data(label)', 'text-wrap':'wrap', 'text-max-width':152,
+        label:'data(label)', 'text-wrap':'wrap', 'text-max-width':140,
         'line-height':1.35, padding:5,
     }},
-    { selector:'node#A',      style:{ width:172, height:68, 'border-width':3, 'font-size':11.5, 'font-weight':'bold' }},
-    { selector:'node#PM5',    style:{ 'border-width':3, 'font-weight':'bold' }},
-    { selector:'node#OPP_PM', style:{ 'border-width':3, 'font-weight':'bold' }},
+    { selector:'node#RIGHT_BLOC_61', style:{ width:162, height:56, 'border-width':3, 'font-size':11.5, 'font-weight':'bold' }},
     { selector:'node:selected', style:{ 'border-width':4, 'border-color':'#fff', 'border-style':'solid' }},
     { selector:'edge', style:{
         width:1.5, 'line-color':'#2a3d55', 'target-arrow-color':'#3a5070',
@@ -432,6 +291,7 @@ const cy = cytoscape({
         'text-background-color':'#12131f', 'text-background-opacity':0.9, 'text-background-padding':'2px',
         'text-rotation':'autorotate', 'text-margin-y':-7,
     }},
+    { selector:'edge[secondary=1]', style:{ 'line-style':'dashed', 'line-color':'#243044', width:1 }},
     { selector:'edge.hi', style:{ 'line-color':'#4a7aaa', 'target-arrow-color':'#5a8abb', width:2.5, color:'#8aaccc' }},
   ],
   layout:{ name:'preset', animate:false },
@@ -444,7 +304,6 @@ cy.on('tap','node', evt => {
   refreshPanel(selectedId);
   document.getElementById('panel').style.display = 'block';
 });
-
 cy.on('tap', evt => {
   if (evt.target === cy) {
     document.getElementById('panel').style.display = 'none';
@@ -455,34 +314,32 @@ cy.on('tap', evt => {
 
 document.getElementById('pslider').addEventListener('input', function() {
   if (!selectedId) return;
-  currentP[selectedId] = parseInt(this.value)/100;
+  obs[selectedId] = parseInt(this.value)/100;       // slider override sticks until reset
   document.getElementById('pslider-pct').textContent = this.value+'%';
-  propagate(selectedId);
+  recompute(); refreshAll(); refreshPanel(selectedId);
 });
 
 document.getElementById('btn-lock').addEventListener('click', () => {
   if (!selectedId) return;
-  locked.has(selectedId) ? locked.delete(selectedId) : locked.add(selectedId);
-  refreshNode(selectedId);
-  refreshPanel(selectedId);
+  if (selectedId in obs) delete obs[selectedId];
+  else obs[selectedId] = currentP[selectedId];      // pin current computed value
+  recompute(); refreshAll(); refreshPanel(selectedId);
 });
 
 document.getElementById('btn-reset').addEventListener('click', () => {
   if (!selectedId) return;
-  locked.delete(selectedId);
-  currentP[selectedId] = priorP[selectedId];
-  propagate(selectedId);
-  refreshPanel(selectedId);
+  delete obs[selectedId];
+  recompute(); refreshAll(); refreshPanel(selectedId);
 });
 
 document.getElementById('reset-all').addEventListener('click', () => {
-  locked.clear();
-  NODES.forEach(n => { currentP[n.id] = priorP[n.id]; });
-  refreshAll();
+  obs = {};
+  recompute(); refreshAll();
   if (selectedId) refreshPanel(selectedId);
 });
 
-cy.ready(() => { cy.fit(undefined, 28); });
+refreshAll();
+cy.ready(() => { cy.fit(undefined, 30); });
 </script>
 </body>
 </html>

@@ -181,6 +181,38 @@ class Graph:
                 _normalise_group(current, grp, locked)
         return current
 
+    def reconcile(self, values: Optional[dict[str, float]] = None) -> dict[str, float]:
+        """
+        Predict each node *purely from its parents* (no self-prior anchoring) via
+        linear law-of-total-probability — primary edges at weight 1, secondary at
+        0.5 — then renormalise exclusive groups.
+
+        This is the divergence/diagnostic model used by pm_analysis: comparing a
+        node's parent-implied probability to its own market price surfaces where
+        the DAG and the market disagree.  Unlike ``propagate`` it does **not** fit
+        an intercept to the node's own prior, so the prior/edge mismatch is *kept*,
+        not absorbed.  Nodes without parents keep their prior.
+        """
+        current = dict(self.prior)
+        if values:
+            for nid, v in values.items():
+                if nid in current:
+                    current[nid] = min(1.0, max(0.0, float(v)))
+        for nid in self.topo:
+            ps = self.parents.get(nid)
+            if not ps:
+                continue
+            wsum = tw = 0.0
+            for par in ps:
+                w = 0.5 if par["type"] == "secondary" else 1.0
+                psrc = current[par["source"]]
+                wsum += w * (par["pYes"] * psrc + par["pNo"] * (1.0 - psrc))
+                tw += w
+            current[nid] = wsum / tw if tw else current[nid]
+            for grp in self._group_after.get(nid, []):
+                _normalise_group(current, grp, set())
+        return current
+
     # ---- presentation ----------------------------------------------------------
     def compute_nodes(self, observations: Optional[dict[str, float]] = None) -> list[dict]:
         """API-facing view: list of node dicts sorted by layer then id."""

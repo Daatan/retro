@@ -148,6 +148,33 @@ def test_pm_candidate_group_never_exceeds_one():
     assert sum(out[m] for m in members if m in out) <= 1.0 + 1e-6
 
 
+# ── reconcile mode (pm_analysis divergence model) ─────────────────────────────
+def test_reconcile_predicts_from_parents_not_self_prior():
+    """reconcile ignores the node's own prior — a single primary parent gives
+    plain LToTP pY*P + pN*(1-P)."""
+    spec = _toy()
+    spec["nodes"][1]["prior"] = 0.4  # child's own prior must NOT anchor the result
+    spec["edges"] = [{"source": "R", "target": "C", "pYes": 0.8, "pNo": 0.2}]
+    g = core.Graph(spec)
+    out = g.reconcile()  # R at prior 0.5 -> 0.8*0.5 + 0.2*0.5 = 0.5
+    assert out["C"] == pytest.approx(0.5, abs=1e-9)
+
+
+def test_reconcile_secondary_half_weight():
+    spec = {
+        "name": "r",
+        "nodes": [{"id": "P", "layer": 0, "prior": 1.0}, {"id": "S", "layer": 0, "prior": 1.0},
+                  {"id": "C", "layer": 1, "prior": 0.3}],
+        "edges": [
+            {"source": "P", "target": "C", "pYes": 0.6, "pNo": 0.1, "type": "primary"},
+            {"source": "S", "target": "C", "pYes": 0.8, "pNo": 0.2, "type": "secondary"},
+        ],
+    }
+    g = core.Graph(spec)
+    # P=S=1 -> (1.0*0.6 + 0.5*0.8) / 1.5
+    assert g.reconcile()["C"] == pytest.approx((0.6 + 0.4) / 1.5, abs=1e-9)
+
+
 # ── topology ──────────────────────────────────────────────────────────────────
 def test_topo_orders_parents_before_children():
     g = core.load_graph(SPECS / "graph_political.json")

@@ -314,14 +314,14 @@
       </div>
     </div>
     <div id="topbar-actions">
-      <span id="data-badge" title="Date when baked-in prices and conditionals were last updated by the daily pipeline">data <span id="data-build-date">2026-06-05</span></span>
+      <span id="data-badge" title="Date when baked-in prices and conditionals were last updated by the daily pipeline">data <span id="data-build-date">2026-06-06</span></span>
       <div class="tb-action">
         <button id="cond-btn" title="Recompute pY/pN conditionals from cached price history (all.json). Works offline — no external API call needed.">📊 Refresh cond.</button>
         <div id="cond-status">from cached history</div>
       </div>
       <div class="tb-action">
         <button id="poll-btn" title="Fetch current prices live from Polymarket Gamma API. Requires direct internet — may fail on corporate networks with SSL inspection.">🔄 Poll live</button>
-        <div id="poll-status" title="Prices baked in from June 5, 2026">baked May 26, 2026</div>
+        <div id="poll-status" title="Prices baked in from June 6, 2026">baked May 26, 2026</div>
       </div>
     </div>
   </div>
@@ -396,38 +396,38 @@
   const NODES = [
     // Layer 0 — Exogenous roots (no Bayes computation; PM price is the prior)
     { id:'IRAN_DEAL',     label:'Iran Deal',          question:'US–Iran nuclear deal signed before 2027',                              pmId:'665325',  pm:0.655, layer:0, slug:'us-iran-nuclear-deal-before-2027',                                       clobToken:'102936224134271070189104847090829839924697394514566827387181305960175107677216' },
-    { id:'CEASEFIRE_X',   label:'Ceasefire Breaks',   question:'Israel–Hamas ceasefire cancelled by June 30 2026',                    pmId:'1090489', pm:0.095, layer:0, slug:'israel-x-hamas-ceasefire-cancelled-by-june-30',                          clobToken:'63808367585655921040786645798394416641162584754134130888507371817017552687973' },
+    { id:'CEASEFIRE_X',   label:'Ceasefire Breaks',   question:'Israel–Hamas ceasefire cancelled by June 30 2026',                    pmId:'1090489', pm:0.11, layer:0, slug:'israel-x-hamas-ceasefire-cancelled-by-june-30',                          clobToken:'63808367585655921040786645798394416641162584754134130888507371817017552687973' },
     { id:'TRUMP_IL',      label:'Trump Backs IL',      question:'Donald Trump visits Israel in 2026',                                  pmId:'665260',  pm:0.315, layer:0, slug:'will-donald-trump-visit-israel-in-2026',                                  clobToken:'17310312046830507121308439157055105976196613647072768511530359658718851345502' },
     { id:'US_WAR_IRAN',   label:'US-Iran War',         question:'US invades or attacks Iran before 2027',                              pmId:'665374',  pm:0.155, layer:0, slug:'will-the-us-invade-iran-before-2027',                                     clobToken:'55115078421062885512539156303747803058407616201213034911037320915726138659123' },
-    { id:'IRAN_REGIME',   label:'Iran Regime Falls',   question:'Iranian regime collapses or falls by end of 2026',                   pmId:'663583',  pm:0.135, layer:0, slug:'will-the-iranian-regime-fall-by-the-end-of-2026',                        clobToken:'10991849228756847439673778874175365458450913336396982752046655649803657501964' },
+    { id:'IRAN_REGIME',   label:'Iran Regime Falls',   question:'Iranian regime collapses or falls by end of 2026',                   pmId:'663583',  pm:0.125, layer:0, slug:'will-the-iranian-regime-fall-by-the-end-of-2026',                        clobToken:'10991849228756847439673778874175365458450913336396982752046655649803657501964' },
     { id:'IRAN_NUKE',     label:'Iran Nuclear Thresh', question:'Iran conducts a nuclear test before 2027',                            pmId:'665521',  pm:0.085, layer:0, slug:'iran-nuclear-test-before-2027',                                           clobToken:'101371628741119370156433108829627306392734152017027640384155257750266453353351' },
 
     // Layer 1 — Near-term political
-    { id:'ELECTIONS', label:'Early Elections',   question:'Israeli parliament dissolved and early elections called by June 30 2026',  pmId:'1280208', pm:0.44, layer:1,
-      primary:'CEASEFIRE_X', pY:0.77, pN:0.398, slug:'israeli-parliament-dissolved-by-june-30-228',      clobToken:'5500958648222024490080262026563017618333773328581609432182941377205770769101' },
-    { id:'BIBI_OUT',  label:'Bibi Not PM 2027', question:'Benjamin Netanyahu is no longer Prime Minister before end of 2027',         pmId:'567688',  pm:0.515, layer:1,
+    { id:'ELECTIONS', label:'Early Elections',   question:'Israeli parliament dissolved and early elections called by June 30 2026',  pmId:'1280208', pm:0.375, layer:1,
+      primary:'CEASEFIRE_X', pY:0.771, pN:0.398, slug:'israeli-parliament-dissolved-by-june-30-228',      clobToken:'5500958648222024490080262026563017618333773328581609432182941377205770769101' },
+    { id:'BIBI_OUT',  label:'Bibi Not PM 2027', question:'Benjamin Netanyahu is no longer Prime Minister before end of 2027',         pmId:'567688',  pm:0.51, layer:1,
       primary:'ELECTIONS', pY:0.58, pN:0.398, slug:'netanyahu-out-before-2027-684-719-226-657',           clobToken:'114694726451307654528948558967898493662917070661203465131156925998487819889437' },
 
     // Layer 2 — PM race (all share primary parent BIBI_OUT)
     { id:'BIBI_PM',      label:'Bibi PM',      question:'Benjamin Netanyahu becomes the next Prime Minister of Israel',               pmId:'682705', pm:0.325,  layer:2, primary:'BIBI_OUT', pY:0.297,  pN:0.608, slug:'will-benjamin-netanyahu-be-the-next-prime-minister-of-israel',    clobToken:'20006732765674855733524007935991362439352594042415161039767275461950712817548' },
-    { id:'BENNETT_PM',   label:'Bennett PM',   question:'Naftali Bennett becomes the next Prime Minister of Israel',                  pmId:'682706', pm:0.265,  layer:2, primary:'BIBI_OUT', pY:0.501, pN:0.242, slug:'will-naftali-bennett-be-the-next-prime-minister-of-israel',         clobToken:'58945936829392654397399777214757608864525173988558750256164021442231118224154' },
-    { id:'EIZENKOT_PM',  label:'Eizenkot PM',  question:'Gadi Eizenkot becomes the next Prime Minister of Israel',                   pmId:'682708', pm:0.2845,  layer:2, primary:'BIBI_OUT', pY:0.142, pN:0.066, slug:'will-gadi-eizenkot-be-the-next-prime-minister-of-israel',           clobToken:'52487256270918227930942830546248720603566203568229607048093730748840489555808' },
-    { id:'LIEBERMAN_PM', label:'Lieberman PM', question:'Avigdor Lieberman becomes the next Prime Minister of Israel',               pmId:'682710', pm:0.036,  layer:2, primary:'BIBI_OUT', pY:0.078, pN:0.013, slug:'will-avigdor-lieberman-be-the-next-prime-minister-of-israel',       clobToken:'105057524965982907913786325697426001538810836564004836999292309706852745390829' },
+    { id:'BENNETT_PM',   label:'Bennett PM',   question:'Naftali Bennett becomes the next Prime Minister of Israel',                  pmId:'682706', pm:0.28,  layer:2, primary:'BIBI_OUT', pY:0.501, pN:0.242, slug:'will-naftali-bennett-be-the-next-prime-minister-of-israel',         clobToken:'58945936829392654397399777214757608864525173988558750256164021442231118224154' },
+    { id:'EIZENKOT_PM',  label:'Eizenkot PM',  question:'Gadi Eizenkot becomes the next Prime Minister of Israel',                   pmId:'682708', pm:0.2725,  layer:2, primary:'BIBI_OUT', pY:0.142, pN:0.066, slug:'will-gadi-eizenkot-be-the-next-prime-minister-of-israel',           clobToken:'52487256270918227930942830546248720603566203568229607048093730748840489555808' },
+    { id:'LIEBERMAN_PM', label:'Lieberman PM', question:'Avigdor Lieberman becomes the next Prime Minister of Israel',               pmId:'682710', pm:0.0355,  layer:2, primary:'BIBI_OUT', pY:0.078, pN:0.013, slug:'will-avigdor-lieberman-be-the-next-prime-minister-of-israel',       clobToken:'105057524965982907913786325697426001538810836564004836999292309706852745390829' },
     { id:'LAPID_PM',     label:'Lapid PM',     question:'Yair Lapid becomes the next Prime Minister of Israel',                       pmId:'682707', pm:0.008,  layer:2, primary:'BIBI_OUT', pY:0.093, pN:0.018, slug:'will-yair-lapid-be-the-next-prime-minister-of-israel',               clobToken:'30912854850866302644106316438153629460678506137655559406260043509960678109607' },
 
     // Layer 3 — Policy outcomes (primary parent: BIBI_PM)
-    { id:'ANNEX_WB',     label:'W.Bank Annex',   question:'Israel formally annexes West Bank territory before 2027',                 pmId:'665515', pm:0.105, layer:3, primary:'BIBI_PM', pY:0.323, pN:0.091,  slug:'will-israel-annex-west-bank-territory-before-2027',                clobToken:'77622159301151595600018692169046934155670985348681037776543994015872072881759' },
-    { id:'ANNEX_GAZA',   label:'Gaza Annex',     question:'Israel formally annexes Gaza territory by 2026',                          pmId:'636921', pm:0.0175, layer:3, primary:'BIBI_PM', pY:0.149, pN:0.031, slug:'will-israel-annex-gaza-territory-by-2026',                          clobToken:'70359681490276052691112887648329793451326841944052095594051773436187530963436' },
-    { id:'US_GAZA',      label:'US Gaza Admin',  question:'US forces deployed and administering Gaza before 2027',                   pmId:'665485', pm:0.13, layer:3, primary:'BIBI_PM', pY:0.491, pN:0.166, slug:'us-forces-in-gaza-before-2027',                                     clobToken:'105233400859414924844071137932068265322197459969475638102195871238609459335708' },
-    { id:'TURKEY_CLASH', label:'IL-Turkey Clash',question:'Israel and Turkey engage in a military clash before 2027',                pmId:'665484', pm:0.155, layer:3, primary:'BIBI_PM', pY:0.279,  pN:0.151, slug:'israel-x-turkey-military-clash-before-2027',                        clobToken:'87453347574739433727741310300628833850540987232802276383336752817811816312350' },
+    { id:'ANNEX_WB',     label:'W.Bank Annex',   question:'Israel formally annexes West Bank territory before 2027',                 pmId:'665515', pm:0.125, layer:3, primary:'BIBI_PM', pY:0.323, pN:0.092,  slug:'will-israel-annex-west-bank-territory-before-2027',                clobToken:'77622159301151595600018692169046934155670985348681037776543994015872072881759' },
+    { id:'ANNEX_GAZA',   label:'Gaza Annex',     question:'Israel formally annexes Gaza territory by 2026',                          pmId:'636921', pm:0.015, layer:3, primary:'BIBI_PM', pY:0.151, pN:0.03, slug:'will-israel-annex-gaza-territory-by-2026',                          clobToken:'70359681490276052691112887648329793451326841944052095594051773436187530963436' },
+    { id:'US_GAZA',      label:'US Gaza Admin',  question:'US forces deployed and administering Gaza before 2027',                   pmId:'665485', pm:0.14, layer:3, primary:'BIBI_PM', pY:0.496, pN:0.164, slug:'us-forces-in-gaza-before-2027',                                     clobToken:'105233400859414924844071137932068265322197459969475638102195871238609459335708' },
+    { id:'TURKEY_CLASH', label:'IL-Turkey Clash',question:'Israel and Turkey engage in a military clash before 2027',                pmId:'665484', pm:0.155, layer:3, primary:'BIBI_PM', pY:0.279,  pN:0.152, slug:'israel-x-turkey-military-clash-before-2027',                        clobToken:'87453347574739433727741310300628833850540987232802276383336752817811816312350' },
 
     // Layer 4 — Downstream outcomes
-    { id:'SAUDI_NORM',    label:'Saudi Norm.',     question:'Israel and Saudi Arabia normalize diplomatic relations before 2027',     pmId:'665218',  pm:0.145, layer:4, primary:'BIBI_PM',     pY:0.316, pN:0.152, slug:'israel-and-saudi-arabia-normalize-relations-before-2027',       clobToken:'86727316187077924188803504745015598973723867072517640274231186919208073176698' },
-    { id:'SAUDI_ACCORDS', label:'Saudi Accords',   question:'Saudi Arabia joins the Abraham Accords before 2027',                    pmId:'665474',  pm:0.105, layer:4, primary:'BIBI_PM',     pY:0.325, pN:0.124, slug:'will-saudi-arabia-join-the-abraham-accords-before-2027',         clobToken:'44330303251518041570433466737679109932061477358497939773558457869950245007155' },
-    { id:'LEBANON_NORM',  label:'Lebanon Norm.',   question:'Israel and Lebanon normalize relations before 2027',                    pmId:'665414',  pm:0.2, layer:4, primary:'BIBI_PM',     pY:0.354, pN:0.176, slug:'israel-and-lebanon-normalize-relations-before-2027',            clobToken:'101831681716333180244111475646971936256198362513844467846876475971510978571235' },
-    { id:'SYRIA_NORM',    label:'Syria Norm.',     question:'Israel and Syria normalize relations by December 31 2026',              pmId:'677273',  pm:0.14, layer:4, primary:'BIBI_PM',     pY:0.311, pN:0.107, slug:'israel-and-syria-normalize-relations-by-december-31-2026-166',  clobToken:'106383854378569763040038727158261681740086130201198677161578651498744312589763' },
-    { id:'STRIKE_5',      label:'Strike on Iran',  question:'Israel conducts a second major military operation against Iran',        pmId:'678748',  pm:0.339, layer:4, primary:'IRAN_NUKE',   pY:0.345, pN:0.177, slug:'israel-military-action-against-iran-by-167',                    clobToken:'11412542007717408179922453938322356199012298204805894786640983803350145893058' },
-    { id:'PAHLAVI',       label:'Pahlavi Returns', question:'US officially recognizes Reza Pahlavi as leader of Iran in 2026',       pmId:'1115288', pm:0.055, layer:4, primary:'IRAN_REGIME', pY:0.513, pN:0.136,  slug:'us-recognizes-reza-pahlavi-as-leader-of-iran-in2026',           clobToken:'35782709243786983035694178955131584324960374432781357142873120580614410145650' },
+    { id:'SAUDI_NORM',    label:'Saudi Norm.',     question:'Israel and Saudi Arabia normalize diplomatic relations before 2027',     pmId:'665218',  pm:0.145, layer:4, primary:'BIBI_PM',     pY:0.318, pN:0.151, slug:'israel-and-saudi-arabia-normalize-relations-before-2027',       clobToken:'86727316187077924188803504745015598973723867072517640274231186919208073176698' },
+    { id:'SAUDI_ACCORDS', label:'Saudi Accords',   question:'Saudi Arabia joins the Abraham Accords before 2027',                    pmId:'665474',  pm:0.1, layer:4, primary:'BIBI_PM',     pY:0.329, pN:0.123, slug:'will-saudi-arabia-join-the-abraham-accords-before-2027',         clobToken:'44330303251518041570433466737679109932061477358497939773558457869950245007155' },
+    { id:'LEBANON_NORM',  label:'Lebanon Norm.',   question:'Israel and Lebanon normalize relations before 2027',                    pmId:'665414',  pm:0.23, layer:4, primary:'BIBI_PM',     pY:0.354, pN:0.177, slug:'israel-and-lebanon-normalize-relations-before-2027',            clobToken:'101831681716333180244111475646971936256198362513844467846876475971510978571235' },
+    { id:'SYRIA_NORM',    label:'Syria Norm.',     question:'Israel and Syria normalize relations by December 31 2026',              pmId:'677273',  pm:0.13, layer:4, primary:'BIBI_PM',     pY:0.312, pN:0.107, slug:'israel-and-syria-normalize-relations-by-december-31-2026-166',  clobToken:'106383854378569763040038727158261681740086130201198677161578651498744312589763' },
+    { id:'STRIKE_5',      label:'Strike on Iran',  question:'Israel conducts a second major military operation against Iran',        pmId:'678748',  pm:0.3395, layer:4, primary:'IRAN_NUKE',   pY:0.343, pN:0.178, slug:'israel-military-action-against-iran-by-167',                    clobToken:'11412542007717408179922453938322356199012298204805894786640983803350145893058' },
+    { id:'PAHLAVI',       label:'Pahlavi Returns', question:'US officially recognizes Reza Pahlavi as leader of Iran in 2026',       pmId:'1115288', pm:0.06, layer:4, primary:'IRAN_REGIME', pY:0.514, pN:0.136,  slug:'us-recognizes-reza-pahlavi-as-leader-of-iran-in2026',           clobToken:'35782709243786983035694178955131584324960374432781357142873120580614410145650' },
     { id:'US_DECLARE',    label:'US Declares War', question:'US officially declares war on Iran by December 31 2026',               pmId:'1170144', pm:0.055, layer:4, primary:'US_WAR_IRAN', pY:0.279, pN:0.077,  slug:'will-the-us-officially-declare-war-on-iran-by-december-31-2026-746', clobToken:'7557290671053949208699445220310834898387867585937374554219472108856099537227' },
   ];
 
@@ -439,47 +439,47 @@
   // r2 = R²; n = overlapping days; wy/wn = data weight for Y/N (w_llm always 1.0);
   // pY/pN_ci = 90% CI [lo, hi] (inflated ×1.5 for autocorrelation; treat as approximate).
   const EDGE_META = {
-    'BIBI_OUT→BIBI_PM': {pY_llm:0.08, pN_llm:0.68, pY_c:0.478, pN_c:0.566, r2:0.0998, n:173, wy:1.2, wn:1.7, src_Y:'bin', src_N:'bin', pY_ci:[0.24, 0.354], pN_ci:[0.58, 0.636]},
-    'BIBI_OUT→EIZENKOT_PM': {pY_llm:0.24, pN_llm:0.08, pY_c:0.061, pN_c:0.058, r2:0.0082, n:173, wy:1.2, wn:1.7, src_Y:'bin', src_N:'bin', pY_ci:[0.084, 0.201], pN_ci:[0.045, 0.088]},
-    'BIBI_OUT→LIEBERMAN_PM': {pY_llm:0.14, pN_llm:0.02, pY_c:0.027, pN_c:0.009, r2:0.0788, n:173, wy:1.2, wn:1.7, src_Y:'bin', src_N:'bin', pY_ci:[0.072, 0.085], pN_ci:[0.012, 0.014]},
-    'BIBI_OUT→LAPID_PM': {pY_llm:0.18, pN_llm:0.01, pY_c:0.021, pN_c:0.022, r2:0.0303, n:169, wy:1.2, wn:1.7, src_Y:'bin', src_N:'bin', pY_ci:[0.082, 0.105], pN_ci:[0.015, 0.02]},
-    'CEASEFIRE_X→ELECTIONS': {pY_llm:0.78, pN_llm:0.52, pY_c:0.535, pN_c:0.386, r2:0.0135, n:104, wy:0.04, wn:9.9, src_Y:'reg', src_N:'bin', pY_ci:[0.62, 0.92], pN_ci:[0.359, 0.437]},
-    'ELECTIONS→BIBI_OUT': {pY_llm:0.68, pN_llm:0.18, pY_c:0.454, pN_c:0.443, r2:0.0248, n:99, wy:0.8, wn:4.9, src_Y:'bin', src_N:'bin', pY_ci:[0.517, 0.642], pN_ci:[0.379, 0.417]},
-    'BIBI_OUT→BENNETT_PM': {pY_llm:0.68, pN_llm:0.18, pY_c:0.352, pN_c:0.287, r2:0.1959, n:165, wy:1.2, wn:1.4, src_Y:'bin', src_N:'bin', pY_ci:[0.483, 0.519], pN_ci:[0.228, 0.257]},
-    'BIBI_PM→ANNEX_WB': {pY_llm:0.28, pN_llm:0.04, pY_c:0.373, pN_c:0.111, r2:0.2846, n:179, wy:0.854, wn:2.6, src_Y:'reg', src_N:'bin', pY_ci:[0.173, 0.473], pN_ci:[0.087, 0.096]},
-    'BIBI_PM→ANNEX_GAZA': {pY_llm:0.12, pN_llm:0.02, pY_c:0.171, pN_c:0.035, r2:0.4426, n:174, wy:1.328, wn:2.5, src_Y:'reg', src_N:'bin', pY_ci:[0.01, 0.299], pN_ci:[0.027, 0.035]},
-    'BIBI_PM→US_GAZA': {pY_llm:0.08, pN_llm:0.18, pY_c:0.78, pN_c:0.16, r2:0.4751, n:170, wy:1.425, wn:2.5, src_Y:'reg', src_N:'bin', pY_ci:[0.341, 0.641], pN_ci:[0.141, 0.19]},
-    'BIBI_PM→TURKEY_CLASH': {pY_llm:0.28, pN_llm:0.12, pY_c:0.161, pN_c:0.164, r2:0.0023, n:169, wy:0.007, wn:2.5, src_Y:'reg', src_N:'bin', pY_ci:[0.129, 0.429], pN_ci:[0.142, 0.161]},
-    'BIBI_PM→SAUDI_NORM': {pY_llm:0.28, pN_llm:0.12, pY_c:0.417, pN_c:0.164, r2:0.1203, n:177, wy:0.361, wn:2.6, src_Y:'reg', src_N:'bin', pY_ci:[0.166, 0.466], pN_ci:[0.138, 0.166]},
-    'BIBI_PM→SAUDI_ACCORDS': {pY_llm:0.22, pN_llm:0.08, pY_c:0.531, pN_c:0.141, r2:0.1703, n:180, wy:0.511, wn:2.6, src_Y:'reg', src_N:'bin', pY_ci:[0.175, 0.475], pN_ci:[0.11, 0.138]},
-    'BIBI_PM→LEBANON_NORM': {pY_llm:0.38, pN_llm:0.12, pY_c:0.15, pN_c:0.198, r2:0.0418, n:170, wy:0.125, wn:2.5, src_Y:'reg', src_N:'bin', pY_ci:[0.204, 0.504], pN_ci:[0.158, 0.193]},
-    'BIBI_PM→SYRIA_NORM': {pY_llm:0.22, pN_llm:0.08, pY_c:0.492, pN_c:0.117, r2:0.1684, n:180, wy:0.505, wn:2.6, src_Y:'reg', src_N:'bin', pY_ci:[0.161, 0.461], pN_ci:[0.095, 0.118]},
-    'IRAN_NUKE→STRIKE_5': {pY_llm:0.72, pN_llm:0.28, pY_c:0.01, pN_c:0.171, r2:0.374, n:165, wy:1.122, wn:16.5, src_Y:'reg', src_N:'bin', pY_ci:[0.195, 0.495], pN_ci:[0.158, 0.197]},
-    'IRAN_REGIME→PAHLAVI': {pY_llm:0.42, pN_llm:0.02, pY_c:0.55, pN_c:0.148, r2:0.8397, n:120, wy:2.519, wn:10.1, src_Y:'reg', src_N:'bin', pY_ci:[0.363, 0.663], pN_ci:[0.122, 0.151]},
-    'US_WAR_IRAN→US_DECLARE': {pY_llm:0.28, pN_llm:0.02, pY_c:0.08, pN_c:0.083, r2:0.0016, n:111, wy:0.005, wn:10.1, src_Y:'reg', src_N:'bin', pY_ci:[0.129, 0.429], pN_ci:[0.073, 0.082]},
-    'IRAN_DEAL→ELECTIONS': {pY_llm:0.72, pN_llm:0.48, pY_c:0.373, pN_c:0.446, r2:0.0012, n:103, wy:2.7, wn:0.9, src_Y:'bin', src_N:'bin', pY_ci:[0.382, 0.552], pN_ci:[0.36, 0.568]},
-    'TRUMP_IL→ELECTIONS': {pY_llm:0.72, pN_llm:0.52, pY_c:0.386, pN_c:0.515, r2:0.027, n:104, wy:3.5, wn:1.1, src_Y:'bin', src_N:'bin', pY_ci:[0.415, 0.505], pN_ci:[0.48, 0.555]},
-    'CEASEFIRE_X→BIBI_OUT': {pY_llm:0.68, pN_llm:0.32, pY_c:0.273, pN_c:0.465, r2:0.1564, n:125, wy:0.469, wn:11.7, src_Y:'reg', src_N:'bin', pY_ci:[0.4, 0.7], pN_ci:[0.439, 0.468]},
-    'TRUMP_IL→BIBI_OUT': {pY_llm:0.52, pN_llm:0.36, pY_c:0.516, pN_c:0.571, r2:0.0127, n:184, wy:11.3, wn:1.1, src_Y:'bin', src_N:'bin', pY_ci:[0.497, 0.536], pN_ci:[0.436, 0.505]},
-    'TRUMP_IL→BIBI_PM': {pY_llm:0.52, pN_llm:0.34, pY_c:0.519, pN_c:0.342, r2:0.4248, n:178, wy:10.5, wn:1.1, src_Y:'bin', src_N:'bin', pY_ci:[0.508, 0.53], pN_ci:[0.331, 0.351]},
-    'TRUMP_IL→STRIKE_5': {pY_llm:0.52, pN_llm:0.28, pY_c:0.122, pN_c:0.323, r2:0.4207, n:166, wy:10.0, wn:1.1, src_Y:'bin', src_N:'bin', pY_ci:[0.14, 0.176], pN_ci:[0.268, 0.337]},
-    'IRAN_DEAL→STRIKE_5': {pY_llm:0.24, pN_llm:0.48, pY_c:0.268, pN_c:0.109, r2:0.4603, n:166, wy:2.6, wn:7.6, src_Y:'bin', src_N:'bin', pY_ci:[0.224, 0.297], pN_ci:[0.137, 0.167]},
-    'BIBI_PM→STRIKE_5': {pY_llm:0.52, pN_llm:0.28, pY_c:0.01, pN_c:0.285, r2:0.352, n:166, wy:1.056, wn:2.5, src_Y:'reg', src_N:'bin', pY_ci:[0.108, 0.408], pN_ci:[0.24, 0.327]},
-    'US_WAR_IRAN→PAHLAVI': {pY_llm:0.42, pN_llm:0.02, pY_c:0.111, pN_c:0.163, r2:0.0192, n:128, wy:0.058, wn:11.3, src_Y:'reg', src_N:'bin', pY_ci:[0.253, 0.553], pN_ci:[0.135, 0.168]},
-    'TRUMP_IL→US_DECLARE': {pY_llm:0.15, pN_llm:0.04, pY_c:0.095, pN_c:0.065, r2:0.4, n:112, wy:4.4, wn:1.1, src_Y:'bin', src_N:'bin', pY_ci:[0.099, 0.112], pN_ci:[0.052, 0.054]},
+    'BIBI_OUT→BIBI_PM': {pY_llm:0.08, pN_llm:0.68, pY_c:0.478, pN_c:0.566, r2:0.1001, n:174, wy:1.2, wn:1.7, src_Y:'bin', src_N:'bin', pY_ci:[0.24, 0.354], pN_ci:[0.58, 0.636]},
+    'BIBI_OUT→EIZENKOT_PM': {pY_llm:0.24, pN_llm:0.08, pY_c:0.061, pN_c:0.058, r2:0.0066, n:174, wy:1.2, wn:1.7, src_Y:'bin', src_N:'bin', pY_ci:[0.084, 0.201], pN_ci:[0.045, 0.088]},
+    'BIBI_OUT→LIEBERMAN_PM': {pY_llm:0.14, pN_llm:0.02, pY_c:0.027, pN_c:0.009, r2:0.0794, n:174, wy:1.2, wn:1.7, src_Y:'bin', src_N:'bin', pY_ci:[0.072, 0.085], pN_ci:[0.012, 0.014]},
+    'BIBI_OUT→LAPID_PM': {pY_llm:0.18, pN_llm:0.01, pY_c:0.021, pN_c:0.022, r2:0.0293, n:170, wy:1.2, wn:1.7, src_Y:'bin', src_N:'bin', pY_ci:[0.082, 0.105], pN_ci:[0.015, 0.02]},
+    'CEASEFIRE_X→ELECTIONS': {pY_llm:0.78, pN_llm:0.52, pY_c:0.531, pN_c:0.386, r2:0.013, n:105, wy:0.039, wn:10.0, src_Y:'reg', src_N:'bin', pY_ci:[0.621, 0.921], pN_ci:[0.36, 0.437]},
+    'ELECTIONS→BIBI_OUT': {pY_llm:0.68, pN_llm:0.18, pY_c:0.454, pN_c:0.443, r2:0.0247, n:100, wy:0.8, wn:4.9, src_Y:'bin', src_N:'bin', pY_ci:[0.517, 0.642], pN_ci:[0.379, 0.417]},
+    'BIBI_OUT→BENNETT_PM': {pY_llm:0.68, pN_llm:0.18, pY_c:0.352, pN_c:0.287, r2:0.1923, n:166, wy:1.2, wn:1.4, src_Y:'bin', src_N:'bin', pY_ci:[0.483, 0.519], pN_ci:[0.228, 0.257]},
+    'BIBI_PM→ANNEX_WB': {pY_llm:0.28, pN_llm:0.04, pY_c:0.373, pN_c:0.111, r2:0.2903, n:180, wy:0.871, wn:2.7, src_Y:'reg', src_N:'bin', pY_ci:[0.173, 0.473], pN_ci:[0.088, 0.096]},
+    'BIBI_PM→ANNEX_GAZA': {pY_llm:0.12, pN_llm:0.02, pY_c:0.173, pN_c:0.034, r2:0.4533, n:175, wy:1.36, wn:2.6, src_Y:'reg', src_N:'bin', pY_ci:[0.01, 0.301], pN_ci:[0.026, 0.034]},
+    'BIBI_PM→US_GAZA': {pY_llm:0.08, pN_llm:0.18, pY_c:0.783, pN_c:0.158, r2:0.4837, n:171, wy:1.451, wn:2.6, src_Y:'reg', src_N:'bin', pY_ci:[0.346, 0.646], pN_ci:[0.14, 0.188]},
+    'BIBI_PM→TURKEY_CLASH': {pY_llm:0.28, pN_llm:0.12, pY_c:0.162, pN_c:0.164, r2:0.0017, n:170, wy:0.005, wn:2.6, src_Y:'reg', src_N:'bin', pY_ci:[0.129, 0.429], pN_ci:[0.143, 0.16]},
+    'BIBI_PM→SAUDI_NORM': {pY_llm:0.28, pN_llm:0.12, pY_c:0.42, pN_c:0.163, r2:0.1259, n:178, wy:0.378, wn:2.7, src_Y:'reg', src_N:'bin', pY_ci:[0.168, 0.468], pN_ci:[0.138, 0.165]},
+    'BIBI_PM→SAUDI_ACCORDS': {pY_llm:0.22, pN_llm:0.08, pY_c:0.535, pN_c:0.139, r2:0.1772, n:181, wy:0.532, wn:2.7, src_Y:'reg', src_N:'bin', pY_ci:[0.179, 0.479], pN_ci:[0.109, 0.137]},
+    'BIBI_PM→LEBANON_NORM': {pY_llm:0.38, pN_llm:0.12, pY_c:0.15, pN_c:0.199, r2:0.0432, n:171, wy:0.13, wn:2.6, src_Y:'reg', src_N:'bin', pY_ci:[0.204, 0.504], pN_ci:[0.16, 0.194]},
+    'BIBI_PM→SYRIA_NORM': {pY_llm:0.22, pN_llm:0.08, pY_c:0.492, pN_c:0.117, r2:0.1713, n:181, wy:0.514, wn:2.7, src_Y:'reg', src_N:'bin', pY_ci:[0.162, 0.462], pN_ci:[0.096, 0.118]},
+    'IRAN_NUKE→STRIKE_5': {pY_llm:0.72, pN_llm:0.28, pY_c:0.01, pN_c:0.172, r2:0.3783, n:166, wy:1.135, wn:16.6, src_Y:'reg', src_N:'bin', pY_ci:[0.193, 0.493], pN_ci:[0.159, 0.198]},
+    'IRAN_REGIME→PAHLAVI': {pY_llm:0.42, pN_llm:0.02, pY_c:0.551, pN_c:0.147, r2:0.8428, n:121, wy:2.528, wn:10.2, src_Y:'reg', src_N:'bin', pY_ci:[0.364, 0.664], pN_ci:[0.121, 0.15]},
+    'US_WAR_IRAN→US_DECLARE': {pY_llm:0.28, pN_llm:0.02, pY_c:0.08, pN_c:0.083, r2:0.001, n:112, wy:0.003, wn:10.2, src_Y:'reg', src_N:'bin', pY_ci:[0.129, 0.429], pN_ci:[0.073, 0.082]},
+    'IRAN_DEAL→ELECTIONS': {pY_llm:0.72, pN_llm:0.48, pY_c:0.374, pN_c:0.446, r2:0.0011, n:104, wy:2.8, wn:0.9, src_Y:'bin', src_N:'bin', pY_ci:[0.383, 0.547], pN_ci:[0.36, 0.568]},
+    'TRUMP_IL→ELECTIONS': {pY_llm:0.72, pN_llm:0.52, pY_c:0.386, pN_c:0.506, r2:0.0263, n:105, wy:3.5, wn:1.2, src_Y:'bin', src_N:'bin', pY_ci:[0.415, 0.505], pN_ci:[0.472, 0.553]},
+    'CEASEFIRE_X→BIBI_OUT': {pY_llm:0.68, pN_llm:0.32, pY_c:0.272, pN_c:0.465, r2:0.1608, n:126, wy:0.482, wn:11.8, src_Y:'reg', src_N:'bin', pY_ci:[0.397, 0.697], pN_ci:[0.439, 0.468]},
+    'TRUMP_IL→BIBI_OUT': {pY_llm:0.52, pN_llm:0.36, pY_c:0.516, pN_c:0.567, r2:0.0115, n:185, wy:11.3, wn:1.2, src_Y:'bin', src_N:'bin', pY_ci:[0.497, 0.536], pN_ci:[0.439, 0.506]},
+    'TRUMP_IL→BIBI_PM': {pY_llm:0.52, pN_llm:0.34, pY_c:0.519, pN_c:0.342, r2:0.4366, n:179, wy:10.5, wn:1.2, src_Y:'bin', src_N:'bin', pY_ci:[0.508, 0.53], pN_ci:[0.333, 0.35]},
+    'TRUMP_IL→STRIKE_5': {pY_llm:0.52, pN_llm:0.28, pY_c:0.122, pN_c:0.324, r2:0.4301, n:167, wy:10.0, wn:1.2, src_Y:'bin', src_N:'bin', pY_ci:[0.14, 0.176], pN_ci:[0.273, 0.335]},
+    'IRAN_DEAL→STRIKE_5': {pY_llm:0.24, pN_llm:0.48, pY_c:0.271, pN_c:0.109, r2:0.4667, n:167, wy:2.7, wn:7.6, src_Y:'bin', src_N:'bin', pY_ci:[0.227, 0.298], pN_ci:[0.137, 0.167]},
+    'BIBI_PM→STRIKE_5': {pY_llm:0.52, pN_llm:0.28, pY_c:0.01, pN_c:0.288, r2:0.361, n:167, wy:1.083, wn:2.6, src_Y:'reg', src_N:'bin', pY_ci:[0.105, 0.405], pN_ci:[0.243, 0.328]},
+    'US_WAR_IRAN→PAHLAVI': {pY_llm:0.42, pN_llm:0.02, pY_c:0.113, pN_c:0.162, r2:0.0168, n:129, wy:0.05, wn:11.4, src_Y:'reg', src_N:'bin', pY_ci:[0.255, 0.555], pN_ci:[0.134, 0.167]},
+    'TRUMP_IL→US_DECLARE': {pY_llm:0.15, pN_llm:0.04, pY_c:0.095, pN_c:0.064, r2:0.4126, n:113, wy:4.4, wn:1.2, src_Y:'bin', src_N:'bin', pY_ci:[0.099, 0.112], pN_ci:[0.051, 0.055]},
   };
 
   // Secondary edges (displayed as dashed; included in multi-parent BayesOracle blend at half weight)
   const EXTRA_EDGES = [
-    { source:'IRAN_DEAL',   target:'ELECTIONS',  pY:0.467, pN:0.464 },
-    { source:'TRUMP_IL',    target:'ELECTIONS',  pY:0.46,  pN:0.517 },
-    { source:'CEASEFIRE_X', target:'BIBI_OUT',   pY:0.55, pN:0.454 },
-    { source:'TRUMP_IL',    target:'BIBI_OUT',   pY:0.516, pN:0.471 },
+    { source:'IRAN_DEAL',   target:'ELECTIONS',  pY:0.465, pN:0.464 },
+    { source:'TRUMP_IL',    target:'ELECTIONS',  pY:0.46,  pN:0.512 },
+    { source:'CEASEFIRE_X', target:'BIBI_OUT',   pY:0.547, pN:0.454 },
+    { source:'TRUMP_IL',    target:'BIBI_OUT',   pY:0.516, pN:0.473 },
     { source:'TRUMP_IL',    target:'BIBI_PM',    pY:0.519, pN:0.341 },
-    { source:'TRUMP_IL',    target:'STRIKE_5',   pY:0.158, pN:0.303 },
-    { source:'IRAN_DEAL',   target:'STRIKE_5',   pY:0.26, pN:0.152 },
-    { source:'BIBI_PM',     target:'STRIKE_5',   pY:0.258, pN:0.284 },
-    { source:'US_WAR_IRAN', target:'PAHLAVI',    pY:0.403, pN:0.151 },
+    { source:'TRUMP_IL',    target:'STRIKE_5',   pY:0.158, pN:0.304 },
+    { source:'IRAN_DEAL',   target:'STRIKE_5',   pY:0.263, pN:0.152 },
+    { source:'BIBI_PM',     target:'STRIKE_5',   pY:0.255, pN:0.286 },
+    { source:'US_WAR_IRAN', target:'PAHLAVI',    pY:0.405, pN:0.151 },
     { source:'TRUMP_IL',    target:'US_DECLARE', pY:0.105, pN:0.053 },
   ];
 

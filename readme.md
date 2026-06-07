@@ -60,7 +60,7 @@ This shifts Daatan from a media-auditing tool into a forward-looking intelligenc
 - **Prediction market participants** — data-driven edge for Polymarket and similar platforms
 - **Corporate & government risk desks** — calibrated probability estimates for geopolitical and economic planning
 
-The TruthMachine inference layer is exposed as the **Oracle API** (`oracle.daatan.com`) — a FastAPI microservice that accepts a binary question and returns a calibrated probability distribution, with per-source credibility weighting derived from the Factum Atlas. See [`docs/ORACLE_API.md`](docs/ORACLE_API.md) and the [live test console](https://komapc.github.io/retro/oracle-test.html).
+The TruthMachine inference layer is exposed as the **Oracle API** (`oracle.daatan.com`) — a FastAPI microservice that accepts a binary question and returns a calibrated probability distribution, with per-source credibility weighting derived from the Factum Atlas. See [`docs/ORACLE_API.md`](docs/ORACLE_API.md) and the [live test console](https://daatan.github.io/retro/oracle-test.html).
 
 ---
 
@@ -99,6 +99,6 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 **LLM:** AWS Bedrock — Nova Micro (gatekeeper) + Nova Lite (extractor, aggregator).
 
 **Live pages:**
-- Factum Atlas: https://komapc.github.io/retro/
-- Oracle Test Console: https://komapc.github.io/retro/oracle-test.html
-- TruthMachine vs Polymarket Duel: https://komapc.github.io/retro/duel.html
+- Factum Atlas: https://daatan.github.io/retro/
+- Oracle Test Console: https://daatan.github.io/retro/oracle-test.html
+- TruthMachine vs Polymarket Duel: https://daatan.github.io/retro/duel.html

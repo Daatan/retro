@@ -292,7 +292,7 @@ The pipeline's checkout at `~/truthmachine` already exists. Add a second, API-on
 ```bash
 # New: dedicated API checkout
 cd /home/ubuntu
-git clone https://github.com/komapc/retro.git oracle-api
+git clone https://github.com/Daatan/retro.git oracle-api
 cd oracle-api/api
 uv sync --frozen
 
@@ -411,7 +411,7 @@ Client: `daatan/src/lib/services/oracle.ts` — `getOracleProbability()` returns
 
 ### IBI analysis tool
 
-The IBI retro analysis tool (formerly the static `komapc.github.io/retro/ibi.html`, now removed) is hosted in daatan at **`/ibi`** (admin-only). It calls Oracle `/fetch-url`, `/search`, and `/llm` through three Daatan proxy routes (`/api/ibi/*`) so the Oracle key never reaches the browser.
+The IBI retro analysis tool (formerly the static `daatan.github.io/retro/ibi.html`, now removed) is hosted in daatan at **`/ibi`** (admin-only). It calls Oracle `/fetch-url`, `/search`, and `/llm` through three Daatan proxy routes (`/api/ibi/*`) so the Oracle key never reaches the browser.
 
 ### Secret management
 

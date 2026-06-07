@@ -11,7 +11,7 @@
 ## Context
 
 Daatan (the Oracle's main client) now logs every Oracle call with the search engine
-used (daatan PR #831, issue komapc/daatan#832). For `/search` calls it reads the
+used (daatan PR #831, issue Daatan/daatan#832). For `/search` calls it reads the
 response's `provider` field. For **`/forecast`** calls the engine is not in the
 response body, so those rows log `searchEngine = null`.
 

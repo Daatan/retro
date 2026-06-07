@@ -8,7 +8,7 @@ TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
   -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null || true)
 REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
   "http://169.254.169.254/latest/meta-data/placement/region" 2>/dev/null || echo "us-east-1")
-REPO="https://github.com/komapc/retro.git"
+REPO="https://github.com/Daatan/retro.git"
 WORKDIR="$HOME/truthmachine"
 
 log() { echo "[bootstrap] $*"; }
@@ -65,7 +65,7 @@ log "Cloning repo..."
 mkdir -p "$WORKDIR"
 
 # Use token-authenticated URL so the run loop can push
-AUTHED_REPO="https://x-token:${GH_TOKEN}@github.com/komapc/retro.git"
+AUTHED_REPO="https://x-token:${GH_TOKEN}@github.com/Daatan/retro.git"
 
 if [[ -d "$WORKDIR/.git" ]]; then
   log "Repo already cloned, pulling latest..."

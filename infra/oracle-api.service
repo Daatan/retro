@@ -1,6 +1,6 @@
 [Unit]
 Description=TruthMachine Oracle API
-Documentation=https://github.com/komapc/retro/blob/main/docs/ORACLE_API.md
+Documentation=https://github.com/Daatan/retro/blob/main/docs/ORACLE_API.md
 After=network-online.target
 Wants=network-online.target
 

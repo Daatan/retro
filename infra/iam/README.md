@@ -66,7 +66,7 @@ Before applying:
 
 ## Scope rationale
 
-- **Trust**: `token.actions.githubusercontent.com` + `repo:komapc/retro:ref:refs/heads/main` means only workflow runs on `main` (and `workflow_dispatch`, which still runs from whatever branch you pick) can assume the role. A PR branch cannot. This matches our deploy trigger.
+- **Trust**: `token.actions.githubusercontent.com` pinned to this repo by its immutable `repository_id` (`1184236342`, stable across org transfer / rename) plus a `sub` restricted to `ref:refs/heads/main` and `environment:*` — so only workflow runs on `main` (and `workflow_dispatch`, which still runs from whatever branch you pick) can assume the role. A PR branch cannot. This matches our deploy trigger.
 - **Permissions**: `ssm:SendCommand` is the sharp tool — anyone with it can run arbitrary shell as root on the target instance. We scope it two ways: the instance ARN is restricted to the one oracle box, and the document ARN is restricted to `AWS-RunShellScript` (blocks e.g. `AWS-RunPowerShellScript` or custom documents). `ssm:GetCommandInvocation` / `ssm:ListCommandInvocations` are scoped to the region but not per-command (the command-id is only known after `SendCommand` returns).
 
 ### Why `SendCommand` is two separate statements

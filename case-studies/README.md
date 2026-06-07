@@ -10,7 +10,7 @@ Google Fonts; no build step and no dependency on the pipeline or atlas data
 - **Not currently published by CI.** `.github/workflows/deploy-atlas.yml` copies
   `factum_atlas.html`, `oracle-test.html`, `duel.html`, and `bayesoracle/` to
   GitHub Pages — it does **not** include `case-studies/`. So this page is not live
-  at `komapc.github.io/retro/` today; it's shared/opened directly.
+  at `daatan.github.io/retro/` today; it's shared/opened directly.
 - It's the plain-HTML sibling of the React prototype in [`ui-prototype/`](../ui-prototype/)
   — same case-study idea, two unconnected implementations.
 

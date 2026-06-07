@@ -21,7 +21,7 @@ The matrix has up to **910 cells** = 70 events × 13 sources. Not all combinatio
 
 For live numbers, look at:
 
-- **Factum Atlas**: [komapc.github.io/retro/factum_atlas.html](https://komapc.github.io/retro/factum_atlas.html) — rendered HTML, updated on every atlas commit.
+- **Factum Atlas**: [daatan.github.io/retro/factum_atlas.html](https://daatan.github.io/retro/factum_atlas.html) — rendered HTML, updated on every atlas commit.
 - **`data/progress.json` on `main`** — cell-by-cell status, updated by the pipeline's per-cycle commit.
 - Recent atlas/progress commits: `git log --oneline --grep='atlas:\|progress:'`.
 
@@ -41,7 +41,7 @@ The pipeline loop (`infra/ec2_run.sh`) runs continuously: it sleeps 300s between
 | Item | Status |
 |------|--------|
 | API skeleton (`api/`) | ✅ Merged |
-| Test console | ✅ Live at [komapc.github.io/retro/oracle-test.html](https://komapc.github.io/retro/oracle-test.html) |
+| Test console | ✅ Live at [daatan.github.io/retro/oracle-test.html](https://daatan.github.io/retro/oracle-test.html) |
 | Pipeline wired (web_search → gatekeeper → extractor → aggregate) | ✅ Complete |
 | Leaderboard credibility weighting (TrueSkill) | ✅ Complete |
 | EC2 deployment (`oracle-api.service`) | ✅ Running |
@@ -61,7 +61,7 @@ The pipeline loop (`infra/ec2_run.sh`) runs continuously: it sleeps 300s between
 | PoC event generation (`poc_event_gen.py`) | ✅ Complete |
 | Duel report generator (`poc_report.py`) | ✅ Complete |
 | `duel.html` generated and deployed to GitHub Pages | ✅ Live |
-| TM vs PM Brier comparison section | ✅ Live — 13 events scored, TM wins 8/13; aggregate Brier: TM ~0.123 vs PM ~0.377; Oracle n=1–20 per event (PRs #82/#84); [komapc.github.io/retro/duel.html](https://komapc.github.io/retro/duel.html) |
+| TM vs PM Brier comparison section | ✅ Live — 13 events scored, TM wins 8/13; aggregate Brier: TM ~0.123 vs PM ~0.377; Oracle n=1–20 per event (PRs #82/#84); [daatan.github.io/retro/duel.html](https://daatan.github.io/retro/duel.html) |
 
 ### Why is it sleeping?
 

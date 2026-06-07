@@ -10,12 +10,13 @@
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
         "StringEquals": {
-          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:repository_id": "1184236342"
         },
         "StringLike": {
           "token.actions.githubusercontent.com:sub": [
-            "repo:komapc/retro:ref:refs/heads/main",
-            "repo:komapc/retro:environment:*"
+            "repo:*:ref:refs/heads/main",
+            "repo:*:environment:*"
           ]
         }
       }

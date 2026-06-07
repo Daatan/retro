@@ -14,7 +14,6 @@ from .models import CellStatus, ExtractionOutput, PredictionExtraction
 from .aggregator import aggregate_predictions, needs_aggregation, aggregate_article_predictions
 from .runner import run_article, ArticleInput, PipelineResult
 from .progress import update_cell, load_state
-from .ingestor import BraveIngestor, GDELTIngestor, DDGIngestor
 from .utils import KNOWN_SOURCE_IDS
 from .gnews_ingest import _is_stub_page
 import httpx
@@ -28,10 +27,11 @@ class SearchMode(str, Enum):
     api = "api"
 
 class Orchestrator:
-    def __init__(self, data_dir: Path, mode: SearchMode = SearchMode.mock, force_reextract: bool = False):
+    def __init__(self, data_dir: Path, mode: SearchMode = SearchMode.mock, force_reextract: bool = False, retry_empty: bool = False):
         self.data_dir = data_dir
         self.mode = mode
         self.force_reextract = force_reextract
+        self.retry_empty = retry_empty
         _vault_default = str(settings.vault_dir) if settings.vault_dir != Path("") else str(data_dir / "vault2")
         self.vault_dir = Path(os.environ.get("VAULT_DIR", _vault_default))
         self.atlas_dir = data_dir / "atlas"
@@ -44,11 +44,8 @@ class Orchestrator:
 
         self._simhash_idx = SimhashIndex(self.vault_dir)
 
-        # Use DDG as primary ingestor; Brave demoted to fallback (quota exhausted)
-        self.ingestor = DDGIngestor()
-        brave_key = os.environ.get("BRAVE_API_KEY", settings.brave_api_key)
-        self.brave = BraveIngestor(brave_key) if brave_key else None
-        self.ddg = DDGIngestor()  # always available as fallback
+        self._oracle_url = os.environ.get("ORACLE_URL", "https://oracle.daatan.com").rstrip("/")
+        self._oracle_key = os.environ.get("ORACLE_API_KEY", "")
 
     def get_article_hash(self, text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -91,7 +88,10 @@ class Orchestrator:
 
             state = load_state()
             cell = state.get(event_id, source["id"])
-            skip_statuses = (CellStatus.done, CellStatus.no_predictions) if not self.force_reextract else (CellStatus.done,)
+            if self.force_reextract or self.retry_empty:
+                skip_statuses = (CellStatus.done,)
+            else:
+                skip_statuses = (CellStatus.done, CellStatus.no_predictions)
             if cell.status in skip_statuses:
                 continue
 
@@ -162,7 +162,7 @@ class Orchestrator:
     async def search_articles(self, source: dict, event: dict, start: datetime, end: datetime) -> List[dict]:
         if self.mode == SearchMode.local_file:
             return self.local_file_search(source["id"], event["id"], start, end)
-        
+
         if self.mode == SearchMode.api:
             domain = (
                 source["url"]
@@ -172,23 +172,70 @@ class Orchestrator:
                 .replace("http://", "")
                 .split("/")[0]
             )
-            if isinstance(self.ingestor, BraveIngestor):
-                results = await self.ingestor.search(domain, event["search_keywords"], start, end)
-                if not results:
-                    console.print(f"    [dim]Brave empty → DDG fallback[/dim]")
-                    results = await self.ddg.search(domain, event["search_keywords"], start, end)
-            else:
-                results = await self.ddg.search(domain, event["search_keywords"], start, end)
+            keywords = event.get("search_keywords", [])
+            query = " ".join(keywords[:3]) + f" site:{domain}"
+            raw = await self._oracle_search(query, 10, start, end)
 
-            results = results[:5]
-            for res in results:
-                if res.get("url"):
-                    full_text = await self.get_full_text(res["url"])
-                    if len(full_text) > 200:
-                        res["text"] = full_text
-            return [r for r in results if len(r.get("text", "")) > 200]
-            
+            # GDELT BigQuery (used for events >90 days old) ignores site: filters
+            # and returns articles from any domain. Enforce domain match here so
+            # articles from wrong sources never land in the wrong Atlas cell.
+            domain_matched = [
+                r for r in raw
+                if domain in r.get("url", "")
+            ]
+            if len(raw) > 0 and len(domain_matched) == 0:
+                console.print(f"    [dim]Oracle returned {len(raw)} results but none from {domain} — skipping[/dim]")
+
+            articles = []
+            for res in domain_matched[:5]:
+                if not res.get("url") or not res.get("published_at"):
+                    continue
+                full_text = await self.get_full_text(res["url"])
+                if len(full_text) > 200:
+                    res["text"] = full_text
+                    articles.append(res)
+            return articles
+
         return []
+
+    async def _oracle_search(
+        self, query: str, limit: int, date_from: datetime, date_to: datetime
+    ) -> List[dict]:
+        if not self._oracle_key:
+            console.print("    [yellow]ORACLE_API_KEY not set — skipping Oracle search[/yellow]")
+            return []
+        payload = {
+            "query": query,
+            "limit": limit,
+            "date_from": date_from.strftime("%Y-%m-%d"),
+            "date_to": date_to.strftime("%Y-%m-%d"),
+            "enrich_snippets": False,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                r = await client.post(
+                    f"{self._oracle_url}/search",
+                    headers={"x-api-key": self._oracle_key, "Content-Type": "application/json"},
+                    json=payload,
+                )
+                r.raise_for_status()
+                data = r.json()
+        except Exception as e:
+            console.print(f"    [dim red]Oracle /search failed: {e}[/dim red]")
+            return []
+
+        results = []
+        for item in data.get("results", []):
+            pub = item.get("published_date", "")
+            results.append({
+                "headline": item.get("title", ""),
+                "text": "",
+                "published_at": pub,
+                "author": "Unknown",
+                "url": item.get("url", ""),
+            })
+        console.print(f"    [dim]Oracle /search: {len(results)} results[/dim]")
+        return results
 
     def local_file_search(
         self, source_id: str, event_id: str,
@@ -382,6 +429,9 @@ async def main():
     parser.add_argument("--force-reextract", action="store_true",
                         help="Ignore vault cache and re-run LLM extraction for all articles. "
                              "Use after updating the extractor prompt.")
+    parser.add_argument("--retry-empty", action="store_true",
+                        help="Re-run Oracle search for cells marked no_predictions. "
+                             "Vault LLM cache is preserved (unlike --force-reextract).")
     parser.add_argument("--events", nargs="+", default=None,
                         help="Specific event IDs to process (default: all in data/events/)")
     args = parser.parse_args()
@@ -392,8 +442,10 @@ async def main():
     console.print(f"[bold green]TruthMachine Orchestrator — {mode.value} mode[/bold green]")
     if args.force_reextract:
         console.print("[yellow]--force-reextract: vault cache will be ignored[/yellow]")
+    if args.retry_empty:
+        console.print("[yellow]--retry-empty: re-searching no_predictions cells (vault cache preserved)[/yellow]")
 
-    orch = Orchestrator(data_dir, mode=mode, force_reextract=args.force_reextract)
+    orch = Orchestrator(data_dir, mode=mode, force_reextract=args.force_reextract, retry_empty=args.retry_empty)
 
     # Auto-discover events from data/events/ or use CLI filter
     if args.events:

@@ -94,8 +94,10 @@ def _is_ascii(s: str) -> bool:
 # Each entry must have a matching data/sources/{id}.json file.
 KNOWN_SOURCE_IDS: list[str] = [
     "ynet", "haaretz", "haaretz_he", "toi", "globes", "reuters", "jpost",
-    "israel_hayom", "walla", "n12", "maariv", "ch13", "kan11",
+    "israel_hayom", "walla", "n12", "maariv", "ch13",
     "web_search", "gdelt",
     "bloomberg", "bbc",
-    "aljazeera", "nyt", "ft", "guardian", "wapost", "axios",
+    "aljazeera", "nyt", "ft", "guardian", "axios",
+    # kan11: TV-only, no indexable web article corpus (Phase 2)
+    # wapost: hard paywall, scraping returns subscription walls
 ]

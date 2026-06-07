@@ -1,19 +1,35 @@
 # Bediavad Backtest Engine
 
 > **File:** `pipeline/src/tm/backtest.py`
-> **Purpose:** Empirically validate the TruthMachine thesis — does scoring media sources on historical accuracy produce predictions that outperform Polymarket consensus?
+> **Purpose:** Empirically validate Bediavad's retroactive source-audit thesis — does scoring media sources on historical accuracy produce a signal that predicts outcomes out-of-sample?
+
+> ⚠️ **Scope — read first.** The **head-to-head against Polymarket is a separate
+> project: the Duel** (`pipeline/src/tm/duel_report.py` → `duel.html`,
+> caches in `data/duel_oracle/`). The Duel is the headline external-validation
+> metric ("is TruthMachine better than a price-discovered market?") and uses the
+> live **Oracle API** with a strict T-day temporal protocol and real Polymarket
+> CLOB price history. **Bediavad does not own the Polymarket comparison.** The
+> Polymarket fetch still wired into `backtest.py` (`fetch_polymarket_price`) is a
+> legacy, redundant copy that duplicates the Duel and currently returns `null` for
+> every event — it should be removed and is not a source of truth. Bediavad's own
+> deliverable is the **source credibility leaderboard** (Brier / ELO per source),
+> not beating the market. For the Polymarket numbers, see the Duel, not this doc.
 
 ---
 
 ## Why This Exists
 
-The core commercial claim of Bediavad is:
+Bediavad's claim is:
 
-> *"Because we know who was right in the past, we can predict the future more accurately than market consensus."*
+> *"From the public trail of what media already published, we can reconstruct who was right — per source, per domain — without waiting for anyone to opt in."*
 
-Before building the full Oracle API, we need to test whether this is actually true. The backtest engine answers the question directly: **given the Factum Atlas data we already have, does our model beat Polymarket?**
+The backtest engine answers a narrower, internal question: **given the Factum
+Atlas data we already have, does the extracted source signal predict the event
+outcome out-of-sample?** Whether that signal then beats a market is the Duel's
+question, not this engine's.
 
-This is not a unit test. It is the primary empirical proof-of-concept for the entire business.
+This is not a unit test. It is the proof-of-concept for the retroactive-audit
+methodology that produces the source leaderboard.
 
 ---
 

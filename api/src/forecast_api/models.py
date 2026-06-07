@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 # ── Meta ──────────────────────────────────────────────────────────────────────
 
 class VersionResponse(BaseModel):
-    version: str = Field(description="Package semver from pyproject [project].version")
+    version: str = Field(description="Composed version: '{base}+build.{n}' (PEP 440 local) or base")
+    base_version: str = Field(description="Human-set semver from pyproject [project].version")
+    build: Optional[int] = Field(default=None, description="Auto build number (git commit count)")
     git_sha: str = Field(description="Deployed commit SHA, or 'unknown'")
     git_branch: Optional[str] = Field(default=None, description="Branch the deploy came from")
     built_at: Optional[str] = Field(default=None, description="UTC ISO-8601 deploy timestamp")

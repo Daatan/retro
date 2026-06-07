@@ -252,6 +252,39 @@ def _truncate_article(text: str, max_chars: int) -> str:
     return text[:max_chars]
 
 
+async def _process_article_bounded(
+    result: SearchResult,
+    question: str,
+    *,
+    max_article_chars: int,
+    timings: list[dict],
+    article_debugs: list[ArticleDebug],
+    timeout_s: float,
+) -> tuple[SearchResult, list] | None:
+    """Run _process_article under a per-article wall-clock ceiling.
+
+    Articles are processed in parallel, so one slow LLM call would otherwise
+    stall the whole batch. On timeout we drop just this article (record it as a
+    ``timeout`` outcome and return None) so the rest of the batch proceeds.
+    """
+    try:
+        return await asyncio.wait_for(
+            _process_article(
+                result,
+                question,
+                max_article_chars=max_article_chars,
+                timings=timings,
+                article_debugs=article_debugs,
+            ),
+            timeout=timeout_s,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("event=article_timeout url=%s timeout_s=%s", result.url, timeout_s)
+        timings.append({"url": result.url, "outcome": "timeout"})
+        article_debugs.append(ArticleDebug(url=result.url, outcome="timeout"))
+        return None
+
+
 async def _process_article(
     result: SearchResult,
     question: str,
@@ -607,12 +640,13 @@ async def _run_forecast_inner(
     article_debugs: list[ArticleDebug] = []
     outcomes = await asyncio.gather(
         *[
-            _process_article(
+            _process_article_bounded(
                 r,
                 req.question,
                 max_article_chars=settings.max_article_chars,
                 timings=timings,
                 article_debugs=article_debugs,
+                timeout_s=settings.per_article_timeout_seconds,
             )
             for r in search_results
         ],

@@ -25,6 +25,15 @@ class ApiSettings(BaseSettings):
     # abort to guarantee we win the race.
     forecast_timeout_seconds: int = 90
 
+    # Per-article wall-clock ceiling for the gatekeeper+extractor LLM work.
+    # Articles are processed in parallel (asyncio.gather), so a single slow LLM
+    # call (gatekeeper stragglers of 30s+ observed; article-phase p99 ~226s)
+    # stalls the whole batch and blows past the caller's timeout. Bounding each
+    # article means one straggler is dropped instead of holding up the rest.
+    # Set comfortably above normal article latency (~3-4s) but well under
+    # forecast_timeout_seconds.
+    per_article_timeout_seconds: int = 25
+
     # Cap article body fed to LLMs. News articles have the thesis in the lead;
     # beyond ~3000 chars we pay LLM latency and $$ for diminishing returns.
     max_article_chars: int = 3000

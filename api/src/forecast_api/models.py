@@ -2,6 +2,16 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+# ── Meta ──────────────────────────────────────────────────────────────────────
+
+class VersionResponse(BaseModel):
+    version: str = Field(description="Package semver from pyproject [project].version")
+    git_sha: str = Field(description="Deployed commit SHA, or 'unknown'")
+    git_branch: Optional[str] = Field(default=None, description="Branch the deploy came from")
+    built_at: Optional[str] = Field(default=None, description="UTC ISO-8601 deploy timestamp")
+    source: str = Field(description="Where commit info came from: deploy | git | env | unknown")
+
+
 # ── Search ────────────────────────────────────────────────────────────────────
 
 class SearchRequest(BaseModel):

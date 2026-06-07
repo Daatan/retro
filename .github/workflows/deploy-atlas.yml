@@ -45,6 +45,11 @@ jobs:
           if [ -d bayesoracle ]; then
             mkdir -p _site/bayesoracle
             cp bayesoracle/*.html _site/bayesoracle/ 2>/dev/null || true
+            # Static assets the viewers load via <script src>: shared engine +
+            # generated data specs. Without these the pages render empty.
+            cp bayesoracle/core.js _site/bayesoracle/ 2>/dev/null || true
+            cp bayesoracle/*.data.js _site/bayesoracle/ 2>/dev/null || true
+            cp bayesoracle/*.json _site/bayesoracle/ 2>/dev/null || true
             cp -r bayesoracle/pm_analysis _site/bayesoracle/ 2>/dev/null || true
             cp -r bayesoracle/node_history _site/bayesoracle/ 2>/dev/null || true
           fi

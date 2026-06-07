@@ -307,9 +307,35 @@ Built and tested:
   propagation are deleted. `/bayes/nodes` docstring corrected (was mislabeled "law of total
   probability"). Full API suite (75 tests) still green.
 
+### Did fitting the edge weights to history help?  (no — `fit_edges.py`)
+
+We tested whether learning the weights `w` from the `node_history` price series beats the
+LLM/correlation-derived weights **out-of-sample** (teacher-forced per-node CPT fit; train ≤
+2026-04-06 / 91d, test 59d, 18 children). Result is a **clean null**:
+
+| Weights (OOS level Brier) | value | vs LLM | vs persistence |
+|---|---|---|---|
+| persistence (freeze at split) | 0.00685 | — | — |
+| **LLM weights** (intercept fit) | **0.00611** | — | **+10.8%** |
+| global-α scale (α≈0.68) | 0.00649 | −6% | worse |
+| per-node fit (ridge 0→10) | 0.00611 | **+0.0%** (−0.1% unregularised) | +10.8% |
+
+Two honest takeaways:
+- **Freeing the weights buys nothing OOS** — the ridge fit reverts to the LLM weights, and the
+  unregularised fit slightly *overfits* (−0.1%). The useful signal (the +10.8% over persistence)
+  comes from the conditional **structure + intercept**, which the existing LLM weights already
+  deliver; tuning the weights doesn't add to it.
+- **First-difference test fails for every model**: predicting ΔP_child, no setting beats a
+  zero-change baseline (LLM 0.000723 vs zero 0.000675). So even the level-Brier "skill" is mostly
+  co-trending / base-rate, not learned change dynamics — consistent with §1.3. Daily PM series
+  barely move; the exploitable conditional signal is in the noise on this data/horizon.
+
+**Recommendation: keep the LLM/correlation weights.** Don't ship a fitted graph — there's no
+out-of-sample case for it. Revisit only with more independent observations (more markets, longer
+horizon, or event-resolution data rather than autocorrelated daily prices).
+
 Not yet done (proposed follow-ups):
 
-- Port `graph.html` / `pm_analysis/index.html` to fetch the JSON specs (needs browser
-  verification; they currently still embed legacy data + propagation).
-- Fix the empirical blend to use first differences (§1.3); re-fit edges against the backtest.
 - Monte-Carlo CI propagation, p1/p2 TM fusion, time-decay toward `outcome_date`.
+- The above fitting null is data-limited, not method-limited; a resolved-events corpus could
+  change it.

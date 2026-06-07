@@ -96,7 +96,7 @@ This is **TruthMachine** — a calibrated oracle API for geopolitical and econom
 - ✅ Pipeline live: gatekeeper → forensic extractor → scoring (Hebrew + English)
 - ✅ 125 seed events defined across 9 domains (politics, war, economy, tech, energy)
 - ✅ 25 sources selected (15 Israeli, 6 international, Polymarket as auxiliary)
-- ✅ **3 fully scored case studies published** — live at [komapc.github.io/retro](https://komapc.github.io/retro):
+- ✅ **3 fully scored case studies published** — live at [daatan.github.io/retro](https://daatan.github.io/retro):
   - 🇻🇪 **Operation Absolute Resolve** — US capture of Maduro; Bloomberg & Reuters called it, ynet/Israel Hayom missed it
   - 📉 **Trump Trade Wars 2025** — tariff escalation & dollar decline; Haaretz called it, Calcalist dismissed it
   - ⚡ **Energy Volatility 2026** — European gas price spike; TheMarker called it, Globes missed it

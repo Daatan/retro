@@ -100,7 +100,7 @@ aws ssm send-command --region eu-central-1 --instance-ids i-00ac444b94c5ff9b2 \
   --document-name AWS-RunShellScript --comment "oracle-api initial setup" \
   --parameters 'commands=[
     "set -eu",
-    "sudo -u ubuntu git clone https://github.com/komapc/retro.git /home/ubuntu/oracle-api",
+    "sudo -u ubuntu git clone https://github.com/Daatan/retro.git /home/ubuntu/oracle-api",
     "cd /home/ubuntu/oracle-api/api && sudo -u ubuntu /home/ubuntu/.local/bin/uv sync --frozen",
     "sudo cp /home/ubuntu/oracle-api/infra/oracle-api.service /etc/systemd/system/oracle-api.service",
     "sudo systemctl daemon-reload",

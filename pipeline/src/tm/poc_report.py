@@ -435,7 +435,7 @@ def render(data_dir: Path, out_path: Path) -> None:
 
 <footer>
   Data sourced from <a href="https://polymarket.com" target="_blank">Polymarket</a> via Gamma API &nbsp;·&nbsp;
-  TruthMachine pipeline by <a href="https://github.com/komapc/retro" target="_blank">komapc/retro</a>
+  TruthMachine pipeline by <a href="https://github.com/Daatan/retro" target="_blank">Daatan/retro</a>
 </footer>
 
 <script>

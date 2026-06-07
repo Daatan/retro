@@ -6,7 +6,7 @@ TruthMachine (Factum Atlas) is a retroactive media analysis pipeline that:
 1. Collects news articles published **before** known past events
 2. Extracts and quantifies forward-looking predictions from each article
 3. Scores each prediction against the actual outcome (Brier score)
-4. Renders an interactive coverage matrix at **komapc.github.io/retro**
+4. Renders an interactive coverage matrix at **daatan.github.io/retro**
 
 ---
 
@@ -363,7 +363,7 @@ recovery. Full design + IAM in [`docs/ATLAS_SNAPSHOTS.md`](docs/ATLAS_SNAPSHOTS.
 
 ```bash
 # On the instance (via SSM session):
-curl -sSL https://raw.githubusercontent.com/komapc/retro/main/infra/ec2_bootstrap.sh | bash
+curl -sSL https://raw.githubusercontent.com/Daatan/retro/main/infra/ec2_bootstrap.sh | bash
 
 # Start pipeline loop
 nohup bash ~/truthmachine/infra/ec2_run.sh \
@@ -390,7 +390,7 @@ nohup bash ~/truthmachine/infra/ec2_run.sh >> ~/truthmachine/pipeline_log.txt 2>
 
 | Workflow | Trigger | Effect |
 |---|---|---|
-| `deploy-atlas.yml`  | push to `main` touching `factum_atlas.html`, `oracle-test.html`, or `duel.html` | Deploys to **https://komapc.github.io/retro/** via GitHub Pages. The EC2 pipeline commits and pushes `factum_atlas.html` after each cycle, which triggers this. |
+| `deploy-atlas.yml`  | push to `main` touching `factum_atlas.html`, `oracle-test.html`, or `duel.html` | Deploys to **https://daatan.github.io/retro/** via GitHub Pages. The EC2 pipeline commits and pushes `factum_atlas.html` after each cycle, which triggers this. |
 | `deploy-oracle.yml` | push to `main` touching `api/**`, `pipeline/**`, `infra/deploy_oracle.sh`, `infra/oracle-api.service`, or the workflow itself; or manual `workflow_dispatch` | Authenticates to AWS via OIDC (no static keys), runs `aws ssm send-command` against the EC2 box to invoke `infra/deploy_oracle.sh`, polls until completion, prints the script output into the Actions log. Includes a no-op fast path when the resolved SHA is already deployed. |
 
 OIDC auth uses an IAM role whose ARN is stored as the `AWS_DEPLOY_ROLE_ARN` repo
@@ -533,7 +533,7 @@ POST /api/forecast
 - Reads `leaderboard.json` from the same `data/` directory (refreshed every 5 min)
 - Auth: `x-api-key` header + AWS Security Group (daatan SG → port 8001 only)
 - Subdomain: `oracle.daatan.com`
-- Test console: https://komapc.github.io/retro/oracle-test.html
+- Test console: https://daatan.github.io/retro/oracle-test.html
 - Full docs: `docs/ORACLE_API.md`
 
 **Decisions closed:**

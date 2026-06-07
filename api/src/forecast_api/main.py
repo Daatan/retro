@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
     logger.info("Oracle API shut down")
 
 
-_CORS_ORIGIN = "https://komapc.github.io"
+_CORS_ORIGIN = "https://daatan.github.io"
 _CORS_ORIGINS = {_CORS_ORIGIN, "https://bayes.daatan.com"}
 
 
@@ -76,7 +76,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://komapc.github.io",
+        "https://daatan.github.io",
         "https://bayes.daatan.com",
         "http://localhost:*",
         "http://127.0.0.1:*",
@@ -89,7 +89,7 @@ app.add_middleware(
 @app.get("/", include_in_schema=False)
 async def root():
     """Redirect to the interactive test console."""
-    return RedirectResponse("https://komapc.github.io/retro/oracle-test.html")
+    return RedirectResponse("https://daatan.github.io/retro/oracle-test.html")
 
 
 @app.get("/bayes/nodes", tags=["BayesOracle"])

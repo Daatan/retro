@@ -40,3 +40,6 @@ venv/
 
 # Skills
 *.skill
+
+# Oracle API build provenance — generated at deploy by infra/deploy_oracle.sh
+api/src/forecast_api/_build_info.json

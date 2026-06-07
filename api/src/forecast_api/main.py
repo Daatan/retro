@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from slowapi.errors import RateLimitExceeded
 
+from ._build import build_info
 from .auth import verify_api_key
 from .bayesoracle import compute_nodes
 from .cache import forecast_cache
@@ -21,7 +22,7 @@ from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderbo
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
 from .limiter import limiter
-from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, LlmRequest, LlmResponse, SearchRequest, SearchResponse, SearchHealthResponse
+from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, LlmRequest, LlmResponse, SearchRequest, SearchResponse, SearchHealthResponse, VersionResponse
 from .searcher import run_search, run_search_health
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
@@ -64,7 +65,7 @@ def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRespons
 app = FastAPI(
     title="TruthMachine Oracle API",
     description="Calibrated probability estimates for binary questions, weighted by historical source accuracy.",
-    version="0.1.0",
+    version=build_info()["version"],  # single-sourced from pyproject [project].version
     lifespan=lifespan,
 )
 
@@ -138,15 +139,25 @@ async def leaderboard(_: None = Depends(verify_api_key)):
 @app.get("/health", tags=["Meta"])
 async def health():
     """Liveness probe — no auth required."""
+    bi = build_info()
     return {
         "status": "ok",
-        "version": app.version,
+        "version": bi["version"],
+        "git_sha": bi["git_sha"],
+        "git_branch": bi["git_branch"],
+        "built_at": bi["built_at"],
         "leaderboard_sources": leaderboard_size(),
         "cache": {
             "enabled": forecast_cache.enabled,
             **forecast_cache.stats().as_dict(),
         },
     }
+
+
+@app.get("/version", response_model=VersionResponse, tags=["Meta"])
+async def version():
+    """Build provenance — version + deployed commit. No auth required."""
+    return build_info()
 
 
 @app.post("/forecast", response_model=ForecastResponse, tags=["Forecast"])

@@ -97,6 +97,13 @@ def build_info() -> dict:
     }
     base = _pkg_semver()  # single-sourced from package metadata, regardless of tier
     build = _coerce_build(info.get("build"))
+    # Backfill the build number from git if the chosen tier didn't carry one
+    # (e.g. a _build_info.json written by an older deploy script). Per-field
+    # fallback so the autoincrement still works without waiting for a redeploy.
+    if build is None and info.get("source") != "git":
+        g = _from_git()
+        if g:
+            build = g.get("build")
     return {
         "version": f"{base}+build.{build}" if build is not None else base,
         "base_version": base,

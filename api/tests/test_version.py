@@ -52,6 +52,22 @@ def test_build_info_prefers_file_and_composes_build(tmp_path, monkeypatch):
     _build.build_info.cache_clear()
 
 
+def test_build_backfilled_from_git_when_file_lacks_it(tmp_path, monkeypatch):
+    """A deploy file without a build number still gets one (git backfill),
+    while keeping source/sha/built_at from the file."""
+    _build.build_info.cache_clear()
+    f = tmp_path / "_build_info.json"
+    f.write_text(json.dumps({"git_sha": "1faa63e", "git_branch": "main",
+                             "built_at": "2026-06-07T13:12:42Z", "source": "deploy"}))
+    monkeypatch.setattr(_build, "_BUILD_FILE", f)
+    info = _build.build_info()
+    assert info["source"] == "deploy"
+    assert info["git_sha"] == "1faa63e"
+    assert isinstance(info["build"], int) and info["build"] > 0
+    assert info["version"] == f"{info['base_version']}+build.{info['build']}"
+    _build.build_info.cache_clear()
+
+
 def test_build_number_autoincrements_with_commit_count(monkeypatch):
     """The git fallback derives the build number from the commit count."""
     _build.build_info.cache_clear()

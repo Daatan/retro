@@ -13,10 +13,15 @@ def test_version_endpoint():
     r = client.get("/version")
     assert r.status_code == 200
     body = r.json()
-    for key in ("version", "git_sha", "git_branch", "built_at", "source"):
+    for key in ("version", "base_version", "build", "git_sha", "git_branch", "built_at", "source"):
         assert key in body
-    assert body["version"]  # non-empty semver
+    assert body["version"]  # non-empty
     assert body["source"] in {"deploy", "git", "env", "unknown"}
+    # when a build number is known, version composes base + build (autoincrement)
+    if body["build"] is not None:
+        assert body["version"] == f"{body['base_version']}+build.{body['build']}"
+    else:
+        assert body["version"] == body["base_version"]
 
 
 def test_health_includes_provenance():
@@ -33,15 +38,29 @@ def test_openapi_version_matches_build_info():
     assert app.version == _build.build_info()["version"]
 
 
-def test_build_info_prefers_file(tmp_path, monkeypatch):
+def test_build_info_prefers_file_and_composes_build(tmp_path, monkeypatch):
     _build.build_info.cache_clear()
     f = tmp_path / "_build_info.json"
-    f.write_text(json.dumps({"git_sha": "abc1234", "git_branch": "main",
+    f.write_text(json.dumps({"git_sha": "abc1234", "git_branch": "main", "build": 348,
                              "built_at": "2026-06-07T00:00:00Z", "source": "deploy"}))
     monkeypatch.setattr(_build, "_BUILD_FILE", f)
     info = _build.build_info()
     assert info["git_sha"] == "abc1234"
     assert info["source"] == "deploy"
+    assert info["build"] == 348
+    assert info["version"] == f"{info['base_version']}+build.348"
+    _build.build_info.cache_clear()
+
+
+def test_build_number_autoincrements_with_commit_count(monkeypatch):
+    """The git fallback derives the build number from the commit count."""
+    _build.build_info.cache_clear()
+    monkeypatch.setattr(_build, "_BUILD_FILE", _build._BUILD_FILE.with_name("nope.json"))
+    info = _build.build_info()
+    # local checkout has git -> build is a positive int and version embeds it
+    assert info["source"] == "git"
+    assert isinstance(info["build"], int) and info["build"] > 0
+    assert info["version"].endswith(f"+build.{info['build']}")
     _build.build_info.cache_clear()
 
 

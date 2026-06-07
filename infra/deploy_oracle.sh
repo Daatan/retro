@@ -54,9 +54,11 @@ $AS_UBUNTU $UV sync --frozen --quiet
 # always read from package metadata by _build.py, so it's not written here.
 BUILD_FILE="$API_DIR/api/src/forecast_api/_build_info.json"
 BRANCH=$($AS_UBUNTU git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-$AS_UBUNTU bash -c "printf '{\"git_sha\":\"%s\",\"git_branch\":\"%s\",\"built_at\":\"%s\",\"source\":\"deploy\"}\n' \
-  '$AFTER' '$BRANCH' '$(date -u +%FT%TZ)' > '$BUILD_FILE'"
-log "wrote build info: ${AFTER:0:8} ($BRANCH)"
+# Auto-incrementing build number = commit count (monotonic across merges to main).
+BUILD=$($AS_UBUNTU git rev-list --count HEAD 2>/dev/null || echo 0)
+$AS_UBUNTU bash -c "printf '{\"git_sha\":\"%s\",\"git_branch\":\"%s\",\"built_at\":\"%s\",\"build\":%s,\"source\":\"deploy\"}\n' \
+  '$AFTER' '$BRANCH' '$(date -u +%FT%TZ)' '$BUILD' > '$BUILD_FILE'"
+log "wrote build info: build $BUILD @ ${AFTER:0:8} ($BRANCH)"
 
 # ── 3. Health probe helper ───────────────────────────────────────────────────
 # Require N *consecutive* 200s rather than the first 200. A SIGHUP reload runs

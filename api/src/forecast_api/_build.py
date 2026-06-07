@@ -34,6 +34,13 @@ def _pkg_semver() -> str:
         return "0.0.0+unknown"
 
 
+def _coerce_build(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _from_file() -> dict | None:
     try:
         data = json.loads(_BUILD_FILE.read_text())
@@ -42,6 +49,7 @@ def _from_file() -> dict | None:
     if not data.get("git_sha"):
         return None
     data.setdefault("source", "deploy")
+    data["build"] = _coerce_build(data.get("build"))
     return data
 
 
@@ -60,7 +68,8 @@ def _from_git() -> dict | None:
     if not sha:
         return None
     return {"git_sha": sha, "git_branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
-            "built_at": None, "source": "git"}
+            "built_at": None, "build": _coerce_build(_git("rev-list", "--count", "HEAD")),
+            "source": "git"}
 
 
 def _from_env() -> dict | None:
@@ -68,19 +77,30 @@ def _from_env() -> dict | None:
     if not sha:
         return None
     return {"git_sha": sha, "git_branch": os.environ.get("GIT_BRANCH"),
-            "built_at": os.environ.get("BUILT_AT"), "source": "env"}
+            "built_at": os.environ.get("BUILT_AT"),
+            "build": _coerce_build(os.environ.get("BUILD_NUMBER")), "source": "env"}
 
 
 @lru_cache(maxsize=1)
 def build_info() -> dict:
-    """Return {version, git_sha, git_branch, built_at, source}. Never raises."""
+    """
+    Return {version, base_version, build, git_sha, git_branch, built_at, source}.
+
+    ``base_version`` is the human-set semver from pyproject; ``build`` is the
+    auto-incrementing commit count; ``version`` composes them as
+    ``"{base}+build.{n}"`` (PEP 440 local version) when a build number is known,
+    else just the base. Never raises.
+    """
     info = _from_file() or _from_git() or _from_env() or {
-        "git_sha": "unknown", "git_branch": None, "built_at": None, "source": "unknown",
+        "git_sha": "unknown", "git_branch": None, "built_at": None,
+        "build": None, "source": "unknown",
     }
-    # version is always single-sourced from package metadata, regardless of tier.
-    info["version"] = _pkg_semver()
+    base = _pkg_semver()  # single-sourced from package metadata, regardless of tier
+    build = _coerce_build(info.get("build"))
     return {
-        "version": info["version"],
+        "version": f"{base}+build.{build}" if build is not None else base,
+        "base_version": base,
+        "build": build,
         "git_sha": info.get("git_sha", "unknown"),
         "git_branch": info.get("git_branch"),
         "built_at": info.get("built_at"),

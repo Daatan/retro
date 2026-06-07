@@ -143,6 +143,7 @@ async def health():
     return {
         "status": "ok",
         "version": bi["version"],
+        "build": bi["build"],
         "git_sha": bi["git_sha"],
         "git_branch": bi["git_branch"],
         "built_at": bi["built_at"],

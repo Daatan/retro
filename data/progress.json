@@ -2670,7 +2670,7 @@
     "A11:calcalist": {
       "event_id": "A11",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2726,7 +2726,7 @@
     "A12:calcalist": {
       "event_id": "A12",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2754,7 +2754,7 @@
     "A13:calcalist": {
       "event_id": "A13",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2782,7 +2782,7 @@
     "A14:calcalist": {
       "event_id": "A14",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2810,8 +2810,8 @@
     "A15:calcalist": {
       "event_id": "A15",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A15:maariv": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T07:55:00.344148"
+  "last_updated": "2026-06-08T07:56:20.036967"
 }

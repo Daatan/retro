@@ -9649,8 +9649,8 @@
     "E05:aljazeera": {
       "event_id": "E05",
       "source_id": "aljazeera",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "E05:axios": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T16:21:51.981324"
+  "last_updated": "2026-06-08T16:25:09.996345"
 }

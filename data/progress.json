@@ -3930,7 +3930,7 @@
     "C09:calcalist": {
       "event_id": "C09",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T09:00:26.398028"
+  "last_updated": "2026-06-08T09:00:38.690322"
 }

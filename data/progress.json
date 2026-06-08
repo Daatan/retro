@@ -1627,8 +1627,8 @@
     "B06:globes": {
       "event_id": "B06",
       "source_id": "globes",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B06:haaretz": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T23:19:11.229600"
+  "last_updated": "2026-06-08T23:19:59.949403"
 }

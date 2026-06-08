@@ -1130,8 +1130,8 @@
     "B04:walla": {
       "event_id": "B04",
       "source_id": "walla",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B08:israel_hayom": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T16:09:48.812895"
+  "last_updated": "2026-06-08T16:10:47.931004"
 }

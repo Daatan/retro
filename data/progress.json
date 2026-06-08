@@ -2670,7 +2670,7 @@
     "A11:calcalist": {
       "event_id": "A11",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2726,7 +2726,7 @@
     "A12:calcalist": {
       "event_id": "A12",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2754,7 +2754,7 @@
     "A13:calcalist": {
       "event_id": "A13",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2782,7 +2782,7 @@
     "A14:calcalist": {
       "event_id": "A14",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T08:58:27.546943"
+  "last_updated": "2026-06-08T08:59:01.863953"
 }

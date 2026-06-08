@@ -2460,8 +2460,8 @@
     "A08:ynet": {
       "event_id": "A08",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A09:ch13": {
@@ -7612,7 +7612,7 @@
     "A06:guardian": {
       "event_id": "A06",
       "source_id": "guardian",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T16:04:41.334269"
+  "last_updated": "2026-06-08T16:05:56.140036"
 }

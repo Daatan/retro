@@ -4602,8 +4602,8 @@
     "E04:globes": {
       "event_id": "E04",
       "source_id": "globes",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "E04:haaretz": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T18:59:38.830239"
+  "last_updated": "2026-06-08T19:02:38.016493"
 }

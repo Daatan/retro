@@ -1368,8 +1368,8 @@
     "G05:walla": {
       "event_id": "G05",
       "source_id": "walla",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "G06:israel_hayom": {
@@ -5673,8 +5673,8 @@
     "G05:maariv": {
       "event_id": "G05",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "G05:n12": {
@@ -5806,8 +5806,8 @@
     "G08:globes": {
       "event_id": "G08",
       "source_id": "globes",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 4,
       "error": null
     },
     "G08:haaretz": {
@@ -10356,7 +10356,7 @@
     "G05:ft": {
       "event_id": "G05",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T16:31:49.968956"
+  "last_updated": "2026-06-08T16:37:58.364303"
 }

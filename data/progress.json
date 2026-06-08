@@ -738,8 +738,8 @@
     "G02:globes": {
       "event_id": "G02",
       "source_id": "globes",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "G02:haaretz": {
@@ -766,8 +766,8 @@
     "G02:ynet": {
       "event_id": "G02",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "C05:jpost": {
@@ -1032,8 +1032,8 @@
     "F05:reuters": {
       "event_id": "F05",
       "source_id": "reuters",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "F05:toi": {
@@ -5379,8 +5379,8 @@
     "G01:ch13": {
       "event_id": "G01",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "G01:globes": {
@@ -5519,8 +5519,8 @@
     "G03:jpost": {
       "event_id": "G03",
       "source_id": "jpost",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 11,
       "error": null
     },
     "G03:calcalist": {
@@ -5547,8 +5547,8 @@
     "G03:reuters": {
       "event_id": "G03",
       "source_id": "reuters",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G03:toi": {
@@ -10244,8 +10244,8 @@
     "G03:aljazeera": {
       "event_id": "G03",
       "source_id": "aljazeera",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "G03:axios": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T15:10:40.811673"
+  "last_updated": "2026-06-08T15:16:49.695906"
 }

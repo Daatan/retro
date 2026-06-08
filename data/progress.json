@@ -1886,7 +1886,7 @@
     "A01:calcalist": {
       "event_id": "A01",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -1970,7 +1970,7 @@
     "A02:calcalist": {
       "event_id": "A02",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -2110,7 +2110,7 @@
     "A04:calcalist": {
       "event_id": "A04",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -2250,7 +2250,7 @@
     "A06:calcalist": {
       "event_id": "A06",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -2670,7 +2670,7 @@
     "A11:calcalist": {
       "event_id": "A11",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -2726,7 +2726,7 @@
     "A12:calcalist": {
       "event_id": "A12",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -2754,7 +2754,7 @@
     "A13:calcalist": {
       "event_id": "A13",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -2782,7 +2782,7 @@
     "A14:calcalist": {
       "event_id": "A14",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -3398,7 +3398,7 @@
     "B11:calcalist": {
       "event_id": "B11",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -3426,7 +3426,7 @@
     "B12:calcalist": {
       "event_id": "B12",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -3510,7 +3510,7 @@
     "C01:calcalist": {
       "event_id": "C01",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -3594,7 +3594,7 @@
     "C02:calcalist": {
       "event_id": "C02",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -3846,7 +3846,7 @@
     "C06:calcalist": {
       "event_id": "C06",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -3930,7 +3930,7 @@
     "C09:calcalist": {
       "event_id": "C09",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -4462,7 +4462,7 @@
     "E02:calcalist": {
       "event_id": "E02",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -4546,7 +4546,7 @@
     "E03:calcalist": {
       "event_id": "E03",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -4630,7 +4630,7 @@
     "E04:calcalist": {
       "event_id": "E04",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -4798,7 +4798,7 @@
     "E06:calcalist": {
       "event_id": "E06",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -4938,7 +4938,7 @@
     "E09:calcalist": {
       "event_id": "E09",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -5022,7 +5022,7 @@
     "E10:calcalist": {
       "event_id": "E10",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -5190,7 +5190,7 @@
     "F02:calcalist": {
       "event_id": "F02",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -5358,7 +5358,7 @@
     "F05:calcalist": {
       "event_id": "F05",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -5526,7 +5526,7 @@
     "G03:calcalist": {
       "event_id": "G03",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -5666,7 +5666,7 @@
     "G05:calcalist": {
       "event_id": "G05",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -5694,7 +5694,7 @@
     "G06:calcalist": {
       "event_id": "G06",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -5750,7 +5750,7 @@
     "G07:calcalist": {
       "event_id": "G07",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },

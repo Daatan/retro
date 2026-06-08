@@ -5190,7 +5190,7 @@
     "F02:calcalist": {
       "event_id": "F02",
       "source_id": "calcalist",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T08:39:54.317395"
+  "last_updated": "2026-06-08T08:40:17.685846"
 }

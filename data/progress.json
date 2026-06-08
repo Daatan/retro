@@ -10,8 +10,8 @@
     "C05:haaretz": {
       "event_id": "C05",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "C05:reuters": {
@@ -45,8 +45,8 @@
     "C06:haaretz": {
       "event_id": "C06",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C06:reuters": {
@@ -1060,7 +1060,7 @@
     "C05:walla": {
       "event_id": "C05",
       "source_id": "walla",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -3839,8 +3839,8 @@
     "C06:ch13": {
       "event_id": "C06",
       "source_id": "ch13",
-      "status": "failed",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C06:calcalist": {
@@ -9054,7 +9054,7 @@
     "C06:nyt": {
       "event_id": "C06",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T14:44:40.105308"
+  "last_updated": "2026-06-08T14:46:39.863960"
 }

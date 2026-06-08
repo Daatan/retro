@@ -5337,8 +5337,8 @@
     "F04:maariv": {
       "event_id": "F04",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "F04:n12": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T19:04:38.912325"
+  "last_updated": "2026-06-08T19:08:40.158431"
 }

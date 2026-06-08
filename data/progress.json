@@ -5477,8 +5477,8 @@
     "G02:maariv": {
       "event_id": "G02",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G02:n12": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T15:50:37.144372"
+  "last_updated": "2026-06-08T15:54:36.692656"
 }

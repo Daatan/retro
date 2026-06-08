@@ -626,8 +626,8 @@
     "D02:ynet": {
       "event_id": "D02",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "D03:globes": {
@@ -1298,7 +1298,7 @@
     "D02:walla": {
       "event_id": "D02",
       "source_id": "walla",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -4147,8 +4147,8 @@
     "D04:reuters": {
       "event_id": "D04",
       "source_id": "reuters",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "D04:toi": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T15:39:39.815185"
+  "last_updated": "2026-06-08T15:42:15.092016"
 }

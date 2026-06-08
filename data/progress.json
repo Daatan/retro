@@ -5666,7 +5666,7 @@
     "G05:calcalist": {
       "event_id": "G05",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5694,7 +5694,7 @@
     "G06:calcalist": {
       "event_id": "G06",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5750,7 +5750,7 @@
     "G07:calcalist": {
       "event_id": "G07",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T09:03:01.578296"
+  "last_updated": "2026-06-08T09:03:22.181840"
 }

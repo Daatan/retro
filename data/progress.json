@@ -3335,8 +3335,8 @@
     "B09:ch13": {
       "event_id": "B09",
       "source_id": "ch13",
-      "status": "failed",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B09:calcalist": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T16:10:47.931004"
+  "last_updated": "2026-06-08T16:12:36.483595"
 }

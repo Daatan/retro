@@ -8151,7 +8151,7 @@
     "A18:ft": {
       "event_id": "A18",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T18:48:29.383243"
+  "last_updated": "2026-06-08T18:50:00.006553"
 }

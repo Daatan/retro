@@ -5372,8 +5372,8 @@
     "F05:n12": {
       "event_id": "F05",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G01:ch13": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T17:31:46.165988"
+  "last_updated": "2026-06-08T17:35:26.718143"
 }

@@ -2544,8 +2544,8 @@
     "A09:ynet": {
       "event_id": "A09",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A10:ch13": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T18:14:05.257986"
+  "last_updated": "2026-06-08T18:15:13.987153"
 }

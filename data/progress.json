@@ -4938,7 +4938,7 @@
     "E09:calcalist": {
       "event_id": "E09",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5022,7 +5022,7 @@
     "E10:calcalist": {
       "event_id": "E10",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5190,8 +5190,8 @@
     "F02:calcalist": {
       "event_id": "F02",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 4,
       "error": null
     },
     "F02:maariv": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T09:01:29.851846"
+  "last_updated": "2026-06-08T09:02:41.477594"
 }

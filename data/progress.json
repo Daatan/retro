@@ -5876,7 +5876,7 @@
     "G08:ynet": {
       "event_id": "G08",
       "source_id": "ynet",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T19:37:23.781347"
+  "last_updated": "2026-06-08T19:42:16.332835"
 }

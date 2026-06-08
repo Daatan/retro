@@ -2978,8 +2978,8 @@
     "A17:toi": {
       "event_id": "A17",
       "source_id": "toi",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A17:walla": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T23:17:44.194532"
+  "last_updated": "2026-06-08T23:19:11.229600"
 }

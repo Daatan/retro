@@ -381,8 +381,8 @@
     "B13:ynet": {
       "event_id": "B13",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A04:globes": {
@@ -3475,8 +3475,8 @@
     "C01:ch13": {
       "event_id": "C01",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "C01:globes": {
@@ -8760,8 +8760,8 @@
     "B13:bloomberg": {
       "event_id": "B13",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B13:ft": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T14:42:23.859674"
+  "last_updated": "2026-06-08T14:44:40.105308"
 }

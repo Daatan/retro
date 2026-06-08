@@ -2999,8 +2999,8 @@
     "A18:ch13": {
       "event_id": "A18",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A18:globes": {
@@ -8151,7 +8151,7 @@
     "A18:ft": {
       "event_id": "A18",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T18:17:00.248148"
+  "last_updated": "2026-06-08T18:20:26.402393"
 }

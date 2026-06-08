@@ -4630,7 +4630,7 @@
     "E04:calcalist": {
       "event_id": "E04",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -4798,7 +4798,7 @@
     "E06:calcalist": {
       "event_id": "E06",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T09:01:13.727704"
+  "last_updated": "2026-06-08T09:01:29.851846"
 }

@@ -3559,8 +3559,8 @@
     "C02:ch13": {
       "event_id": "C02",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "C02:globes": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T15:35:32.067462"
+  "last_updated": "2026-06-08T15:37:17.975760"
 }

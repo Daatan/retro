@@ -4630,7 +4630,7 @@
     "E04:calcalist": {
       "event_id": "E04",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -4714,8 +4714,8 @@
     "E05:calcalist": {
       "event_id": "E05",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "E05:maariv": {
@@ -4798,7 +4798,7 @@
     "E06:calcalist": {
       "event_id": "E06",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -4854,8 +4854,8 @@
     "E07:calcalist": {
       "event_id": "E07",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "E07:maariv": {
@@ -4882,7 +4882,7 @@
     "E08:calcalist": {
       "event_id": "E08",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T08:19:42.037294"
+  "last_updated": "2026-06-08T08:24:21.710458"
 }

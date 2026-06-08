@@ -3,36 +3,51 @@ from .config import settings
 from .llm import complete_structured
 
 PROMPT = """\
-You are a forensic prediction analyst. Extract every distinct forward-looking prediction \
-from the article below and quantify each one.
+You are a forensic prediction analyst. Your job is to extract EVERY signal — \
+explicit or implicit — that bears on whether the RELATED EVENT will occur.
 
-Extract ALL predictions — not just explicit forecasts, but also:
-- Implied directional views ("the economy is heading toward...")
-- Vague sentiment that implies an outcome ("things are deteriorating")
-- Predictions hidden between the lines in analysis or sourced commentary
+## What counts as a signal
 
-STANCE DEFINITION — this is the most important field:
-  stance measures how strongly the prediction implies the RELATED EVENT will occur.
-  +1.0 = the author is certain the related event WILL happen
-  -1.0 = the author is certain the related event WILL NOT happen
-   0.0 = neutral / genuinely uncertain
+Extract ALL of the following:
+- Explicit forecasts: "X will happen", "Y is expected to..."
+- Implied directional views: "the economy is heading toward...", "pressure is mounting"
+- Factual reports whose content logically implies an outcome — e.g. reporting that \
+  troops are advancing implies a battle outcome; reporting that negotiations collapsed \
+  implies a deal is less likely. INFER the implication.
+- Quotes from officials, analysts, or experts that imply a position
+- Vague sentiment that colors likelihood: "things are deteriorating", "a breakthrough \
+  looks distant"
+- Even near-zero certainty signals (certainty=0.1) are valuable — include them
 
-  The related event is given below. Ask yourself: does this prediction imply the
-  event is more likely (+) or less likely (-) to happen?
+## What does NOT count
+- Pure background with zero bearing on the event (e.g. article only covers geography)
+- Statements about a wholly different event with no link to the related event
 
-  Example: related event = "Assad regime falls in Syria"
-    "Rebel forces are closing in on Hama" → stance +0.7  (implies Assad will fall)
-    "Assad's army is holding the line"    → stance -0.6  (implies Assad will NOT fall)
-    "The outcome remains uncertain"       → stance  0.0
+## STANCE — the most important field
+Stance measures how strongly this signal implies the RELATED EVENT will occur.
+  +1.0 = certain the event WILL happen
+  -1.0 = certain the event WILL NOT happen
+   0.0 = neutral / no directional signal
 
-  Do NOT use stance to indicate whether the outcome is good or bad.
-  Use stance ONLY to indicate whether the prediction points toward the event happening.
+Ask yourself: "If this quote/fact is true, does it make the related event more likely \
+(positive stance) or less likely (negative stance)?"
 
-For each prediction extract exactly four fields:
-- quote: exact sentence(s) from the article (keep original language)
-- claim: one-sentence neutral summary in English
-- stance: float from -1.0 (event will NOT happen) to +1.0 (event WILL happen)
-- certainty: float from 0.0 (very hedged) to 1.0 (absolute confidence)
+Examples — related event: "Assad regime falls in Syria":
+  "Rebel forces are closing in on Hama"        → stance +0.7, certainty 0.6
+  "Assad's army is holding the line"           → stance −0.6, certainty 0.5
+  "The conflict has dragged on for two years"  → stance +0.2, certainty 0.2
+  "International sanctions remain in place"   → stance +0.3, certainty 0.3
+
+Note: even factual/contextual sentences have a stance if they imply a direction.
+Do NOT use stance to indicate good/bad — only more/less likely to happen.
+
+## Article language
+The article may be in Hebrew, Arabic, or English. Always write the claim in English.
+Quote the original language verbatim in the quote field.
+
+## Output
+Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certainty \
+signals if they are the only content available.
 
 Article:
 <article>
@@ -44,22 +59,23 @@ Journalist: {journalist}
 Date: {article_date}
 Related event: {event_name} — {event_description}
 
-Return up to 5 predictions. If more exist, take the most specific and highest-stance ones.
-The claim field must be in English.
-
 IMPORTANT: Your response must be a JSON object with a "predictions" key containing a list.
-Example structure: {{"predictions": [ {{...}}, {{...}} ]}}
-Do NOT return a bare JSON array. Always wrap in {{"predictions": [...]}}
+Example: {{"predictions": [ {{...}}, {{...}} ]}}
 
-CRITICAL: Each prediction must be a JSON object with exactly these four fields:
-  quote (string), claim (string), stance (float -1 to 1), certainty (float 0-1)
+Each prediction has exactly four fields:
+  quote (string — original language), claim (string — English), \
+stance (float −1 to 1), certainty (float 0 to 1)
 
 Example — related event: "Assad regime falls in Syria":
 {{
-  "quote": "Syrian rebel forces pushed close on Tuesday to the major city of Hama",
-  "claim": "Rebel advances toward Hama make Assad's fall increasingly likely",
-  "stance": 0.7,
-  "certainty": 0.6
+  "predictions": [
+    {{
+      "quote": "Syrian rebel forces pushed close on Tuesday to the major city of Hama",
+      "claim": "Rebel advances toward Hama make Assad's fall increasingly likely",
+      "stance": 0.7,
+      "certainty": 0.6
+    }}
+  ]
 }}
 """
 

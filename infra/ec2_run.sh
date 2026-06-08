@@ -155,6 +155,48 @@ print(' '.join(sorted(events)))
 
   log "Extraction complete — $(cell_stats)"
 
+  # ── 4. Oracle API fill-in: search for articles for events that are still empty ─
+  # Runs once every 4 cycles (offset-based) to avoid hammering Oracle on every cycle.
+  ORACLE_TURN_FILE="$DATA_DIR/oracle_fill_turn"
+  ORACLE_TURN=$(cat "$ORACLE_TURN_FILE" 2>/dev/null || echo 0)
+  ORACLE_TURN=$(( (ORACLE_TURN + 1) % 4 ))
+  echo "$ORACLE_TURN" > "$ORACLE_TURN_FILE"
+  if [[ "$ORACLE_TURN" -eq 0 ]] && [[ -n "${ORACLE_API_KEY:-}" ]]; then
+    EMPTY_EVENTS=$(python3 -c "
+import json, os
+from pathlib import Path
+data = Path(os.environ['DATA_DIR'])
+raw = data / 'raw_ingest'
+cells = json.loads((data / 'progress.json').read_text()).get('cells', {})
+# Events where every known source is no_predictions AND has no raw articles
+from collections import defaultdict
+event_has_articles = defaultdict(bool)
+if raw.exists():
+    for src_dir in raw.iterdir():
+        for evt_dir in src_dir.iterdir():
+            if any(evt_dir.glob('*.json')):
+                event_has_articles[evt_dir.name] = True
+# Events with no articles at all
+events_dir = data / 'events'
+all_events = {p.stem for p in events_dir.glob('*.json')}
+empty = sorted(e for e in all_events if not event_has_articles[e])
+print(' '.join(empty))
+" 2>/dev/null)
+    if [[ -n "$EMPTY_EVENTS" ]]; then
+      read -ra EMPTY_ARR <<< "$EMPTY_EVENTS"
+      log "Oracle API fill: ${#EMPTY_ARR[@]} events with no articles — searching via Oracle"
+      for (( i=0; i<${#EMPTY_ARR[@]}; i+=5 )); do
+        FILL_BATCH=("${EMPTY_ARR[@]:i:5}")
+        timeout 600 uv run --project "$PIPELINE_DIR" python -m tm.orchestrator api \
+          --retry-empty \
+          --events "${FILL_BATCH[@]}" 2>&1 \
+          || log "WARNING: Oracle fill batch timed out or failed — continuing"
+        commit_and_push "oracle-fill (${FILL_BATCH[*]})"
+      done
+      log "Oracle API fill complete — $(cell_stats)"
+    fi
+  fi
+
   # Snapshot atlas+vault2 to S3 so a replaced EC2 instance can resume with
   # prior state. Non-fatal — failures are logged but don't break the loop.
   # Runs unconditionally after the extraction phase because vault2/ grows on

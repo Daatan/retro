@@ -95,9 +95,10 @@ def _is_ascii(s: str) -> bool:
 KNOWN_SOURCE_IDS: list[str] = [
     "ynet", "haaretz", "haaretz_he", "toi", "globes", "reuters", "jpost",
     "israel_hayom", "walla", "n12", "maariv", "ch13", "calcalist",
-    "web_search", "gdelt",
     "bloomberg", "bbc",
     "aljazeera", "nyt", "ft", "guardian", "axios",
-    # kan11: TV-only, no indexable web article corpus (Phase 2)
-    # wapost: hard paywall, scraping returns subscription walls
+    # kan11:      TV-only, no indexable web article corpus (Phase 2)
+    # wapost:     hard paywall, scraping returns subscription walls
+    # web_search: meta-source / synthetic, not a scoreable news outlet
+    # gdelt:      synthetic aggregator, not a scoreable news outlet
 ]

@@ -2677,8 +2677,8 @@
     "A11:maariv": {
       "event_id": "A11",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A11:n12": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T17:44:11.471939"
+  "last_updated": "2026-06-08T17:46:07.494828"
 }

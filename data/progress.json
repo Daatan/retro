@@ -3426,8 +3426,8 @@
     "B12:calcalist": {
       "event_id": "B12",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B12:maariv": {
@@ -3510,7 +3510,7 @@
     "C01:calcalist": {
       "event_id": "C01",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -3594,8 +3594,8 @@
     "C02:calcalist": {
       "event_id": "C02",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C02:maariv": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T08:59:28.997780"
+  "last_updated": "2026-06-08T09:00:13.605813"
 }

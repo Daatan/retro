@@ -556,7 +556,7 @@
     "A15:ynet": {
       "event_id": "A15",
       "source_id": "ynet",
-      "status": "in_progress",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2740,8 +2740,8 @@
     "A12:n12": {
       "event_id": "A12",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A13:ch13": {
@@ -2782,8 +2782,8 @@
     "A14:calcalist": {
       "event_id": "A14",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A14:maariv": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T14:26:54.991048"
+  "last_updated": "2026-06-08T14:29:54.928675"
 }

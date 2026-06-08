@@ -2628,8 +2628,8 @@
     "A10:ynet": {
       "event_id": "A10",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A11:ch13": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T17:42:58.691833"
+  "last_updated": "2026-06-08T17:44:11.471939"
 }

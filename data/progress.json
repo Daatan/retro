@@ -2852,8 +2852,8 @@
     "A16:israel_hayom": {
       "event_id": "A16",
       "source_id": "israel_hayom",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "A16:jpost": {
@@ -3132,8 +3132,8 @@
     "B01:n12": {
       "event_id": "B01",
       "source_id": "n12",
-      "status": "failed",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B02:ch13": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T15:30:53.096555"
+  "last_updated": "2026-06-08T15:32:52.591934"
 }

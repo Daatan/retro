@@ -5659,8 +5659,8 @@
     "G05:ch13": {
       "event_id": "G05",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "G05:calcalist": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T17:04:54.533834"
+  "last_updated": "2026-06-08T17:10:04.094948"
 }

@@ -3412,8 +3412,8 @@
     "B11:n12": {
       "event_id": "B11",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B12:ch13": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T19:20:39.574478"
+  "last_updated": "2026-06-08T19:22:25.710133"
 }

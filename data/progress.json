@@ -2250,7 +2250,7 @@
     "A06:calcalist": {
       "event_id": "A06",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2334,8 +2334,8 @@
     "A07:calcalist": {
       "event_id": "A07",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A07:maariv": {
@@ -2418,8 +2418,8 @@
     "A08:calcalist": {
       "event_id": "A08",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 9,
       "error": null
     },
     "A08:maariv": {
@@ -2502,8 +2502,8 @@
     "A09:calcalist": {
       "event_id": "A09",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A09:maariv": {
@@ -2586,8 +2586,8 @@
     "A10:calcalist": {
       "event_id": "A10",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A10:maariv": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T07:49:46.986540"
+  "last_updated": "2026-06-08T07:55:00.344148"
 }

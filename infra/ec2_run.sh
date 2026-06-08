@@ -144,6 +144,7 @@ print(' '.join(sorted(events)))
       log "Batch ${BATCH}: events ${BATCH_EVENTS[*]}"
 
       timeout 600 uv run --project "$PIPELINE_DIR" python -m tm.orchestrator local_file \
+        --retry-empty \
         --events "${BATCH_EVENTS[@]}" 2>&1 \
         || log "WARNING: orchestrator batch ${BATCH} timed out or failed — continuing"
 

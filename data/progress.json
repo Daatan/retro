@@ -5701,8 +5701,8 @@
     "G06:maariv": {
       "event_id": "G06",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G06:n12": {
@@ -5736,8 +5736,8 @@
     "G07:israel_hayom": {
       "event_id": "G07",
       "source_id": "israel_hayom",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 4,
       "error": null
     },
     "G07:jpost": {
@@ -5848,8 +5848,8 @@
     "G08:n12": {
       "event_id": "G08",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "G08:reuters": {
@@ -10496,8 +10496,8 @@
     "G08:ft": {
       "event_id": "G08",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "G08:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T15:16:49.695906"
+  "last_updated": "2026-06-08T15:23:55.011046"
 }

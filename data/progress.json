@@ -1060,8 +1060,8 @@
     "C05:walla": {
       "event_id": "C05",
       "source_id": "walla",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "C06:israel_hayom": {
@@ -3846,8 +3846,8 @@
     "C06:calcalist": {
       "event_id": "C06",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C06:maariv": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T15:37:17.975760"
+  "last_updated": "2026-06-08T15:39:39.815185"
 }

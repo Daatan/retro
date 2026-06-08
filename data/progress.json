@@ -4301,8 +4301,8 @@
     "D06:maariv": {
       "event_id": "D06",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "D06:n12": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T15:42:15.092016"
+  "last_updated": "2026-06-08T15:44:35.870633"
 }

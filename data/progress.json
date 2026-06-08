@@ -8634,7 +8634,7 @@
     "B10:ft": {
       "event_id": "B10",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T21:53:16.360556"
+  "last_updated": "2026-06-08T21:54:50.645785"
 }

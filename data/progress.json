@@ -3398,7 +3398,7 @@
     "B11:calcalist": {
       "event_id": "B11",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T08:59:01.863953"
+  "last_updated": "2026-06-08T08:59:28.997780"
 }

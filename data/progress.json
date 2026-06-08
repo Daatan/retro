@@ -5358,7 +5358,7 @@
     "F05:calcalist": {
       "event_id": "F05",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5526,7 +5526,7 @@
     "G03:calcalist": {
       "event_id": "G03",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T09:02:41.477594"
+  "last_updated": "2026-06-08T09:03:01.578296"
 }

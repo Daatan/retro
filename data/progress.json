@@ -1298,8 +1298,8 @@
     "D02:walla": {
       "event_id": "D02",
       "source_id": "walla",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "D03:israel_hayom": {
@@ -9299,7 +9299,7 @@
     "D03:ft": {
       "event_id": "D03",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T16:15:24.832884"
+  "last_updated": "2026-06-08T16:19:32.446236"
 }

@@ -2061,15 +2061,15 @@
     "A03:maariv": {
       "event_id": "A03",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A03:n12": {
       "event_id": "A03",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A03:reuters": {
@@ -2145,8 +2145,8 @@
     "A05:haaretz": {
       "event_id": "A05",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A05:israel_hayom": {
@@ -2159,8 +2159,8 @@
     "A05:jpost": {
       "event_id": "A05",
       "source_id": "jpost",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A05:calcalist": {
@@ -2173,15 +2173,15 @@
     "A05:maariv": {
       "event_id": "A05",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A05:n12": {
       "event_id": "A05",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A05:reuters": {
@@ -2194,22 +2194,22 @@
     "A05:toi": {
       "event_id": "A05",
       "source_id": "toi",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A05:walla": {
       "event_id": "A05",
       "source_id": "walla",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 6,
       "error": null
     },
     "A05:ynet": {
       "event_id": "A05",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A06:ch13": {
@@ -7549,15 +7549,15 @@
     "A05:ft": {
       "event_id": "A05",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "A05:guardian": {
       "event_id": "A05",
       "source_id": "guardian",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A05:nyt": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T14:15:46.127126"
+  "last_updated": "2026-06-08T14:20:20.164070"
 }

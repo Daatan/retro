@@ -1018,8 +1018,8 @@
     "F05:haaretz": {
       "event_id": "F05",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "F05:jpost": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T16:28:01.089935"
+  "last_updated": "2026-06-08T16:31:49.968956"
 }

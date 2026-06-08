@@ -2250,7 +2250,7 @@
     "A06:calcalist": {
       "event_id": "A06",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T08:58:08.378168"
+  "last_updated": "2026-06-08T08:58:27.546943"
 }

@@ -4882,8 +4882,8 @@
     "E08:calcalist": {
       "event_id": "E08",
       "source_id": "calcalist",
-      "status": "failed",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "E08:maariv": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T08:47:08.824011"
+  "last_updated": "2026-06-08T08:51:09.427572"
 }

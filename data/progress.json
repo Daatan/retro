@@ -5687,8 +5687,8 @@
     "G06:ch13": {
       "event_id": "G06",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G06:calcalist": {
@@ -10356,7 +10356,7 @@
     "G05:ft": {
       "event_id": "G05",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10482,8 +10482,8 @@
     "G08:bbc": {
       "event_id": "G08",
       "source_id": "bbc",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G08:bloomberg": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T15:54:36.692656"
+  "last_updated": "2026-06-08T16:01:08.714151"
 }

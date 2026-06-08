@@ -9299,7 +9299,7 @@
     "D03:ft": {
       "event_id": "D03",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T16:50:51.316995"
+  "last_updated": "2026-06-08T16:53:02.464173"
 }

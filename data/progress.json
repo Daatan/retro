@@ -4973,8 +4973,8 @@
     "E09:walla": {
       "event_id": "E09",
       "source_id": "walla",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "E09:ynet": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T15:08:14.454217"
+  "last_updated": "2026-06-08T15:10:40.811673"
 }

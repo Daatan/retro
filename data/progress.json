@@ -2754,8 +2754,8 @@
     "A13:calcalist": {
       "event_id": "A13",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A13:maariv": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T17:13:27.477998"
+  "last_updated": "2026-06-08T17:15:40.946980"
 }

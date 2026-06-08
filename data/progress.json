@@ -8781,7 +8781,7 @@
     "B13:nyt": {
       "event_id": "B13",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T22:51:46.596921"
+  "last_updated": "2026-06-08T22:53:16.632982"
 }

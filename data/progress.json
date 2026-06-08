@@ -556,8 +556,8 @@
     "A15:ynet": {
       "event_id": "A15",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A19:globes": {
@@ -1242,8 +1242,8 @@
     "A13:walla": {
       "event_id": "A13",
       "source_id": "walla",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A14:israel_hayom": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T15:28:13.414826"
+  "last_updated": "2026-06-08T15:30:53.096555"
 }

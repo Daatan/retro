@@ -3510,8 +3510,8 @@
     "C01:calcalist": {
       "event_id": "C01",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C01:maariv": {
@@ -8781,7 +8781,7 @@
     "B13:nyt": {
       "event_id": "B13",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T16:47:56.609347"
+  "last_updated": "2026-06-08T16:49:36.969460"
 }

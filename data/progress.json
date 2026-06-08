@@ -66,8 +66,8 @@
     "C06:ynet": {
       "event_id": "C06",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "C07:globes": {
@@ -1452,8 +1452,8 @@
     "B01:ynet": {
       "event_id": "B01",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 7,
       "error": null
     },
     "B02:globes": {
@@ -1508,8 +1508,8 @@
     "B02:ynet": {
       "event_id": "B02",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "B03:globes": {
@@ -2908,8 +2908,8 @@
     "A16:ynet": {
       "event_id": "A16",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A17:ch13": {

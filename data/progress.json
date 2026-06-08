@@ -1487,8 +1487,8 @@
     "B02:reuters": {
       "event_id": "B02",
       "source_id": "reuters",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B02:toi": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T18:50:00.006553"
+  "last_updated": "2026-06-08T18:50:53.923225"
 }

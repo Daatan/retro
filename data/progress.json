@@ -4756,8 +4756,8 @@
     "E05:ynet": {
       "event_id": "E05",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "E06:ch13": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-08T22:01:53.139683"
+  "last_updated": "2026-06-08T22:04:31.716694"
 }

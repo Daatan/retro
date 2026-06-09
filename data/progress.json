@@ -10356,7 +10356,7 @@
     "G05:ft": {
       "event_id": "G05",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-09T03:20:49.796925"
+  "last_updated": "2026-06-09T03:25:37.443317"
 }

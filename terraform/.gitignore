@@ -1,0 +1,11 @@
+# Terraform
+.terraform/
+# NOTE: .terraform.lock.hcl IS committed (pins provider versions) — not ignored.
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf

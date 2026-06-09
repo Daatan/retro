@@ -160,10 +160,6 @@ GCP_SA_KEY_JSON: Optional[str] = _secret("GCP_SA_KEY_JSON", "daatan/gcp-service-
 NEWS_INDEXER_URL: Optional[str] = _secret("NEWS_INDEXER_URL", "daatan/news-indexer-url")
 NEWS_INDEXER_API_KEY: Optional[str] = _secret("NEWS_INDEXER_API_KEY", "daatan/news-indexer-api-key")
 
-# news-indexer — local semantic index (https://scrapper.daatan.com)
-NEWS_INDEXER_URL: Optional[str] = _secret("NEWS_INDEXER_URL", "openclaw/news-indexer-url")
-NEWS_INDEXER_API_KEY: Optional[str] = _secret("NEWS_INDEXER_API_KEY", "openclaw/news-indexer-api-key")
-
 _KEY_LOADED_AT: float = time.time()
 
 # Cached BigQuery client — created lazily on first use, invalidated on key refresh.

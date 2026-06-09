@@ -326,7 +326,7 @@ The instance hosts two independent `git` worktrees with two systemd services:
 Both checkouts read the same `data/` directory — the API's `.env` sets
 `DATA_DIR=/home/ubuntu/truthmachine/data`. **Data is shared, code is not.** This
 keeps API deploys trivial: they never have to reason about the pipeline's
-unpushed atlas commits. See [`docs/ORACLE_DEPLOY.md`](docs/ORACLE_DEPLOY.md).
+unpushed atlas commits. See [`docs/ORACLE_DEPLOY.md`](ORACLE_DEPLOY.md).
 
 ### Atlas durability (S3 snapshots)
 
@@ -336,7 +336,7 @@ are not in git. `infra/snapshot_atlas.sh` tars them to
 cycle. `infra/restore_atlas.sh` runs from `ec2_bootstrap.sh` between data-dir
 creation and service start, restoring `latest.tgz` if `data/atlas/` is empty.
 30-day per-cycle retention + 7-day versioned `latest.tgz` give point-in-time
-recovery. Full design + IAM in [`docs/ATLAS_SNAPSHOTS.md`](docs/ATLAS_SNAPSHOTS.md).
+recovery. Full design + IAM in [`docs/ATLAS_SNAPSHOTS.md`](ATLAS_SNAPSHOTS.md).
 
 ### Required Secrets (AWS Secrets Manager, `eu-central-1`)
 
@@ -392,8 +392,8 @@ OIDC auth uses an IAM role whose ARN is stored as the `AWS_DEPLOY_ROLE_ARN` repo
 variable. The role's trust + permissions are scoped to GH runs from this repo on
 `main` (plus `workflow_dispatch`) and to `ssm:SendCommand` on the one oracle
 instance with the `AWS-RunShellScript` document only. Templates live in
-`infra/iam/` — see [`infra/iam/README.md`](infra/iam/README.md) and
-[`docs/ORACLE_DEPLOY.md`](docs/ORACLE_DEPLOY.md).
+`infra/iam/` — see [`infra/iam/README.md`](../infra/iam/README.md) and
+[`docs/ORACLE_DEPLOY.md`](ORACLE_DEPLOY.md).
 
 ---
 
@@ -468,7 +468,7 @@ New question arrives
 > via `oracle.ts` (context route + express guess route, with automatic fallback
 > to the existing LLM `guessChances` path when the Oracle is unavailable).
 > Auto-deploys on merge to `main` via `.github/workflows/deploy-oracle.yml`. See
-> [`docs/ORACLE_API.md`](docs/ORACLE_API.md) and [`docs/ORACLE_DEPLOY.md`](docs/ORACLE_DEPLOY.md).
+> [`docs/ORACLE_API.md`](ORACLE_API.md) and [`docs/ORACLE_DEPLOY.md`](ORACLE_DEPLOY.md).
 
 ### Purpose
 

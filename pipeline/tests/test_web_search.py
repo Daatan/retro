@@ -402,6 +402,107 @@ class TestGoogleCseProvider:
 
 
 # ---------------------------------------------------------------------------
+# news-indexer provider (requires import)
+# ---------------------------------------------------------------------------
+
+@needs_deps
+class TestNewsIndexerProvider:
+    def test_inert_when_unconfigured(self, monkeypatch):
+        """Both env vars absent → httpx never called, 'news_indexer' not in chain.
+        This is the load-bearing guarantee: the block is a no-op until secrets
+        are configured in Secrets Manager."""
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = None
+        ws.NEWS_INDEXER_API_KEY = None
+        called = []
+        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: called.append(a) or (_ for _ in ()).throw(RuntimeError("must not be called")))
+        with patch.multiple(ws,
+            _search_gdelt=MagicMock(return_value=[]),
+            _search_gdelt_bq=MagicMock(return_value=[]),
+            _search_serpapi_news=MagicMock(return_value=[]),
+            _search_serper_news=MagicMock(return_value=[]),
+            _search_brave_news=MagicMock(return_value=[]),
+            _search_tavily=MagicMock(return_value=[]),
+            _search_brightdata=MagicMock(return_value=[]),
+            _search_nimbleway=MagicMock(return_value=[]),
+            _search_scrapingbee=MagicMock(return_value=[]),
+            _search_newsdata_io=MagicMock(return_value=[]),
+            _search_dataforseo=MagicMock(return_value=[]),
+            _search_ddg_news=MagicMock(return_value=[]),
+        ):
+            ws.search_articles("test query")
+        assert not called, "httpx.get must not be called when news-indexer is unconfigured"
+        assert "news_indexer" not in ws.get_last_search_provider_chain()
+
+    def test_runs_before_gdelt_when_configured(self, monkeypatch):
+        """Configured + non-empty response → returns before GDELT; provider is 'news_indexer'."""
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        from tm.web_search import SearchResult
+        hit = [{"title": "T", "url": "http://x.com/1", "snippet": "S", "source": "x.com", "published_date": "2026-06-01"}]
+        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(200, hit))
+        gdelt_spy = MagicMock(return_value=[])
+        with patch.multiple(ws, _search_gdelt=gdelt_spy):
+            res = ws.search_articles("some query")
+        assert res
+        assert res[0].url == "http://x.com/1"
+        assert ws.get_last_search_provider() == "news_indexer"
+        assert not gdelt_spy.called, "GDELT must not run when news-indexer returns hits"
+
+    def test_falls_through_on_empty_list(self, monkeypatch):
+        """Empty list response → fall through to GDELT; 'news_indexer' still appears in chain."""
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        from tm.web_search import SearchResult
+        gdelt_hit = [SearchResult(title="G", url="http://g.com/1", snippet="gdelt")]
+        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(200, []))
+        with patch.multiple(ws,
+            _search_gdelt=MagicMock(return_value=gdelt_hit),
+            _search_gdelt_bq=MagicMock(return_value=[]),
+        ):
+            res = ws.search_articles("some query")
+        assert res
+        assert res[0].url == "http://g.com/1"
+        assert ws.get_last_search_provider() == "gdelt"
+        assert "news_indexer" in ws.get_last_search_provider_chain()
+
+    def test_falls_through_on_http_error(self, monkeypatch):
+        """Network/HTTP error → warning logged, fall through to GDELT; no exception raised."""
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        from tm.web_search import SearchResult
+        gdelt_hit = [SearchResult(title="G", url="http://g.com/1", snippet="gdelt")]
+        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: (_ for _ in ()).throw(Exception("connection refused")))
+        with patch.multiple(ws,
+            _search_gdelt=MagicMock(return_value=gdelt_hit),
+            _search_gdelt_bq=MagicMock(return_value=[]),
+        ):
+            res = ws.search_articles("some query")
+        assert res
+        assert ws.get_last_search_provider() == "gdelt"
+
+    def test_passes_correct_params(self, monkeypatch):
+        """Verifies URL, query param, limit, and x-api-key header are sent correctly."""
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "https://scrapper.daatan.com"
+        ws.NEWS_INDEXER_API_KEY = "mykey"
+        captured = {}
+        def fake_get(url, *, params=None, headers=None, timeout=None):
+            captured["url"] = url
+            captured["params"] = params
+            captured["headers"] = headers
+            return _FakeResp(200, [{"title": "T", "url": "http://x.com", "snippet": "S", "source": "", "published_date": ""}])
+        monkeypatch.setattr(ws.httpx, "get", fake_get)
+        ws.search_articles("ukraine war", limit=5)
+        assert captured["url"] == "https://scrapper.daatan.com/search"
+        assert captured["params"] == {"q": "ukraine war", "limit": 5}
+        assert captured["headers"].get("x-api-key") == "mykey"
+
+
+# ---------------------------------------------------------------------------
 # GDELT BigQuery fallback ordering (requires import)
 # ---------------------------------------------------------------------------
 

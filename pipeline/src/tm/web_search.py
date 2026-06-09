@@ -156,6 +156,10 @@ GOOGLE_CSE_API_KEY: Optional[str] = _secret("GOOGLE_CSE_API_KEY", "openclaw/goog
 GOOGLE_CSE_CX: Optional[str] = _secret("GOOGLE_CSE_CX", "openclaw/google-cse-cx")
 GCP_SA_KEY_JSON: Optional[str] = _secret("GCP_SA_KEY_JSON", "openclaw/gcp-service-account-key")
 
+# news-indexer — local semantic index (https://scrapper.daatan.com)
+NEWS_INDEXER_URL: Optional[str] = _secret("NEWS_INDEXER_URL", "openclaw/news-indexer-url")
+NEWS_INDEXER_API_KEY: Optional[str] = _secret("NEWS_INDEXER_API_KEY", "openclaw/news-indexer-api-key")
+
 _KEY_LOADED_AT: float = time.time()
 
 # Cached BigQuery client — created lazily on first use, invalidated on key refresh.
@@ -1415,6 +1419,38 @@ def search_articles(
     _refresh_keys_if_stale()
     _provider_local.name = "none"
     _provider_local.chain = []
+
+    # 0. news-indexer — local semantic index; first-in-chain, no SERP cost.
+    #    Returns [] (gating check runs server-side) → fall through to GDELT/SERP.
+    #    Inert when NEWS_INDEXER_URL / NEWS_INDEXER_API_KEY are not configured.
+    if NEWS_INDEXER_URL and NEWS_INDEXER_API_KEY:
+        _provider_local.chain.append("news_indexer")
+        _t0 = time.perf_counter()
+        try:
+            r = httpx.get(
+                f"{NEWS_INDEXER_URL}/search",
+                params={"q": query, "limit": limit},
+                headers={"x-api-key": NEWS_INDEXER_API_KEY},
+                timeout=httpx.Timeout(connect=2.0, read=8.0, write=2.0, pool=2.0),
+            )
+            r.raise_for_status()
+            hits = [SearchResult(**h) for h in r.json()]
+            if hits:
+                _provider_local.name = "news_indexer"
+                logger.debug(
+                    "news_indexer: %d hits %dms: %s",
+                    len(hits), int((time.perf_counter() - _t0) * 1000), query[:60],
+                )
+                return hits
+            logger.debug(
+                "news_indexer: below threshold %dms: %s",
+                int((time.perf_counter() - _t0) * 1000), query[:60],
+            )
+        except Exception as exc:
+            logger.warning(
+                "news_indexer failed %dms: %s",
+                int((time.perf_counter() - _t0) * 1000), exc,
+            )
 
     # 1. GDELT Doc API (free, no key) — primary; news-only, reliable dates, 3-month window
     _provider_local.chain.append("gdelt")

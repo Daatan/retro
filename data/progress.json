@@ -5463,8 +5463,8 @@
     "G02:ch13": {
       "event_id": "G02",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "G02:calcalist": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-09T01:53:32.360273"
+  "last_updated": "2026-06-09T01:56:50.696025"
 }

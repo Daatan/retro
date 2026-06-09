@@ -854,7 +854,7 @@ free -m                                     # Memory
 
 > **Note:** `TECH.md` documents the **daatan web app** (Next.js). For retro pipeline and Oracle API docs, see `ARCHITECTURE.md` and `docs/ORACLE_API.md`.
 
-- [PRODUCT.md](./PRODUCT.md) — Product documentation (daatan web app)
+- [PRODUCT.md](./business/PRODUCT.md) — Product documentation (daatan web app)
 - [TODO.md](./TODO.md) — Technical debt and roadmap
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — Retro pipeline and Oracle API architecture
-- [docs/ORACLE_API.md](./docs/ORACLE_API.md) — Oracle forecast service documentation
+- [docs/ORACLE_API.md](./ORACLE_API.md) — Oracle forecast service documentation

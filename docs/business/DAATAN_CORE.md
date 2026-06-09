@@ -1,5 +1,5 @@
 # DAATAN Core Document
-_This document is the single source of truth for the DAATAN project (the web app). It describes the daatan Next.js product, not the retro pipeline. For retro/TruthMachine docs, see [ARCHITECTURE.md](./ARCHITECTURE.md)._
+_This document is the single source of truth for the DAATAN project (the web app). It describes the daatan Next.js product, not the retro pipeline. For retro/TruthMachine docs, see [ARCHITECTURE.md](../ARCHITECTURE.md)._
 
 ## 1. Project Mission
 
@@ -54,4 +54,4 @@ If any check fails → out of scope.
 - **Prediction Weight:** `RS × CU` — influence of a specific prediction
 - **Brier Score:** Probability calibration metric, `(probability − outcome)²` — lower is better
 
-See [GLOSSARY.md](./GLOSSARY.md) for full terminology and [PRODUCT.md](./PRODUCT.md) for detailed product documentation.
+See [GLOSSARY.md](../GLOSSARY.md) for full terminology and [PRODUCT.md](./PRODUCT.md) for detailed product documentation.

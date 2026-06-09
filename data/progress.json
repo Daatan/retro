@@ -360,8 +360,8 @@
     "B13:haaretz": {
       "event_id": "B13",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 4,
       "error": null
     },
     "B13:reuters": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-09T00:17:46.859766"
+  "last_updated": "2026-06-09T00:19:19.546221"
 }

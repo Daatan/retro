@@ -11,6 +11,12 @@ data/pm_harvest/
 infra/openclaw/
 infra/email/
 
+# Terraform (Oracle box IaC) — never commit init artifacts or state
+terraform/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
 # npm
 package-lock.json
 

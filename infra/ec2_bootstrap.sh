@@ -44,19 +44,19 @@ get_secret() {
     --query SecretString --output text 2>/dev/null
 }
 
-OPENROUTER_KEY=$(get_secret "openclaw/openrouter-api-key") || true
-BRAVE_KEY=$(get_secret "openclaw/brave-api-key") || true
-SERPAPI_KEY=$(get_secret "openclaw/serpapi-key") || true
-SERPERDEV_KEY=$(get_secret "openclaw/serperdev-key") || true
-GH_TOKEN=$(get_secret "openclaw/github-pat") || true
+OPENROUTER_KEY=$(get_secret "daatan/openrouter-api-key") || true
+BRAVE_KEY=$(get_secret "daatan/brave-api-key") || true
+SERPAPI_KEY=$(get_secret "daatan/serpapi-key") || true
+SERPERDEV_KEY=$(get_secret "daatan/serperdev-key") || true
+GH_TOKEN=$(get_secret "daatan/github-pat") || true
 
 if [[ -z "$OPENROUTER_KEY" ]]; then
-  echo "ERROR: openclaw/openrouter-api-key not found in Secrets Manager" >&2
+  echo "ERROR: daatan/openrouter-api-key not found in Secrets Manager" >&2
   exit 1
 fi
 if [[ -z "$GH_TOKEN" ]]; then
-  echo "ERROR: openclaw/github-pat not found in Secrets Manager" >&2
-  echo "Create it: aws secretsmanager create-secret --name openclaw/github-pat --secret-string ghp_..." >&2
+  echo "ERROR: daatan/github-pat not found in Secrets Manager" >&2
+  echo "Create it: aws secretsmanager create-secret --name daatan/github-pat --secret-string ghp_..." >&2
   exit 1
 fi
 

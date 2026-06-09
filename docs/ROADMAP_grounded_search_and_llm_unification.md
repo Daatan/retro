@@ -96,8 +96,8 @@ credentials are set, so it ships with zero behavior change.
 1. Create a Programmable Search Engine; set it to "search the entire web" (or scope to
    news sites). Note its `cx`.
 2. Set both secrets (env vars on the box, or AWS Secrets Manager):
-   `GOOGLE_CSE_API_KEY` (= `openclaw/google-cse-api-key`) and
-   `GOOGLE_CSE_CX` (= `openclaw/google-cse-cx`). Restart/reload the Oracle.
+   `GOOGLE_CSE_API_KEY` (= `daatan/google-cse-api-key`) and
+   `GOOGLE_CSE_CX` (= `daatan/google-cse-cx`). Restart/reload the Oracle.
 3. Verify: `GET /search/health` shows `google_cse: ok`; a `/search` returns
    `provider: "google_cse"`.
 

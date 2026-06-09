@@ -311,9 +311,8 @@ weighted_brier  = brier × weight
 - **Instance name**: `truthmachine-pipeline` (`i-00ac444b94c5ff9b2`)
 - **Public IP**: `3.120.185.111` (dynamic — reassigned on stop/start)
 - **Terraform**: not in this repo. The EC2 instance was originally provisioned by
-  the `openclaw` Terraform stack, which has since been decommissioned. The instance
-  continues to run manually; a fresh Terraform module for TruthMachine would need
-  to be authored if a replacement is ever required.
+  a decommissioned stack and continues to run manually; a fresh Terraform module
+  for TruthMachine would need to be authored if a replacement is ever required.
 
 ### Two checkouts on one box
 
@@ -341,23 +340,19 @@ recovery. Full design + IAM in [`docs/ATLAS_SNAPSHOTS.md`](docs/ATLAS_SNAPSHOTS.
 
 ### Required Secrets (AWS Secrets Manager, `eu-central-1`)
 
-> **Note on naming:** The secret names below are prefixed `openclaw/` for historical
-> reasons — they predate the decommissioning of the OpenClaw stack. The secrets
-> themselves are still in active use by TruthMachine/Oracle and should **not** be
-> renamed without a coordinated update to `infra/ec2_bootstrap.sh`, `infra/check_keys.sh`,
-> and the Oracle API service config.
-
 | Secret name | Used by |
 |---|---|
-| `openclaw/openrouter-api-key` | LLM inference via OpenRouter (fallback) |
-| `openclaw/serpapi-key` | Web search — SerpAPI/Google News (optional) |
-| `openclaw/serperdev-key` | Web search — Serper.dev/Google News (optional) |
-| `openclaw/brave-api-key` | Web search — Brave News Search (optional) |
-| `openclaw/brightdata-api-key` | Web search — BrightData SERP API (optional) |
-| `openclaw/nimbleway-api-key` | Web search — Nimbleway SERP API (optional) |
-| `openclaw/scrapingbee-api-key` | Web search — ScrapingBee Google Search (optional) |
-| `openclaw/github-pat` | Push `factum_atlas.html` to repo |
-| `openclaw/oracle-api-key` | Shared auth key between Oracle API and daatan |
+| `daatan/openrouter-api-key` | LLM inference via OpenRouter (fallback) |
+| `daatan/serpapi-key` | Web search — SerpAPI/Google News (optional) |
+| `daatan/serperdev-key` | Web search — Serper.dev/Google News (optional) |
+| `daatan/brave-api-key` | Web search — Brave News Search (optional) |
+| `daatan/brightdata-api-key` | Web search — BrightData SERP API (optional) |
+| `daatan/nimbleway-api-key` | Web search — Nimbleway SERP API (optional) |
+| `daatan/scrapingbee-api-key` | Web search — ScrapingBee Google Search (optional) |
+| `daatan/github-pat` | Push `factum_atlas.html` to repo |
+| `daatan/oracle-api-key` | Shared auth key between Oracle API and daatan |
+
+> **Note:** The actual AWS Secrets Manager entries were originally created as `openclaw/*` (a decommissioned stack's namespace). Code and docs now use `daatan/*`. Rename the live secrets with `aws secretsmanager update-secret --secret-id openclaw/X --secret-string "$(aws secretsmanager get-secret-value --secret-id openclaw/X --query SecretString --output text)"` then `aws secretsmanager create-secret --name daatan/X --secret-string ...` for each entry, then delete the old names.
 
 ### Bootstrap on an existing EC2 instance
 

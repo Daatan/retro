@@ -415,12 +415,12 @@ The IBI retro analysis tool (formerly the static `daatan.github.io/retro/ibi.htm
 
 ### Secret management
 
-The shared `x-api-key` lives in AWS Secrets Manager at `openclaw/oracle-api-key` (region `eu-central-1`). The `openclaw/` prefix is legacy naming from the decommissioned OpenClaw stack and is retained for backwards compatibility with `ec2_bootstrap.sh`. Both sides read the key from there:
+The shared `x-api-key` lives in AWS Secrets Manager at `daatan/oracle-api-key` (region `eu-central-1`). Both sides read the key from there:
 
 - **retro EC2** (`oracle-api.service`) — `ORACLE_API_KEY` env var
 - **daatan EC2** (`~/app/.env`) — `ORACLE_URL` + `ORACLE_API_KEY`, pulled via `scripts/fetch-secrets.sh` from the `daatan-env-prod` / `daatan-env-staging` bundle secret on each deploy
 
-To rotate: update `openclaw/oracle-api-key` in Secrets Manager, then update both `daatan-env-{prod,staging}` bundles and the EC2 `.env` on the retro side, and restart both services.
+To rotate: update `daatan/oracle-api-key` in Secrets Manager, then update both `daatan-env-{prod,staging}` bundles and the EC2 `.env` on the retro side, and restart both services.
 
 ---
 

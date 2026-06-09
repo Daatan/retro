@@ -51,7 +51,7 @@ The pipeline loop (`infra/ec2_run.sh`) runs continuously: it sleeps 300s between
 | daatan secrets (`ORACLE_URL` + `ORACLE_API_KEY`) | ✅ In AWS Secrets Manager (`daatan-env-{prod,staging}`) |
 | daatan integration (`oracle.ts` wired into context + express guess routes) | ✅ Live in daatan v1.9.0 |
 | Search provider expansion (BrightData + Nimbleway + ScrapingBee) | ✅ Live (2026-04-28) — 6 paid providers + DDG |
-| Secrets Manager read permission (`openclaw-secrets-read` on `truthmachine-ec2-role`) | ✅ Applied |
+| Secrets Manager read permission (`daatan-secrets-read` on `truthmachine-ec2-role`) | ✅ Applied |
 
 ### Duel: TruthMachine vs Polymarket
 
@@ -237,7 +237,7 @@ cd /home/mark/projects/retro && git fetch && git log --oneline -10
 | AMI | Ubuntu 24.04 LTS arm64 |
 | Type | t4g.small |
 | IAM Role | `truthmachine-ec2-role` |
-| Permissions | SSM + Bedrock (Nova) + Secrets Manager (`openclaw/*`) + S3 (`truthmachine-atlas-snapshots-*`) |
+| Permissions | SSM + Bedrock (Nova) + Secrets Manager (`daatan/*`) + S3 (`truthmachine-atlas-snapshots-*`) |
 | Workdir | `/home/ubuntu/truthmachine/` |
 | Service | `systemctl status truthmachine` |
 | Log | `/home/ubuntu/truthmachine/pipeline_log.txt` |

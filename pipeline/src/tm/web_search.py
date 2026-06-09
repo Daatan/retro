@@ -52,7 +52,7 @@ Key differences from the Doc API:
   - No rate limit; GCP free tier = 1 TB/month of query data
 
 Requires a GCP service-account JSON key stored in AWS Secrets Manager at:
-  openclaw/gcp-service-account-key
+  daatan/gcp-service-account-key
 
 The key is loaded once at startup (same _secret() pattern as other providers) and
 used to construct a BigQuery client. When the secret is absent the provider is
@@ -60,7 +60,7 @@ silently skipped. Queries target gkg_partitioned (DAY-partitioned by ingestion
 time) so _PARTITIONTIME pruning works correctly.
 
 All keys are loaded from the environment first, then from AWS Secrets Manager
-(openclaw/* namespace) as a fallback. See _secret().
+(daatan/* namespace) as a fallback. See _secret().
 
 Usage:
     from tm.web_search import search_articles
@@ -141,24 +141,24 @@ def _secret(env_var: str, secret_name: str) -> Optional[str]:
         return None
 
 
-DATAFORSEO_API_KEY: Optional[str] = _secret("DATAFORSEO_API_KEY", "openclaw/dataforseo-key")
-SERPAPI_API_KEY: Optional[str] = _secret("SERPAPI_API_KEY", "openclaw/serpapi-key")
-SERPER_API_KEY: Optional[str] = _secret("SERPER_API_KEY", "openclaw/serperdev-key")
-BRAVE_API_KEY: Optional[str] = _secret("BRAVE_API_KEY", "openclaw/brave-api-key")
-BRIGHTDATA_API_KEY: Optional[str] = _secret("BRIGHTDATA_API_KEY", "openclaw/brightdata-api-key")
-NIMBLEWAY_API_KEY: Optional[str] = _secret("NIMBLEWAY_API_KEY", "openclaw/nimbleway-api-key")
-SCRAPINGBEE_API_KEY: Optional[str] = _secret("SCRAPINGBEE_API_KEY", "openclaw/scrapingbee-api-key")
-NEWSDATA_API_KEY: Optional[str] = _secret("NEWSDATA_API_KEY", "openclaw/newsdata-api-key")
-TAVILY_API_KEY: Optional[str] = _secret("TAVILY_API_KEY", "openclaw/tavily-api-key")
+DATAFORSEO_API_KEY: Optional[str] = _secret("DATAFORSEO_API_KEY", "daatan/dataforseo-key")
+SERPAPI_API_KEY: Optional[str] = _secret("SERPAPI_API_KEY", "daatan/serpapi-key")
+SERPER_API_KEY: Optional[str] = _secret("SERPER_API_KEY", "daatan/serperdev-key")
+BRAVE_API_KEY: Optional[str] = _secret("BRAVE_API_KEY", "daatan/brave-api-key")
+BRIGHTDATA_API_KEY: Optional[str] = _secret("BRIGHTDATA_API_KEY", "daatan/brightdata-api-key")
+NIMBLEWAY_API_KEY: Optional[str] = _secret("NIMBLEWAY_API_KEY", "daatan/nimbleway-api-key")
+SCRAPINGBEE_API_KEY: Optional[str] = _secret("SCRAPINGBEE_API_KEY", "daatan/scrapingbee-api-key")
+NEWSDATA_API_KEY: Optional[str] = _secret("NEWSDATA_API_KEY", "daatan/newsdata-api-key")
+TAVILY_API_KEY: Optional[str] = _secret("TAVILY_API_KEY", "daatan/tavily-api-key")
 # Google Programmable Search (Custom Search JSON API). Needs BOTH an API key and a
 # search-engine id (cx). Inert until both are configured — see _search_google_cse.
-GOOGLE_CSE_API_KEY: Optional[str] = _secret("GOOGLE_CSE_API_KEY", "openclaw/google-cse-api-key")
-GOOGLE_CSE_CX: Optional[str] = _secret("GOOGLE_CSE_CX", "openclaw/google-cse-cx")
-GCP_SA_KEY_JSON: Optional[str] = _secret("GCP_SA_KEY_JSON", "openclaw/gcp-service-account-key")
+GOOGLE_CSE_API_KEY: Optional[str] = _secret("GOOGLE_CSE_API_KEY", "daatan/google-cse-api-key")
+GOOGLE_CSE_CX: Optional[str] = _secret("GOOGLE_CSE_CX", "daatan/google-cse-cx")
+GCP_SA_KEY_JSON: Optional[str] = _secret("GCP_SA_KEY_JSON", "daatan/gcp-service-account-key")
 
 # news-indexer — local semantic index (https://scrapper.daatan.com)
-NEWS_INDEXER_URL: Optional[str] = _secret("NEWS_INDEXER_URL", "openclaw/news-indexer-url")
-NEWS_INDEXER_API_KEY: Optional[str] = _secret("NEWS_INDEXER_API_KEY", "openclaw/news-indexer-api-key")
+NEWS_INDEXER_URL: Optional[str] = _secret("NEWS_INDEXER_URL", "daatan/news-indexer-url")
+NEWS_INDEXER_API_KEY: Optional[str] = _secret("NEWS_INDEXER_API_KEY", "daatan/news-indexer-api-key")
 
 _KEY_LOADED_AT: float = time.time()
 
@@ -174,7 +174,7 @@ def _get_bq_client() -> object:
     if not _BQ_AVAILABLE:
         raise RuntimeError("google-cloud-bigquery not installed")
     if not GCP_SA_KEY_JSON:
-        raise RuntimeError("GCP_SA_KEY_JSON / openclaw/gcp-service-account-key not configured")
+        raise RuntimeError("GCP_SA_KEY_JSON / daatan/gcp-service-account-key not configured")
     info = _json.loads(GCP_SA_KEY_JSON)
     creds = _sa.Credentials.from_service_account_info(
         info,
@@ -199,18 +199,18 @@ def _refresh_keys_if_stale() -> None:
     if time.time() - _KEY_LOADED_AT < _KEY_MAX_AGE_SECONDS:
         return
     logger.info("Refreshing search API keys from Secrets Manager (>24h since last fetch)")
-    DATAFORSEO_API_KEY = _secret("DATAFORSEO_API_KEY", "openclaw/dataforseo-key")
-    SERPAPI_API_KEY = _secret("SERPAPI_API_KEY", "openclaw/serpapi-key")
-    SERPER_API_KEY = _secret("SERPER_API_KEY", "openclaw/serperdev-key")
-    BRAVE_API_KEY = _secret("BRAVE_API_KEY", "openclaw/brave-api-key")
-    BRIGHTDATA_API_KEY = _secret("BRIGHTDATA_API_KEY", "openclaw/brightdata-api-key")
-    NIMBLEWAY_API_KEY = _secret("NIMBLEWAY_API_KEY", "openclaw/nimbleway-api-key")
-    SCRAPINGBEE_API_KEY = _secret("SCRAPINGBEE_API_KEY", "openclaw/scrapingbee-api-key")
-    NEWSDATA_API_KEY = _secret("NEWSDATA_API_KEY", "openclaw/newsdata-api-key")
-    TAVILY_API_KEY = _secret("TAVILY_API_KEY", "openclaw/tavily-api-key")
-    GOOGLE_CSE_API_KEY = _secret("GOOGLE_CSE_API_KEY", "openclaw/google-cse-api-key")
-    GOOGLE_CSE_CX = _secret("GOOGLE_CSE_CX", "openclaw/google-cse-cx")
-    new_gcp = _secret("GCP_SA_KEY_JSON", "openclaw/gcp-service-account-key")
+    DATAFORSEO_API_KEY = _secret("DATAFORSEO_API_KEY", "daatan/dataforseo-key")
+    SERPAPI_API_KEY = _secret("SERPAPI_API_KEY", "daatan/serpapi-key")
+    SERPER_API_KEY = _secret("SERPER_API_KEY", "daatan/serperdev-key")
+    BRAVE_API_KEY = _secret("BRAVE_API_KEY", "daatan/brave-api-key")
+    BRIGHTDATA_API_KEY = _secret("BRIGHTDATA_API_KEY", "daatan/brightdata-api-key")
+    NIMBLEWAY_API_KEY = _secret("NIMBLEWAY_API_KEY", "daatan/nimbleway-api-key")
+    SCRAPINGBEE_API_KEY = _secret("SCRAPINGBEE_API_KEY", "daatan/scrapingbee-api-key")
+    NEWSDATA_API_KEY = _secret("NEWSDATA_API_KEY", "daatan/newsdata-api-key")
+    TAVILY_API_KEY = _secret("TAVILY_API_KEY", "daatan/tavily-api-key")
+    GOOGLE_CSE_API_KEY = _secret("GOOGLE_CSE_API_KEY", "daatan/google-cse-api-key")
+    GOOGLE_CSE_CX = _secret("GOOGLE_CSE_CX", "daatan/google-cse-cx")
+    new_gcp = _secret("GCP_SA_KEY_JSON", "daatan/gcp-service-account-key")
     if new_gcp != GCP_SA_KEY_JSON:
         GCP_SA_KEY_JSON = new_gcp
         _BQ_CLIENT = None  # force client rebuild with new credentials

@@ -7,7 +7,7 @@ INSTANCE="i-00ac444b94c5ff9b2"
 REGION="eu-central-1"
 
 SERPERDEV_KEY=$(aws secretsmanager get-secret-value \
-  --secret-id openclaw/serperdev-key \
+  --secret-id daatan/serperdev-key \
   --region "$REGION" \
   --query SecretString --output text 2>/dev/null)
 
@@ -49,12 +49,12 @@ if [[ -n "$SERPERDEV_KEY" ]]; then
     fail "Serper.dev (HTTP $STATUS)"
   fi
 else
-  warn "Serper.dev — key not found in Secrets Manager (openclaw/serperdev-key)"
+  warn "Serper.dev — key not found in Secrets Manager (daatan/serperdev-key)"
 fi
 
 # ── Brave ───────────────────────────────────────────────
 BRAVE_KEY=$(aws secretsmanager get-secret-value \
-  --secret-id openclaw/brave-api-key \
+  --secret-id daatan/brave-api-key \
   --region "$REGION" \
   --query SecretString --output text 2>/dev/null)
 if [[ -n "$BRAVE_KEY" ]]; then
@@ -87,7 +87,7 @@ fi
 echo ""
 echo "  GIT / GITHUB"
 GH_TOKEN=$(aws secretsmanager get-secret-value \
-  --secret-id openclaw/github-pat \
+  --secret-id daatan/github-pat \
   --region "$REGION" \
   --query SecretString --output text 2>/dev/null)
 if [[ -n "$GH_TOKEN" ]]; then

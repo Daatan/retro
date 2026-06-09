@@ -11,7 +11,7 @@ Comparison protocol:
 
 TM predictions are fetched live from oracle.daatan.com (or ORACLE_URL) and
 cached in data/duel_oracle/{event_id}.json.  Set ORACLE_API_KEY or configure
-AWS Secrets Manager (openclaw/oracle-api-key) before running.
+AWS Secrets Manager (daatan/oracle-api-key) before running.
 
 Usage:
     ORACLE_API_KEY=sk-... DATA_DIR=data python -m tm.duel_report
@@ -185,7 +185,7 @@ def fetch_tm_probabilities_oracle(data_dir: Path, events: list[dict], t_days: in
         try:
             import boto3
             sm = boto3.client("secretsmanager", region_name="eu-central-1")
-            api_key = sm.get_secret_value(SecretId="openclaw/oracle-api-key")["SecretString"]
+            api_key = sm.get_secret_value(SecretId="daatan/oracle-api-key")["SecretString"]
             console.print("[dim]Oracle API key loaded from Secrets Manager[/dim]")
         except Exception as e:
             console.print(f"[red]ORACLE_API_KEY not set and AWS fetch failed: {e}[/red]")

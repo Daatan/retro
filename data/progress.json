@@ -745,7 +745,7 @@
     "G02:haaretz": {
       "event_id": "G02",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-09T13:11:36.716993"
+  "last_updated": "2026-06-09T13:14:52.995910"
 }

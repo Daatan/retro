@@ -7612,7 +7612,7 @@
     "A06:guardian": {
       "event_id": "A06",
       "source_id": "guardian",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-09T18:11:39.190725"
+  "last_updated": "2026-06-09T18:12:40.013872"
 }

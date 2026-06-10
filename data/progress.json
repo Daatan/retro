@@ -4357,7 +4357,7 @@
     "E01:haaretz": {
       "event_id": "E01",
       "source_id": "haaretz",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -9390,7 +9390,7 @@
     "D05:ft": {
       "event_id": "D05",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9404,7 +9404,7 @@
     "D05:nyt": {
       "event_id": "D05",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9432,7 +9432,7 @@
     "D06:bloomberg": {
       "event_id": "D06",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -9453,7 +9453,7 @@
     "D06:nyt": {
       "event_id": "D06",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T19:59:46.084784"
+  "last_updated": "2026-06-10T20:03:01.758086"
 }

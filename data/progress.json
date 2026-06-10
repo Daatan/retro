@@ -4154,14 +4154,14 @@
     "D04:toi": {
       "event_id": "D04",
       "source_id": "toi",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
     "D04:walla": {
       "event_id": "D04",
       "source_id": "walla",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9173,7 +9173,7 @@
     "C09:ft": {
       "event_id": "C09",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9299,7 +9299,7 @@
     "D03:ft": {
       "event_id": "D03",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -9348,7 +9348,7 @@
     "D04:ft": {
       "event_id": "D04",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9362,7 +9362,7 @@
     "D04:nyt": {
       "event_id": "D04",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T20:43:02.597446"
+  "last_updated": "2026-06-10T20:47:29.540341"
 }

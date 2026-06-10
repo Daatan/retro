@@ -1886,7 +1886,7 @@
     "A01:calcalist": {
       "event_id": "A01",
       "source_id": "calcalist",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -1935,7 +1935,7 @@
     "A02:ch13": {
       "event_id": "A02",
       "source_id": "ch13",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T19:36:42.307828"
+  "last_updated": "2026-06-10T19:40:09.412388"
 }

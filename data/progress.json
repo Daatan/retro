@@ -2012,8 +2012,8 @@
     "A02:ynet": {
       "event_id": "A02",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A03:ch13": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T00:48:29.936481"
+  "last_updated": "2026-06-10T00:51:06.829499"
 }

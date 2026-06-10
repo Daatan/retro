@@ -4196,7 +4196,7 @@
     "D05:israel_hayom": {
       "event_id": "D05",
       "source_id": "israel_hayom",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -4476,7 +4476,7 @@
     "E02:n12": {
       "event_id": "E02",
       "source_id": "n12",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -4553,7 +4553,7 @@
     "E03:maariv": {
       "event_id": "E03",
       "source_id": "maariv",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9390,7 +9390,7 @@
     "D05:ft": {
       "event_id": "D05",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10706,7 +10706,7 @@
     "E02:bloomberg": {
       "event_id": "E02",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T21:38:02.509174"
+  "last_updated": "2026-06-10T21:41:18.301837"
 }

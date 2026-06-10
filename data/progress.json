@@ -367,7 +367,7 @@
     "B13:reuters": {
       "event_id": "B13",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -1753,7 +1753,7 @@
     "B12:israel_hayom": {
       "event_id": "B12",
       "source_id": "israel_hayom",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8718,7 +8718,7 @@
     "B12:ft": {
       "event_id": "B12",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8767,7 +8767,7 @@
     "B13:ft": {
       "event_id": "B13",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8858,7 +8858,7 @@
     "C02:ft": {
       "event_id": "C02",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8907,7 +8907,7 @@
     "C03:ft": {
       "event_id": "C03",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T19:50:27.332235"
+  "last_updated": "2026-06-10T19:53:53.387333"
 }

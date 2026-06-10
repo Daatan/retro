@@ -1886,7 +1886,7 @@
     "A01:calcalist": {
       "event_id": "A01",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -1935,7 +1935,7 @@
     "A02:ch13": {
       "event_id": "A02",
       "source_id": "ch13",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7388,7 +7388,7 @@
     "A01:nyt": {
       "event_id": "A01",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7465,7 +7465,7 @@
     "A03:ft": {
       "event_id": "A03",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7563,7 +7563,7 @@
     "A05:nyt": {
       "event_id": "A05",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10524,7 +10524,7 @@
     "A03:bloomberg": {
       "event_id": "A03",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T18:49:28.963612"
+  "last_updated": "2026-06-10T18:54:20.263900"
 }

@@ -2033,7 +2033,7 @@
     "A03:haaretz": {
       "event_id": "A03",
       "source_id": "haaretz",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -7465,7 +7465,7 @@
     "A03:ft": {
       "event_id": "A03",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10524,7 +10524,7 @@
     "A03:bloomberg": {
       "event_id": "A03",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T21:59:45.280386"
+  "last_updated": "2026-06-10T22:02:51.524478"
 }

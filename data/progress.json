@@ -297,7 +297,7 @@
     "B10:reuters": {
       "event_id": "B10",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -3279,7 +3279,7 @@
     "B07:ch13": {
       "event_id": "B07",
       "source_id": "ch13",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -8634,7 +8634,7 @@
     "B10:ft": {
       "event_id": "B10",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -8676,7 +8676,7 @@
     "B11:ft": {
       "event_id": "B11",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T20:34:48.588250"
+  "last_updated": "2026-06-10T20:37:28.331556"
 }

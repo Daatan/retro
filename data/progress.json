@@ -7598,14 +7598,14 @@
     "A06:bloomberg": {
       "event_id": "A06",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "A06:ft": {
       "event_id": "A06",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10545,14 +10545,14 @@
     "A07:bloomberg": {
       "event_id": "A07",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "A09:bloomberg": {
       "event_id": "A09",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T22:02:51.524478"
+  "last_updated": "2026-06-10T22:03:52.516089"
 }

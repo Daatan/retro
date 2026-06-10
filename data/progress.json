@@ -710,7 +710,7 @@
     "E08:haaretz": {
       "event_id": "E08",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -4595,7 +4595,7 @@
     "E04:ch13": {
       "event_id": "E04",
       "source_id": "ch13",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -4609,7 +4609,7 @@
     "E04:haaretz": {
       "event_id": "E04",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -4679,7 +4679,7 @@
     "E05:ch13": {
       "event_id": "E05",
       "source_id": "ch13",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -4721,14 +4721,14 @@
     "E05:maariv": {
       "event_id": "E05",
       "source_id": "maariv",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
     "E05:n12": {
       "event_id": "E05",
       "source_id": "n12",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -4861,7 +4861,7 @@
     "E07:maariv": {
       "event_id": "E07",
       "source_id": "maariv",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10741,7 +10741,7 @@
     "E08:bloomberg": {
       "event_id": "E08",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T19:16:39.097533"
+  "last_updated": "2026-06-10T19:18:52.896716"
 }

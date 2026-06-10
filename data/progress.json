@@ -8767,7 +8767,7 @@
     "B13:ft": {
       "event_id": "B13",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8781,7 +8781,7 @@
     "B13:nyt": {
       "event_id": "B13",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T18:01:31.623728"
+  "last_updated": "2026-06-10T18:02:59.807293"
 }

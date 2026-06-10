@@ -1935,7 +1935,7 @@
     "A02:ch13": {
       "event_id": "A02",
       "source_id": "ch13",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2033,7 +2033,7 @@
     "A03:haaretz": {
       "event_id": "A03",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7388,7 +7388,7 @@
     "A01:nyt": {
       "event_id": "A01",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -7549,7 +7549,7 @@
     "A05:ft": {
       "event_id": "A05",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T21:15:05.044093"
+  "last_updated": "2026-06-10T21:17:51.034869"
 }

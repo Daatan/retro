@@ -4196,7 +4196,7 @@
     "D05:israel_hayom": {
       "event_id": "D05",
       "source_id": "israel_hayom",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -4357,7 +4357,7 @@
     "E01:haaretz": {
       "event_id": "E01",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -4476,7 +4476,7 @@
     "E02:n12": {
       "event_id": "E02",
       "source_id": "n12",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10706,14 +10706,14 @@
     "E02:bloomberg": {
       "event_id": "E02",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "E03:bloomberg": {
       "event_id": "E03",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T20:47:29.540341"
+  "last_updated": "2026-06-10T20:50:45.249866"
 }

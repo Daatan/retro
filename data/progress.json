@@ -5036,7 +5036,7 @@
     "E10:n12": {
       "event_id": "E10",
       "source_id": "n12",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -5288,7 +5288,7 @@
     "F03:n12": {
       "event_id": "F03",
       "source_id": "n12",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -9845,7 +9845,7 @@
     "E09:ft": {
       "event_id": "E09",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9894,7 +9894,7 @@
     "E10:ft": {
       "event_id": "E10",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -9908,7 +9908,7 @@
     "E10:nyt": {
       "event_id": "E10",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -9936,7 +9936,7 @@
     "F01:bloomberg": {
       "event_id": "F01",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9992,7 +9992,7 @@
     "F02:ft": {
       "event_id": "F02",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10006,7 +10006,7 @@
     "F02:nyt": {
       "event_id": "F02",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10027,7 +10027,7 @@
     "F03:bloomberg": {
       "event_id": "F03",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10048,7 +10048,7 @@
     "F03:nyt": {
       "event_id": "F03",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T21:45:24.889480"
+  "last_updated": "2026-06-10T21:48:57.613349"
 }

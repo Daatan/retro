@@ -2943,7 +2943,7 @@
     "A17:jpost": {
       "event_id": "A17",
       "source_id": "jpost",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -8116,7 +8116,7 @@
     "A17:nyt": {
       "event_id": "A17",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -8151,7 +8151,7 @@
     "A18:ft": {
       "event_id": "A18",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -8242,7 +8242,7 @@
     "B01:ft": {
       "event_id": "B01",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T22:05:34.785658"
+  "last_updated": "2026-06-10T22:06:54.214282"
 }

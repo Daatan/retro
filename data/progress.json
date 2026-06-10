@@ -934,7 +934,7 @@
     "G05:haaretz": {
       "event_id": "G05",
       "source_id": "haaretz",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -962,7 +962,7 @@
     "G05:ynet": {
       "event_id": "G05",
       "source_id": "ynet",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -983,7 +983,7 @@
     "G06:jpost": {
       "event_id": "G06",
       "source_id": "jpost",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5582,7 +5582,7 @@
     "G04:globes": {
       "event_id": "G04",
       "source_id": "globes",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5645,7 +5645,7 @@
     "G04:walla": {
       "event_id": "G04",
       "source_id": "walla",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5666,7 +5666,7 @@
     "G05:calcalist": {
       "event_id": "G05",
       "source_id": "calcalist",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5694,7 +5694,7 @@
     "G06:calcalist": {
       "event_id": "G06",
       "source_id": "calcalist",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5785,8 +5785,8 @@
     "G07:walla": {
       "event_id": "G07",
       "source_id": "walla",
-      "status": "failed",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G07:ynet": {
@@ -5799,7 +5799,7 @@
     "G08:ch13": {
       "event_id": "G08",
       "source_id": "ch13",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5869,14 +5869,14 @@
     "G08:walla": {
       "event_id": "G08",
       "source_id": "walla",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "G08:ynet": {
       "event_id": "G08",
       "source_id": "ynet",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10335,7 +10335,7 @@
     "G05:aljazeera": {
       "event_id": "G05",
       "source_id": "aljazeera",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10419,7 +10419,7 @@
     "G06:nyt": {
       "event_id": "G06",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10468,7 +10468,7 @@
     "G08:aljazeera": {
       "event_id": "G08",
       "source_id": "aljazeera",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10769,14 +10769,14 @@
     "G05:bloomberg": {
       "event_id": "G05",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "G07:bloomberg": {
       "event_id": "G07",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T21:53:13.886310"
+  "last_updated": "2026-06-10T21:59:45.280386"
 }

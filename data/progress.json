@@ -4665,7 +4665,7 @@
     "E04:walla": {
       "event_id": "E04",
       "source_id": "walla",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -4721,14 +4721,14 @@
     "E05:maariv": {
       "event_id": "E05",
       "source_id": "maariv",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
     "E05:n12": {
       "event_id": "E05",
       "source_id": "n12",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -4749,7 +4749,7 @@
     "E05:walla": {
       "event_id": "E05",
       "source_id": "walla",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -4777,7 +4777,7 @@
     "E06:haaretz": {
       "event_id": "E06",
       "source_id": "haaretz",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -4861,7 +4861,7 @@
     "E07:maariv": {
       "event_id": "E07",
       "source_id": "maariv",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -9712,7 +9712,7 @@
     "E06:ft": {
       "event_id": "E06",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T21:41:18.301837"
+  "last_updated": "2026-06-10T21:45:24.889480"
 }

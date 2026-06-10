@@ -5358,7 +5358,7 @@
     "F05:calcalist": {
       "event_id": "F05",
       "source_id": "calcalist",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5407,7 +5407,7 @@
     "G01:jpost": {
       "event_id": "G01",
       "source_id": "jpost",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5442,7 +5442,7 @@
     "G01:toi": {
       "event_id": "G01",
       "source_id": "toi",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5456,7 +5456,7 @@
     "G01:ynet": {
       "event_id": "G01",
       "source_id": "ynet",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5505,7 +5505,7 @@
     "G03:haaretz": {
       "event_id": "G03",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T20:59:46.006874"
+  "last_updated": "2026-06-10T21:05:41.789728"
 }

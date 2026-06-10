@@ -7850,7 +7850,7 @@
     "A11:nyt": {
       "event_id": "A11",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T03:42:25.129572"
+  "last_updated": "2026-06-10T03:44:06.457127"
 }

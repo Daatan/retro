@@ -962,7 +962,7 @@
     "G05:ynet": {
       "event_id": "G05",
       "source_id": "ynet",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -983,7 +983,7 @@
     "G06:jpost": {
       "event_id": "G06",
       "source_id": "jpost",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -5645,7 +5645,7 @@
     "G04:walla": {
       "event_id": "G04",
       "source_id": "walla",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -5666,7 +5666,7 @@
     "G05:calcalist": {
       "event_id": "G05",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -5729,7 +5729,7 @@
     "G07:haaretz": {
       "event_id": "G07",
       "source_id": "haaretz",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5855,14 +5855,14 @@
     "G08:reuters": {
       "event_id": "G08",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
     "G08:toi": {
       "event_id": "G08",
       "source_id": "toi",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10356,7 +10356,7 @@
     "G05:ft": {
       "event_id": "G05",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10510,7 +10510,7 @@
     "G08:nyt": {
       "event_id": "G08",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10762,21 +10762,21 @@
     "G04:bloomberg": {
       "event_id": "G04",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
     "G05:bloomberg": {
       "event_id": "G05",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "G07:bloomberg": {
       "event_id": "G07",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T20:16:27.516649"
+  "last_updated": "2026-06-10T20:22:03.062537"
 }

@@ -864,7 +864,7 @@
     "A13:jpost": {
       "event_id": "A13",
       "source_id": "jpost",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -2670,7 +2670,7 @@
     "A11:calcalist": {
       "event_id": "A11",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -2691,7 +2691,7 @@
     "A11:reuters": {
       "event_id": "A11",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -2803,7 +2803,7 @@
     "A15:ch13": {
       "event_id": "A15",
       "source_id": "ch13",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7836,7 +7836,7 @@
     "A11:ft": {
       "event_id": "A11",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7850,7 +7850,7 @@
     "A11:nyt": {
       "event_id": "A11",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7878,7 +7878,7 @@
     "A12:ft": {
       "event_id": "A12",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7906,7 +7906,7 @@
     "A13:axios": {
       "event_id": "A13",
       "source_id": "axios",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7934,7 +7934,7 @@
     "A13:nyt": {
       "event_id": "A13",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7962,7 +7962,7 @@
     "A14:bloomberg": {
       "event_id": "A14",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10566,7 +10566,7 @@
     "A13:bloomberg": {
       "event_id": "A13",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T18:55:53.054543"
+  "last_updated": "2026-06-10T18:59:54.779787"
 }

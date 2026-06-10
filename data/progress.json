@@ -5624,7 +5624,7 @@
     "G04:n12": {
       "event_id": "G04",
       "source_id": "n12",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T22:24:00.692508"
+  "last_updated": "2026-06-10T22:28:35.533621"
 }

@@ -8809,7 +8809,7 @@
     "C01:ft": {
       "event_id": "C01",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8823,7 +8823,7 @@
     "C01:nyt": {
       "event_id": "C01",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T19:05:52.311733"
+  "last_updated": "2026-06-10T19:07:41.434276"
 }

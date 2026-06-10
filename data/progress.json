@@ -864,7 +864,7 @@
     "A13:jpost": {
       "event_id": "A13",
       "source_id": "jpost",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2670,7 +2670,7 @@
     "A11:calcalist": {
       "event_id": "A11",
       "source_id": "calcalist",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2691,7 +2691,7 @@
     "A11:reuters": {
       "event_id": "A11",
       "source_id": "reuters",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -2719,7 +2719,7 @@
     "A12:ch13": {
       "event_id": "A12",
       "source_id": "ch13",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7836,7 +7836,7 @@
     "A11:ft": {
       "event_id": "A11",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -7906,7 +7906,7 @@
     "A13:axios": {
       "event_id": "A13",
       "source_id": "axios",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -7934,7 +7934,7 @@
     "A13:nyt": {
       "event_id": "A13",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -7962,7 +7962,7 @@
     "A14:bloomberg": {
       "event_id": "A14",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T19:41:42.406656"
+  "last_updated": "2026-06-10T19:44:39.686123"
 }

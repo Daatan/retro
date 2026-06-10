@@ -7738,7 +7738,7 @@
     "A09:ft": {
       "event_id": "A09",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7801,7 +7801,7 @@
     "A10:nyt": {
       "event_id": "A10",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T20:26:50.055026"
+  "last_updated": "2026-06-10T20:28:55.932777"
 }

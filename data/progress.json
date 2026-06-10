@@ -745,7 +745,7 @@
     "G02:haaretz": {
       "event_id": "G02",
       "source_id": "haaretz",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -1354,7 +1354,7 @@
     "G02:walla": {
       "event_id": "G02",
       "source_id": "walla",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5393,7 +5393,7 @@
     "G01:haaretz": {
       "event_id": "G01",
       "source_id": "haaretz",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5435,7 +5435,7 @@
     "G01:reuters": {
       "event_id": "G01",
       "source_id": "reuters",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5456,7 +5456,7 @@
     "G01:ynet": {
       "event_id": "G01",
       "source_id": "ynet",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5505,7 +5505,7 @@
     "G03:haaretz": {
       "event_id": "G03",
       "source_id": "haaretz",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10083,7 +10083,7 @@
     "F04:ft": {
       "event_id": "F04",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10125,7 +10125,7 @@
     "F05:ft": {
       "event_id": "F05",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T22:20:58.174193"
+  "last_updated": "2026-06-10T22:24:00.692508"
 }

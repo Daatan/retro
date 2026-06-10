@@ -4105,7 +4105,7 @@
     "D04:haaretz": {
       "event_id": "D04",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -4133,7 +4133,7 @@
     "D04:maariv": {
       "event_id": "D04",
       "source_id": "maariv",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -4154,7 +4154,7 @@
     "D04:toi": {
       "event_id": "D04",
       "source_id": "toi",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9173,7 +9173,7 @@
     "C09:ft": {
       "event_id": "C09",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9222,7 +9222,7 @@
     "D01:guardian": {
       "event_id": "D01",
       "source_id": "guardian",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9257,7 +9257,7 @@
     "D02:ft": {
       "event_id": "D02",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9271,7 +9271,7 @@
     "D02:nyt": {
       "event_id": "D02",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9299,7 +9299,7 @@
     "D03:ft": {
       "event_id": "D03",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10685,7 +10685,7 @@
     "D01:bloomberg": {
       "event_id": "D01",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-10T19:09:49.390792"
+  "last_updated": "2026-06-10T19:14:17.663466"
 }

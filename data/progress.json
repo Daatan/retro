@@ -7563,7 +7563,7 @@
     "A05:nyt": {
       "event_id": "A05",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-11T01:45:07.208018"
+  "last_updated": "2026-06-11T01:48:10.216464"
 }

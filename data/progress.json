@@ -8256,7 +8256,7 @@
     "B01:nyt": {
       "event_id": "B01",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-11T16:54:38.361259"
+  "last_updated": "2026-06-11T16:55:57.411677"
 }

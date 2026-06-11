@@ -4777,8 +4777,8 @@
     "E06:haaretz": {
       "event_id": "E06",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "E06:israel_hayom": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-11T17:05:13.336155"
+  "last_updated": "2026-06-11T17:07:32.021462"
 }

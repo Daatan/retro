@@ -7423,7 +7423,7 @@
     "A02:ft": {
       "event_id": "A02",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-11T00:49:55.814222"
+  "last_updated": "2026-06-11T00:52:14.366288"
 }

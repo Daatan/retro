@@ -7920,7 +7920,7 @@
     "A13:ft": {
       "event_id": "A13",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-11T04:09:36.674360"
+  "last_updated": "2026-06-11T04:11:17.735700"
 }

@@ -9712,8 +9712,8 @@
     "E06:ft": {
       "event_id": "E06",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 4,
       "error": null
     },
     "E06:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-12T19:52:01.686299"
+  "last_updated": "2026-06-12T19:54:19.873561"
 }

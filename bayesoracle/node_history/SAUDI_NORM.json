@@ -778,6 +778,18 @@
     {
       "date": "2026-06-09",
       "probability": 0.14
+    },
+    {
+      "date": "2026-06-10",
+      "probability": 0.13
+    },
+    {
+      "date": "2026-06-11",
+      "probability": 0.13
+    },
+    {
+      "date": "2026-06-12",
+      "probability": 0.13
     }
   ]
 }

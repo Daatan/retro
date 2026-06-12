@@ -8648,7 +8648,7 @@
     "B10:nyt": {
       "event_id": "B10",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-12T19:15:47.341950"
+  "last_updated": "2026-06-12T19:17:21.979353"
 }

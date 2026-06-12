@@ -9404,7 +9404,7 @@
     "D05:nyt": {
       "event_id": "D05",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-12T02:01:27.288584"
+  "last_updated": "2026-06-12T02:03:39.170990"
 }

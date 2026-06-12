@@ -71,17 +71,19 @@ class TestSyntax:
         of _GDELT_DOC_BROKEN_UNTIL within search_articles().
         """
         tree = ast.parse(_SOURCE)
+        # The provider chain (and the GDELT global) now lives in _search_articles_chain;
+        # search_articles is a thin wrapper that also warms the news-indexer cache.
         func = next(
             n for n in ast.walk(tree)
-            if isinstance(n, ast.FunctionDef) and n.name == "search_articles"
+            if isinstance(n, ast.FunctionDef) and n.name == "_search_articles_chain"
         )
         func_src_lines = _SOURCE.splitlines()[func.lineno - 1 : func.end_lineno]
         func_src = "\n".join(func_src_lines)
 
         m_global = re.search(r"global\s+[^\n]*_GDELT_DOC_BROKEN_UNTIL", func_src)
         m_read   = re.search(r"_GDELT_DOC_BROKEN_UNTIL\s*-\s*time", func_src)
-        assert m_global, "search_articles must declare _GDELT_DOC_BROKEN_UNTIL global"
-        assert m_read,   "search_articles must read _GDELT_DOC_BROKEN_UNTIL"
+        assert m_global, "_search_articles_chain must declare _GDELT_DOC_BROKEN_UNTIL global"
+        assert m_read,   "_search_articles_chain must read _GDELT_DOC_BROKEN_UNTIL"
         assert m_global.start() < m_read.start(), (
             "global declaration must appear before first read of _GDELT_DOC_BROKEN_UNTIL"
         )
@@ -503,6 +505,92 @@ class TestNewsIndexerProvider:
 
 
 # ---------------------------------------------------------------------------
+# news-indexer cache-fill (warm /enqueue after a paid hit)
+# ---------------------------------------------------------------------------
+
+@needs_deps
+class TestNewsIndexerWarm:
+    """search_articles() feeds paid-provider results back into the news-indexer on-demand
+    cache via POST /enqueue, so a future identical query is served locally with no SERP cost."""
+
+    @staticmethod
+    def _inline_threads(ws, monkeypatch):
+        # Run the daemon-thread body synchronously so the POST is observable in-test.
+        class _Inline:
+            def __init__(self, target=None, **kw):
+                self._t = target
+
+            def start(self):
+                if self._t:
+                    self._t()
+
+        monkeypatch.setattr(ws.threading, "Thread", _Inline)
+
+    def test_warms_with_paid_provider_results(self, monkeypatch):
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        self._inline_threads(ws, monkeypatch)
+        monkeypatch.setattr(ws, "get_last_search_provider", lambda: "gdelt")
+        posts = []
+        monkeypatch.setattr(ws.httpx, "post", lambda *a, **k: posts.append(k) or _FakeResp(200, {}))
+        from tm.web_search import SearchResult
+        results = [
+            SearchResult(title="A", url="http://a.com/1", snippet="s"),
+            SearchResult(title="B", url="http://b.com/2", snippet="s"),
+        ]
+        ws._warm_news_indexer(results)
+        assert len(posts) == 1
+        assert posts[0]["json"] == {"urls": ["http://a.com/1", "http://b.com/2"]}
+        assert posts[0]["headers"]["x-api-key"] == "secret"
+
+    def test_no_warm_when_news_indexer_served(self, monkeypatch):
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        self._inline_threads(ws, monkeypatch)
+        monkeypatch.setattr(ws, "get_last_search_provider", lambda: "news_indexer")
+        posts = []
+        monkeypatch.setattr(ws.httpx, "post", lambda *a, **k: posts.append(1))
+        from tm.web_search import SearchResult
+        ws._warm_news_indexer([SearchResult(title="A", url="http://a.com/1", snippet="s")])
+        assert not posts, "already-indexed results must not be re-enqueued"
+
+    def test_inert_when_unconfigured(self, monkeypatch):
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = None
+        ws.NEWS_INDEXER_API_KEY = None
+        posts = []
+        monkeypatch.setattr(ws.httpx, "post", lambda *a, **k: posts.append(1))
+        from tm.web_search import SearchResult
+        ws._warm_news_indexer([SearchResult(title="A", url="http://a.com/1", snippet="s")])
+        assert not posts
+
+    def test_post_failure_is_swallowed(self, monkeypatch):
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        self._inline_threads(ws, monkeypatch)
+        monkeypatch.setattr(ws, "get_last_search_provider", lambda: "gdelt")
+
+        def boom(*a, **k):
+            raise RuntimeError("enqueue down")
+
+        monkeypatch.setattr(ws.httpx, "post", boom)
+        from tm.web_search import SearchResult
+        ws._warm_news_indexer([SearchResult(title="A", url="http://a.com/1", snippet="s")])  # must not raise
+
+    def test_non_list_results_never_break_search(self, monkeypatch):
+        # A bare (non-iterable) result must not raise out of warming.
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        monkeypatch.setattr(ws, "get_last_search_provider", lambda: "gdelt")
+        from tm.web_search import SearchResult
+        ws._warm_news_indexer(SearchResult(title="A", url="http://a.com/1", snippet="s"))
+
+
+# ---------------------------------------------------------------------------
 # GDELT BigQuery fallback ordering (requires import)
 # ---------------------------------------------------------------------------
 
@@ -516,6 +604,10 @@ class TestGdeltBqFallbackOrder:
         """Configure keys and patch the chain so only *winner* returns a result;
         every other provider returns []. Returns the SearchResult list it yields."""
         from tm.web_search import SearchResult
+        # Test isolation: null the news-indexer provider so a resolvable secret on the dev box
+        # doesn't let it intercept the live query (it runs first in the chain). Unset in CI.
+        ws.NEWS_INDEXER_URL = None
+        ws.NEWS_INDEXER_API_KEY = None
         ws.GCP_SA_KEY_JSON = "fake"
         ws.SERPAPI_API_KEY = "fake"
         ws._SERPAPI_QUOTA_EXHAUSTED = False

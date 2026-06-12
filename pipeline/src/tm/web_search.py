@@ -1391,7 +1391,51 @@ def enrich_snippets(results: List[SearchResult], timeout: float = 8.0) -> List[S
 # Public API — tries providers in order
 # ──────────────────────────────────────────────
 
+def _warm_news_indexer(results: List[SearchResult]) -> None:
+    """Fire-and-forget: feed paid-provider results back into the news-indexer on-demand cache
+    (`POST /enqueue`) so a future identical query is served locally with no SERP cost. No-op
+    when the result came from news_indexer itself (already indexed), nothing was found, or the
+    indexer isn't configured. Runs in a daemon thread and never raises — /search is on the
+    Oracle latency path, so warming must not add latency or fail the search."""
+    try:
+        if not (NEWS_INDEXER_URL and NEWS_INDEXER_API_KEY):
+            return
+        if get_last_search_provider() in ("news_indexer", "none"):
+            return
+        urls = [r.url for r in results if getattr(r, "url", None)][:10]
+        if not urls:
+            return
+
+        def _post() -> None:
+            try:
+                httpx.post(
+                    f"{NEWS_INDEXER_URL}/enqueue",
+                    json={"urls": urls},
+                    headers={"x-api-key": NEWS_INDEXER_API_KEY},
+                    timeout=httpx.Timeout(connect=2.0, read=3.0, write=2.0, pool=2.0),
+                )
+            except Exception as exc:
+                logger.debug("news_indexer warm failed (non-fatal): %s", exc)
+
+        threading.Thread(target=_post, name="ni-warm", daemon=True).start()
+    except Exception as exc:  # warming must never perturb the search result
+        logger.debug("news_indexer warm skipped (non-fatal): %s", exc)
+
+
 def search_articles(
+    query: str,
+    limit: int = 10,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+) -> List[SearchResult]:
+    """Search wrapper: run the provider chain, then warm the news-indexer cache with any
+    paid-provider results before returning. See `_search_articles_chain` for the chain itself."""
+    results = _search_articles_chain(query, limit, date_from=date_from, date_to=date_to)
+    _warm_news_indexer(results)
+    return results
+
+
+def _search_articles_chain(
     query: str,
     limit: int = 10,
     date_from: Optional[datetime] = None,

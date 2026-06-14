@@ -1382,8 +1382,8 @@
     "G06:walla": {
       "event_id": "G06",
       "source_id": "walla",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "F05:israel_hayom": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-14T18:06:32.180146"
+  "last_updated": "2026-06-14T18:11:08.085694"
 }

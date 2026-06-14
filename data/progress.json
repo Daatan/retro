@@ -1767,7 +1767,7 @@
     "B12:reuters": {
       "event_id": "B12",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-14T03:45:22.952140"
+  "last_updated": "2026-06-14T03:46:05.479744"
 }

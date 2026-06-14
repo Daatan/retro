@@ -10503,7 +10503,7 @@
     "G08:guardian": {
       "event_id": "G08",
       "source_id": "guardian",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-14T14:22:19.989485"
+  "last_updated": "2026-06-14T14:26:51.903541"
 }

@@ -9432,7 +9432,7 @@
     "D06:bloomberg": {
       "event_id": "D06",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-14T16:33:47.803573"
+  "last_updated": "2026-06-14T16:35:59.503162"
 }

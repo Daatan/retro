@@ -10706,7 +10706,7 @@
     "E02:bloomberg": {
       "event_id": "E02",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-15T01:54:19.269839"
+  "last_updated": "2026-06-15T01:56:32.066121"
 }

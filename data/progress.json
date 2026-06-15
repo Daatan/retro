@@ -9908,7 +9908,7 @@
     "E10:nyt": {
       "event_id": "E10",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-15T11:21:08.911783"
+  "last_updated": "2026-06-15T11:23:03.765252"
 }

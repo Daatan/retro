@@ -9222,7 +9222,7 @@
     "D01:guardian": {
       "event_id": "D01",
       "source_id": "guardian",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-15T23:56:33.043190"
+  "last_updated": "2026-06-15T23:58:40.787713"
 }

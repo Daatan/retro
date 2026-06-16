@@ -91,6 +91,8 @@ class SourceSignal(BaseModel):
     certainty: float = Field(description="Author certainty [0, 1]")
     credibility_weight: float = Field(description="Source trust from leaderboard [0, ∞], 1.0 = neutral")
     claims: list[str] = Field(description="Extracted claim summaries")
+    published_date: Optional[str] = Field(default=None, description="Article publish date (YYYY-MM-DD) if known; drives recency weighting")
+    recency_weight: Optional[float] = Field(default=None, description="Time-decay weight applied to this source in aggregation [recency_floor, 1.0]")
 
 
 class ArticleDebug(BaseModel):

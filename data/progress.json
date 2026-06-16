@@ -8284,8 +8284,8 @@
     "B02:ft": {
       "event_id": "B02",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "B02:guardian": {
@@ -8417,8 +8417,8 @@
     "B05:ft": {
       "event_id": "B05",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B05:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T18:33:16.834417"
+  "last_updated": "2026-06-16T18:34:05.696557"
 }

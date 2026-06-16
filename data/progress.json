@@ -7850,8 +7850,8 @@
     "A11:nyt": {
       "event_id": "A11",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A12:aljazeera": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:29:57.232315"
+  "last_updated": "2026-06-16T19:30:44.071382"
 }

@@ -8781,8 +8781,8 @@
     "B13:nyt": {
       "event_id": "B13",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "C01:aljazeera": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:55:39.540275"
+  "last_updated": "2026-06-16T19:57:03.256679"
 }

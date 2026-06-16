@@ -8508,8 +8508,8 @@
     "B07:bloomberg": {
       "event_id": "B07",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B07:ft": {
@@ -8529,7 +8529,7 @@
     "B07:nyt": {
       "event_id": "B07",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T20:28:01.116588"
+  "last_updated": "2026-06-16T20:29:54.401425"
 }

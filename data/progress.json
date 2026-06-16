@@ -4889,8 +4889,8 @@
     "E08:maariv": {
       "event_id": "E08",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "E08:n12": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T20:01:00.321135"
+  "last_updated": "2026-06-16T20:01:55.370456"
 }

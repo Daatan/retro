@@ -9040,8 +9040,8 @@
     "C06:ft": {
       "event_id": "C06",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "C06:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T20:31:12.966004"
+  "last_updated": "2026-06-16T20:32:07.760476"
 }

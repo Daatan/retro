@@ -367,7 +367,7 @@
     "B13:reuters": {
       "event_id": "B13",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8767,8 +8767,8 @@
     "B13:ft": {
       "event_id": "B13",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B13:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T18:35:42.434199"
+  "last_updated": "2026-06-16T18:37:27.545439"
 }

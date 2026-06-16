@@ -8648,8 +8648,8 @@
     "B10:nyt": {
       "event_id": "B10",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "B11:aljazeera": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T21:27:46.722685"
+  "last_updated": "2026-06-16T21:29:26.234272"
 }

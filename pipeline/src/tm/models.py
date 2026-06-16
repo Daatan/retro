@@ -10,6 +10,12 @@ class GatekeeperOutput(BaseModel):
     is_prediction: bool
     reason: str
     prediction_count_estimate: int = Field(default=0, ge=0)
+    relevance_score: float = Field(
+        default=1.0, ge=0.0, le=1.0,
+        description="Graded topic relevance of the article to the event [0,1]; "
+                    "its square multiplies the source's aggregation weight. "
+                    "Defaults to 1.0 (neutral) when a caller/model omits it.",
+    )
 
 
 class PredictionType(str, Enum):

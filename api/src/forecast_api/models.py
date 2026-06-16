@@ -93,6 +93,7 @@ class SourceSignal(BaseModel):
     claims: list[str] = Field(description="Extracted claim summaries")
     published_date: Optional[str] = Field(default=None, description="Article publish date (YYYY-MM-DD) if known; drives recency weighting")
     recency_weight: Optional[float] = Field(default=None, description="Time-decay weight applied to this source in aggregation [recency_floor, 1.0]")
+    relevance_score: Optional[float] = Field(default=None, description="Graded topic relevance [0,1]; its square multiplies this source's aggregation weight")
 
 
 class ArticleDebug(BaseModel):

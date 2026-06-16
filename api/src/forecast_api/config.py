@@ -51,6 +51,14 @@ class ApiSettings(BaseSettings):
     # Probability clamp before taking log-odds (keeps logits finite). Also caps
     # how extreme a single pooled estimate can get: [clamp, 1-clamp].
     logit_clamp: float = 0.01
+    # Each source's aggregation weight is multiplied by relevance_score² (the
+    # gatekeeper's graded topic relevance). If the summed relevance mass
+    # Σ relevance² across surviving articles is below this floor, the whole set is
+    # treated as off-topic and the forecast returns insufficient_data
+    # (reason="all_articles_off_topic") rather than pooling junk. Conservative:
+    # 0.05 ≈ one article at relevance ~0.22. Tune down using daatan's logged
+    # relevance_score / all_articles_off_topic data.
+    relevance_weight_floor: float = 0.05
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.

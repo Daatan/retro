@@ -5750,8 +5750,8 @@
     "G07:calcalist": {
       "event_id": "G07",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G07:maariv": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T23:41:43.325700"
+  "last_updated": "2026-06-16T23:42:37.896675"
 }

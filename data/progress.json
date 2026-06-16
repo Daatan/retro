@@ -1886,8 +1886,8 @@
     "A01:calcalist": {
       "event_id": "A01",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A01:maariv": {
@@ -1935,7 +1935,7 @@
     "A02:ch13": {
       "event_id": "A02",
       "source_id": "ch13",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -2033,8 +2033,8 @@
     "A03:haaretz": {
       "event_id": "A03",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A03:israel_hayom": {
@@ -7388,8 +7388,8 @@
     "A01:nyt": {
       "event_id": "A01",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A02:aljazeera": {
@@ -7521,8 +7521,8 @@
     "A04:nyt": {
       "event_id": "A04",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A05:aljazeera": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T18:25:53.661347"
+  "last_updated": "2026-06-16T18:28:12.100950"
 }

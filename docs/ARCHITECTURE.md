@@ -516,9 +516,26 @@ POST /api/forecast
 1. `leaderboard.get_credibility_weight(source_id)` — OpenSkill conservative score (μ − 3σ) from `leaderboard.json`
 2. `weight = credibility × certainty` per prediction
 
-**Stage 4 — Aggregate → Distribution**
-1. Weighted mean stance + variance → `{ mean, std, ci_low, ci_high }`
+**Stage 4 — Aggregate → Distribution** (`aggregation.pool_sources`)
+1. Each source's stance is converted to a probability, clamped to `[0.01, 0.99]`, and the sources are pooled in **log-odds (logit) space** — a weighted *mean* of log-odds (a logarithmic opinion pool), weighted by `credibility × certainty × recency`. The result is converted back to `{ mean, std, ci_low, ci_high }` on the stance scale.
 2. Convert to probability: `p = (mean + 1) / 2`
+
+> **Why Oracle probabilities stay in ~20–80% (by design, not a clamp).** There is
+> no hard cap on the output. The only hard clamp is *per-source* (`logit_clamp`,
+> pins each source's probability to `[0.01, 0.99]` so its log-odds stay finite).
+> The narrow aggregate range is **emergent**: because Stage 4 pools sources as a
+> weighted *mean* of log-odds, the pooled probability can never be more extreme
+> than its most confident member. Since news-extracted stances are typically
+> moderate (rarely near ±1), the aggregate lands around 20–80%. This is
+> deliberate — a logarithmic opinion pool is robust to off-topic/stale outliers
+> (the original "73% on a decided series" overconfidence bug): a lone dissenter
+> can't drag a confident consensus back to 0.5, and the estimate stays bounded by
+> its members. The tradeoff is the flip side — the Oracle **also cannot express
+> genuine near-certainty** even when warranted. To let it reach the extremes you
+> would switch from a logit-*mean* (opinion pool) to a logit-*sum* (Bayesian
+> evidence accumulation), which reintroduces the overconfidence risk this design
+> removes. Near-certain numbers on daatan.com therefore come from the LLM-fallback
+> path, not the Oracle.
 
 ### Deployment (decided 2026-04-14)
 

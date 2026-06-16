@@ -31,7 +31,7 @@ How directly does this article bear on whether the specific event happens? Ancho
 Be discriminating: reserve the top band for articles a forecaster would treat as direct
 evidence. When in doubt between two bands, choose the lower one.
 
-Article snippet:
+Article:
 <article>
 {article_text}
 </article>
@@ -55,7 +55,7 @@ async def check_is_prediction(
 ) -> tuple["GatekeeperOutput", dict]:
     """Returns (GatekeeperOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens."""
     prompt = PROMPT.format(
-        article_text=article_text[200:2700],
+        article_text=article_text,
         source_name=source_name,
         article_date=article_date,
         event_name=event_name,

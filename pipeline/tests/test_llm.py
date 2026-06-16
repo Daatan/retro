@@ -217,6 +217,9 @@ class TestCallerDelegation:
         assert captured["max_tokens"] == 200
         assert captured["timeout"] == 90
         assert "Some Event" in captured["prompt"]
+        # Full article text reaches the gate (no front-trim): the old
+        # article_text[200:2700] slice emptied short inputs like this one.
+        assert "article" in captured["prompt"]
 
     async def test_extractor_delegates_with_exact_params(self, monkeypatch):
         from tm import extractor

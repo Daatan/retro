@@ -7598,8 +7598,8 @@
     "A06:bloomberg": {
       "event_id": "A06",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A06:ft": {
@@ -7619,8 +7619,8 @@
     "A06:nyt": {
       "event_id": "A06",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A07:aljazeera": {
@@ -7738,8 +7738,8 @@
     "A09:ft": {
       "event_id": "A09",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A09:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T18:28:12.100950"
+  "last_updated": "2026-06-16T18:29:22.157760"
 }

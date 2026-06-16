@@ -5729,8 +5729,8 @@
     "G07:haaretz": {
       "event_id": "G07",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "G07:israel_hayom": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T22:47:57.070324"
+  "last_updated": "2026-06-16T22:48:52.264030"
 }

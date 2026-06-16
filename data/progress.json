@@ -10566,8 +10566,8 @@
     "A13:bloomberg": {
       "event_id": "A13",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A15:bloomberg": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:52:01.024151"
+  "last_updated": "2026-06-16T19:52:43.016208"
 }

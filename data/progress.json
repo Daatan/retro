@@ -1935,7 +1935,7 @@
     "A02:ch13": {
       "event_id": "A02",
       "source_id": "ch13",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -7423,8 +7423,8 @@
     "A02:ft": {
       "event_id": "A02",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A02:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:03:02.766215"
+  "last_updated": "2026-06-16T19:06:09.960117"
 }

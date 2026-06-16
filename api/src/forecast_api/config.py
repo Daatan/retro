@@ -34,9 +34,10 @@ class ApiSettings(BaseSettings):
     # forecast_timeout_seconds.
     per_article_timeout_seconds: int = 25
 
-    # Cap article body fed to LLMs. News articles have the thesis in the lead;
-    # beyond ~3000 chars we pay LLM latency and $$ for diminishing returns.
-    max_article_chars: int = 3000
+    # Cap article body fed to LLMs (both the gatekeeper relevance screen and the
+    # extractor). The thesis is usually in the lead, but the relevance signal can
+    # sit deeper, so we keep a generous window before latency/$$ diminish returns.
+    max_article_chars: int = 4000
 
     # ── Aggregation (logit pooling + recency) ──────────────────────────────
     # Sources are pooled in log-odds space, weighted by credibility × certainty

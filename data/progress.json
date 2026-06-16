@@ -710,8 +710,8 @@
     "E08:haaretz": {
       "event_id": "E08",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "E08:reuters": {
@@ -4595,8 +4595,8 @@
     "E04:ch13": {
       "event_id": "E04",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "E04:globes": {
@@ -4609,8 +4609,8 @@
     "E04:haaretz": {
       "event_id": "E04",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "E04:israel_hayom": {
@@ -4728,8 +4728,8 @@
     "E05:n12": {
       "event_id": "E05",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "E05:reuters": {
@@ -4875,8 +4875,8 @@
     "E08:ch13": {
       "event_id": "E08",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 4,
       "error": null
     },
     "E08:calcalist": {
@@ -4889,7 +4889,7 @@
     "E08:maariv": {
       "event_id": "E08",
       "source_id": "maariv",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T18:44:14.977040"
+  "last_updated": "2026-06-16T18:50:43.144902"
 }

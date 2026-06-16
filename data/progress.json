@@ -3769,8 +3769,8 @@
     "C04:maariv": {
       "event_id": "C04",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C04:n12": {
@@ -8998,8 +8998,8 @@
     "C05:ft": {
       "event_id": "C05",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C05:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:35:49.493069"
+  "last_updated": "2026-06-16T19:37:01.195115"
 }

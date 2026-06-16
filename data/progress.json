@@ -10412,8 +10412,8 @@
     "G06:guardian": {
       "event_id": "G06",
       "source_id": "guardian",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G06:nyt": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T20:04:26.676687"
+  "last_updated": "2026-06-16T20:06:11.919768"
 }

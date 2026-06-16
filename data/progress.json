@@ -9943,8 +9943,8 @@
     "F01:ft": {
       "event_id": "F01",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "F01:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T20:18:49.322805"
+  "last_updated": "2026-06-16T20:20:02.069884"
 }

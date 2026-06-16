@@ -9068,8 +9068,8 @@
     "C07:axios": {
       "event_id": "C07",
       "source_id": "axios",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C07:bbc": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T21:58:47.722883"
+  "last_updated": "2026-06-16T21:59:27.089268"
 }

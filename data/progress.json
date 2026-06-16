@@ -4889,7 +4889,7 @@
     "E08:maariv": {
       "event_id": "E08",
       "source_id": "maariv",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10741,8 +10741,8 @@
     "E08:bloomberg": {
       "event_id": "E08",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "F05:bloomberg": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:18:54.471643"
+  "last_updated": "2026-06-16T19:19:51.470380"
 }

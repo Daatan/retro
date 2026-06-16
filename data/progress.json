@@ -7563,8 +7563,8 @@
     "A05:nyt": {
       "event_id": "A05",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A05:wapost": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T22:06:20.045121"
+  "last_updated": "2026-06-16T22:09:29.350094"
 }

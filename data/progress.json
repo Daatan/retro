@@ -5694,8 +5694,8 @@
     "G06:calcalist": {
       "event_id": "G06",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G06:maariv": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T20:21:07.717847"
+  "last_updated": "2026-06-16T20:22:35.311728"
 }

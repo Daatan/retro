@@ -507,8 +507,8 @@
     "A14:reuters": {
       "event_id": "A14",
       "source_id": "reuters",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A14:toi": {
@@ -7920,8 +7920,8 @@
     "A13:ft": {
       "event_id": "A13",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A13:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:07:01.569755"
+  "last_updated": "2026-06-16T19:07:58.644589"
 }

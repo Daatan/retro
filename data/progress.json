@@ -1767,8 +1767,8 @@
     "B12:reuters": {
       "event_id": "B12",
       "source_id": "reuters",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B12:toi": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T20:45:49.769757"
+  "last_updated": "2026-06-16T20:47:12.060965"
 }

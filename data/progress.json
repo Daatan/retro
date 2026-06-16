@@ -10335,8 +10335,8 @@
     "G05:aljazeera": {
       "event_id": "G05",
       "source_id": "aljazeera",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G05:axios": {
@@ -10503,8 +10503,8 @@
     "G08:guardian": {
       "event_id": "G08",
       "source_id": "guardian",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G08:nyt": {
@@ -10769,8 +10769,8 @@
     "G05:bloomberg": {
       "event_id": "G05",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "G07:bloomberg": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:46:52.613439"
+  "last_updated": "2026-06-16T19:49:13.292935"
 }

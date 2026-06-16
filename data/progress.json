@@ -864,8 +864,8 @@
     "A13:jpost": {
       "event_id": "A13",
       "source_id": "jpost",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A14:jpost": {
@@ -2670,8 +2670,8 @@
     "A11:calcalist": {
       "event_id": "A11",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A11:maariv": {
@@ -2691,8 +2691,8 @@
     "A11:reuters": {
       "event_id": "A11",
       "source_id": "reuters",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 4,
       "error": null
     },
     "A11:toi": {
@@ -2719,8 +2719,8 @@
     "A12:ch13": {
       "event_id": "A12",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A12:calcalist": {
@@ -2803,8 +2803,8 @@
     "A15:ch13": {
       "event_id": "A15",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 6,
       "error": null
     },
     "A15:calcalist": {
@@ -7878,8 +7878,8 @@
     "A12:ft": {
       "event_id": "A12",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A12:guardian": {
@@ -7906,8 +7906,8 @@
     "A13:axios": {
       "event_id": "A13",
       "source_id": "axios",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A13:bbc": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T18:29:22.157760"
+  "last_updated": "2026-06-16T18:31:37.472356"
 }

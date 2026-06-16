@@ -5435,7 +5435,7 @@
     "G01:reuters": {
       "event_id": "G01",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T21:06:28.532209"
+  "last_updated": "2026-06-16T21:07:27.562291"
 }

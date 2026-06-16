@@ -5869,8 +5869,8 @@
     "G08:walla": {
       "event_id": "G08",
       "source_id": "walla",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G08:ynet": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T21:07:27.562291"
+  "last_updated": "2026-06-16T21:08:52.260036"
 }

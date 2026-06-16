@@ -5561,8 +5561,8 @@
     "G03:walla": {
       "event_id": "G03",
       "source_id": "walla",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 4,
       "error": null
     },
     "G03:ynet": {
@@ -10272,8 +10272,8 @@
     "G03:ft": {
       "event_id": "G03",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G03:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:45:21.851335"
+  "last_updated": "2026-06-16T19:46:52.613439"
 }

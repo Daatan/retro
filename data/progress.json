@@ -577,8 +577,8 @@
     "A19:reuters": {
       "event_id": "A19",
       "source_id": "reuters",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "A19:toi": {
@@ -8116,7 +8116,7 @@
     "A17:nyt": {
       "event_id": "A17",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T20:26:33.293703"
+  "last_updated": "2026-06-16T20:27:28.869650"
 }

@@ -7465,8 +7465,8 @@
     "A03:ft": {
       "event_id": "A03",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A03:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T20:06:11.919768"
+  "last_updated": "2026-06-16T20:08:19.543719"
 }

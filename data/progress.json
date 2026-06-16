@@ -9054,8 +9054,8 @@
     "C06:nyt": {
       "event_id": "C06",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C07:aljazeera": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:12:39.574889"
+  "last_updated": "2026-06-16T19:14:08.877932"
 }

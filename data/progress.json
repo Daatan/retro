@@ -8956,8 +8956,8 @@
     "C04:ft": {
       "event_id": "C04",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C04:guardian": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:57:03.256679"
+  "last_updated": "2026-06-16T19:58:01.840999"
 }

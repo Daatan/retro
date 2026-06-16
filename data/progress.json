@@ -983,8 +983,8 @@
     "G06:jpost": {
       "event_id": "G06",
       "source_id": "jpost",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "G06:reuters": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T21:22:42.294830"
+  "last_updated": "2026-06-16T21:23:56.965884"
 }

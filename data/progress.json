@@ -5281,8 +5281,8 @@
     "F03:maariv": {
       "event_id": "F03",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "F03:n12": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T21:49:08.392538"
+  "last_updated": "2026-06-16T21:49:54.926696"
 }

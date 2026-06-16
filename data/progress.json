@@ -2943,8 +2943,8 @@
     "A17:jpost": {
       "event_id": "A17",
       "source_id": "jpost",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 6,
       "error": null
     },
     "A17:calcalist": {
@@ -8053,8 +8053,8 @@
     "A16:ft": {
       "event_id": "A16",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A16:guardian": {
@@ -8102,8 +8102,8 @@
     "A17:ft": {
       "event_id": "A17",
       "source_id": "ft",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "A17:guardian": {
@@ -8228,8 +8228,8 @@
     "B01:axios": {
       "event_id": "B01",
       "source_id": "axios",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B01:bbc": {
@@ -8256,8 +8256,8 @@
     "B01:nyt": {
       "event_id": "B01",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B02:aljazeera": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T18:31:37.472356"
+  "last_updated": "2026-06-16T18:33:16.834417"
 }

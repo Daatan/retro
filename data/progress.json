@@ -5393,8 +5393,8 @@
     "G01:haaretz": {
       "event_id": "G01",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "G01:israel_hayom": {
@@ -5505,8 +5505,8 @@
     "G03:haaretz": {
       "event_id": "G03",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "G03:israel_hayom": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:21:45.902868"
+  "last_updated": "2026-06-16T19:23:37.088630"
 }

@@ -4196,8 +4196,8 @@
     "D05:israel_hayom": {
       "event_id": "D05",
       "source_id": "israel_hayom",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "D05:jpost": {
@@ -4308,8 +4308,8 @@
     "D06:n12": {
       "event_id": "D06",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "D06:reuters": {
@@ -4553,8 +4553,8 @@
     "E03:maariv": {
       "event_id": "E03",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "E03:n12": {
@@ -9404,8 +9404,8 @@
     "D05:nyt": {
       "event_id": "D05",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "D06:aljazeera": {
@@ -9432,8 +9432,8 @@
     "D06:bloomberg": {
       "event_id": "D06",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "D06:ft": {
@@ -9453,7 +9453,7 @@
     "D06:nyt": {
       "event_id": "D06",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9544,8 +9544,8 @@
     "E02:nyt": {
       "event_id": "E02",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "E03:aljazeera": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T18:41:06.298147"
+  "last_updated": "2026-06-16T18:44:14.977040"
 }

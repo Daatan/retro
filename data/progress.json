@@ -2607,7 +2607,7 @@
     "A10:reuters": {
       "event_id": "A10",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7752,8 +7752,8 @@
     "A09:nyt": {
       "event_id": "A09",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A10:aljazeera": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:51:09.767383"
+  "last_updated": "2026-06-16T19:52:01.024151"
 }

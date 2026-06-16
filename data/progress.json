@@ -7892,8 +7892,8 @@
     "A12:nyt": {
       "event_id": "A12",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A13:aljazeera": {
@@ -7962,8 +7962,8 @@
     "A14:bloomberg": {
       "event_id": "A14",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 4,
       "error": null
     },
     "A14:ft": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T20:09:03.577470"
+  "last_updated": "2026-06-16T20:09:43.506151"
 }

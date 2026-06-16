@@ -4154,14 +4154,14 @@
     "D04:toi": {
       "event_id": "D04",
       "source_id": "toi",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "D04:walla": {
       "event_id": "D04",
       "source_id": "walla",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9271,8 +9271,8 @@
     "D02:nyt": {
       "event_id": "D02",
       "source_id": "nyt",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "D03:aljazeera": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T18:38:44.060715"
+  "last_updated": "2026-06-16T18:41:06.298147"
 }

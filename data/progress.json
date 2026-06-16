@@ -5442,8 +5442,8 @@
     "G01:toi": {
       "event_id": "G01",
       "source_id": "toi",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G01:walla": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T20:37:55.954466"
+  "last_updated": "2026-06-16T20:38:52.840448"
 }

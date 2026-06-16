@@ -5666,8 +5666,8 @@
     "G05:calcalist": {
       "event_id": "G05",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "G05:maariv": {
@@ -5876,8 +5876,8 @@
     "G08:ynet": {
       "event_id": "G08",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "A19:kan11": {
@@ -10419,8 +10419,8 @@
     "G06:nyt": {
       "event_id": "G06",
       "source_id": "nyt",
-      "status": "failed",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G07:aljazeera": {
@@ -10468,8 +10468,8 @@
     "G08:aljazeera": {
       "event_id": "G08",
       "source_id": "aljazeera",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G08:axios": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:23:37.088630"
+  "last_updated": "2026-06-16T19:27:09.314587"
 }

@@ -38,6 +38,20 @@ class ApiSettings(BaseSettings):
     # beyond ~3000 chars we pay LLM latency and $$ for diminishing returns.
     max_article_chars: int = 3000
 
+    # ── Aggregation (logit pooling + recency) ──────────────────────────────
+    # Sources are pooled in log-odds space, weighted by credibility × certainty
+    # × recency. Recency uses exponential decay with this half-life (days): an
+    # article this many days old counts half as much as one published today.
+    # Aggressive (7d) by design — the latest reporting should dominate as an
+    # event resolves, so stale pre-resolution coverage stops diluting a decided
+    # outcome.
+    recency_half_life_days: float = 7.0
+    # Floor for the recency weight so very old articles still count a little.
+    recency_floor: float = 0.02
+    # Probability clamp before taking log-odds (keeps logits finite). Also caps
+    # how extreme a single pooled estimate can get: [clamp, 1-clamp].
+    logit_clamp: float = 0.01
+
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.
     cache_ttl_seconds: int = 3600

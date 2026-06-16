@@ -10,7 +10,6 @@ Flow:
 import asyncio
 import hashlib
 import logging
-import math
 import re
 import time
 from datetime import datetime
@@ -26,6 +25,7 @@ from tm.web_search import search_articles, SearchResult, get_last_search_provide
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
 
+from .aggregation import claim_weighted_stance, pool_sources, recency_weight
 from .cache import forecast_cache, search_cache
 from .leaderboard import get_credibility_weight
 from .models import ArticleDebug, ArticleInput, DebugInfo, ForecastRequest, ForecastResponse, SourceSignal
@@ -408,7 +408,13 @@ async def _process_article(
         ))
         return None
 
-    avg_stance = sum(p.stance for p in extraction.predictions) / len(extraction.predictions)
+    # Certainty-weight the claims so a decisive claim isn't washed out by
+    # tangential hedged ones (mirrors the cross-source weighting below).
+    avg_stance = claim_weighted_stance(
+        [p.stance for p in extraction.predictions],
+        [p.certainty for p in extraction.predictions],
+        [p.specificity for p in extraction.predictions],
+    )
     avg_certainty = sum(p.certainty for p in extraction.predictions) / len(extraction.predictions)
     first_claim = (extraction.predictions[0].claim or "")[:160]
     logger.info(
@@ -664,10 +670,13 @@ async def _run_forecast_inner(
         avg_extract_ms=_avg(timings, "extract_ms"),
     )
 
-    # Step 3: build per-source signals
+    # Step 3: build per-source signals.
+    # Recency is measured against "now" so the latest reporting dominates as an
+    # event resolves (stale pre-resolution coverage stops diluting the result).
     source_signals: list[SourceSignal] = []
     all_stances: list[float] = []
     all_weights: list[float] = []
+    ref_date = datetime.now().strftime("%Y-%m-%d")
 
     for result, outcome in zip(search_results, outcomes):
         if isinstance(outcome, Exception):
@@ -682,9 +691,23 @@ async def _run_forecast_inner(
 
         source_id = _source_id_from_url(result.url)
         credibility = get_credibility_weight(source_id)
-        avg_stance = sum(p.stance for p in predictions) / len(predictions)
+        # Layer A: certainty-weight the article's claims so a decisive claim
+        # dominates tangential hedged ones instead of being washed out.
+        avg_stance = claim_weighted_stance(
+            [p.stance for p in predictions],
+            [p.certainty for p in predictions],
+            [p.specificity for p in predictions],
+        )
         avg_certainty = sum(p.certainty for p in predictions) / len(predictions)
-        weight = credibility * avg_certainty
+        # Layer B: down-weight older articles via exponential recency decay.
+        article_date = result.published_date or None
+        rweight = recency_weight(
+            article_date,
+            ref_date,
+            settings.recency_half_life_days,
+            floor=settings.recency_floor,
+        )
+        weight = credibility * avg_certainty * rweight
 
         all_stances.append(avg_stance)
         all_weights.append(weight)
@@ -697,6 +720,8 @@ async def _run_forecast_inner(
             certainty=round(avg_certainty, 3),
             credibility_weight=round(credibility, 3),
             claims=[p.claim for p in predictions if p.claim],
+            published_date=article_date,
+            recency_weight=round(rweight, 3),
         ))
 
     if not all_stances:
@@ -752,18 +777,19 @@ async def _run_forecast_inner(
             debug=empty_debug,
         )
 
-    # Step 4: weighted mean + 95% CI
-    total_w = sum(all_weights)
-    mean = sum(s * w for s, w in zip(all_stances, all_weights)) / total_w
-    variance = sum(w * (s - mean) ** 2 for s, w in zip(all_stances, all_weights)) / total_w
-    std = math.sqrt(variance)
+    # Step 4: logit (log-odds) pooling + 95% CI.
+    # Pooling in log-odds space (a logarithmic opinion pool) is robust to
+    # outliers: a single dissenting source can't drag a confident consensus back
+    # to the middle the way an arithmetic mean does. Combined with the per-claim
+    # certainty weighting (Layer A) and recency weighting (Layer B), a decided
+    # event reads decisive instead of the old wishy-washy ~0.5.
     n = len(all_stances)
-    sem = std / math.sqrt(n) if n > 1 else std
-    ci_low = max(-1.0, mean - 1.96 * sem)
-    ci_high = min(1.0, mean + 1.96 * sem)
+    mean, std, ci_low, ci_high = pool_sources(
+        all_stances, all_weights, clamp_eps=settings.logit_clamp
+    )
 
     logger.info(
-        "Forecast: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d",
+        "Forecast: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d (logit-pool)",
         mean, std, ci_low, ci_high, n,
     )
 

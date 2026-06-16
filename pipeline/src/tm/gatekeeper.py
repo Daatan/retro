@@ -5,36 +5,31 @@ from .llm import complete_structured
 PROMPT = """\
 You are a topic-relevance screener for a forecasting system.
 
-Decide whether this article contains useful evidence about the RELATED EVENT below.
-A downstream extractor will pull out directional signals and assign its own stance and
-certainty — even a weak or ambiguous signal is valuable. ERR ON THE SIDE OF INCLUDING
-the article. Worst case, the extractor will assign near-zero certainty and it won't
-affect the forecast.
+You do two things for the RELATED EVENT below: a coarse keep/drop gate, and a graded
+relevance score that decides how much this article counts. Off-topic articles are NOT
+harmless — a confident off-topic article still pulls the forecast — so score honestly.
 
-**PASS (is_prediction=true) if ANY of these apply:**
-- The article discusses the related event directly (including reporting current actions,
-  announcements, statements, or developments).
-- The article covers the specific actors, institutions, places, or situation underlying
-  the event (even in a factual / analytical style).
-- The article reports causes, consequences, or recent developments a reasonable reader
-  would consider relevant evidence for whether the event will occur.
-- The article contains explicit or implicit forecasts, analysis, or commentary about
-  the event's likelihood or drivers.
-- The article is partisan, opinion, or speculative but on-topic.
-
-**REJECT (is_prediction=false) ONLY if:**
-- The article is wholly about a clearly different event or domain (e.g. celebrity
-  gossip when the event is about monetary policy).
+**1. Coarse gate — set `is_prediction`.**
+Set it to false ONLY for clearly unusable input:
+- The article is wholly about a different event or domain (e.g. celebrity gossip when the
+  event is about monetary policy), or only brushes the event's keywords in passing while
+  its substance is about something unrelated.
 - The article is empty, a paywall/404 stub, or has no substantive content (under ~200
   meaningful words).
-- The article only brushes past the event's keywords in passing while the substance is
-  about something wholly unrelated.
+Otherwise set it to true. Keep this bar LOW — borderline articles pass the gate and are
+disciplined by the relevance score below. Do NOT reject for being "only factual
+reporting", lacking explicit "X will happen" language, or being short but on-topic.
 
-**Do NOT reject for:**
-- Being "only factual reporting" — recent facts ARE evidence for forecasts.
-- Lacking explicit "X will happen" language — implicit signal is extracted downstream.
-- Being short but on-topic — the extractor handles low-specificity input.
-- Covering an adjacent aspect of the same underlying situation.
+**2. Graded relevance — set `relevance_score` in [0.0, 1.0].**
+How directly does this article bear on whether the specific event happens? Anchored bands:
+- **0.8–1.0** — directly about the event: reports its actors/situation, its likelihood,
+  or developments that move it.
+- **0.4–0.6** — tangential or an adjacent aspect of the same broad situation; related
+  domain but not this specific event.
+- **0.0–0.2** — unrelated, or merely shares a keyword/name while the substance is about
+  something else.
+Be discriminating: reserve the top band for articles a forecaster would treat as direct
+evidence. When in doubt between two bands, choose the lower one.
 
 Article snippet:
 <article>
@@ -45,10 +40,10 @@ Source: {source_name}
 Date: {article_date}
 Related event: {event_name}
 
-Set `is_prediction` to true for on-topic articles even when they contain no explicit
-forecast. Set `reason` with a one-sentence justification. Set `prediction_count_estimate`
-to how many distinct predictive signals (explicit or implicit) a careful reader could
-extract; use 0 for purely factual on-topic articles (but still pass them).
+Set `reason` with a one-sentence justification covering both the gate and the score. Set
+`prediction_count_estimate` to how many distinct predictive signals (explicit or implicit)
+a careful reader could extract; use 0 for purely factual on-topic articles (but still pass
+them if relevant).
 """
 
 

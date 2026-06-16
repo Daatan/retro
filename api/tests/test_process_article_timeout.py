@@ -13,7 +13,7 @@ import forecast_api.forecaster as fc
 
 async def test_passes_through_a_fast_article(monkeypatch):
     async def fast(result, question, **kwargs):
-        return (result, ["ok"])
+        return (result, 0.9, ["ok"])
 
     monkeypatch.setattr(fc, "_process_article", fast)
     timings: list = []
@@ -24,7 +24,7 @@ async def test_passes_through_a_fast_article(monkeypatch):
         r, "Q?", max_article_chars=3000, timings=timings, article_debugs=debugs, timeout_s=1.0
     )
 
-    assert out == (r, ["ok"])
+    assert out == (r, 0.9, ["ok"])
     assert timings == []  # no timeout entry recorded
     assert debugs == []
 

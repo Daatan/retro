@@ -260,7 +260,7 @@ async def _process_article_bounded(
     timings: list[dict],
     article_debugs: list[ArticleDebug],
     timeout_s: float,
-) -> tuple[SearchResult, list] | None:
+) -> tuple[SearchResult, float, list] | None:
     """Run _process_article under a per-article wall-clock ceiling.
 
     Articles are processed in parallel, so one slow LLM call would otherwise
@@ -292,7 +292,7 @@ async def _process_article(
     max_article_chars: int,
     timings: list[dict],
     article_debugs: list[ArticleDebug],
-) -> tuple[SearchResult, list] | None:
+) -> tuple[SearchResult, float, list] | None:
     """
     Run gatekeeper + extractor for one article.
     Fetches full article text via trafilatura; falls back to title+snippet.
@@ -437,7 +437,7 @@ async def _process_article(
         total_tokens=(gate_tok + ext_tok) or None,
         fetch_ms=round(fetch_ms, 1), gate_ms=round(gate_ms, 1), extract_ms=round(extract_ms, 1),
     ))
-    return (result, extraction.predictions)
+    return (result, gate.relevance_score, extraction.predictions)
 
 
 async def run_forecast(req: ForecastRequest) -> ForecastResponse:
@@ -676,6 +676,7 @@ async def _run_forecast_inner(
     source_signals: list[SourceSignal] = []
     all_stances: list[float] = []
     all_weights: list[float] = []
+    relevances: list[float] = []
     ref_date = datetime.now().strftime("%Y-%m-%d")
 
     for result, outcome in zip(search_results, outcomes):
@@ -687,7 +688,7 @@ async def _run_forecast_inner(
             continue
         if outcome is None:
             continue
-        _, predictions = outcome
+        _, relevance, predictions = outcome
 
         source_id = _source_id_from_url(result.url)
         credibility = get_credibility_weight(source_id)
@@ -707,10 +708,14 @@ async def _run_forecast_inner(
             settings.recency_half_life_days,
             floor=settings.recency_floor,
         )
-        weight = credibility * avg_certainty * rweight
+        # Layer C: down-weight off-topic articles by the gatekeeper's graded
+        # relevance, applied convexly (squared) so a confident-but-tangential
+        # article (relevance ~0.5 → 0.25× pull) can't drag the pooled mean.
+        weight = credibility * avg_certainty * rweight * (relevance ** 2)
 
         all_stances.append(avg_stance)
         all_weights.append(weight)
+        relevances.append(relevance)
 
         source_signals.append(SourceSignal(
             source_id=source_id,
@@ -722,9 +727,17 @@ async def _run_forecast_inner(
             claims=[p.claim for p in predictions if p.claim],
             published_date=article_date,
             recency_weight=round(rweight, 3),
+            relevance_score=round(relevance, 3),
         ))
 
-    if not all_stances:
+    # Aggregate relevance safety net: if every surviving article is off-topic,
+    # the relevance² weights collapse and pool_sources would fall back to an
+    # *unweighted* mean — re-admitting the off-topic articles at full strength.
+    # Treat that as insufficient data instead. See settings.relevance_weight_floor.
+    relevance_mass = sum(r * r for r in relevances)
+    all_off_topic = bool(all_stances) and relevance_mass < settings.relevance_weight_floor
+
+    if not all_stances or all_off_topic:
         # Outcome histogram tells us *why* we got nothing — were articles
         # rejected by the gatekeeper, did extraction return empty, or did
         # fetch fail? Without this the warning is uninvestigatable.
@@ -732,7 +745,11 @@ async def _run_forecast_inner(
         for t in timings:
             key = str(t.get("outcome", "unknown"))
             outcome_counts[key] = outcome_counts.get(key, 0) + 1
-        reason = _reason_from_outcomes(outcome_counts)
+        if all_off_topic:
+            outcome_counts["all_low_relevance"] = len(relevances)
+            reason = "all_articles_off_topic"
+        else:
+            reason = _reason_from_outcomes(outcome_counts)
         logger.warning(
             "No usable predictions extracted from %d articles (reason=%s outcomes=%s)",
             len(search_results),
@@ -793,6 +810,14 @@ async def _run_forecast_inner(
         mean, std, ci_low, ci_high, n,
     )
 
+    # Per-article outcome histogram on the success path too, plus a low_relevance
+    # tally so the admin dashboard can see how many sources were down-weighted.
+    success_outcome_counts: dict[str, int] = {}
+    for t in timings:
+        key = str(t.get("outcome", "unknown"))
+        success_outcome_counts[key] = success_outcome_counts.get(key, 0) + 1
+    success_outcome_counts["low_relevance"] = sum(1 for r in relevances if r < 0.3)
+
     debug_info: Optional[DebugInfo] = None
     if req.debug:
         total_prompt_tok = sum(
@@ -829,6 +854,7 @@ async def _run_forecast_inner(
         articles_found=len(search_results),
         sources=source_signals,
         placeholder=False,
+        outcome_counts=success_outcome_counts,
         provider=search_provider,
         provider_chain=provider_chain,
         distilled_query=distilled_query,

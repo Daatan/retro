@@ -3279,8 +3279,8 @@
     "B07:ch13": {
       "event_id": "B07",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "B07:calcalist": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T22:38:59.191874"
+  "last_updated": "2026-06-16T22:40:35.880133"
 }

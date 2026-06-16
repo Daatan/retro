@@ -2880,8 +2880,8 @@
     "A16:n12": {
       "event_id": "A16",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A16:reuters": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:30:44.071382"
+  "last_updated": "2026-06-16T19:32:18.192693"
 }

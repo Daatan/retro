@@ -745,8 +745,8 @@
     "G02:haaretz": {
       "event_id": "G02",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 6,
       "error": null
     },
     "G02:reuters": {
@@ -1354,8 +1354,8 @@
     "G02:walla": {
       "event_id": "G02",
       "source_id": "walla",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 11,
       "error": null
     },
     "G05:israel_hayom": {
@@ -5358,8 +5358,8 @@
     "F05:calcalist": {
       "event_id": "F05",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 6,
       "error": null
     },
     "F05:maariv": {
@@ -5407,8 +5407,8 @@
     "G01:jpost": {
       "event_id": "G01",
       "source_id": "jpost",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "G01:calcalist": {
@@ -5456,8 +5456,8 @@
     "G01:ynet": {
       "event_id": "G01",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G02:ch13": {
@@ -5491,8 +5491,8 @@
     "G03:ch13": {
       "event_id": "G03",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G03:globes": {
@@ -5533,8 +5533,8 @@
     "G03:maariv": {
       "event_id": "G03",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G03:n12": {
@@ -10076,8 +10076,8 @@
     "F04:bloomberg": {
       "event_id": "F04",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "F04:ft": {
@@ -10167,8 +10167,8 @@
     "G01:bloomberg": {
       "event_id": "G01",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G01:ft": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T18:52:53.620994"
+  "last_updated": "2026-06-16T18:56:45.199179"
 }

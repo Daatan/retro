@@ -4357,8 +4357,8 @@
     "E01:haaretz": {
       "event_id": "E01",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "E01:israel_hayom": {
@@ -4476,8 +4476,8 @@
     "E02:n12": {
       "event_id": "E02",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "E02:reuters": {
@@ -9453,7 +9453,7 @@
     "D06:nyt": {
       "event_id": "D06",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:40:36.271327"
+  "last_updated": "2026-06-16T19:42:58.897113"
 }

@@ -4987,8 +4987,8 @@
     "E10:ch13": {
       "event_id": "E10",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "E10:globes": {
@@ -5022,8 +5022,8 @@
     "E10:calcalist": {
       "event_id": "E10",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "E10:maariv": {
@@ -9936,8 +9936,8 @@
     "F01:bloomberg": {
       "event_id": "F01",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "F01:ft": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T19:19:51.470380"
+  "last_updated": "2026-06-16T19:21:45.902868"
 }

@@ -962,8 +962,8 @@
     "G05:ynet": {
       "event_id": "G05",
       "source_id": "ynet",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G06:globes": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-16T22:20:53.019808"
+  "last_updated": "2026-06-16T22:22:04.447368"
 }

@@ -3930,8 +3930,8 @@
     "C09:calcalist": {
       "event_id": "C09",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C09:maariv": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-17T00:31:22.903595"
+  "last_updated": "2026-06-17T00:32:44.872262"
 }

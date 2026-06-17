@@ -5813,7 +5813,7 @@
     "G08:haaretz": {
       "event_id": "G08",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -5841,7 +5841,7 @@
     "G08:maariv": {
       "event_id": "G08",
       "source_id": "maariv",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -5862,7 +5862,7 @@
     "G08:toi": {
       "event_id": "G08",
       "source_id": "toi",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10762,7 +10762,7 @@
     "G04:bloomberg": {
       "event_id": "G04",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-17T21:18:37.700928"
+  "last_updated": "2026-06-17T21:19:20.635469"
 }

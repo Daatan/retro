@@ -3,33 +3,42 @@ from .config import settings
 from .llm import complete_structured
 
 PROMPT = """\
-You are a topic-relevance screener for a forecasting system.
+You are a relevance screener for a forecasting system. Below is a CLAIM (a specific
+predicted outcome) and an article. Judge the article by one question only:
 
-You do two things for the RELATED EVENT below: a coarse keep/drop gate, and a graded
-relevance score that decides how much this article counts. Off-topic articles are NOT
-harmless — a confident off-topic article still pulls the forecast — so score honestly.
+  **Does this article change how likely the CLAIM's specific outcome is?**
+
+Judge *evidence-relevance*, not keyword overlap. Two traps to avoid:
+- An article can be strongly relevant WITHOUT mentioning the outcome. A report on a
+  leader's failing health is strong evidence for "will they die this year?" even if it
+  never says "death." Indirect evidence still counts — do not require the outcome to be
+  named.
+- An article can be about the claim's main actor/topic yet be IRRELEVANT. A story about
+  Elon Musk's views on bitcoin tells you nothing about whether he will tweet about some
+  specific company. Being *about the actor* is NOT enough — it must bear on THIS outcome.
 
 **1. Coarse gate — set `is_prediction`.**
-Set it to false ONLY for clearly unusable input:
-- The article is wholly about a different event or domain (e.g. celebrity gossip when the
-  event is about monetary policy), or only brushes the event's keywords in passing while
-  its substance is about something unrelated.
-- The article is empty, a paywall/404 stub, or has no substantive content (under ~200
-  meaningful words).
-Otherwise set it to true. Keep this bar LOW — borderline articles pass the gate and are
-disciplined by the relevance score below. Do NOT reject for being "only factual
-reporting", lacking explicit "X will happen" language, or being short but on-topic.
+Set it to false when a forecaster would get nothing to update on for this claim:
+- It is about the claim's actor/topic but its substance does not bear on the specific
+  outcome (claim "X will tweet about Y" + article about X's unrelated business dealings).
+- It is wholly about a different event or domain, or only brushes the claim's keywords in
+  passing.
+- It is empty, a paywall/404 stub, or has no substantive content (under ~200 meaningful
+  words).
+Otherwise set it to true. The bar is *bears on the outcome* — borderline-but-relevant
+articles pass and are graded below. Do NOT reject for being "only factual reporting",
+lacking explicit "X will happen" language, for being short, or for being INDIRECT evidence.
 
 **2. Graded relevance — set `relevance_score` in [0.0, 1.0].**
-How directly does this article bear on whether the specific event happens? Anchored bands:
-- **0.8–1.0** — directly about the event: reports its actors/situation, its likelihood,
-  or developments that move it.
-- **0.4–0.6** — tangential or an adjacent aspect of the same broad situation; related
-  domain but not this specific event.
-- **0.0–0.2** — unrelated, or merely shares a keyword/name while the substance is about
-  something else.
-Be discriminating: reserve the top band for articles a forecaster would treat as direct
-evidence. When in doubt between two bands, choose the lower one.
+How much would a forecaster update their estimate of THIS outcome after reading it?
+- **0.8–1.0** — direct or strong evidence: reports the outcome, its drivers, or
+  developments (even indirect) that clearly move its likelihood.
+- **0.4–0.6** — weak/partial bearing: touches the situation but only loosely moves the
+  specific outcome.
+- **0.0–0.2** — no bearing on the outcome: about the actor/topic but a different matter,
+  or merely shares a name/keyword.
+Reserve the top band for genuine evidence about the outcome. When in doubt between two
+bands, choose the lower one.
 
 Article:
 <article>
@@ -38,12 +47,12 @@ Article:
 
 Source: {source_name}
 Date: {article_date}
-Related event: {event_name}
+Claim: {event_name}
 
 Set `reason` with a one-sentence justification covering both the gate and the score. Set
 `prediction_count_estimate` to how many distinct predictive signals (explicit or implicit)
-a careful reader could extract; use 0 for purely factual on-topic articles (but still pass
-them if relevant).
+a careful reader could extract; use 0 for purely factual articles that still bear on the
+outcome (but pass them).
 """
 
 

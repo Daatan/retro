@@ -737,7 +737,20 @@ async def _run_forecast_inner(
     relevance_mass = sum(r * r for r in relevances)
     all_off_topic = bool(all_stances) and relevance_mass < settings.relevance_weight_floor
 
-    if not all_stances or all_off_topic:
+    # Decisiveness safety net: even with on-subject articles, a thin, low-certainty
+    # pool produces a confident-looking ~50% from evidence that doesn't actually
+    # bear on the claim (e.g. generic Musk news for "will Musk tweet about X?").
+    # `all_weights` already folds credibility × certainty × recency × relevance²,
+    # so their sum is the certainty-weighted evidence mass; below a floor we defer
+    # to the caller's base rate instead of emitting a coin-flip. A genuinely
+    # balanced ~50% backed by strong coverage has high mass and is unaffected.
+    evidence_mass = sum(all_weights)
+    no_decisive_signal = (
+        bool(all_stances) and not all_off_topic
+        and evidence_mass < settings.decisiveness_floor
+    )
+
+    if not all_stances or all_off_topic or no_decisive_signal:
         # Outcome histogram tells us *why* we got nothing — were articles
         # rejected by the gatekeeper, did extraction return empty, or did
         # fetch fail? Without this the warning is uninvestigatable.
@@ -748,6 +761,9 @@ async def _run_forecast_inner(
         if all_off_topic:
             outcome_counts["all_low_relevance"] = len(relevances)
             reason = "all_articles_off_topic"
+        elif no_decisive_signal:
+            outcome_counts["low_evidence_mass"] = len(all_weights)
+            reason = "no_decisive_signal"
         else:
             reason = _reason_from_outcomes(outcome_counts)
         logger.warning(

@@ -60,6 +60,15 @@ class ApiSettings(BaseSettings):
     # 0.05 ≈ one article at relevance ~0.22. Tune down using daatan's logged
     # relevance_score / all_articles_off_topic data.
     relevance_weight_floor: float = 0.05
+    # Decisiveness floor: minimum total certainty-weighted evidence mass
+    # (Σ credibility·certainty·recency·relevance² over surviving articles) required
+    # to emit a forecast. Below this the pool is too thin/low-certainty to mean
+    # anything, so we return insufficient_data (reason="no_decisive_signal") and
+    # let the caller keep its base-rate estimate instead of overwriting it with a
+    # ~50% coin-flip. 0.5 ≈ one solid, on-topic, confident article's worth of
+    # evidence. Deferring is a safe degradation (caller falls back to its LLM base
+    # rate); a genuinely balanced ~50% backed by strong coverage clears this easily.
+    decisiveness_floor: float = 0.5
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.

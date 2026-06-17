@@ -40,13 +40,14 @@ class TestGatekeeperRelevanceScore:
 
 # --- run_forecast wiring ----------------------------------------------------
 
-def _preds(stance: float):
-    return [SimpleNamespace(stance=stance, certainty=0.8, specificity=1.0, claim="c")]
+def _preds(stance: float, certainty: float = 0.8):
+    return [SimpleNamespace(stance=stance, certainty=certainty, specificity=1.0, claim="c")]
 
 
-def _wire(monkeypatch, articles):
+def _wire(monkeypatch, articles, certainty: float = 0.8):
     """Stub search + per-article processing. ``articles`` is a list of
-    ``(url, relevance, stance)``; each yields one prediction with that stance."""
+    ``(url, relevance, stance)``; each yields one prediction with that stance
+    and the given certainty (drives the evidence-mass / decisiveness floor)."""
     results = [SearchResult(title="t", url=url, snippet="s", source=url) for url, _, _ in articles]
     monkeypatch.setattr(forecaster, "search_articles", lambda q, limit: list(results))
 
@@ -61,7 +62,7 @@ def _wire(monkeypatch, articles):
     async def _bounded(result, question, *, max_article_chars, timings, article_debugs, timeout_s):
         rel, stance = by_url[result.url]
         timings.append({"url": result.url, "outcome": "ok"})
-        return (result, rel, _preds(stance))
+        return (result, rel, _preds(stance, certainty))
     monkeypatch.setattr(forecaster, "_process_article_bounded", _bounded)
 
 
@@ -103,11 +104,43 @@ class TestConvexRelevanceWeighting:
         # Same low-relevance set passes when the floor is lowered below the mass.
         _wire(monkeypatch, [("http://a.com/1", 0.1, 0.9), ("http://b.com/2", 0.1, 0.9)])
         monkeypatch.setattr(api_settings, "relevance_weight_floor", 0.001)
+        # This tiny set would also trip the decisiveness floor; lower it too so the
+        # test isolates the relevance floor.
+        monkeypatch.setattr(api_settings, "decisiveness_floor", 0.001)
         resp = await forecaster.run_forecast(ForecastRequest(question="floor toggle probe 9a?"))
 
         assert resp.insufficient_data is False
         assert resp.articles_used == 2
         assert resp.outcome_counts.get("low_relevance") == 2
+
+
+class TestDecisivenessFloor:
+    async def test_thin_low_certainty_pool_defers(self, monkeypatch):
+        # On-subject articles (relevance 0.6, so NOT off-topic) but low certainty
+        # 0.1 → evidence mass = 2 × (1.0·0.1·1.0·0.6²) = 0.072 < 0.5 floor. The
+        # Oracle should defer (insufficient_data) instead of emitting a coin-flip,
+        # so the caller keeps its base rate. (The "Elon will tweet about X" case.)
+        _wire(monkeypatch, [
+            ("http://a.com/1", 0.6, 0.4),
+            ("http://b.com/2", 0.6, -0.4),
+        ], certainty=0.1)
+        resp = await forecaster.run_forecast(ForecastRequest(question="decisiveness probe e1?"))
+
+        assert resp.insufficient_data is True
+        assert resp.reason == "no_decisive_signal"
+        assert resp.articles_used == 0
+        assert resp.outcome_counts.get("low_evidence_mass") == 2
+
+    async def test_strong_pool_is_not_blocked(self, monkeypatch):
+        # Same articles at full certainty clear the floor and produce a forecast.
+        _wire(monkeypatch, [
+            ("http://a.com/1", 0.9, 0.4),
+            ("http://b.com/2", 0.9, 0.5),
+        ], certainty=0.9)
+        resp = await forecaster.run_forecast(ForecastRequest(question="decisiveness probe e2?"))
+
+        assert resp.insufficient_data is False
+        assert resp.articles_used == 2
 
 
 def test_pipeline_settings_unaffected():

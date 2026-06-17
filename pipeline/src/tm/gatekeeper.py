@@ -31,14 +31,18 @@ lacking explicit "X will happen" language, for being short, or for being INDIREC
 
 **2. Graded relevance — set `relevance_score` in [0.0, 1.0].**
 How much would a forecaster update their estimate of THIS outcome after reading it?
-- **0.8–1.0** — direct or strong evidence: reports the outcome, its drivers, or
-  developments (even indirect) that clearly move its likelihood.
-- **0.4–0.6** — weak/partial bearing: touches the situation but only loosely moves the
-  specific outcome.
-- **0.0–0.2** — no bearing on the outcome: about the actor/topic but a different matter,
-  or merely shares a name/keyword.
-Reserve the top band for genuine evidence about the outcome. When in doubt between two
-bands, choose the lower one.
+- **0.7–1.0** — genuine evidence: reports the outcome, its drivers, or developments that
+  advance or hinder it — INCLUDING the process leading to it (accession talks for "will
+  the EU admit members?"; territorial gains/losses or military setbacks for "will they
+  lose territory?"; a leader's failing health for "will they die?"). If a reasonable
+  reader would treat it as evidence either way, it belongs here — be generous, not stingy.
+- **0.3–0.6** — partial/background bearing: about the situation and somewhat informative,
+  but only loosely tied to the specific outcome.
+- **0.0–0.2** — no bearing: about the actor/topic but a DIFFERENT matter (Musk's bitcoin
+  views for "will Musk tweet about Daatan?"), or merely shares a name/keyword.
+Most articles a search returns for a well-formed claim are genuinely relevant — the
+0.0–0.2 band is for the actor-but-different-matter case, not for solid evidence that
+merely isn't laser-focused on the outcome.
 
 Article:
 <article>

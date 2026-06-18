@@ -5862,8 +5862,8 @@
     "G08:toi": {
       "event_id": "G08",
       "source_id": "toi",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "G08:walla": {
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-18T00:09:29.796958"
+  "last_updated": "2026-06-18T00:10:19.901737"
 }

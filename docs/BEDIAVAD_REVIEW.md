@@ -99,8 +99,14 @@ run now, but per Finding #1 the output stays trivial until negatives exist.
 
 ## 2. Bediavad engine bugs (these hurt its real job: source scoring)
 
-Not blocking, but they make the "who was right" mechanism partly inert. List, not
-yet fixed.
+> **Update (2026-06-18):** all five bugs below are now fixed in
+> `fix/bediavad-source-scoring-bugs` (`source_brier` wired from
+> `leaderboard.json`; `domain` read from `category[0]`; model label reflects the
+> branch actually taken; legacy Polymarket code + mock report removed; the
+> weighted-average fallback no longer drops source weights). Kept here for the
+> record.
+
+Not blocking, but they made the "who was right" mechanism partly inert.
 
 1. **`source_brier` feature is dead.** `entry_to_features` reads source accuracy
    from `data/sources/{id}.json`'s `brier_scores` key — but those files have **no

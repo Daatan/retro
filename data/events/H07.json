@@ -1,0 +1,21 @@
+{
+  "id": "H07",
+  "name": "Check Point acquires Cyberint",
+  "outcome": true,
+  "outcome_date": "2024-08-01",
+  "search_keywords": [
+    "צ'ק פוינט רוכשת סייברינט",
+    "Check Point acquires Cyberint"
+  ],
+  "llm_referee_criteria": "Must focus on the acquisition announcement in Aug 2024.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Tech"
+  ],
+  "tags": [
+    "Check Point",
+    "Cyberint",
+    "acquisition"
+  ],
+  "polymarket": null
+}

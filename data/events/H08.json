@@ -1,0 +1,23 @@
+{
+  "id": "H08",
+  "name": "Israeli AI startup raises $100M+ round (multiple)",
+  "outcome": true,
+  "outcome_date": "2024-06-01",
+  "search_keywords": [
+    "סטארטאפ ישראלי בינה מלאכותית גיוס",
+    "Israeli AI startup $100M raise"
+  ],
+  "llm_referee_criteria": "Must cite at least one Israeli AI company closing a $100M+ round in 2024.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Tech",
+    "AI & Tech",
+    "Israeli Economy"
+  ],
+  "tags": [
+    "AI startup",
+    "funding round",
+    "Israel"
+  ],
+  "polymarket": null
+}

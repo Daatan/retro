@@ -1,0 +1,21 @@
+{
+  "id": "H03",
+  "name": "IronSource completes merger with Unity",
+  "outcome": true,
+  "outcome_date": "2022-11-07",
+  "search_keywords": [
+    "מיזוג אירון סורס יוניטי",
+    "IronSource Unity merger complete"
+  ],
+  "llm_referee_criteria": "Must focus on the Nov 7 closing of the deal.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Tech"
+  ],
+  "tags": [
+    "IronSource",
+    "Unity",
+    "merger"
+  ],
+  "polymarket": null
+}

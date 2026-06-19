@@ -1,0 +1,23 @@
+{
+  "id": "I02",
+  "name": "Israel-EU natural gas export MOU signed",
+  "outcome": true,
+  "outcome_date": "2022-06-15",
+  "search_keywords": [
+    "הסכם גז ישראל אירופה",
+    "Israel EU gas export MOU"
+  ],
+  "llm_referee_criteria": "Must focus on the June 15 tripartite agreement (Israel, Egypt, EU).",
+  "predictive_window_days": 30,
+  "category": [
+    "Energy",
+    "Global",
+    "Israeli Economy"
+  ],
+  "tags": [
+    "natural gas",
+    "EU",
+    "MOU"
+  ],
+  "polymarket": null
+}

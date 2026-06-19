@@ -1,0 +1,22 @@
+{
+  "id": "H10",
+  "name": "Start-Up Nation Central: Israel drops out of top 5 startup ecosystems",
+  "outcome": true,
+  "outcome_date": "2024-06-01",
+  "search_keywords": [
+    "מדד אקוסיסטם ישראל",
+    "Israel startup ecosystem ranking drop"
+  ],
+  "llm_referee_criteria": "Must cite a specific global ranking report showing Israel below top 5.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Tech",
+    "Israeli Economy"
+  ],
+  "tags": [
+    "startup ecosystem",
+    "ranking",
+    "Israel"
+  ],
+  "polymarket": null
+}

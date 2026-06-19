@@ -1,0 +1,22 @@
+{
+  "id": "H09",
+  "name": "Israeli tech layoffs exceed 15,000 cumulative (2023)",
+  "outcome": true,
+  "outcome_date": "2023-12-31",
+  "search_keywords": [
+    "פיטורים הייטק ישראל 2023",
+    "Israeli tech layoffs 2023"
+  ],
+  "llm_referee_criteria": "Must cite cumulative layoff figures above 15,000 for 2023.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Tech",
+    "Israeli Economy"
+  ],
+  "tags": [
+    "layoffs",
+    "tech",
+    "Israel"
+  ],
+  "polymarket": null
+}

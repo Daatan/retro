@@ -1,0 +1,22 @@
+{
+  "id": "I01",
+  "name": "Brent crude oil exceeds $100/barrel (Russia-Ukraine)",
+  "outcome": true,
+  "outcome_date": "2022-02-24",
+  "search_keywords": [
+    "נפט מעל 100 דולר",
+    "Brent crude 100 dollars barrel"
+  ],
+  "llm_referee_criteria": "Must focus on the Feb 24 price spike above $100 triggered by invasion.",
+  "predictive_window_days": 30,
+  "category": [
+    "Energy",
+    "Global"
+  ],
+  "tags": [
+    "Brent crude",
+    "oil price",
+    "Russia-Ukraine"
+  ],
+  "polymarket": null
+}

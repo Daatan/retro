@@ -814,6 +814,34 @@
     {
       "date": "2026-06-13",
       "probability": 0.274
+    },
+    {
+      "date": "2026-06-14",
+      "probability": 0.2845
+    },
+    {
+      "date": "2026-06-15",
+      "probability": 0.413
+    },
+    {
+      "date": "2026-06-16",
+      "probability": 0.316
+    },
+    {
+      "date": "2026-06-17",
+      "probability": 0.3625
+    },
+    {
+      "date": "2026-06-18",
+      "probability": 0.377
+    },
+    {
+      "date": "2026-06-19",
+      "probability": 0.3855
+    },
+    {
+      "date": "2026-06-20",
+      "probability": 0.3745
     }
   ]
 }

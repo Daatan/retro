@@ -9453,7 +9453,7 @@
     "D06:nyt": {
       "event_id": "D06",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "in_progress",
       "prediction_count": 0,
       "error": null
     },
@@ -11271,5 +11271,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-21T19:14:21.418900"
+  "last_updated": "2026-06-21T19:15:31.302569"
 }

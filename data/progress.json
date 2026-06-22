@@ -12386,7 +12386,7 @@
     "I01:globes": {
       "event_id": "I01",
       "source_id": "globes",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12484,7 +12484,7 @@
     "I02:bbc": {
       "event_id": "I02",
       "source_id": "bbc",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12519,7 +12519,7 @@
     "I02:globes": {
       "event_id": "I02",
       "source_id": "globes",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13819,5 +13819,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T18:07:48.409840"
+  "last_updated": "2026-06-22T18:07:57.548906"
 }

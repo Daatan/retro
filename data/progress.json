@@ -13051,8 +13051,8 @@
     "C10:globes": {
       "event_id": "C10",
       "source_id": "globes",
-      "status": "failed",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "C10:guardian": {
@@ -13394,8 +13394,8 @@
     "C13:ynet": {
       "event_id": "C13",
       "source_id": "ynet",
-      "status": "in_progress",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "D07:aljazeera": {
@@ -13679,5 +13679,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T15:59:39.102910"
+  "last_updated": "2026-06-22T16:06:24.177880"
 }

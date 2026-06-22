@@ -13849,8 +13849,8 @@
     "I04:globes": {
       "event_id": "I04",
       "source_id": "globes",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "I04:guardian": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T22:56:02.371933"
+  "last_updated": "2026-06-22T23:05:52.215671"
 }

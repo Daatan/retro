@@ -12806,8 +12806,8 @@
     "A20:israel_hayom": {
       "event_id": "A20",
       "source_id": "israel_hayom",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A20:jpost": {
@@ -13679,5 +13679,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T15:44:44.234845"
+  "last_updated": "2026-06-22T15:45:35.668822"
 }

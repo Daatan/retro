@@ -11637,7 +11637,7 @@
     "H04:nyt": {
       "event_id": "H04",
       "source_id": "nyt",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11749,7 +11749,7 @@
     "H05:jpost": {
       "event_id": "H05",
       "source_id": "jpost",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13819,5 +13819,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T18:06:36.039643"
+  "last_updated": "2026-06-22T18:07:34.050781"
 }

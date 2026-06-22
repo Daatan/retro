@@ -11269,7 +11269,406 @@
       "status": "no_predictions",
       "prediction_count": 0,
       "error": null
+    },
+    "H01:aljazeera": {
+      "event_id": "H01",
+      "source_id": "aljazeera",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:axios": {
+      "event_id": "H01",
+      "source_id": "axios",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:bbc": {
+      "event_id": "H01",
+      "source_id": "bbc",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:bloomberg": {
+      "event_id": "H01",
+      "source_id": "bloomberg",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:calcalist": {
+      "event_id": "H01",
+      "source_id": "calcalist",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:ch13": {
+      "event_id": "H01",
+      "source_id": "ch13",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:ft": {
+      "event_id": "H01",
+      "source_id": "ft",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:globes": {
+      "event_id": "H01",
+      "source_id": "globes",
+      "status": "done",
+      "prediction_count": 5,
+      "error": null
+    },
+    "H01:guardian": {
+      "event_id": "H01",
+      "source_id": "guardian",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:haaretz": {
+      "event_id": "H01",
+      "source_id": "haaretz",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:israel_hayom": {
+      "event_id": "H01",
+      "source_id": "israel_hayom",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:jpost": {
+      "event_id": "H01",
+      "source_id": "jpost",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:maariv": {
+      "event_id": "H01",
+      "source_id": "maariv",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:n12": {
+      "event_id": "H01",
+      "source_id": "n12",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:nyt": {
+      "event_id": "H01",
+      "source_id": "nyt",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:reuters": {
+      "event_id": "H01",
+      "source_id": "reuters",
+      "status": "done",
+      "prediction_count": 2,
+      "error": null
+    },
+    "H01:toi": {
+      "event_id": "H01",
+      "source_id": "toi",
+      "status": "done",
+      "prediction_count": 1,
+      "error": null
+    },
+    "H01:walla": {
+      "event_id": "H01",
+      "source_id": "walla",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H01:ynet": {
+      "event_id": "H01",
+      "source_id": "ynet",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:aljazeera": {
+      "event_id": "H02",
+      "source_id": "aljazeera",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:axios": {
+      "event_id": "H02",
+      "source_id": "axios",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:bbc": {
+      "event_id": "H02",
+      "source_id": "bbc",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:bloomberg": {
+      "event_id": "H02",
+      "source_id": "bloomberg",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:calcalist": {
+      "event_id": "H02",
+      "source_id": "calcalist",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:ch13": {
+      "event_id": "H02",
+      "source_id": "ch13",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:ft": {
+      "event_id": "H02",
+      "source_id": "ft",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:globes": {
+      "event_id": "H02",
+      "source_id": "globes",
+      "status": "done",
+      "prediction_count": 2,
+      "error": null
+    },
+    "H02:guardian": {
+      "event_id": "H02",
+      "source_id": "guardian",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:haaretz": {
+      "event_id": "H02",
+      "source_id": "haaretz",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:israel_hayom": {
+      "event_id": "H02",
+      "source_id": "israel_hayom",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:jpost": {
+      "event_id": "H02",
+      "source_id": "jpost",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:maariv": {
+      "event_id": "H02",
+      "source_id": "maariv",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:n12": {
+      "event_id": "H02",
+      "source_id": "n12",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:nyt": {
+      "event_id": "H02",
+      "source_id": "nyt",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:reuters": {
+      "event_id": "H02",
+      "source_id": "reuters",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:toi": {
+      "event_id": "H02",
+      "source_id": "toi",
+      "status": "done",
+      "prediction_count": 1,
+      "error": null
+    },
+    "H02:walla": {
+      "event_id": "H02",
+      "source_id": "walla",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H02:ynet": {
+      "event_id": "H02",
+      "source_id": "ynet",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:aljazeera": {
+      "event_id": "H04",
+      "source_id": "aljazeera",
+      "status": "done",
+      "prediction_count": 1,
+      "error": null
+    },
+    "H04:axios": {
+      "event_id": "H04",
+      "source_id": "axios",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:bbc": {
+      "event_id": "H04",
+      "source_id": "bbc",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:bloomberg": {
+      "event_id": "H04",
+      "source_id": "bloomberg",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:calcalist": {
+      "event_id": "H04",
+      "source_id": "calcalist",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:ch13": {
+      "event_id": "H04",
+      "source_id": "ch13",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:ft": {
+      "event_id": "H04",
+      "source_id": "ft",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:globes": {
+      "event_id": "H04",
+      "source_id": "globes",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:guardian": {
+      "event_id": "H04",
+      "source_id": "guardian",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:haaretz": {
+      "event_id": "H04",
+      "source_id": "haaretz",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:israel_hayom": {
+      "event_id": "H04",
+      "source_id": "israel_hayom",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:jpost": {
+      "event_id": "H04",
+      "source_id": "jpost",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:maariv": {
+      "event_id": "H04",
+      "source_id": "maariv",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:n12": {
+      "event_id": "H04",
+      "source_id": "n12",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:nyt": {
+      "event_id": "H04",
+      "source_id": "nyt",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:reuters": {
+      "event_id": "H04",
+      "source_id": "reuters",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:toi": {
+      "event_id": "H04",
+      "source_id": "toi",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:walla": {
+      "event_id": "H04",
+      "source_id": "walla",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "H04:ynet": {
+      "event_id": "H04",
+      "source_id": "ynet",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
     }
   },
-  "last_updated": "2026-06-22T13:56:10.427411"
+  "last_updated": "2026-06-22T13:57:27.798697"
 }

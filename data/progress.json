@@ -11637,7 +11637,7 @@
     "H04:nyt": {
       "event_id": "H04",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -11749,7 +11749,7 @@
     "H05:jpost": {
       "event_id": "H05",
       "source_id": "jpost",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -11854,7 +11854,7 @@
     "H06:globes": {
       "event_id": "H06",
       "source_id": "globes",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -11882,7 +11882,7 @@
     "H06:jpost": {
       "event_id": "H06",
       "source_id": "jpost",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12253,7 +12253,7 @@
     "H10:globes": {
       "event_id": "H10",
       "source_id": "globes",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12281,7 +12281,7 @@
     "H10:jpost": {
       "event_id": "H10",
       "source_id": "jpost",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12386,7 +12386,7 @@
     "I01:globes": {
       "event_id": "I01",
       "source_id": "globes",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12484,7 +12484,7 @@
     "I02:bbc": {
       "event_id": "I02",
       "source_id": "bbc",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12519,7 +12519,7 @@
     "I02:globes": {
       "event_id": "I02",
       "source_id": "globes",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13716,7 +13716,7 @@
     "H07:globes": {
       "event_id": "H07",
       "source_id": "globes",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13819,5 +13819,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T17:41:15.355476"
+  "last_updated": "2026-06-22T17:48:50.949986"
 }

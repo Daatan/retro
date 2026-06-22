@@ -13065,7 +13065,7 @@
     "C10:haaretz": {
       "event_id": "C10",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T22:19:52.565939"
+  "last_updated": "2026-06-22T22:21:14.397711"
 }

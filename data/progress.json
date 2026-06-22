@@ -11854,7 +11854,7 @@
     "H06:globes": {
       "event_id": "H06",
       "source_id": "globes",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11882,7 +11882,7 @@
     "H06:jpost": {
       "event_id": "H06",
       "source_id": "jpost",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12253,7 +12253,7 @@
     "H10:globes": {
       "event_id": "H10",
       "source_id": "globes",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12281,7 +12281,7 @@
     "H10:jpost": {
       "event_id": "H10",
       "source_id": "jpost",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13716,7 +13716,7 @@
     "H07:globes": {
       "event_id": "H07",
       "source_id": "globes",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13819,5 +13819,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T18:07:34.050781"
+  "last_updated": "2026-06-22T18:07:48.409840"
 }

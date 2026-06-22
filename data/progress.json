@@ -13817,7 +13817,252 @@
       "status": "no_predictions",
       "prediction_count": 0,
       "error": null
+    },
+    "I04:bloomberg": {
+      "event_id": "I04",
+      "source_id": "bloomberg",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:calcalist": {
+      "event_id": "I04",
+      "source_id": "calcalist",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:ch13": {
+      "event_id": "I04",
+      "source_id": "ch13",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:ft": {
+      "event_id": "I04",
+      "source_id": "ft",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:globes": {
+      "event_id": "I04",
+      "source_id": "globes",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:guardian": {
+      "event_id": "I04",
+      "source_id": "guardian",
+      "status": "done",
+      "prediction_count": 1,
+      "error": null
+    },
+    "I04:haaretz": {
+      "event_id": "I04",
+      "source_id": "haaretz",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:israel_hayom": {
+      "event_id": "I04",
+      "source_id": "israel_hayom",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:jpost": {
+      "event_id": "I04",
+      "source_id": "jpost",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:maariv": {
+      "event_id": "I04",
+      "source_id": "maariv",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:n12": {
+      "event_id": "I04",
+      "source_id": "n12",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:nyt": {
+      "event_id": "I04",
+      "source_id": "nyt",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:reuters": {
+      "event_id": "I04",
+      "source_id": "reuters",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:toi": {
+      "event_id": "I04",
+      "source_id": "toi",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:walla": {
+      "event_id": "I04",
+      "source_id": "walla",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I04:ynet": {
+      "event_id": "I04",
+      "source_id": "ynet",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:aljazeera": {
+      "event_id": "I05",
+      "source_id": "aljazeera",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:axios": {
+      "event_id": "I05",
+      "source_id": "axios",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:bbc": {
+      "event_id": "I05",
+      "source_id": "bbc",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:bloomberg": {
+      "event_id": "I05",
+      "source_id": "bloomberg",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:calcalist": {
+      "event_id": "I05",
+      "source_id": "calcalist",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:ch13": {
+      "event_id": "I05",
+      "source_id": "ch13",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:ft": {
+      "event_id": "I05",
+      "source_id": "ft",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:globes": {
+      "event_id": "I05",
+      "source_id": "globes",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:guardian": {
+      "event_id": "I05",
+      "source_id": "guardian",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:haaretz": {
+      "event_id": "I05",
+      "source_id": "haaretz",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:israel_hayom": {
+      "event_id": "I05",
+      "source_id": "israel_hayom",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:jpost": {
+      "event_id": "I05",
+      "source_id": "jpost",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:maariv": {
+      "event_id": "I05",
+      "source_id": "maariv",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:n12": {
+      "event_id": "I05",
+      "source_id": "n12",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:nyt": {
+      "event_id": "I05",
+      "source_id": "nyt",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:reuters": {
+      "event_id": "I05",
+      "source_id": "reuters",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:toi": {
+      "event_id": "I05",
+      "source_id": "toi",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:walla": {
+      "event_id": "I05",
+      "source_id": "walla",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
+    },
+    "I05:ynet": {
+      "event_id": "I05",
+      "source_id": "ynet",
+      "status": "no_predictions",
+      "prediction_count": 0,
+      "error": null
     }
   },
-  "last_updated": "2026-06-22T19:00:54.989654"
+  "last_updated": "2026-06-22T19:08:32.009661"
 }

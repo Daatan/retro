@@ -12624,7 +12624,7 @@
     "I03:bloomberg": {
       "event_id": "I03",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T21:03:05.001223"
+  "last_updated": "2026-06-22T21:05:13.470768"
 }

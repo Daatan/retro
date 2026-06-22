@@ -13191,8 +13191,8 @@
     "C11:guardian": {
       "event_id": "C11",
       "source_id": "guardian",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C11:haaretz": {
@@ -13819,5 +13819,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T16:43:35.760420"
+  "last_updated": "2026-06-22T16:44:32.563928"
 }

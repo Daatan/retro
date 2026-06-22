@@ -12939,8 +12939,8 @@
     "B14:israel_hayom": {
       "event_id": "B14",
       "source_id": "israel_hayom",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B14:jpost": {
@@ -13819,5 +13819,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T16:23:25.518203"
+  "last_updated": "2026-06-22T16:24:32.389600"
 }

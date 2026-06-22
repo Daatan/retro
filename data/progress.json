@@ -12757,7 +12757,7 @@
     "A20:bloomberg": {
       "event_id": "A20",
       "source_id": "bloomberg",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12792,7 +12792,7 @@
     "A20:guardian": {
       "event_id": "A20",
       "source_id": "guardian",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12806,7 +12806,7 @@
     "A20:israel_hayom": {
       "event_id": "A20",
       "source_id": "israel_hayom",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13679,5 +13679,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T15:29:38.145438"
+  "last_updated": "2026-06-22T15:30:28.502501"
 }

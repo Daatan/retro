@@ -1,0 +1,22 @@
+{
+  "id": "I03",
+  "name": "Karish gas field begins production",
+  "outcome": true,
+  "outcome_date": "2022-10-27",
+  "search_keywords": [
+    "שדה קריש ייצור גז",
+    "Karish gas field production"
+  ],
+  "llm_referee_criteria": "Must focus on the first gas production from Karish.",
+  "predictive_window_days": 30,
+  "category": [
+    "Energy",
+    "Israeli Economy"
+  ],
+  "tags": [
+    "Karish",
+    "natural gas",
+    "production"
+  ],
+  "polymarket": null
+}

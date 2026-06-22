@@ -1,0 +1,23 @@
+{
+  "id": "I05",
+  "name": "Global oil price drops below $70/barrel (demand fears)",
+  "outcome": true,
+  "outcome_date": "2023-06-12",
+  "search_keywords": [
+    "נפט מתחת 70 דולר",
+    "oil price below $70 demand"
+  ],
+  "llm_referee_criteria": "Must focus on Brent closing below $70 citing global demand slowdown.",
+  "predictive_window_days": 30,
+  "category": [
+    "Energy",
+    "Global",
+    "Israeli Economy"
+  ],
+  "tags": [
+    "oil price",
+    "Brent",
+    "demand"
+  ],
+  "polymarket": null
+}

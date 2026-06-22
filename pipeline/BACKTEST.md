@@ -9,11 +9,10 @@
 > metric ("is TruthMachine better than a price-discovered market?") and uses the
 > live **Oracle API** with a strict T-day temporal protocol and real Polymarket
 > CLOB price history. **Bediavad does not own the Polymarket comparison.** The
-> Polymarket fetch still wired into `backtest.py` (`fetch_polymarket_price`) is a
-> legacy, redundant copy that duplicates the Duel and currently returns `null` for
-> every event — it should be removed and is not a source of truth. Bediavad's own
-> deliverable is the **source credibility leaderboard** (Brier / ELO per source),
-> not beating the market. For the Polymarket numbers, see the Duel, not this doc.
+> legacy `fetch_polymarket_price` copy that used to be wired into `backtest.py`
+> (it duplicated the Duel and returned `null` for every event) has been removed.
+> Bediavad's deliverable is the **source credibility leaderboard** (Brier / ELO
+> per source), not beating the market. For the Polymarket numbers, see the Duel.
 
 ---
 
@@ -51,21 +50,11 @@ This window is configurable via `MIN_DAYS_BEFORE_EVENT` and `MAX_DAYS_BEFORE_EVE
 
 **Why weighted average fallback:** LOO requires at least 10 training samples. Early in the Atlas build (fewer than ~15 resolved events), LightGBM is unreliable. The weighted average uses source Brier scores directly, which is a sensible baseline that works from day one.
 
-### 3. Polymarket via Gamma API (automatic)
-
-**Why not manual:** Manual Polymarket prices would require human judgment to match event definitions — introducing bias. The Gamma API search is imperfect but reproducible and unbiased.
-
-**Known limitation:** Polymarket coverage of Israeli events is ~30%. The script returns `None` for unmatched events and excludes them from the Brier comparison. This is intentional — better to exclude than to fake a comparison.
-
-The script fetches the price **at the start of the prediction window** (30 days before the event), not at resolution. This is the fair comparison point: what did the market believe at the same time our media sources were publishing?
-
-### 4. Brier score as the metric
+### 3. Brier score as the metric
 
 Brier score = `(prediction - outcome)²`. Lower is better. A perfectly calibrated random guesser scores 0.25. A perfect predictor scores 0.0.
 
 **Why Brier and not accuracy:** Accuracy (binary correct/incorrect) ignores calibration — a model that says 0.51 when the true probability is 0.95 is penalized equally to one that says 0.49. Brier score rewards well-calibrated probabilities.
-
-**Win threshold:** A Brier difference of 0.01 is used to declare a winner. Differences smaller than this are noise given our dataset size.
 
 ---
 
@@ -84,7 +73,7 @@ Each article in the Atlas window is converted to 11 features:
 | `source_authority` | LLM extraction | Predictions based on named sources are more reliable than opinion |
 | `sentiment` | LLM extraction | Emotional charge of the article |
 | `days_before` | Computed | Recent predictions carry more weight than early ones |
-| `source_brier` | Historical Atlas | The source's track record in this domain |
+| `source_brier` | `data/leaderboard.json` | The source's overall historical Brier track record |
 | `prediction_count` | Computed | Articles with more predictions signal a more actively covered event |
 
 Multiple predictions within a single article are aggregated by mean before feeding to the model.
@@ -98,22 +87,16 @@ Multiple predictions within a single article are aggregated by mean before feedi
 ```
 ─────────────── Bediavad Backtest Report ────────────────
 
-┌─────────────────────────────────────────────────────────┐
-│ Event │ Outcome │ Our P │ Our Brier │ Poly P │ Poly B │ Winner │
-├───────┼─────────┼───────┼───────────┼────────┼────────┼────────┤
-│ A02   │ ✅ YES  │ 0.731 │ 0.0726    │ 0.680  │ 0.1024 │ US     │
-│ B01   │ ✅ YES  │ 0.612 │ 0.1488    │ 0.710  │ 0.0841 │ POLY   │
-│ D02   │ ✅ YES  │ 0.788 │ 0.0452    │ N/A    │ N/A    │ —      │
-└───────┴─────────┴───────┴───────────┴────────┴────────┴────────┘
+┌────────────────────────────────────────────┐
+│ Event │ Outcome │ Our P(YES) │ Our Brier    │
+├───────┼─────────┼────────────┼──────────────┤
+│ A02   │ ✅ YES  │ 0.731      │ 0.0726       │
+│ B01   │ ✅ YES  │ 0.612      │ 0.1488       │
+│ D02   │ ✅ YES  │ 0.788      │ 0.0452       │
+└───────┴─────────┴────────────┴──────────────┘
 
 Aggregate Brier Score
-  Ours:       0.0854
-  Polymarket: 0.0934
-  Beat Poly:  4/6 events
-  Lost:       2/6 events
-  Tied:       0/6 events
-
-✅ We outperform Polymarket overall
+  Ours: 0.0854  (3 events)
 
 Source Contribution (avg stance weight)
   haaretz      +0.312   8 events
@@ -195,8 +178,7 @@ uv run python -m tm.backtest --all-resolved --no-lgbm
 
 | Situation | Meaning |
 |---|---|
-| Our Brier < Poly Brier by >0.01 | We beat Polymarket on this event |
-| `N/A` in Poly column | No Polymarket market found — excluded from comparison |
+| Our Brier < 0.25 | Better-than-random calibration on this event |
 | LightGBM fallback message | Fewer than 10 training samples — weighted average used |
 | Source contribution near 0 | Source had no clear directional stance in the window |
 | Source contribution strongly negative | Source consistently predicted the opposite of what happened |
@@ -205,13 +187,13 @@ uv run python -m tm.backtest --all-resolved --no-lgbm
 
 ## Known Limitations
 
-1. **Polymarket matching is fuzzy.** The Gamma API text search may match the wrong market, or miss a valid one. Results with `N/A` should be manually verified before publishing.
+1. **Near-total class imbalance.** 69 of 70 events resolved `true`. With essentially no NO outcomes, Brier is uninformative (an always-YES guesser scores ≈0.014) and discrimination (AUC/calibration) cannot be measured. This is the top validity gate — add NO-outcome events before drawing conclusions.
 
 2. **Small dataset bias.** With fewer than 20 resolved events, LOO cross-validation is noisy. Aggregate Brier differences of <0.02 are not statistically meaningful. Run on 50+ events before drawing conclusions.
 
-3. **No calibration layer yet.** The LightGBM outputs are raw probabilities, not isotonic-calibrated. They may be overconfident. Calibration will be added in Phase 2.
+3. **Calibration is in-sample.** An isotonic (Pool-Adjacent-Violators) calibration layer now post-processes the raw probabilities and reports a calibrated Brier alongside the raw one, plus an always-YES base-rate baseline. The fit is currently in-sample (no held-out calibration fold yet), so read the calibrated number as an upper bound. On the present all-YES set it trivially maps every prediction to 1.0 — which is exactly the imbalance signal, not a real gain.
 
-4. **Source Brier scores bootstrapped.** Until enough Atlas events are resolved, `source_brier` defaults to 0.25 (random baseline). This means early runs underweight the source track record feature.
+4. **Source Brier scores are sparse.** Sources not yet in `data/leaderboard.json` default to 0.25 (random baseline), so early runs underweight the source track-record feature for unranked sources.
 
 5. **Single prediction window.** The script uses one fixed window per event. A more sophisticated version would run multiple windows (7d, 14d, 30d) and compare which window produces the strongest signal.
 
@@ -219,8 +201,8 @@ uv run python -m tm.backtest --all-resolved --no-lgbm
 
 ## Roadmap
 
-- [ ] Add isotonic calibration post-LightGBM
-- [ ] Add Kalshi as a second comparison baseline
+- [x] Add isotonic calibration post-LightGBM (in-sample; held-out fold pending)
+- [x] Add always-YES base-rate baseline column
 - [ ] Add confidence intervals via bootstrap resampling
 - [ ] Add multi-window analysis (7d vs 14d vs 30d)
 - [ ] Add SHAP feature importance output per event

@@ -1,0 +1,22 @@
+{
+  "id": "C11",
+  "name": "Israel strikes Iran's nuclear facilities (April 2024 retaliation)",
+  "outcome": false,
+  "outcome_date": "2024-04-19",
+  "search_keywords": [
+    "תקיפה ישראלית מתקני גרעין איראן",
+    "Israel strike Iran nuclear facilities"
+  ],
+  "llm_referee_criteria": "Mark False if Israel's retaliation did not strike Iranian nuclear sites; the Apr 19 Isfahan strike that avoided nuclear facilities counts as False.",
+  "predictive_window_days": 30,
+  "category": [
+    "Regional Geopolitics",
+    "Gaza War"
+  ],
+  "tags": [
+    "Iran",
+    "nuclear",
+    "retaliation"
+  ],
+  "polymarket": null
+}

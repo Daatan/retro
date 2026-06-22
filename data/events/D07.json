@@ -1,0 +1,21 @@
+{
+  "id": "D07",
+  "name": "Israel enters recession in 2024",
+  "outcome": false,
+  "outcome_date": "2024-12-31",
+  "search_keywords": [
+    "מיתון בישראל 2024",
+    "Israel recession 2024 GDP"
+  ],
+  "llm_referee_criteria": "Mark False if Israel did not enter a technical recession (two consecutive quarters of GDP contraction) during 2024.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Economy"
+  ],
+  "tags": [
+    "recession",
+    "GDP",
+    "economy"
+  ],
+  "polymarket": null
+}

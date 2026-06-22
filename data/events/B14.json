@@ -1,0 +1,22 @@
+{
+  "id": "B14",
+  "name": "Comprehensive Gaza ceasefire & hostage deal reached",
+  "outcome": false,
+  "outcome_date": "2024-08-31",
+  "search_keywords": [
+    "עסקת חטופים והפסקת אש כוללת",
+    "Gaza comprehensive ceasefire hostage deal"
+  ],
+  "llm_referee_criteria": "Mark False if no comprehensive ceasefire-and-hostage agreement was concluded by this date; partial or phased talks do not count.",
+  "predictive_window_days": 30,
+  "category": [
+    "Gaza War",
+    "Global"
+  ],
+  "tags": [
+    "ceasefire",
+    "hostage deal",
+    "negotiations"
+  ],
+  "polymarket": null
+}

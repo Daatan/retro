@@ -1,0 +1,22 @@
+{
+  "id": "A20",
+  "name": "Early Knesset elections called in 2024",
+  "outcome": false,
+  "outcome_date": "2024-12-31",
+  "search_keywords": [
+    "בחירות מוקדמות 2024",
+    "Israel early elections 2024",
+    "government collapse"
+  ],
+  "llm_referee_criteria": "Mark False if the 37th government did not fall and no early Knesset election was called during 2024.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Politics"
+  ],
+  "tags": [
+    "coalition",
+    "early elections",
+    "government collapse"
+  ],
+  "polymarket": null
+}

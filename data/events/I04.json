@@ -1,0 +1,22 @@
+{
+  "id": "I04",
+  "name": "Europe reduces Russian gas dependency below 15% of supply",
+  "outcome": true,
+  "outcome_date": "2023-12-31",
+  "search_keywords": [
+    "אירופה גז רוסי תלות",
+    "Europe reduces Russian gas dependency"
+  ],
+  "llm_referee_criteria": "Must cite IEA or Eurostat data confirming below 15% share by end 2023.",
+  "predictive_window_days": 30,
+  "category": [
+    "Energy",
+    "Global"
+  ],
+  "tags": [
+    "Russian gas",
+    "Europe",
+    "energy"
+  ],
+  "polymarket": null
+}

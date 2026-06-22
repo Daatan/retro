@@ -1,0 +1,22 @@
+{
+  "id": "H05",
+  "name": "Wiz rejects Google $23B acquisition offer",
+  "outcome": true,
+  "outcome_date": "2024-07-22",
+  "search_keywords": [
+    "ויז דחתה גוגל",
+    "Wiz rejects Google acquisition"
+  ],
+  "llm_referee_criteria": "Must focus on the July 22 rejection announcement.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Tech",
+    "AI & Tech"
+  ],
+  "tags": [
+    "Wiz",
+    "Google",
+    "acquisition"
+  ],
+  "polymarket": null
+}

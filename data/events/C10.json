@@ -1,0 +1,22 @@
+{
+  "id": "C10",
+  "name": "Saudi-Israel normalization deal signed",
+  "outcome": false,
+  "outcome_date": "2023-09-30",
+  "search_keywords": [
+    "נורמליזציה סעודיה ישראל",
+    "Saudi Israel normalization deal"
+  ],
+  "llm_referee_criteria": "Mark False if no formal normalization agreement was signed by this date; pledges or 'getting closer' talks do not count.",
+  "predictive_window_days": 30,
+  "category": [
+    "Regional Geopolitics",
+    "Israeli Politics"
+  ],
+  "tags": [
+    "Saudi Arabia",
+    "normalization",
+    "diplomacy"
+  ],
+  "polymarket": null
+}

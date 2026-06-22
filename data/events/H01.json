@@ -1,0 +1,22 @@
+{
+  "id": "H01",
+  "name": "Mobileye IPO on Nasdaq",
+  "outcome": true,
+  "outcome_date": "2022-10-26",
+  "search_keywords": [
+    "הנפקת מובילאיי נאסדק",
+    "Mobileye IPO Nasdaq"
+  ],
+  "llm_referee_criteria": "Must focus on the Oct 26 trading debut.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Tech",
+    "Israeli Economy"
+  ],
+  "tags": [
+    "Mobileye",
+    "IPO",
+    "Nasdaq"
+  ],
+  "polymarket": null
+}

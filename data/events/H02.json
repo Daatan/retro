@@ -1,0 +1,22 @@
+{
+  "id": "H02",
+  "name": "Intel cancels Tower Semiconductor acquisition",
+  "outcome": true,
+  "outcome_date": "2023-08-16",
+  "search_keywords": [
+    "ביטול רכישת טאואר אינטל",
+    "Intel Tower acquisition cancelled"
+  ],
+  "llm_referee_criteria": "Must focus on the Aug 16 termination announcement.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Tech",
+    "Israeli Economy"
+  ],
+  "tags": [
+    "Intel",
+    "Tower Semiconductor",
+    "acquisition"
+  ],
+  "polymarket": null
+}

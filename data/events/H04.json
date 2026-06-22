@@ -1,0 +1,22 @@
+{
+  "id": "H04",
+  "name": "Israeli VC investment drops 50%+ YoY (2022→2023)",
+  "outcome": true,
+  "outcome_date": "2023-12-31",
+  "search_keywords": [
+    "ירידה השקעות הייטק ישראל",
+    "Israeli VC investment drop 2023"
+  ],
+  "llm_referee_criteria": "Must cite IVC/Start-Up Nation Central data showing 50%+ decline.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Tech",
+    "Israeli Economy"
+  ],
+  "tags": [
+    "VC",
+    "investment",
+    "decline"
+  ],
+  "polymarket": null
+}

@@ -1,0 +1,22 @@
+{
+  "id": "C13",
+  "name": "Israel-Hezbollah escalate to all-out war (early 2024)",
+  "outcome": false,
+  "outcome_date": "2024-01-31",
+  "search_keywords": [
+    "מלחמה כוללת חיזבאללה",
+    "Israel Hezbollah all out war Lebanon"
+  ],
+  "llm_referee_criteria": "Mark False if no full-scale Israel-Hezbollah war erupted by this date; limited cross-border exchanges do not count.",
+  "predictive_window_days": 30,
+  "category": [
+    "Regional Geopolitics",
+    "Gaza War"
+  ],
+  "tags": [
+    "Hezbollah",
+    "Lebanon",
+    "escalation"
+  ],
+  "polymarket": null
+}

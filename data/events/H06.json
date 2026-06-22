@@ -1,0 +1,22 @@
+{
+  "id": "H06",
+  "name": "Google agrees to acquire Wiz for $32B",
+  "outcome": true,
+  "outcome_date": "2025-03-18",
+  "search_keywords": [
+    "גוגל רוכשת ויז",
+    "Google acquires Wiz $32B"
+  ],
+  "llm_referee_criteria": "Must focus on the definitive agreement announcement.",
+  "predictive_window_days": 30,
+  "category": [
+    "Israeli Tech",
+    "AI & Tech"
+  ],
+  "tags": [
+    "Wiz",
+    "Google",
+    "acquisition"
+  ],
+  "polymarket": null
+}

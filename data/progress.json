@@ -13072,7 +13072,7 @@
     "C10:israel_hayom": {
       "event_id": "C10",
       "source_id": "israel_hayom",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13135,7 +13135,7 @@
     "C11:aljazeera": {
       "event_id": "C11",
       "source_id": "aljazeera",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13191,7 +13191,7 @@
     "C11:guardian": {
       "event_id": "C11",
       "source_id": "guardian",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13205,8 +13205,8 @@
     "C11:israel_hayom": {
       "event_id": "C11",
       "source_id": "israel_hayom",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "C11:jpost": {
@@ -13819,5 +13819,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-22T16:25:07.100823"
+  "last_updated": "2026-06-22T16:26:19.486090"
 }

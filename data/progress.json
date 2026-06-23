@@ -13324,7 +13324,7 @@
     "C13:guardian": {
       "event_id": "C13",
       "source_id": "guardian",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-23T10:43:52.757289"
+  "last_updated": "2026-06-23T10:47:32.748359"
 }

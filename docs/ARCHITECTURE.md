@@ -35,7 +35,7 @@ retro/
 │   │   ├── gdelt_ingest.py      # GDELT Doc 2.0 API batch ingestor (sequential, rate-limited)
 │   │   ├── ingestor.py          # Pluggable ingestor classes: DDGIngestor, GDELTIngestor
 │   │   ├── site_search.py       # Direct site-search scraper (no API key, high reliability)
-│   │   ├── web_search.py        # Multi-provider news search: GDELT → GDELT BQ → SerpAPI → Serper → Tavily → Brave → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG
+│   │   ├── web_search.py        # Multi-provider news search: news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG
 │   │   ├── polymarket.py        # Polymarket Gamma API: fetch market history per event
 │   │   ├── polymarket_harvest.py # Bulk harvest of all resolved Polymarket political markets
 │   │   │
@@ -477,7 +477,7 @@ Given a binary question ("Will X happen by Y?"), return a calibrated probability
 ### Input / Output
 
 ```
-POST /api/forecast
+POST /forecast
 {
   "question": "Will Israel and Hamas reach a permanent ceasefire by June 2025?",
   "deadline": "2025-06-01",
@@ -505,7 +505,7 @@ POST /api/forecast
 ### Pipeline
 
 **Stage 1 — Search & Fetch**
-1. `web_search.search_articles(question, limit)` — GDELT → GDELT BQ → SerpAPI → Serper → Tavily → Brave → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG fallback chain
+1. `web_search.search_articles(question, limit)` — news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG fallback chain (news-indexer is first-in-chain: the local pgvector index is queried before any paid provider)
 2. Per article: trafilatura full-text fetch (falls back to title+snippet)
 
 **Stage 2 — Gatekeeper + Extractor** (parallel per article)

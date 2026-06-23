@@ -11749,8 +11749,8 @@
     "H05:jpost": {
       "event_id": "H05",
       "source_id": "jpost",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "H05:maariv": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-23T02:05:45.482995"
+  "last_updated": "2026-06-23T02:06:47.874029"
 }

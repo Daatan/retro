@@ -28,9 +28,10 @@ There is one logical search path, and it is good:
 ```
 daatan /api/ibi/search ──▶ Oracle POST /search ──▶ tm.web_search.search_articles()
    (oracleSearch.ts,           (api/searcher.py)        multi-provider fallback chain:
-    oracleClient.ts)                                    GDELT → SerpAPI → Serper → Brave
-                                                        → Tavily → BrightData → Nimbleway
-                                                        → ScrapingBee → Newsdata
+    oracleClient.ts)                                    news-indexer → GDELT → GDELT BQ
+                                                        → Google CSE → SerpAPI → Serper
+                                                        → Brave → Tavily → BrightData
+                                                        → Nimbleway → ScrapingBee → Newsdata
                                                         → DataForSEO → DuckDuckGo
 ```
 

@@ -12085,14 +12085,14 @@
     "H09:bbc": {
       "event_id": "H09",
       "source_id": "bbc",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "H09:bloomberg": {
       "event_id": "H09",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-23T20:53:48.282693"
+  "last_updated": "2026-06-23T20:56:58.464660"
 }

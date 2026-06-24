@@ -9390,7 +9390,7 @@
     "D05:ft": {
       "event_id": "D05",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-24T17:35:37.728907"
+  "last_updated": "2026-06-24T17:37:49.082816"
 }

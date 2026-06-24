@@ -8151,7 +8151,7 @@
     "A18:ft": {
       "event_id": "A18",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12757,7 +12757,7 @@
     "A20:bloomberg": {
       "event_id": "A20",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-24T17:29:30.057383"
+  "last_updated": "2026-06-24T17:30:14.155044"
 }

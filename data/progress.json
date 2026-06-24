@@ -13289,7 +13289,7 @@
     "C13:bloomberg": {
       "event_id": "C13",
       "source_id": "bloomberg",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-24T12:31:23.430027"
+  "last_updated": "2026-06-24T12:32:20.547238"
 }

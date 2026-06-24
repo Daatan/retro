@@ -838,6 +838,14 @@
     {
       "date": "2026-06-22",
       "probability": 0.1
+    },
+    {
+      "date": "2026-06-23",
+      "probability": 0.11
+    },
+    {
+      "date": "2026-06-24",
+      "probability": 0.11
     }
   ]
 }

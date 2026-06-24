@@ -5813,7 +5813,7 @@
     "G08:haaretz": {
       "event_id": "G08",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -5841,7 +5841,7 @@
     "G08:maariv": {
       "event_id": "G08",
       "source_id": "maariv",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11294,7 +11294,7 @@
     "H01:bloomberg": {
       "event_id": "H01",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11546,7 +11546,7 @@
     "H04:axios": {
       "event_id": "H04",
       "source_id": "axios",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11595,7 +11595,7 @@
     "H04:guardian": {
       "event_id": "H04",
       "source_id": "guardian",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11637,7 +11637,7 @@
     "H04:nyt": {
       "event_id": "H04",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11721,7 +11721,7 @@
     "H05:globes": {
       "event_id": "H05",
       "source_id": "globes",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -11784,7 +11784,7 @@
     "H05:toi": {
       "event_id": "H05",
       "source_id": "toi",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-24T16:52:30.892308"
+  "last_updated": "2026-06-24T16:55:33.342247"
 }

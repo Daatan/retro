@@ -9390,7 +9390,7 @@
     "D05:ft": {
       "event_id": "D05",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -13422,7 +13422,7 @@
     "D07:bloomberg": {
       "event_id": "D07",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-24T17:15:53.767134"
+  "last_updated": "2026-06-24T17:21:35.579169"
 }

@@ -13212,7 +13212,7 @@
     "C11:jpost": {
       "event_id": "C11",
       "source_id": "jpost",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-24T12:30:33.902941"
+  "last_updated": "2026-06-24T12:31:23.430027"
 }

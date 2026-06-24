@@ -13814,8 +13814,8 @@
     "I04:bbc": {
       "event_id": "I04",
       "source_id": "bbc",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "I04:bloomberg": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-24T11:50:40.528954"
+  "last_updated": "2026-06-24T11:51:49.490127"
 }

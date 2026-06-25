@@ -92,7 +92,7 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 
 **Compute:** AWS EC2 t4g.small (Graviton, ARM), `eu-central-1` (Frankfurt). Access via AWS SSM only (port 22 blocked).
 
-**Storage (MVP):** Filesystem JSON — one file per event/source pair (~3,200 atlas entries). Migrates to PostgreSQL + pgvector as data volume and API demand grows.
+**Storage (MVP):** Filesystem JSON — one file per event/source pair (~900 atlas entries). Migrates to PostgreSQL + pgvector as data volume and API demand grows.
 
 **Orchestration:** `truthmachine.service` (batch pipeline loop) + `oracle-api.service` (FastAPI forecast API at `oracle.daatan.com`).
 

@@ -223,7 +223,7 @@ git push → GitHub Actions → GitHub Pages
 | Gatekeeper | `bedrock/amazon.nova-micro-v1:0` | Topic-relevance filter: is this article on-topic for the event? (Was a stricter "is_prediction" filter; softened in PR #47.) |
 | Extractor | `bedrock/amazon.nova-lite-v1:0` | Structured extraction of up to 5 predictions per article (4 fields: quote, claim, stance, certainty) |
 | Article Aggregator | `bedrock/amazon.nova-lite-v1:0` | Collapses high-spread (>0.4) predictions within a single article into one editorial signal |
-| Keywords | `google/gemini-2.0-flash-001` | One-time: generate search keywords per event (via OpenRouter) |
+| Keywords | `bedrock/amazon.nova-micro-v1:0` | One-time: generate search keywords per event (via `tm.llm`) |
 
 All defaults via AWS Bedrock. Override via env vars in `pipeline/src/tm/config.py`. The `model_api_base` and `model_api_key` settings allow routing through any LiteLLM-compatible provider (OpenRouter, etc.).
 
@@ -509,7 +509,7 @@ POST /forecast
 2. Per article: trafilatura full-text fetch (falls back to title+snippet)
 
 **Stage 2 — Gatekeeper + Extractor** (parallel per article)
-1. `gatekeeper.check_is_prediction()` — LLM filter: does this article contain a prediction?
+1. `gatekeeper.check_is_prediction()` — LLM topic-relevance screen (graded `relevance_score`); the legacy method name predates the softening to a relevance filter.
 2. `extractor.extract_predictions()` — LLM extraction: `stance`, `certainty`, `claim`, etc.
 
 **Stage 3 — Weight by Source Credibility**
@@ -542,7 +542,7 @@ POST /forecast
 **FastAPI microservice in `retro/api/`** — deployed as a second systemd service (`oracle-api.service`) on the retro EC2 alongside the batch pipeline.
 
 - Imports `tm.gatekeeper`, `tm.extractor`, `tm.web_search` directly — no code ported
-- Reads `leaderboard.json` from the same `data/` directory (refreshed every 5 min)
+- Reads `leaderboard.json` from the same `data/` directory (refreshed daily; `leaderboard_refresh_seconds` default 86400)
 - Auth: `x-api-key` header + AWS Security Group (daatan SG → port 8001 only)
 - Subdomain: `oracle.daatan.com`
 - Test console: https://daatan.github.io/retro/oracle-test.html

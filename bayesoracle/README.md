@@ -89,7 +89,7 @@ For each edge A → B:
 
 1. **Search**: 3 queries via the `tm` provider chain (GDELT → paid fallbacks), deduplicated
 2. **Fetch**: up to 4 full article texts via `trafilatura`
-3. **LLM call**: Claude Haiku via OpenRouter — estimates `pY = P(B|A=1)` and `pN = P(B|A=0)`
+3. **LLM call**: Bedrock Nova Lite via `tm.llm` — estimates `pY = P(B|A=1)` and `pN = P(B|A=0)`
 4. **Consistency check**: `pY·P(A) + pN·(1−P(A))` should be within 10pp of the PM price for B
 5. **Save**: appended to `edge_weights.json` immediately (crash-safe)
 

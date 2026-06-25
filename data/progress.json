@@ -13933,8 +13933,8 @@
     "I05:aljazeera": {
       "event_id": "I05",
       "source_id": "aljazeera",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "I05:axios": {
@@ -13989,8 +13989,8 @@
     "I05:guardian": {
       "event_id": "I05",
       "source_id": "guardian",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "I05:haaretz": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-25T11:12:13.415434"
+  "last_updated": "2026-06-25T11:12:51.326941"
 }

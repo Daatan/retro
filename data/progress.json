@@ -11616,7 +11616,7 @@
     "H04:jpost": {
       "event_id": "H04",
       "source_id": "jpost",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-25T20:03:39.062724"
+  "last_updated": "2026-06-25T20:04:33.217438"
 }

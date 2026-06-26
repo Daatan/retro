@@ -8067,7 +8067,7 @@
     "A16:nyt": {
       "event_id": "A16",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-26T16:09:44.283765"
+  "last_updated": "2026-06-26T16:10:26.952309"
 }

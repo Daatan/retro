@@ -12218,7 +12218,7 @@
     "H10:bbc": {
       "event_id": "H10",
       "source_id": "bbc",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12337,7 +12337,7 @@
     "I01:aljazeera": {
       "event_id": "I01",
       "source_id": "aljazeera",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-26T14:42:45.216852"
+  "last_updated": "2026-06-26T14:44:04.568222"
 }

@@ -13947,8 +13947,8 @@
     "I05:bbc": {
       "event_id": "I05",
       "source_id": "bbc",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "I05:bloomberg": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-26T18:29:16.163749"
+  "last_updated": "2026-06-26T18:33:36.473716"
 }

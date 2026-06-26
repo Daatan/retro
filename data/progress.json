@@ -12337,8 +12337,8 @@
     "I01:aljazeera": {
       "event_id": "I01",
       "source_id": "aljazeera",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "I01:axios": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-26T14:59:19.554982"
+  "last_updated": "2026-06-26T14:59:41.875447"
 }

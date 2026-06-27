@@ -12470,7 +12470,7 @@
     "I02:aljazeera": {
       "event_id": "I02",
       "source_id": "aljazeera",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-27T16:37:14.861075"
+  "last_updated": "2026-06-27T16:39:23.666364"
 }

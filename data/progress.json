@@ -12736,7 +12736,7 @@
     "A20:aljazeera": {
       "event_id": "A20",
       "source_id": "aljazeera",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-27T11:53:43.743379"
+  "last_updated": "2026-06-27T11:54:24.893498"
 }

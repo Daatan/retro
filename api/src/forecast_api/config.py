@@ -69,6 +69,17 @@ class ApiSettings(BaseSettings):
     # evidence. Deferring is a safe degradation (caller falls back to its LLM base
     # rate); a genuinely balanced ~50% backed by strong coverage clears this easily.
     decisiveness_floor: float = 0.5
+    # Per-source certainty floor: an article whose certainty-weighted claims average
+    # below this is dropped before aggregation entirely (not just down-weighted).
+    # certainty ∈ [0,1] is the extractor's linguistic confidence — 0.1–0.2 is hedged
+    # speculation ("could", "implies", "potentially"), the kind of tangential claim a
+    # search match on a common word produces. Dropping these (rather than letting
+    # their small weight still tug the pool and pad the evidence mass) makes a pool of
+    # only-speculative sources collapse to insufficient_data via the floors above,
+    # instead of emitting a confident-looking estimate from claims that barely bear on
+    # the question. 0.0 disables the gate. Conservative default — tune up using
+    # daatan's logged per-source certainty distribution.
+    certainty_floor: float = 0.2
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.

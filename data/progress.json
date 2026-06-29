@@ -12946,7 +12946,7 @@
     "B14:jpost": {
       "event_id": "B14",
       "source_id": "jpost",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-29T02:19:18.338183"
+  "last_updated": "2026-06-29T02:19:39.231096"
 }

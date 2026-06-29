@@ -8466,7 +8466,7 @@
     "B06:ft": {
       "event_id": "B06",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-29T09:40:45.889450"
+  "last_updated": "2026-06-29T09:42:11.686998"
 }

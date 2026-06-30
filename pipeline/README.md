@@ -16,12 +16,12 @@ pipeline/
     gdelt_ingest.py        # GDELT Doc 2.0 API batch ingestor (sequential, rate-limited)
     ingestor.py            # Pluggable ingestor classes: DDGIngestor, GDELTIngestor
     site_search.py         # Direct site-search scraper (no API key, high reliability)
-    web_search.py          # Multi-provider search: GDELT → GDELT BQ → SerpAPI → Serper → Tavily → Brave → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG
+    web_search.py          # Multi-provider search: news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → ScrapingBee → DataForSEO → DDG → trusted-sites
     polymarket.py          # Polymarket Gamma API: fetch market history per event
     polymarket_harvest.py  # Bulk harvest of all resolved Polymarket political markets
 
     # Extraction
-    gatekeeper.py          # LLM stage 1: does this article contain predictions?
+    gatekeeper.py          # LLM stage 1: graded topic/evidence-relevance gate (emits relevance_score; passes indirect evidence, not just explicit predictions)
     extractor.py           # LLM stage 2: extract structured predictions from article
     runner.py              # Orchestrates gatekeeper → extractor per article
     aggregator.py          # Cell-level: collapse all predictions → CellSignal
@@ -166,7 +166,7 @@ Progress: 3/250 (1.2%) | done: 2 | no_pred: 1 | failed: 0
 
 | Stage | File | Model | Purpose |
 |---|---|---|---|
-| 1 | `gatekeeper.py` | `bedrock/amazon.nova-micro-v1:0` | filter — is this article a prediction? |
+| 1 | `gatekeeper.py` | `bedrock/amazon.nova-micro-v1:0` | graded topic/evidence-relevance gate (emits relevance_score; passes indirect evidence, not just explicit predictions) |
 | 2 | `extractor.py` | `bedrock/amazon.nova-lite-v1:0` | extract up to 5 predictions per article (4 fields: quote, claim, stance, certainty) |
 | 3 | `runner.py` | — | orchestrate stages 1+2 per article |
 | 4 | `aggregator.py` | — | collapse article predictions → CellSignal |

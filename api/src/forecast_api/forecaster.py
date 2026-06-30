@@ -677,6 +677,7 @@ async def _run_forecast_inner(
     all_stances: list[float] = []
     all_weights: list[float] = []
     relevances: list[float] = []
+    n_low_certainty = 0
     ref_date = datetime.now().strftime("%Y-%m-%d")
 
     for result, outcome in zip(search_results, outcomes):
@@ -700,6 +701,13 @@ async def _run_forecast_inner(
             [p.specificity for p in predictions],
         )
         avg_certainty = sum(p.certainty for p in predictions) / len(predictions)
+        # Certainty gate: drop sources whose claims are only hedged speculation
+        # before they can pad the evidence mass or tug the pool. A pool of only such
+        # sources then collapses to insufficient_data via the floors below. See
+        # settings.certainty_floor (0.0 disables).
+        if avg_certainty < settings.certainty_floor:
+            n_low_certainty += 1
+            continue
         # Layer B: down-weight older articles via exponential recency decay.
         article_date = result.published_date or None
         rweight = recency_weight(
@@ -758,12 +766,18 @@ async def _run_forecast_inner(
         for t in timings:
             key = str(t.get("outcome", "unknown"))
             outcome_counts[key] = outcome_counts.get(key, 0) + 1
+        if n_low_certainty:
+            outcome_counts["low_certainty"] = n_low_certainty
         if all_off_topic:
             outcome_counts["all_low_relevance"] = len(relevances)
             reason = "all_articles_off_topic"
         elif no_decisive_signal:
             outcome_counts["low_evidence_mass"] = len(all_weights)
             reason = "no_decisive_signal"
+        elif not all_stances and n_low_certainty:
+            # Every source that survived gatekeeper+extractor was dropped by the
+            # certainty gate — the pool was all hedged speculation.
+            reason = "all_low_certainty"
         else:
             reason = _reason_from_outcomes(outcome_counts)
         logger.warning(
@@ -833,6 +847,8 @@ async def _run_forecast_inner(
         key = str(t.get("outcome", "unknown"))
         success_outcome_counts[key] = success_outcome_counts.get(key, 0) + 1
     success_outcome_counts["low_relevance"] = sum(1 for r in relevances if r < 0.3)
+    if n_low_certainty:
+        success_outcome_counts["low_certainty"] = n_low_certainty
 
     debug_info: Optional[DebugInfo] = None
     if req.debug:

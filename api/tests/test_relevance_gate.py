@@ -116,14 +116,15 @@ class TestConvexRelevanceWeighting:
 
 class TestDecisivenessFloor:
     async def test_thin_low_certainty_pool_defers(self, monkeypatch):
-        # On-subject articles (relevance 0.6, so NOT off-topic) but low certainty
-        # 0.1 → evidence mass = 2 × (1.0·0.1·1.0·0.6²) = 0.072 < 0.5 floor. The
-        # Oracle should defer (insufficient_data) instead of emitting a coin-flip,
-        # so the caller keeps its base rate. (The "Elon will tweet about X" case.)
+        # On-subject articles (relevance 0.6, so NOT off-topic) but modest certainty
+        # 0.3 (above the per-source certainty gate) → evidence mass =
+        # 2 × (1.0·0.3·1.0·0.6²) = 0.216 < 0.5 floor. The Oracle should defer
+        # (insufficient_data) instead of emitting a coin-flip, so the caller keeps
+        # its base rate. (The "Elon will tweet about X" case.)
         _wire(monkeypatch, [
             ("http://a.com/1", 0.6, 0.4),
             ("http://b.com/2", 0.6, -0.4),
-        ], certainty=0.1)
+        ], certainty=0.3)
         resp = await forecaster.run_forecast(ForecastRequest(question="decisiveness probe e1?"))
 
         assert resp.insufficient_data is True
@@ -141,6 +142,68 @@ class TestDecisivenessFloor:
 
         assert resp.insufficient_data is False
         assert resp.articles_used == 2
+
+
+class TestCertaintyGate:
+    async def test_all_hedged_sources_dropped_defers(self, monkeypatch):
+        # On-topic (relevance 0.9, clears the relevance floor) but every claim is
+        # hedged speculation (certainty 0.1 < 0.2 gate). Each source is dropped
+        # before aggregation, so the pool is empty and the Oracle defers rather
+        # than pooling junk into a confident-looking estimate. This is the Fable
+        # case: a search match on a common word yields tangential "could/implies"
+        # claims that should not produce a number.
+        _wire(monkeypatch, [
+            ("http://a.com/1", 0.9, 0.6),
+            ("http://b.com/2", 0.9, 0.4),
+        ], certainty=0.1)
+        resp = await forecaster.run_forecast(ForecastRequest(question="certainty gate probe a1?"))
+
+        assert resp.insufficient_data is True
+        assert resp.reason == "all_low_certainty"
+        assert resp.articles_used == 0
+        assert resp.outcome_counts.get("low_certainty") == 2
+
+    async def test_gate_disabled_when_floor_zero(self, monkeypatch):
+        # certainty_floor=0 disables the gate; the hedged sources survive (and then
+        # the decisiveness floor governs, lowered here to isolate the gate).
+        _wire(monkeypatch, [
+            ("http://a.com/1", 0.9, 0.6),
+            ("http://b.com/2", 0.9, 0.4),
+        ], certainty=0.1)
+        monkeypatch.setattr(api_settings, "certainty_floor", 0.0)
+        monkeypatch.setattr(api_settings, "decisiveness_floor", 0.001)
+        resp = await forecaster.run_forecast(ForecastRequest(question="certainty gate probe a2?"))
+
+        assert resp.insufficient_data is False
+        assert resp.articles_used == 2
+
+    async def test_confident_source_kept_hedged_dropped(self, monkeypatch):
+        # Mixed pool: one confident on-topic source survives, one hedged source is
+        # dropped, so a single decisive article still yields a forecast.
+        results = [
+            SearchResult(title="t", url=u, snippet="s", source=u)
+            for u in ("http://keep.com/1", "http://drop.com/2")
+        ]
+        monkeypatch.setattr(forecaster, "search_articles", lambda q, limit: list(results))
+
+        async def _no_distill(question):
+            return question
+        monkeypatch.setattr(forecaster, "_distill_query", _no_distill)
+        monkeypatch.setattr(forecaster, "get_credibility_weight", lambda sid: 1.0)
+
+        per_url = {"http://keep.com/1": 0.9, "http://drop.com/2": 0.1}
+
+        async def _bounded(result, question, *, max_article_chars, timings, article_debugs, timeout_s):
+            timings.append({"url": result.url, "outcome": "ok"})
+            return (result, 0.9, _preds(0.8, per_url[result.url]))
+        monkeypatch.setattr(forecaster, "_process_article_bounded", _bounded)
+
+        resp = await forecaster.run_forecast(ForecastRequest(question="certainty gate probe a3?"))
+
+        assert resp.insufficient_data is False
+        assert resp.articles_used == 1
+        assert [s.url for s in resp.sources] == ["http://keep.com/1"]
+        assert resp.outcome_counts.get("low_certainty") == 1
 
 
 def test_pipeline_settings_unaffected():

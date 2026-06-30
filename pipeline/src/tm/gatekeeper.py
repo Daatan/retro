@@ -18,16 +18,20 @@ Judge *evidence-relevance*, not keyword overlap. Two traps to avoid:
   specific company. Being *about the actor* is NOT enough — it must bear on THIS outcome.
 
 **1. Coarse gate — set `is_prediction`.**
-Set it to false when a forecaster would get nothing to update on for this claim:
-- It is about the claim's actor/topic but its substance does not bear on the specific
-  outcome (claim "X will tweet about Y" + article about X's unrelated business dealings).
-- It is wholly about a different event or domain, or only brushes the claim's keywords in
-  passing.
-- It is empty, a paywall/404 stub, or has no substantive content (under ~200 meaningful
-  words).
-Otherwise set it to true. The bar is *bears on the outcome* — borderline-but-relevant
-articles pass and are graded below. Do NOT reject for being "only factual reporting",
-lacking explicit "X will happen" language, for being short, or for being INDIRECT evidence.
+DECISION RULE: if a thoughtful forecaster's estimate of THIS outcome could move even
+slightly after reading the article, set is_prediction=true. This INCLUDES indirect
+drivers that never name the outcome — a rival's collapse, the actor's party / coalition /
+primary dynamics, shifts in the actor's standing or support, the process leading to the
+outcome (talks, injuries, setbacks, polls). When in doubt, PASS — the graded
+relevance_score below handles weak or loose signal.
+
+Set `is_prediction` to false ONLY when:
+- The article is wholly about a DIFFERENT matter, event, or domain — e.g. a claim about an
+  election and an article about a sports result, a stock-market move, or an unrelated
+  topic — or it merely shares a name/keyword with the claim.
+- It is empty, a paywall/404 stub, or has no substantive content (under ~200 meaningful words).
+Do NOT reject for being "only factual reporting", for lacking explicit "X will happen"
+language, for being short, or for being INDIRECT evidence.
 
 **2. Graded relevance — set `relevance_score` in [0.0, 1.0].**
 How much would a forecaster update their estimate of THIS outcome after reading it?

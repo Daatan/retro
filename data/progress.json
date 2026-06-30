@@ -11784,8 +11784,8 @@
     "H05:toi": {
       "event_id": "H05",
       "source_id": "toi",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "H05:walla": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-30T12:20:11.222746"
+  "last_updated": "2026-06-30T12:20:32.183952"
 }

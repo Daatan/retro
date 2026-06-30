@@ -5,8 +5,8 @@ by searching current articles, extracting predictions, and weighting each source
 by its historical accuracy (from `leaderboard.json`). Live at **`oracle.daatan.com`**.
 
 This README is the developer entry point. For the full request/response contract
-see [`docs/ORACLE_API.md`](../docs/ORACLE_API.md); for deploy/rollback see
-[`docs/ORACLE_DEPLOY.md`](../docs/ORACLE_DEPLOY.md).
+see the [Oracle API contract](https://github.com/Daatan/docs/blob/main/oracle-api.md);
+for deploy/rollback see [`docs/ORACLE_DEPLOY.md`](../docs/ORACLE_DEPLOY.md).
 
 ## Layout (`src/forecast_api/`)
 
@@ -60,5 +60,5 @@ secret. CI runs this on every PR and **gates the deploy** (see `.github/workflow
 `POST /fetch-url`, `GET /bayes/nodes`, `GET /leaderboard`, `GET /health`,
 `GET /pm/markets`. All require the `x-api-key` header **except** `/health` and the
 deliberately-public `/fetch-url` (which is rate-limited and SSRF-guarded —
-http(s) only, no private/loopback/link-local hosts). Full details in
-[`docs/ORACLE_API.md`](../docs/ORACLE_API.md).
+http(s) only, no private/loopback/link-local hosts). Full details in the
+[Oracle API contract](https://github.com/Daatan/docs/blob/main/oracle-api.md).

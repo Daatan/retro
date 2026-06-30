@@ -12015,7 +12015,7 @@
     "H08:jpost": {
       "event_id": "H08",
       "source_id": "jpost",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-30T21:24:04.301332"
+  "last_updated": "2026-06-30T21:27:06.602350"
 }

@@ -11721,8 +11721,8 @@
     "H05:globes": {
       "event_id": "H05",
       "source_id": "globes",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "H05:guardian": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-30T11:33:53.121472"
+  "last_updated": "2026-06-30T11:34:17.529366"
 }

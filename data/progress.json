@@ -9992,7 +9992,7 @@
     "F02:ft": {
       "event_id": "F02",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-06-30T08:47:52.910005"
+  "last_updated": "2026-06-30T08:48:31.655487"
 }

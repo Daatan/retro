@@ -173,7 +173,7 @@ class ForecastResponse(BaseModel):
     sources: list[SourceSignal]
     placeholder: bool = Field(default=False, description="True if this is a stub response (pipeline not yet wired)")
     insufficient_data: bool = Field(default=False, description="True when the forecast could not be computed (no usable articles). mean/ci are NOT a real estimate — render 'couldn't answer', not 0%.")
-    reason: Optional[str] = Field(default=None, description="When insufficient_data: why. One of no_search_results | all_articles_off_topic | no_decisive_signal | all_low_certainty | all_fetches_failed | extraction_errors | no_usable_predictions | timeout | no_result")
+    reason: Optional[str] = Field(default=None, description="When insufficient_data: why. One of no_search_results | all_articles_off_topic | no_decisive_signal | all_fetches_failed | extraction_errors | no_usable_predictions | timeout | no_result. (no_decisive_signal only when defer_on_thin_evidence is set; otherwise thin evidence yields a wide-CI estimate.)")
     articles_found: int = Field(default=0, description="How many search results were considered before filtering")
     outcome_counts: dict[str, int] = Field(default_factory=dict, description="Per-article outcome histogram (gate_rejected, gate_error, empty_text, extract_error, unhandled_error, ok, …) — explains an empty forecast")
     provider: str = Field(default="", description="Search provider that served the underlying article search. May be a pseudo-provider: 'caller' (articles supplied by the request), 'search_cache', or 'none'.")

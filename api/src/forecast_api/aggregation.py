@@ -157,3 +157,37 @@ def pool_sources(
     ci_low = prob_to_stance(ci_low_p)
     ci_high = prob_to_stance(ci_high_p)
     return mean, std, ci_low, ci_high
+
+
+def widen_ci_for_thin_evidence(
+    mean: float,
+    ci_low: float,
+    ci_high: float,
+    std: float,
+    *,
+    deficit: float,
+    max_inflation: float,
+) -> tuple[float, float, float]:
+    """Widen a pooled CI to reflect *thin* evidence.
+
+    :func:`pool_sources` derives its interval from how much the sources *disagree*
+    and how many there are — not from how *much* evidence backs them. So a handful
+    of hedged articles that happen to agree get a deceptively tight CI. Given a
+    ``deficit`` ∈ [0, 1] (how far the certainty-weighted evidence mass falls below
+    the decisiveness floor, 1 = no evidence) we add up to ``max_inflation`` of
+    probability-space half-width symmetrically around the mean, so a thin on-topic
+    pool self-reports as a low-confidence estimate with a wide band.
+
+    Returns ``(ci_low, ci_high, std)`` on the stance scale [-1, 1]; a no-op when
+    ``deficit`` or ``max_inflation`` is ≤ 0.
+    """
+    if deficit <= 0.0 or max_inflation <= 0.0:
+        return ci_low, ci_high, std
+    extra_p = clamp(deficit, 0.0, 1.0) * max_inflation
+    p = stance_to_prob(mean)
+    lo_p = clamp(min(stance_to_prob(ci_low), p) - extra_p, 0.0, 1.0)
+    hi_p = clamp(max(stance_to_prob(ci_high), p) + extra_p, 0.0, 1.0)
+    # std is secondary (the CI is what callers display); bump it monotonically so
+    # it can't claim more precision than the widened band.
+    new_std = max(std, 2.0 * extra_p)
+    return prob_to_stance(lo_p), prob_to_stance(hi_p), new_std

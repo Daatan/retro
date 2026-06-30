@@ -846,6 +846,8 @@
     const REASON_TEXT = {
       no_search_results:     'Search returned no articles for this question.',
       all_articles_off_topic:'Articles were found but all were judged off-topic by the gatekeeper — likely degraded search relevance (paid providers may be exhausted).',
+      no_decisive_signal:    'Articles were found and on-topic, but the combined evidence was too thin or low-certainty to commit to a forecast.',
+      all_low_certainty:     'Articles were found, but every usable source was only hedged speculation — not confident enough to forecast.',
       all_fetches_failed:    'Articles were found but their full text could not be fetched (paywalls / blocked / dead links).',
       extraction_errors:     'The extraction step errored on the articles found — the service is degraded, not "no data".',
       timeout:               'The forecast timed out before producing a result.',

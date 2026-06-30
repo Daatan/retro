@@ -223,8 +223,8 @@ This is the **fastest-growing cost** at scale. The oracle runs searches for ever
 
 ### 7. LLM APIs — Oracle Pipeline at Scale
 
-At 21,000 oracle calls/day, each running gatekeeper + extractor on 5 articles:
-= 210,000 LLM calls/day × 1,000 tokens avg = **210M tokens/day = 6.3B tokens/month**
+At 21,000 oracle calls/day, each running gatekeeper + extractor on 10 articles (the default `max_articles`):
+= 420,000 LLM calls/day × 1,000 tokens avg = **420M tokens/day = 12.6B tokens/month** (scales linearly with `max_articles`; the table below was sized at 5 articles)
 
 | Provider | Use | Monthly | Annual |
 |---|---|---|---|

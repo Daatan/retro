@@ -2,7 +2,7 @@
 Core forecast logic — Phase 2: live pipeline integration.
 
 Flow:
-  1. search_articles(question) — Serper.dev → Brave → DDG fallback
+  1. search_articles(question) — multi-provider chain (news-indexer first, then GDELT/Google-CSE/SerpAPI/…/DDG); see tm.web_search
   2. For each article (in parallel): gatekeeper → extractor
   3. Weight each source by credibility from leaderboard
   4. Aggregate: weighted mean stance + 95% CI → return ForecastResponse

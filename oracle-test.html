@@ -609,7 +609,7 @@
       <div class="topbar-right">
         <div class="articles-input">
           <span>Articles</span>
-          <input id="max-articles" type="number" value="5" min="1" max="20" />
+          <input id="max-articles" type="number" value="10" min="1" max="20" />
         </div>
         <label class="articles-input" style="cursor:pointer;gap:.35rem" title="Include token counts, gatekeeper scores, search chain, and prompts in response">
           <input type="checkbox" id="debug-toggle" style="accent-color:var(--accent)" />
@@ -738,7 +738,7 @@
 
       const body = {
         question: q,
-        max_articles: parseInt($('max-articles').value) || 5,
+        max_articles: parseInt($('max-articles').value) || 10,
         debug: debugMode || promptEditorOpen,
       }
       if (gatekeeperOverride && gatekeeperOverride !== defaultGatekeeperPrompt)

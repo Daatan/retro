@@ -13,7 +13,7 @@ class ApiSettings(BaseSettings):
     leaderboard_path: Path = Path("")  # empty = data_dir/leaderboard.json
     leaderboard_refresh_seconds: int = 86400  # pipeline writes this at most once/day
 
-    max_articles: int = 5
+    max_articles: int = 10
     host: str = "127.0.0.1"
     port: int = 8001
 

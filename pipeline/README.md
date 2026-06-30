@@ -50,6 +50,7 @@ pipeline/
     test_models.py
   smoke_test.py            # 3 hardcoded articles through full pipeline
   test_run.py              # Manual test runner
+  eval_gatekeeper.py       # Bedrock calibration harness guarding the gatekeeper coarse-gate prompt (recall on indirect evidence vs precision on off-domain noise); run after any gate prompt/model change
   BACKTEST.md              # backtest design rationale and usage
 ```
 

@@ -468,7 +468,7 @@ New question arrives
 > via `oracle.ts` (context route + express guess route, with automatic fallback
 > to the existing LLM `guessChances` path when the Oracle is unavailable).
 > Auto-deploys on merge to `main` via `.github/workflows/deploy-oracle.yml`. See
-> [`docs/ORACLE_API.md`](ORACLE_API.md) and [`docs/ORACLE_DEPLOY.md`](ORACLE_DEPLOY.md).
+> the [Oracle API contract](https://github.com/Daatan/docs/blob/main/oracle-api.md) and [`docs/ORACLE_DEPLOY.md`](ORACLE_DEPLOY.md).
 
 ### Purpose
 
@@ -480,27 +480,45 @@ Given a binary question ("Will X happen by Y?"), return a calibrated probability
 POST /forecast
 {
   "question": "Will Israel and Hamas reach a permanent ceasefire by June 2025?",
-  "deadline": "2025-06-01",
-  "async": false          // optional, default false
+  "max_articles": 10      // optional
 }
 
 → 200 OK
 {
-  "question": "...",
-  "category": "Gaza War",         // auto-classified by LLM
-  "mean": 0.38,
-  "std": 0.14,
-  "ci_low": 0.18,
-  "ci_high": 0.58,
-  "articles_found": 7,
+  "question": "Will Israel and Hamas reach a permanent ceasefire by June 2025?",
+  "mean": -0.24,                  // credibility-weighted mean stance [-1, 1]; p = (mean+1)/2 ≈ 0.38
+  "std": 0.28,
+  "ci_low": -0.79,
+  "ci_high": 0.31,
   "articles_used": 5,
   "sources": [
-    { "name": "Times of Israel", "trust": 0.84, "stance": 0.4, "certainty": 0.7 },
-    ...
+    {
+      "source_id": "timesofisrael.com",
+      "source_name": "Times of Israel",
+      "url": "https://www.timesofisrael.com/...",
+      "stance": -0.4,
+      "certainty": 0.7,
+      "credibility_weight": 1.12,
+      "claims": ["Talks stalled over the question of a permanent end to the war."],
+      "published_date": "2025-05-18",
+      "recency_weight": 0.83,
+      "relevance_score": 0.91
+    }
   ],
-  "computed_at": "2026-04-14T12:00:00Z"
+  "placeholder": false,
+  "insufficient_data": false,
+  "reason": null,
+  "articles_found": 7,
+  "outcome_counts": { "ok": 5, "gate_rejected": 2 },
+  "provider": "news-indexer",
+  "provider_chain": ["news-indexer"],
+  "distilled_query": null
 }
 ```
+
+When the pipeline can't compute a real estimate it returns `insufficient_data: true`
+with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
+`no_decisive_signal`) instead of a forecast — see "Deferral / insufficient-data" below.
 
 ### Pipeline
 
@@ -537,6 +555,26 @@ POST /forecast
 > removes. Near-certain numbers on daatan.com therefore come from the LLM-fallback
 > path, not the Oracle.
 
+### Deferral / insufficient-data
+
+Aggregation enforces three safety floors (`api/src/forecast_api/config.py`) so the
+Oracle defers rather than emit a meaningless number:
+
+- **`relevance_weight_floor` (0.05)** — if the summed relevance mass
+  (Σ `relevance_score²` over surviving articles) is below this, the whole set is
+  treated as off-topic → `reason="all_articles_off_topic"`.
+- **`decisiveness_floor` (0.5)** — minimum total certainty-weighted evidence mass
+  (Σ `credibility·certainty·recency·relevance²`) required to forecast; below it the
+  pool is too thin → `reason="no_decisive_signal"`.
+- **`certainty_floor` (0.2)** — per-article gate: an article whose certainty-weighted
+  claims average below this is *dropped* before aggregation (hedged-speculation
+  filter), so a pool of only-speculative sources collapses to one of the floors above.
+
+When a floor isn't met the API returns `insufficient_data=true` plus a `reason`
+(`no_search_results`, `all_articles_off_topic`, `no_decisive_signal`,
+`all_low_certainty`, …) **instead of** a forecast. This is the deferral contract:
+the caller keeps its own base rate rather than overwriting it with a ~50% coin-flip.
+
 ### Deployment (decided 2026-04-14)
 
 **FastAPI microservice in `retro/api/`** — deployed as a second systemd service (`oracle-api.service`) on the retro EC2 alongside the batch pipeline.
@@ -546,7 +584,7 @@ POST /forecast
 - Auth: `x-api-key` header + AWS Security Group (daatan SG → port 8001 only)
 - Subdomain: `oracle.daatan.com`
 - Test console: https://daatan.github.io/retro/oracle-test.html
-- Full docs: `docs/ORACLE_API.md`
+- Full docs: [Oracle API contract](https://github.com/Daatan/docs/blob/main/oracle-api.md)
 
 **Decisions closed:**
 - Source scores stay in `leaderboard.json` on the retro EC2 (no daatan DB sync needed)

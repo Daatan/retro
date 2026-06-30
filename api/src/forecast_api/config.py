@@ -60,26 +60,34 @@ class ApiSettings(BaseSettings):
     # 0.05 ≈ one article at relevance ~0.22. Tune down using daatan's logged
     # relevance_score / all_articles_off_topic data.
     relevance_weight_floor: float = 0.05
-    # Decisiveness floor: minimum total certainty-weighted evidence mass
-    # (Σ credibility·certainty·recency·relevance² over surviving articles) required
-    # to emit a forecast. Below this the pool is too thin/low-certainty to mean
-    # anything, so we return insufficient_data (reason="no_decisive_signal") and
-    # let the caller keep its base-rate estimate instead of overwriting it with a
-    # ~50% coin-flip. 0.5 ≈ one solid, on-topic, confident article's worth of
-    # evidence. Deferring is a safe degradation (caller falls back to its LLM base
-    # rate); a genuinely balanced ~50% backed by strong coverage clears this easily.
+    # Syndication dedupe: two search results are treated as the same (re-hosted)
+    # story when their title-token Jaccard is >= this. Kept high so genuinely
+    # different stories sharing a topic word are not merged; only true re-prints
+    # collapse to one source. 0.0 disables title clustering (URL-dedupe still runs).
+    syndication_title_similarity: float = 0.8
+    # Decisiveness floor: the certainty-weighted evidence mass
+    # (Σ credibility·certainty·recency·relevance² over surviving articles) at or
+    # above which the pooled CI is trusted as-is. BELOW it the pool is thin/hedged,
+    # so rather than abstain (which surfaced as "no AI estimate" even for on-topic
+    # coverage) we *widen the CI* toward maximal uncertainty in proportion to the
+    # shortfall — a thin on-topic pool then self-reports as a low-confidence estimate
+    # with a wide band instead of a deceptively tight one. 0.5 ≈ one solid, on-topic,
+    # confident article's worth of evidence. Abstention is now reserved for the
+    # relevance floor (genuinely off-topic) and a truly empty pool. See
+    # thin_evidence_ci_inflation and defer_on_thin_evidence.
     decisiveness_floor: float = 0.5
-    # Per-source certainty floor: an article whose certainty-weighted claims average
-    # below this is dropped before aggregation entirely (not just down-weighted).
-    # certainty ∈ [0,1] is the extractor's linguistic confidence — 0.1–0.2 is hedged
-    # speculation ("could", "implies", "potentially"), the kind of tangential claim a
-    # search match on a common word produces. Dropping these (rather than letting
-    # their small weight still tug the pool and pad the evidence mass) makes a pool of
-    # only-speculative sources collapse to insufficient_data via the floors above,
-    # instead of emitting a confident-looking estimate from claims that barely bear on
-    # the question. 0.0 disables the gate. Conservative default — tune up using
-    # daatan's logged per-source certainty distribution.
-    certainty_floor: float = 0.2
+    # Maximum half-width (in probability space, [0,1]) added to the pooled 95% CI
+    # when evidence_mass → 0, scaled linearly by the decisiveness shortfall
+    # (deficit = (floor − mass)/floor). pool_sources' interval reflects only how much
+    # the sources *disagree*, not how *much* evidence there is, so a thin pool that
+    # happens to agree gets a deceptively tight CI; this term restores the missing
+    # uncertainty. 0.45 ≈ a near-zero-mass on-topic pool spans almost the full [0,1].
+    # 0.0 disables the widening (CI reflects dispersion only).
+    thin_evidence_ci_inflation: float = 0.45
+    # Escape hatch: when True, restore the old behaviour — a pool below
+    # decisiveness_floor returns insufficient_data (reason="no_decisive_signal")
+    # instead of emitting a wide-CI estimate. Default False (widen, don't defer).
+    defer_on_thin_evidence: bool = False
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.

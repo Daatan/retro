@@ -9,8 +9,6 @@ that fixes the "73% on a decided series" dilution bug:
 """
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from forecast_api.aggregation import (
@@ -22,7 +20,40 @@ from forecast_api.aggregation import (
     sigmoid,
     stance_to_prob,
     weighted_mean,
+    widen_ci_for_thin_evidence,
 )
+
+
+class TestWidenCiForThinEvidence:
+    def test_noop_when_no_deficit(self):
+        out = widen_ci_for_thin_evidence(0.2, 0.1, 0.3, 0.05, deficit=0.0, max_inflation=0.45)
+        assert out == (0.1, 0.3, 0.05)
+
+    def test_noop_when_inflation_zero(self):
+        out = widen_ci_for_thin_evidence(0.2, 0.1, 0.3, 0.05, deficit=1.0, max_inflation=0.0)
+        assert out == (0.1, 0.3, 0.05)
+
+    def test_widens_band_and_brackets_mean(self):
+        ci_low, ci_high, std = widen_ci_for_thin_evidence(
+            0.2, 0.15, 0.25, 0.05, deficit=0.5, max_inflation=0.45
+        )
+        assert ci_low < 0.15
+        assert ci_high > 0.25
+        assert ci_low <= 0.2 <= ci_high
+        assert std >= 0.05
+
+    def test_full_deficit_spans_nearly_everything(self):
+        ci_low, ci_high, _std = widen_ci_for_thin_evidence(
+            0.0, -0.1, 0.1, 0.1, deficit=1.0, max_inflation=0.45
+        )
+        assert (ci_high - ci_low) > 1.5
+
+    def test_widening_grows_monotonically_with_deficit(self):
+        widths = []
+        for d in (0.1, 0.4, 0.8):
+            lo, hi, _ = widen_ci_for_thin_evidence(0.0, -0.1, 0.1, 0.1, deficit=d, max_inflation=0.45)
+            widths.append(hi - lo)
+        assert widths[0] < widths[1] < widths[2]
 
 
 def _prob(mean_stance: float) -> float:

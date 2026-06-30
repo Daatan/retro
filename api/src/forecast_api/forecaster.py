@@ -25,8 +25,14 @@ from tm.web_search import search_articles, SearchResult, get_last_search_provide
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
 
-from .aggregation import claim_weighted_stance, pool_sources, recency_weight
+from .aggregation import (
+    claim_weighted_stance,
+    pool_sources,
+    recency_weight,
+    widen_ci_for_thin_evidence,
+)
 from .cache import forecast_cache, search_cache
+from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight
 from .models import ArticleDebug, ArticleInput, DebugInfo, ForecastRequest, ForecastResponse, SourceSignal
 from .config import settings
@@ -640,6 +646,25 @@ async def _run_forecast_inner(
         [r.url for r in search_results],
     )
 
+    # Step 1b: collapse syndicated near-duplicates (one wire story re-hosted across
+    # aggregators) to a single highest-credibility source, so it can't triple its
+    # weight in the pool or pad the evidence mass. Done before fetch/extract to save
+    # work too. Conservative (high title-similarity threshold) — different stories
+    # on the same topic survive.
+    n_before_dedupe = len(search_results)
+    search_results = dedupe_syndicated(
+        search_results,
+        title_of=lambda r: r.title or "",
+        url_of=lambda r: r.url or "",
+        priority_of=lambda r: get_credibility_weight(_source_id_from_url(r.url)),
+        threshold=settings.syndication_title_similarity,
+    )
+    if len(search_results) < n_before_dedupe:
+        logger.info(
+            "event=syndication_dedupe before=%d after=%d collapsed=%d",
+            n_before_dedupe, len(search_results), n_before_dedupe - len(search_results),
+        )
+
     # Step 2: gatekeeper + extractor in parallel
     process_start = time.perf_counter()
     timings: list[dict] = []
@@ -677,7 +702,6 @@ async def _run_forecast_inner(
     all_stances: list[float] = []
     all_weights: list[float] = []
     relevances: list[float] = []
-    n_low_certainty = 0
     ref_date = datetime.now().strftime("%Y-%m-%d")
 
     for result, outcome in zip(search_results, outcomes):
@@ -701,13 +725,12 @@ async def _run_forecast_inner(
             [p.specificity for p in predictions],
         )
         avg_certainty = sum(p.certainty for p in predictions) / len(predictions)
-        # Certainty gate: drop sources whose claims are only hedged speculation
-        # before they can pad the evidence mass or tug the pool. A pool of only such
-        # sources then collapses to insufficient_data via the floors below. See
-        # settings.certainty_floor (0.0 disables).
-        if avg_certainty < settings.certainty_floor:
-            n_low_certainty += 1
-            continue
+        # Hedged sources (low avg_certainty) are *down-weighted, not dropped*:
+        # avg_certainty is a linear factor in `weight` below, so speculative claims
+        # tug the pool weakly and contribute little evidence mass. A pool of only
+        # such sources ends up below decisiveness_floor and surfaces as a wide-CI
+        # low-confidence estimate (see the thin-evidence widening after pooling),
+        # rather than being deleted and forcing an abstention on on-topic coverage.
         # Layer B: down-weight older articles via exponential recency decay.
         article_date = result.published_date or None
         rweight = recency_weight(
@@ -745,18 +768,19 @@ async def _run_forecast_inner(
     relevance_mass = sum(r * r for r in relevances)
     all_off_topic = bool(all_stances) and relevance_mass < settings.relevance_weight_floor
 
-    # Decisiveness safety net: even with on-subject articles, a thin, low-certainty
-    # pool produces a confident-looking ~50% from evidence that doesn't actually
-    # bear on the claim (e.g. generic Musk news for "will Musk tweet about X?").
-    # `all_weights` already folds credibility × certainty × recency × relevance²,
-    # so their sum is the certainty-weighted evidence mass; below a floor we defer
-    # to the caller's base rate instead of emitting a coin-flip. A genuinely
-    # balanced ~50% backed by strong coverage has high mass and is unaffected.
+    # Thin-evidence detection. `all_weights` already folds credibility × certainty ×
+    # recency × relevance², so their sum is the certainty-weighted evidence mass.
+    # Below decisiveness_floor the pool is thin/hedged. We no longer abstain on this
+    # (that surfaced as "no AI estimate" even for on-topic coverage like the Mythos
+    # case); instead we pool and *widen the CI* in proportion to the shortfall, so a
+    # thin pool reads as a low-confidence estimate with a wide band. The old
+    # deferral is still available behind settings.defer_on_thin_evidence.
     evidence_mass = sum(all_weights)
-    no_decisive_signal = (
+    thin_evidence = (
         bool(all_stances) and not all_off_topic
         and evidence_mass < settings.decisiveness_floor
     )
+    no_decisive_signal = thin_evidence and settings.defer_on_thin_evidence
 
     if not all_stances or all_off_topic or no_decisive_signal:
         # Outcome histogram tells us *why* we got nothing — were articles
@@ -766,18 +790,12 @@ async def _run_forecast_inner(
         for t in timings:
             key = str(t.get("outcome", "unknown"))
             outcome_counts[key] = outcome_counts.get(key, 0) + 1
-        if n_low_certainty:
-            outcome_counts["low_certainty"] = n_low_certainty
         if all_off_topic:
             outcome_counts["all_low_relevance"] = len(relevances)
             reason = "all_articles_off_topic"
         elif no_decisive_signal:
             outcome_counts["low_evidence_mass"] = len(all_weights)
             reason = "no_decisive_signal"
-        elif not all_stances and n_low_certainty:
-            # Every source that survived gatekeeper+extractor was dropped by the
-            # certainty gate — the pool was all hedged speculation.
-            reason = "all_low_certainty"
         else:
             reason = _reason_from_outcomes(outcome_counts)
         logger.warning(
@@ -835,9 +853,24 @@ async def _run_forecast_inner(
         all_stances, all_weights, clamp_eps=settings.logit_clamp
     )
 
+    # Evidence-mass-aware CI: pool_sources' interval reflects only how much the
+    # sources *disagree*, not how *much* evidence backs them, so a thin pool that
+    # happens to agree gets a deceptively tight band. Widen it toward maximal
+    # uncertainty in proportion to the decisiveness shortfall (mass → 0 ⇒ widest),
+    # so a thin on-topic pool self-reports as low-confidence instead of either a
+    # false-confident point or an abstention.
+    floor = settings.decisiveness_floor
+    if floor > 0 and evidence_mass < floor:
+        deficit = (floor - evidence_mass) / floor
+        ci_low, ci_high, std = widen_ci_for_thin_evidence(
+            mean, ci_low, ci_high, std,
+            deficit=deficit,
+            max_inflation=settings.thin_evidence_ci_inflation,
+        )
+
     logger.info(
-        "Forecast: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d (logit-pool)",
-        mean, std, ci_low, ci_high, n,
+        "Forecast: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d mass=%.3f (logit-pool)",
+        mean, std, ci_low, ci_high, n, evidence_mass,
     )
 
     # Per-article outcome histogram on the success path too, plus a low_relevance
@@ -847,8 +880,8 @@ async def _run_forecast_inner(
         key = str(t.get("outcome", "unknown"))
         success_outcome_counts[key] = success_outcome_counts.get(key, 0) + 1
     success_outcome_counts["low_relevance"] = sum(1 for r in relevances if r < 0.3)
-    if n_low_certainty:
-        success_outcome_counts["low_certainty"] = n_low_certainty
+    if thin_evidence:
+        success_outcome_counts["thin_evidence"] = len(all_weights)
 
     debug_info: Optional[DebugInfo] = None
     if req.debug:

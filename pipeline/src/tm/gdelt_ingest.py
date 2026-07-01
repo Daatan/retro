@@ -46,6 +46,7 @@ MVP_EVENTS = [
 
 
 from .utils import _is_ascii, existing_articles, save_article
+from .net_guard import safe_get_async
 from .article_text import extract_article_body
 
 
@@ -141,7 +142,7 @@ async def _fetch_text(url: str) -> str:
             headers={"User-Agent": "Mozilla/5.0 (compatible; TruthMachine/1.0)"},
             follow_redirects=True,
         ) as client:
-            r = await client.get(url)
+            r = await safe_get_async(client, url)
             if r.status_code != 200:
                 return ""
         return extract_article_body(BeautifulSoup(r.text, "html.parser"))

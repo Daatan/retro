@@ -53,6 +53,7 @@ from .models import CellStatus
 from .progress import load_state, update_cell
 from .web_search import search_articles as _web_search
 from .article_text import BROWSER_HEADERS, extract_article_body
+from .net_guard import safe_get, safe_get_async
 from .utils import existing_articles, save_article
 
 console = Console()
@@ -386,7 +387,7 @@ def resolve_url(
     direct = _construct_url(title, domain, expected_date)
     if direct:
         try:
-            r = httpx.get(direct, headers=HEADERS, timeout=10, follow_redirects=True)
+            r = safe_get(direct, headers=HEADERS, timeout=10)
             if r.status_code == 200 and len(r.text) > 500:
                 console.print(f"    [dim green]URL via slug[/dim green]")
                 return str(r.url)
@@ -622,7 +623,7 @@ async def search_gdelt(
             except Exception:
                 pub_dt = start_date
             try:
-                r = await client.get(url)
+                r = await safe_get_async(client, url)
                 if r.status_code != 200:
                     continue
                 text = await _scrape_html(r.text)
@@ -764,7 +765,7 @@ async def fetch_article_text(url: str) -> str:
         async with httpx.AsyncClient(
             headers=HEADERS, timeout=25, follow_redirects=True
         ) as client:
-            r = await client.get(url)
+            r = await safe_get_async(client, url)
             if r.status_code in (401, 403, 429):
                 console.print(f"    [dim]HTTP {r.status_code}, trying Wayback...[/dim]")
                 wb_text = await _fetch_wayback(url, client)

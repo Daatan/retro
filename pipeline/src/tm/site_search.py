@@ -45,6 +45,7 @@ MVP_EVENTS = [
 ]
 
 from .article_text import BROWSER_HEADERS, extract_article_body
+from .net_guard import safe_get_async
 
 
 async def _get(url: str, timeout: int = 20) -> Optional[BeautifulSoup]:
@@ -52,7 +53,7 @@ async def _get(url: str, timeout: int = 20) -> Optional[BeautifulSoup]:
         async with httpx.AsyncClient(
             headers=BROWSER_HEADERS, timeout=timeout, follow_redirects=True
         ) as client:
-            r = await client.get(url)
+            r = await safe_get_async(client, url)
             if r.status_code == 200:
                 return BeautifulSoup(r.text, "html.parser")
     except Exception as e:

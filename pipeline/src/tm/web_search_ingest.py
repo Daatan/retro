@@ -142,6 +142,7 @@ DUEL_EVENTS = [
 
 from .utils import _is_ascii, existing_articles, save_article
 from .article_text import BROWSER_HEADERS, extract_article_body
+from .net_guard import safe_get_async
 
 
 
@@ -149,7 +150,7 @@ async def _fetch_text(url: str) -> Tuple[str, Optional[str]]:
     """Return (visible_text, html_publish_date_or_None) for the page."""
     try:
         async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=25, follow_redirects=True) as c:
-            r = await c.get(url)
+            r = await safe_get_async(c, url)
             if r.status_code != 200:
                 return "", None
         full_soup = BeautifulSoup(r.text, "html.parser")

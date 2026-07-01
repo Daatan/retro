@@ -32,6 +32,7 @@ from .article_text import BROWSER_HEADERS, extract_article_body
 from .models import CellStatus
 from .progress import load_state
 from .utils import existing_articles, save_article, KNOWN_SOURCE_IDS
+from .net_guard import safe_get
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def _find_sitemaps(domain: str, client: httpx.Client) -> list[str]:
     """Return sitemap URLs via robots.txt, falling back to common patterns."""
     sitemaps: list[str] = []
     try:
-        r = client.get(f"https://{domain}/robots.txt", timeout=10)
+        r = safe_get(f"https://{domain}/robots.txt", client=client, timeout=10)
         if r.status_code == 200:
             for line in r.text.splitlines():
                 if line.lower().startswith("sitemap:"):
@@ -137,7 +138,7 @@ def _parse_sitemap(
     if depth > 1:
         return []
     try:
-        r = client.get(url, timeout=15, follow_redirects=True)
+        r = safe_get(url, client=client, timeout=15)
         if r.status_code != 200:
             return []
         root = ET.fromstring(r.text)
@@ -173,7 +174,7 @@ def _parse_sitemap(
 def _fetch_article(url: str, pub_date: datetime, client: httpx.Client) -> Optional[dict]:
     """Fetch URL and extract full text. Returns None if text is too short (paywall/stub)."""
     try:
-        r = client.get(url, timeout=20, follow_redirects=True)
+        r = safe_get(url, client=client, timeout=20)
         if r.status_code != 200:
             return None
         html = r.text

@@ -92,6 +92,8 @@ from urllib.parse import urlencode
 import httpx
 from ddgs import DDGS
 
+from .net_guard import safe_get
+
 try:
     import trafilatura as _trafilatura
     from bs4 import BeautifulSoup as _BeautifulSoup
@@ -1330,8 +1332,7 @@ def _fetch_snippet(url: str) -> str:
     if not _SNIPPET_LIBS_AVAILABLE:
         return ""
     try:
-        r = httpx.get(url, headers={"User-Agent": _SNIPPET_UA},
-                      timeout=_SNIPPET_TIMEOUT, follow_redirects=True)
+        r = safe_get(url, headers={"User-Agent": _SNIPPET_UA}, timeout=_SNIPPET_TIMEOUT)
         if r.status_code != 200 or "text/html" not in r.headers.get("content-type", ""):
             return ""
         text = _trafilatura.extract(r.text, include_comments=False, include_tables=False)

@@ -13275,7 +13275,7 @@
     "C13:axios": {
       "event_id": "C13",
       "source_id": "axios",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13303,21 +13303,21 @@
     "C13:ch13": {
       "event_id": "C13",
       "source_id": "ch13",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "C13:ft": {
       "event_id": "C13",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "C13:globes": {
       "event_id": "C13",
       "source_id": "globes",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13331,7 +13331,7 @@
     "C13:haaretz": {
       "event_id": "C13",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13359,14 +13359,14 @@
     "C13:n12": {
       "event_id": "C13",
       "source_id": "n12",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "C13:nyt": {
       "event_id": "C13",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13380,14 +13380,14 @@
     "C13:toi": {
       "event_id": "C13",
       "source_id": "toi",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "C13:walla": {
       "event_id": "C13",
       "source_id": "walla",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13401,7 +13401,7 @@
     "D07:aljazeera": {
       "event_id": "D07",
       "source_id": "aljazeera",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13429,14 +13429,14 @@
     "D07:calcalist": {
       "event_id": "D07",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "D07:ch13": {
       "event_id": "D07",
       "source_id": "ch13",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13457,7 +13457,7 @@
     "D07:guardian": {
       "event_id": "D07",
       "source_id": "guardian",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13492,7 +13492,7 @@
     "D07:n12": {
       "event_id": "D07",
       "source_id": "n12",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13520,7 +13520,7 @@
     "D07:walla": {
       "event_id": "D07",
       "source_id": "walla",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T02:53:55.633582"
+  "last_updated": "2026-07-01T02:57:59.357634"
 }

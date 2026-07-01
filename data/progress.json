@@ -13009,7 +13009,7 @@
     "C10:axios": {
       "event_id": "C10",
       "source_id": "axios",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13037,7 +13037,7 @@
     "C10:ch13": {
       "event_id": "C10",
       "source_id": "ch13",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13058,7 +13058,7 @@
     "C10:guardian": {
       "event_id": "C10",
       "source_id": "guardian",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13093,14 +13093,14 @@
     "C10:n12": {
       "event_id": "C10",
       "source_id": "n12",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "C10:nyt": {
       "event_id": "C10",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13114,7 +13114,7 @@
     "C10:toi": {
       "event_id": "C10",
       "source_id": "toi",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13128,7 +13128,7 @@
     "C10:ynet": {
       "event_id": "C10",
       "source_id": "ynet",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13149,7 +13149,7 @@
     "C11:bbc": {
       "event_id": "C11",
       "source_id": "bbc",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13184,7 +13184,7 @@
     "C11:globes": {
       "event_id": "C11",
       "source_id": "globes",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13198,7 +13198,7 @@
     "C11:haaretz": {
       "event_id": "C11",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13226,7 +13226,7 @@
     "C11:n12": {
       "event_id": "C11",
       "source_id": "n12",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T02:15:26.661505"
+  "last_updated": "2026-07-01T02:24:03.559826"
 }

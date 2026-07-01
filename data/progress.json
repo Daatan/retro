@@ -11630,8 +11630,8 @@
     "H04:n12": {
       "event_id": "H04",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "H04:nyt": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T01:38:03.792547"
+  "last_updated": "2026-07-01T01:39:11.708377"
 }

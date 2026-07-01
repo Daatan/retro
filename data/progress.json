@@ -12246,7 +12246,7 @@
     "H10:ft": {
       "event_id": "H10",
       "source_id": "ft",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12260,7 +12260,7 @@
     "H10:guardian": {
       "event_id": "H10",
       "source_id": "guardian",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T00:22:24.604677"
+  "last_updated": "2026-07-01T00:23:00.455342"
 }

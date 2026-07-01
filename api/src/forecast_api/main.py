@@ -17,7 +17,7 @@ from .cache import forecast_cache
 from .config import settings
 from .forecaster import run_forecast
 from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache
-from .net_guard import is_safe_url
+from .net_guard import UnsafeURLError, is_safe_url, safe_get
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
 from .limiter import limiter
@@ -247,9 +247,28 @@ async def fetch_url(request: Request, body: FetchUrlRequest):
             {"detail": "URL must be a public http(s) address"}, status_code=422
         )
     import trafilatura
-    downloaded = trafilatura.fetch_url(body.url)
-    if not downloaded:
+
+    # Fetch through safe_get rather than trafilatura.fetch_url: the latter
+    # re-resolves the host independently of the is_safe_url check above, leaving a
+    # DNS-rebinding (TOCTOU) window. safe_get validates the host it actually
+    # connects to and re-checks every redirect hop; trafilatura only parses the
+    # HTML we hand it. Run the sync fetch off the event loop.
+    try:
+        resp = await asyncio.to_thread(
+            safe_get,
+            body.url,
+            timeout=10.0,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; TruthMachine/1.0)"},
+        )
+    except UnsafeURLError:
+        return JSONResponse(
+            {"detail": "URL must be a public http(s) address"}, status_code=422
+        )
+    except Exception:
         return JSONResponse({"detail": "Could not fetch URL"}, status_code=422)
+    if resp.status_code != 200 or not resp.text:
+        return JSONResponse({"detail": "Could not fetch URL"}, status_code=422)
+    downloaded = resp.text
     metadata = trafilatura.extract_metadata(downloaded)
     text = trafilatura.extract(downloaded, include_comments=False, include_tables=False) or ""
     date_str: str | None = None

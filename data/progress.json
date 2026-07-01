@@ -12743,14 +12743,14 @@
     "A20:axios": {
       "event_id": "A20",
       "source_id": "axios",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "A20:bbc": {
       "event_id": "A20",
       "source_id": "bbc",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12778,14 +12778,14 @@
     "A20:ft": {
       "event_id": "A20",
       "source_id": "ft",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "A20:globes": {
       "event_id": "A20",
       "source_id": "globes",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12799,8 +12799,8 @@
     "A20:haaretz": {
       "event_id": "A20",
       "source_id": "haaretz",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A20:israel_hayom": {
@@ -12827,14 +12827,14 @@
     "A20:n12": {
       "event_id": "A20",
       "source_id": "n12",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "A20:nyt": {
       "event_id": "A20",
       "source_id": "nyt",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12848,22 +12848,22 @@
     "A20:toi": {
       "event_id": "A20",
       "source_id": "toi",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A20:walla": {
       "event_id": "A20",
       "source_id": "walla",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "A20:ynet": {
       "event_id": "A20",
       "source_id": "ynet",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B14:aljazeera": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T01:25:17.805994"
+  "last_updated": "2026-07-01T01:28:28.748861"
 }

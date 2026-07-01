@@ -19,11 +19,25 @@ for deploy/rollback see [`docs/ORACLE_DEPLOY.md`](../docs/ORACLE_DEPLOY.md).
 | `bayesoracle.py` | `/bayes/nodes` — node probabilities for the BayesOracle viewers |
 | `models.py` | Pydantic request/response schemas |
 | `config.py` | Settings (env-driven; reuses the `tm` pipeline package) |
-| `auth.py` | `x-api-key` dependency |
+| `auth.py` | `x-api-key` dependency (constant-time compare via `hmac.compare_digest`) |
+| `net_guard.py` | SSRF guard: `safe_get`/`is_safe_url`, re-checks every redirect hop |
 | `limiter.py` / `cache.py` | slowapi rate limiting; forecast + search caches |
 
 It imports `tm.gatekeeper`, `tm.extractor`, and `tm.web_search` from the
 `pipeline/` package (a path dependency) — no code is duplicated.
+
+**CORS.** Allowed origins are `https://daatan.github.io` and
+`https://bayes.daatan.com`; localhost dev origins (`http://localhost` /
+`http://127.0.0.1`, any port) are matched via `allow_origin_regex` because
+Starlette's `allow_origins` list requires exact matches (wildcard ports don't
+work there).
+
+**Fetching external URLs.** Never fetch a caller- or search-supplied URL with a
+raw `httpx` client. Use `forecast_api.net_guard.safe_get`, which rejects
+non-http(s) schemes and hosts that resolve to private/loopback/link-local
+addresses (including the cloud metadata IP `169.254.169.254`) and re-validates
+every redirect hop — a validated public host can still 30x-redirect to an
+internal one. This is what backs the public `/fetch-url` proxy.
 
 ## Run locally
 
@@ -62,3 +76,7 @@ secret. CI runs this on every PR and **gates the deploy** (see `.github/workflow
 deliberately-public `/fetch-url` (which is rate-limited and SSRF-guarded —
 http(s) only, no private/loopback/link-local hosts). Full details in the
 [Oracle API contract](https://github.com/Daatan/docs/blob/main/oracle-api.md).
+
+Error-contract notes: `/search` returns **422** (not 500) on malformed date
+params, and `/pm/markets` returns **502** on a Polymarket upstream HTTP error
+(**504** on an upstream connect/timeout failure) rather than an opaque 500.

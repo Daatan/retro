@@ -10685,7 +10685,7 @@
     "D01:bloomberg": {
       "event_id": "D01",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T03:45:24.734636"
+  "last_updated": "2026-07-01T03:46:36.298713"
 }

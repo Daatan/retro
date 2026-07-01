@@ -77,9 +77,10 @@ app.add_middleware(
     allow_origins=[
         "https://daatan.github.io",
         "https://bayes.daatan.com",
-        "http://localhost:*",
-        "http://127.0.0.1:*",
     ],
+    # Starlette matches allow_origins exactly (wildcard ports don't work there),
+    # so localhost dev origins need a regex.
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "x-api-key"],
 )
@@ -289,7 +290,17 @@ async def pm_markets(
     # Gamma requires repeated params: ?id=111&id=222 (not comma-separated)
     params = [("id", i) for i in ids] + [("limit", str(len(ids)))]
     url = f"{_GAMMA_BASE}/markets"
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(url, params=params, headers=_GAMMA_HEADERS)
-        resp.raise_for_status()
-    return JSONResponse(resp.json())
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, params=params, headers=_GAMMA_HEADERS)
+            resp.raise_for_status()
+        return JSONResponse(resp.json())
+    except httpx.HTTPStatusError as exc:
+        # Surface upstream failures as 502 rather than an opaque 500 — this proxy
+        # is the browser's only path to Gamma.
+        return JSONResponse(
+            {"detail": f"Upstream Polymarket error: {exc.response.status_code}"},
+            status_code=502,
+        )
+    except httpx.HTTPError:
+        return JSONResponse({"detail": "Upstream Polymarket request failed"}, status_code=504)

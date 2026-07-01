@@ -369,11 +369,22 @@ class Scorer:
     # ─────────────────────────────────────────────
 
     def _update_elo(self, stats: dict, predictions: list, outcome: bool, K: int = 32):
-        """Zero-sum ELO adjustment: sources that predicted correctly gain from those that didn't."""
-        for sid, stance in predictions:
-            is_correct = (stance > 0) == outcome
-            delta = K / len(predictions)
-            stats[sid]["elo"] += delta if is_correct else -delta
+        """Zero-sum ELO adjustment: correct sources gain exactly what the incorrect
+        sources lose. Each winner takes an equal share of the losers' stake, so the
+        aggregate ELO is conserved regardless of the correct/wrong split. No change
+        when everyone lands on the same side (no counterparty)."""
+        n = len(predictions)
+        if n == 0:
+            return
+        correct = [sid for sid, stance in predictions if (stance > 0) == outcome]
+        wrong = [sid for sid, stance in predictions if (stance > 0) != outcome]
+        n_c, n_w = len(correct), len(wrong)
+        if n_c == 0 or n_w == 0:
+            return
+        for sid in correct:
+            stats[sid]["elo"] += K * n_w / n
+        for sid in wrong:
+            stats[sid]["elo"] -= K * n_c / n
 
     def _update_skill(
         self,

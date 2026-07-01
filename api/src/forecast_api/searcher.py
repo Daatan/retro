@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Optional
 
 import httpx
+from fastapi import HTTPException
 
 from tm import web_search as _ws
 
@@ -21,10 +22,16 @@ logger = logging.getLogger(__name__)
 async def run_search(req: SearchRequest) -> SearchResponse:
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
-    if req.date_from:
-        date_from = datetime.fromisoformat(req.date_from)
-    if req.date_to:
-        date_to = datetime.fromisoformat(req.date_to)
+    try:
+        if req.date_from:
+            date_from = datetime.fromisoformat(req.date_from)
+        if req.date_to:
+            date_to = datetime.fromisoformat(req.date_to)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="date_from/date_to must be ISO-8601 (e.g. 2026-01-31 or 2026-01-31T00:00:00)",
+        ) from exc
 
     t0 = time.perf_counter()
     # Provider attribution is thread-local: search runs in a worker thread via

@@ -11567,8 +11567,8 @@
     "H04:calcalist": {
       "event_id": "H04",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "H04:ch13": {
@@ -11581,7 +11581,7 @@
     "H04:ft": {
       "event_id": "H04",
       "source_id": "ft",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11630,7 +11630,7 @@
     "H04:n12": {
       "event_id": "H04",
       "source_id": "n12",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T00:17:27.492685"
+  "last_updated": "2026-07-01T00:18:56.636066"
 }

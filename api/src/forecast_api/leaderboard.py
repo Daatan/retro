@@ -46,6 +46,18 @@ async def background_refresh_loop(path: Path, interval_seconds: int) -> None:
             logger.error("Leaderboard refresh failed: %s", exc)
 
 
+def _conservative_score(entry: dict):
+    """skill_conservative, falling back to the legacy trueskill_conservative.
+    Returns None only when neither is present — 0.0 is a valid score, not 'missing'."""
+    v = entry.get("skill_conservative")
+    return v if v is not None else entry.get("trueskill_conservative")
+
+
+def _conservative_or_zero(entry: dict) -> float:
+    v = _conservative_score(entry)
+    return float(v) if v is not None else 0.0
+
+
 def get_credibility_weight(source_id: str) -> float:
     """
     Credibility weight derived from OpenSkill conservative estimate (μ − 3σ).
@@ -65,8 +77,9 @@ def get_credibility_weight(source_id: str) -> float:
     if entry is None:
         return 1.0
 
-    # Support new field name (skill_conservative) and old (trueskill_conservative)
-    conservative_raw = entry.get("skill_conservative") or entry.get("trueskill_conservative")
+    # Support new field name (skill_conservative) and old (trueskill_conservative).
+    # A real 0.0 score must map to weight 1.0, not fall through to the ELO/Brier path.
+    conservative_raw = _conservative_score(entry)
     if conservative_raw is not None:
         return max(0.1, 1.0 + float(conservative_raw) / 25.0)
 
@@ -83,8 +96,5 @@ def leaderboard_size() -> int:
 def get_leaderboard_data() -> list[dict]:
     """Return a snapshot of all leaderboard entries, sorted by skill conservative score."""
     entries = list(_cache.values())
-    entries.sort(
-        key=lambda e: float(e.get("skill_conservative") or e.get("trueskill_conservative") or 0.0),
-        reverse=True,
-    )
+    entries.sort(key=_conservative_or_zero, reverse=True)
     return entries

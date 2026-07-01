@@ -11770,7 +11770,7 @@
     "H05:nyt": {
       "event_id": "H05",
       "source_id": "nyt",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11833,7 +11833,7 @@
     "H06:calcalist": {
       "event_id": "H06",
       "source_id": "calcalist",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11896,7 +11896,7 @@
     "H06:n12": {
       "event_id": "H06",
       "source_id": "n12",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11966,8 +11966,8 @@
     "H08:calcalist": {
       "event_id": "H08",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "H08:ch13": {
@@ -11987,7 +11987,7 @@
     "H08:globes": {
       "event_id": "H08",
       "source_id": "globes",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12029,7 +12029,7 @@
     "H08:n12": {
       "event_id": "H08",
       "source_id": "n12",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12071,7 +12071,7 @@
     "H09:aljazeera": {
       "event_id": "H09",
       "source_id": "aljazeera",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12127,7 +12127,7 @@
     "H09:guardian": {
       "event_id": "H09",
       "source_id": "guardian",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12162,14 +12162,14 @@
     "H09:n12": {
       "event_id": "H09",
       "source_id": "n12",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "H09:nyt": {
       "event_id": "H09",
       "source_id": "nyt",
-      "status": "pending",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T00:18:56.636066"
+  "last_updated": "2026-07-01T00:22:24.604677"
 }

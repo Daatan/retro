@@ -12743,14 +12743,14 @@
     "A20:axios": {
       "event_id": "A20",
       "source_id": "axios",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "A20:bbc": {
       "event_id": "A20",
       "source_id": "bbc",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12778,14 +12778,14 @@
     "A20:ft": {
       "event_id": "A20",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "A20:globes": {
       "event_id": "A20",
       "source_id": "globes",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12799,7 +12799,7 @@
     "A20:haaretz": {
       "event_id": "A20",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12827,14 +12827,14 @@
     "A20:n12": {
       "event_id": "A20",
       "source_id": "n12",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "A20:nyt": {
       "event_id": "A20",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12848,21 +12848,21 @@
     "A20:toi": {
       "event_id": "A20",
       "source_id": "toi",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "A20:walla": {
       "event_id": "A20",
       "source_id": "walla",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "A20:ynet": {
       "event_id": "A20",
       "source_id": "ynet",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T01:15:39.218394"
+  "last_updated": "2026-07-01T01:18:37.257992"
 }

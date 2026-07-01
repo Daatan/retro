@@ -2,8 +2,8 @@
 
 These cover the robustness fixes added in PR #44: HTTP status checking,
 paywall-stub detection, and the "extracted must beat the snippet" rule.
-They use ``unittest.mock`` to stub ``httpx.get`` and ``trafilatura.extract``
-so no network or real HTML parsing is required.
+They use ``unittest.mock`` to stub ``safe_get`` (the SSRF-guarded fetch) and
+``trafilatura.extract`` so no network or real HTML parsing is required.
 """
 
 from unittest.mock import patch, MagicMock
@@ -50,7 +50,7 @@ class TestFetchArticleText:
 
     def test_returns_extracted_when_long_and_healthy(self):
         long_article = "A real article body. " * 100  # ~2000 chars
-        with patch("forecast_api.forecaster.httpx.get") as mock_get, \
+        with patch("forecast_api.forecaster.safe_get") as mock_get, \
              patch("forecast_api.forecaster.trafilatura.extract", return_value=long_article):
             mock_get.return_value = _mock_response(200, "<html>...</html>")
             out = _fetch_article_text("https://example.com/a", self.FALLBACK)
@@ -58,19 +58,19 @@ class TestFetchArticleText:
 
     def test_falls_back_on_404(self):
         """A 404 page must never be handed to the gatekeeper as article text."""
-        with patch("forecast_api.forecaster.httpx.get") as mock_get:
+        with patch("forecast_api.forecaster.safe_get") as mock_get:
             mock_get.return_value = _mock_response(404, "<html>Not found</html>")
             out = _fetch_article_text("https://example.com/gone", self.FALLBACK)
         assert out == self.FALLBACK
 
     def test_falls_back_on_403(self):
-        with patch("forecast_api.forecaster.httpx.get") as mock_get:
+        with patch("forecast_api.forecaster.safe_get") as mock_get:
             mock_get.return_value = _mock_response(403, "<html>Forbidden</html>")
             out = _fetch_article_text("https://example.com/locked", self.FALLBACK)
         assert out == self.FALLBACK
 
     def test_falls_back_on_500(self):
-        with patch("forecast_api.forecaster.httpx.get") as mock_get:
+        with patch("forecast_api.forecaster.safe_get") as mock_get:
             mock_get.return_value = _mock_response(500, "<html>Server error</html>")
             out = _fetch_article_text("https://example.com/boom", self.FALLBACK)
         assert out == self.FALLBACK
@@ -79,7 +79,7 @@ class TestFetchArticleText:
         """Trafilatura extracts the paywall CTA — we must not trust it."""
         stub = "Subscribe to read the full article for $4.99/month."
         assert len(stub) < _MIN_ARTICLE_CHARS  # guard: precondition for the check
-        with patch("forecast_api.forecaster.httpx.get") as mock_get, \
+        with patch("forecast_api.forecaster.safe_get") as mock_get, \
              patch("forecast_api.forecaster.trafilatura.extract", return_value=stub):
             mock_get.return_value = _mock_response(200, "<html>...</html>")
             out = _fetch_article_text("https://ft.com/article", self.FALLBACK)
@@ -95,20 +95,32 @@ class TestFetchArticleText:
         )
         short_body = "Short clip without the detail."
         assert len(short_body) < len(rich_fallback)  # guard
-        with patch("forecast_api.forecaster.httpx.get") as mock_get, \
+        with patch("forecast_api.forecaster.safe_get") as mock_get, \
              patch("forecast_api.forecaster.trafilatura.extract", return_value=short_body):
             mock_get.return_value = _mock_response(200, "<html>...</html>")
             out = _fetch_article_text("https://example.com/a", rich_fallback)
         assert out == rich_fallback
 
     def test_falls_back_on_trafilatura_empty(self):
-        with patch("forecast_api.forecaster.httpx.get") as mock_get, \
+        with patch("forecast_api.forecaster.safe_get") as mock_get, \
              patch("forecast_api.forecaster.trafilatura.extract", return_value=None):
             mock_get.return_value = _mock_response(200, "<html>junk</html>")
             out = _fetch_article_text("https://example.com/a", self.FALLBACK)
         assert out == self.FALLBACK
 
     def test_falls_back_on_network_error(self):
-        with patch("forecast_api.forecaster.httpx.get", side_effect=httpx.ConnectError("dns")):
+        with patch("forecast_api.forecaster.safe_get", side_effect=httpx.ConnectError("dns")):
             out = _fetch_article_text("https://example.com/a", self.FALLBACK)
+        assert out == self.FALLBACK
+
+    def test_falls_back_on_unsafe_url(self):
+        """An SSRF-blocked URL (safe_get raises UnsafeURLError) yields the fallback,
+        never a fetched internal response."""
+        from forecast_api.net_guard import UnsafeURLError
+
+        with patch(
+            "forecast_api.forecaster.safe_get",
+            side_effect=UnsafeURLError("http://169.254.169.254/"),
+        ):
+            out = _fetch_article_text("http://169.254.169.254/latest/meta-data/", self.FALLBACK)
         assert out == self.FALLBACK

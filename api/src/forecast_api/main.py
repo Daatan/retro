@@ -1,8 +1,6 @@
 import asyncio
-import ipaddress
 import logging
 import re
-import socket
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
@@ -19,6 +17,7 @@ from .cache import forecast_cache
 from .config import settings
 from .forecaster import run_forecast
 from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache
+from .net_guard import is_safe_url
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
 from .limiter import limiter
@@ -234,46 +233,6 @@ async def llm_proxy(
     return LlmResponse(content=content, model=model)
 
 
-def _is_safe_url(url: str) -> bool:
-    """SSRF guard for the fetch proxy.
-
-    Accept only http(s) URLs whose host resolves entirely to public IPs.
-    Rejects loopback / private (RFC1918) / link-local (incl. the cloud
-    metadata endpoint 169.254.169.254) / reserved / multicast addresses.
-    All resolved addresses must be public — guards basic DNS rebinding.
-    """
-    try:
-        parsed = urlparse(url)
-    except ValueError:
-        return False
-    if parsed.scheme not in ("http", "https"):
-        return False
-    host = parsed.hostname
-    if not host:
-        return False
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except (socket.gaierror, UnicodeError, ValueError):
-        return False
-    if not infos:
-        return False
-    for info in infos:
-        try:
-            ip = ipaddress.ip_address(info[4][0])
-        except ValueError:
-            return False
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-            or ip.is_unspecified
-        ):
-            return False
-    return True
-
-
 @app.post("/fetch-url", response_model=FetchUrlResponse, tags=["IBI"])
 @limiter.limit("30/minute")
 async def fetch_url(request: Request, body: FetchUrlRequest):
@@ -283,7 +242,7 @@ async def fetch_url(request: Request, body: FetchUrlRequest):
     without a key, but rate-limited and SSRF-guarded: rejects non-http(s) schemes
     and hosts that resolve to non-public addresses.
     """
-    if not _is_safe_url(body.url):
+    if not is_safe_url(body.url):
         return JSONResponse(
             {"detail": "URL must be a public http(s) address"}, status_code=422
         )

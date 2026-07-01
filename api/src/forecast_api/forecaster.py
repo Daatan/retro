@@ -31,6 +31,7 @@ from .aggregation import (
     recency_weight,
     widen_ci_for_thin_evidence,
 )
+from .net_guard import UnsafeURLError, safe_get
 from .cache import forecast_cache, search_cache
 from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight
@@ -205,10 +206,9 @@ def _fetch_article_text(url: str, fallback: str) -> str:
     status: int | None = None
     extracted_len = 0
     try:
-        resp = httpx.get(
+        resp = safe_get(
             url,
             timeout=6.0,
-            follow_redirects=True,
             headers={"User-Agent": "Mozilla/5.0 (compatible; TruthMachine/1.0)"},
         )
         status = resp.status_code
@@ -231,6 +231,9 @@ def _fetch_article_text(url: str, fallback: str) -> str:
                     url, status, extracted_len,
                 )
                 return extracted
+    except UnsafeURLError as exc:
+        outcome = "blocked_unsafe_url"
+        logger.warning("Blocked unsafe article URL %s: %s", url, exc)
     except httpx.HTTPStatusError as exc:
         outcome = "http_error"
         status = exc.response.status_code

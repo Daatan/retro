@@ -12,10 +12,10 @@ Fallback order:
   3. Serper.dev /news endpoint      SERPER_API_KEY
   4. Brave News Search              BRAVE_API_KEY
   4b. Tavily News Search            TAVILY_API_KEY       (after Brave: returns no published_date)
+  4c. Newsdata.io                   NEWSDATA_API_KEY     (news API w/ dates; ahead of SERP scrapers)
   5. BrightData SERP API            BRIGHTDATA_API_KEY
   6. Nimbleway SERP API             NIMBLEWAY_API_KEY
   7. ScrapingBee Google Search      SCRAPINGBEE_API_KEY
-  8. Newsdata.io                    NEWSDATA_API_KEY
   9. DataForSEO Google News         DATAFORSEO_API_KEY  (last-resort paid fallback)
  10. DuckDuckGo Lite                (free, no key)
 
@@ -1446,7 +1446,7 @@ def _search_articles_chain(
 
     Tries providers in order, skipping any without a configured key or with
     an exhausted quota flag set for this process lifetime:
-      GDELT → SerpAPI → Serper.dev → Brave → Tavily → BrightData → Nimbleway → ScrapingBee → Newsdata.io → DataForSEO → DDG
+      GDELT → SerpAPI → Serper.dev → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → ScrapingBee → DataForSEO → DDG
 
     DDG is tried last; if AWS IPs are blocked by DDG/Yahoo it fails and is logged.
 
@@ -1633,6 +1633,19 @@ def _search_articles_chain(
         except Exception as e:
             logger.warning("tavily failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
+    # 4c. Newsdata.io — dedicated news API (published dates), ahead of the generic SERP scrapers.
+    if NEWSDATA_API_KEY and not _NEWSDATA_QUOTA_EXHAUSTED:
+        _provider_local.chain.append("newsdata")
+        _t0 = time.perf_counter()
+        try:
+            results = _search_newsdata_io(query, limit, date_from, date_to)
+            if results:
+                _provider_local.name = "newsdata"
+                return results
+            logger.debug("newsdata empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
+        except Exception as e:
+            logger.warning("newsdata failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
+
     # 5. BrightData SERP API
     if BRIGHTDATA_API_KEY and not _BRIGHTDATA_QUOTA_EXHAUSTED:
         _provider_local.chain.append("brightdata")
@@ -1671,19 +1684,6 @@ def _search_articles_chain(
             logger.debug("scrapingbee empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
             logger.warning("scrapingbee failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
-
-    # 8. Newsdata.io
-    if NEWSDATA_API_KEY and not _NEWSDATA_QUOTA_EXHAUSTED:
-        _provider_local.chain.append("newsdata")
-        _t0 = time.perf_counter()
-        try:
-            results = _search_newsdata_io(query, limit, date_from, date_to)
-            if results:
-                _provider_local.name = "newsdata"
-                return results
-            logger.debug("newsdata empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
-            logger.warning("newsdata failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 9. DataForSEO (paid — last-resort fallback only)
     if DATAFORSEO_API_KEY and not _DATAFORSEO_QUOTA_EXHAUSTED:

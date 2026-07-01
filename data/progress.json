@@ -13422,8 +13422,8 @@
     "D07:bloomberg": {
       "event_id": "D07",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "D07:calcalist": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T07:28:59.849504"
+  "last_updated": "2026-07-01T07:32:23.867353"
 }

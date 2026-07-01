@@ -12127,8 +12127,8 @@
     "H09:guardian": {
       "event_id": "H09",
       "source_id": "guardian",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "H09:haaretz": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T01:39:11.708377"
+  "last_updated": "2026-07-01T01:41:37.865065"
 }

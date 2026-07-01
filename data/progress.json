@@ -13184,8 +13184,8 @@
     "C11:globes": {
       "event_id": "C11",
       "source_id": "globes",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C11:guardian": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T11:46:23.291413"
+  "last_updated": "2026-07-01T11:47:20.100092"
 }

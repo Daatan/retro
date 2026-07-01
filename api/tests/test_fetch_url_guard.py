@@ -9,7 +9,7 @@ offline — ``socket.getaddrinfo`` parses numeric literals and reads ``localhost
 from the hosts file without network DNS.
 """
 
-from forecast_api.main import _is_safe_url
+from forecast_api.net_guard import is_safe_url as _is_safe_url
 
 
 class TestRejectsUnsafeSchemes:

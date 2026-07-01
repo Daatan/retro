@@ -12904,14 +12904,14 @@
     "B14:ch13": {
       "event_id": "B14",
       "source_id": "ch13",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B14:ft": {
       "event_id": "B14",
       "source_id": "ft",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12932,8 +12932,8 @@
     "B14:haaretz": {
       "event_id": "B14",
       "source_id": "haaretz",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "B14:israel_hayom": {
@@ -12960,14 +12960,14 @@
     "B14:n12": {
       "event_id": "B14",
       "source_id": "n12",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "B14:nyt": {
       "event_id": "B14",
       "source_id": "nyt",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12981,22 +12981,22 @@
     "B14:toi": {
       "event_id": "B14",
       "source_id": "toi",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 12,
       "error": null
     },
     "B14:walla": {
       "event_id": "B14",
       "source_id": "walla",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "B14:ynet": {
       "event_id": "B14",
       "source_id": "ynet",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C10:aljazeera": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T01:58:44.279026"
+  "last_updated": "2026-07-01T02:01:34.014288"
 }

@@ -13898,7 +13898,7 @@
     "I04:nyt": {
       "event_id": "I04",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T05:03:02.906393"
+  "last_updated": "2026-07-01T05:07:36.226509"
 }

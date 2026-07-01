@@ -10685,7 +10685,7 @@
     "D01:bloomberg": {
       "event_id": "D01",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -13275,8 +13275,8 @@
     "C13:axios": {
       "event_id": "C13",
       "source_id": "axios",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "C13:bbc": {
@@ -13303,21 +13303,21 @@
     "C13:ch13": {
       "event_id": "C13",
       "source_id": "ch13",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 6,
       "error": null
     },
     "C13:ft": {
       "event_id": "C13",
       "source_id": "ft",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "C13:globes": {
       "event_id": "C13",
       "source_id": "globes",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13331,8 +13331,8 @@
     "C13:haaretz": {
       "event_id": "C13",
       "source_id": "haaretz",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C13:israel_hayom": {
@@ -13359,15 +13359,15 @@
     "C13:n12": {
       "event_id": "C13",
       "source_id": "n12",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 7,
       "error": null
     },
     "C13:nyt": {
       "event_id": "C13",
       "source_id": "nyt",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C13:reuters": {
@@ -13380,15 +13380,15 @@
     "C13:toi": {
       "event_id": "C13",
       "source_id": "toi",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 11,
       "error": null
     },
     "C13:walla": {
       "event_id": "C13",
       "source_id": "walla",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C13:ynet": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T03:08:53.079124"
+  "last_updated": "2026-07-01T03:17:55.771701"
 }

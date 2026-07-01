@@ -13037,8 +13037,8 @@
     "C10:ch13": {
       "event_id": "C10",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C10:ft": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-07-01T06:04:04.681129"
+  "last_updated": "2026-07-01T06:05:07.064309"
 }

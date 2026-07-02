@@ -88,6 +88,19 @@ class ApiSettings(BaseSettings):
     # decisiveness_floor returns insufficient_data (reason="no_decisive_signal")
     # instead of emitting a wide-CI estimate. Default False (widen, don't defer).
     defer_on_thin_evidence: bool = False
+    # ── Settlement override ─────────────────────────────────────────────────
+    # When at least this many independent sources carry a settlement claim (the
+    # extractor's `settled` flag: the outcome is reported as an accomplished
+    # fact, not a prediction) agreeing in direction, the pooled estimate is
+    # pinned to ±settlement_stance and the response carries settled=true.
+    # Pooling can never exceed its most confident member, so a decided event
+    # otherwise tops out wherever the extractor's stances land (the Knicks
+    # "82% the day after the title" case). 2 = one wire story can't settle a
+    # forecast alone; 0 disables the override entirely.
+    settlement_min_sources: int = 2
+    # Stance the pinned estimate takes on settlement (0.94 stance = 0.97
+    # probability). Deliberately short of 1.0 — sources can be wrong together.
+    settlement_stance: float = 0.94
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.

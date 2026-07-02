@@ -22,6 +22,11 @@ Extract ALL of the following:
 ## What does NOT count
 - Pure background with zero bearing on the event (e.g. article only covers geography)
 - Statements about a wholly different event with no link to the related event
+- Statements about the SAME subject but a DIFFERENT timeframe, edition, or deadline \
+than the related event — e.g. next season's title odds when the event is this season's \
+final, a later election, a different year's target. Check any year/date in the claim \
+against the related event's timeframe; if they refer to a different occurrence of the \
+event, do NOT extract it.
 
 ## STANCE — the most important field
 Stance measures how strongly this signal implies the RELATED EVENT will occur.
@@ -37,9 +42,22 @@ Examples — related event: "Assad regime falls in Syria":
   "Assad's army is holding the line"           → stance −0.6, certainty 0.5
   "The conflict has dragged on for two years"  → stance +0.2, certainty 0.2
   "International sanctions remain in place"   → stance +0.3, certainty 0.3
+  "Rebels have taken Damascus; Assad has fled the country" \
+                                               → stance +1.0, certainty 0.95, settled true
+  "Assad crushed the uprising; the rebellion is over" \
+                                               → stance −1.0, certainty 0.95, settled true
 
 Note: even factual/contextual sentences have a stance if they imply a direction.
 Do NOT use stance to indicate good/bad — only more/less likely to happen.
+
+## SETTLED — the event already happened (or definitively cannot)
+When the article REPORTS THE OUTCOME AS AN ACCOMPLISHED FACT — the event occurred, \
+or became permanently impossible (deadline passed, subject died, contest decided) — \
+set settled to true and use the full ±1.0 stance with certainty ≥ 0.9. Past-tense \
+reporting of the outcome ("X won", "the deal was signed", "Y has died") is settled; \
+predictions, odds, and expectations ("X is likely to win") are NOT settled, however \
+confident. Do not soften a settled outcome into a likelihood — a report that the \
+event happened is stance +1.0, not +0.7.
 
 ## Article language
 The article may be in Hebrew, Arabic, or English. Always write the claim in English.
@@ -62,9 +80,10 @@ Related event: {event_name} — {event_description}
 IMPORTANT: Your response must be a JSON object with a "predictions" key containing a list.
 Example: {{"predictions": [ {{...}}, {{...}} ]}}
 
-Each prediction has exactly four fields:
+Each prediction has exactly five fields:
   quote (string — original language), claim (string — English), \
-stance (float −1 to 1), certainty (float 0 to 1)
+stance (float −1 to 1), certainty (float 0 to 1), settled (boolean — true only when \
+the source reports the outcome as an accomplished fact)
 
 Example — related event: "Assad regime falls in Syria":
 {{
@@ -73,7 +92,15 @@ Example — related event: "Assad regime falls in Syria":
       "quote": "Syrian rebel forces pushed close on Tuesday to the major city of Hama",
       "claim": "Rebel advances toward Hama make Assad's fall increasingly likely",
       "stance": 0.7,
-      "certainty": 0.6
+      "certainty": 0.6,
+      "settled": false
+    }},
+    {{
+      "quote": "Rebels seized the capital on Sunday as Assad fled to Moscow",
+      "claim": "The Assad regime has fallen; rebels control Damascus",
+      "stance": 1.0,
+      "certainty": 0.95,
+      "settled": true
     }}
   ]
 }}

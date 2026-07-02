@@ -21,7 +21,8 @@ retro/
 │   │   ├── leaderboard.py       # Load/cache leaderboard.json for credibility weights
 │   │   ├── models.py            # Pydantic request/response schemas
 │   │   ├── config.py            # Settings (extends tm.config pattern)
-│   │   ├── auth.py              # x-api-key dependency
+│   │   ├── auth.py              # x-api-key dependency (hmac.compare_digest)
+│   │   ├── net_guard.py         # SSRF guard: safe_get/is_safe_url, re-checks redirect hops
 │   │   └── limiter.py           # slowapi rate limiting
 │   └── pyproject.toml
 ├── pipeline/                    # Python pipeline (uv project)
@@ -29,6 +30,7 @@ retro/
 │   │   ├── config.py            # Settings (models, API keys via .env)
 │   │   ├── models.py            # Pydantic models (Prediction, ExtractionOutput, CellSignal, etc.)
 │   │   ├── progress.py          # progress.json read/write helpers + rich terminal visualizer
+│   │   ├── net_guard.py         # SSRF guard: safe_get/safe_get_async/is_safe_url, re-checks redirect hops
 │   │   │
 │   │   ├── # --- Ingest ---
 │   │   ├── gnews_ingest.py      # GNews RSS → URL resolution → trafilatura + Wayback fallback

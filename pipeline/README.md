@@ -54,6 +54,17 @@ pipeline/
   BACKTEST.md              # backtest design rationale and usage
 ```
 
+## Fetching external URLs
+
+Never fetch an external or user-influenced URL with a raw `httpx`/`requests`
+client. All outbound article fetches go through `tm.net_guard.safe_get` /
+`safe_get_async`, which reject non-http(s) schemes and any host that resolves to
+a private/loopback/link-local address (including the cloud metadata IP
+`169.254.169.254`) and **re-validate every redirect hop** — a validated public
+host can still 30x-redirect to an internal one. URLs here come from third-party
+search results, GDELT/GNews JSON, and scraped result pages, so they are all
+attacker-influenceable; treat a raw client as an SSRF hole.
+
 ## Setup
 
 ```bash

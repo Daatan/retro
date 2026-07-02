@@ -54,6 +54,12 @@ Three different ways to call a model today, and Gemini is already reached two of
 | B | retro `tm.llm` | litellm + instructor | Bedrock Nova (`bedrock/amazon.nova-{micro,lite}`) — gatekeeper / extractor / aggregator / forecaster keyword-distill |
 | C | retro raw `httpx` → OpenRouter | direct REST | `/llm` IBI proxy (pass-through), `calibrate_edges.py` (`anthropic/claude-haiku-4.5`), `improve_keywords.py` (`openrouter/google/gemini-2.0-flash-001`) |
 
+> **Guard note (row C).** The raw-`httpx` calls above are acceptable only because
+> they target a single *fixed, trusted* LLM endpoint. Do **not** copy that pattern
+> to fetch external or user-/search-influenced URLs — those must go through
+> `tm.net_guard.safe_get` / `safe_get_async` (SSRF guard: blocks
+> private/loopback/link-local/IMDS hosts, re-validates every redirect hop).
+
 So **Gemini is already integrated in daatan** (native SDK, no grounding tool
 enabled yet) and reached *separately* from retro (via OpenRouter). Grounding does
 **not** exist anywhere yet (no `google_search` tool / `groundingMetadata` usage).
@@ -128,7 +134,9 @@ of whether daatan uses Gemini grounding for a fast research answer.
      (retro) and the `LLMProvider` chain (daatan) — never a fresh ad-hoc client.
    - Consider whether the retro raw-httpx OpenRouter calls (row C) should move
      behind `tm.llm` so retro has one dispatch layer (noted, deferred — the `/llm`
-     proxy is intentionally a generic pass-through).
+     proxy is intentionally a generic pass-through). Either way, raw clients stay
+     confined to that fixed LLM endpoint; any external URL fetch must use
+     `tm.net_guard.safe_get`.
 
 ## Open decisions (do not implement yet)
 - Grounding vs CSE vs both; and does grounding feed the credibility pipeline or only

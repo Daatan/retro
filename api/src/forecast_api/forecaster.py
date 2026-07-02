@@ -28,7 +28,9 @@ from tm.llm import complete_text_once
 from .aggregation import (
     claim_weighted_stance,
     pool_sources,
+    prob_to_stance,
     recency_weight,
+    stance_to_prob,
     widen_ci_for_thin_evidence,
 )
 from .net_guard import UnsafeURLError, safe_get
@@ -705,6 +707,7 @@ async def _run_forecast_inner(
     all_stances: list[float] = []
     all_weights: list[float] = []
     relevances: list[float] = []
+    settled_directions: list[float] = []
     ref_date = datetime.now().strftime("%Y-%m-%d")
 
     for result, outcome in zip(search_results, outcomes):
@@ -722,11 +725,18 @@ async def _run_forecast_inner(
         credibility = get_credibility_weight(source_id)
         # Layer A: certainty-weight the article's claims so a decisive claim
         # dominates tangential hedged ones instead of being washed out.
+        # Settlement claims (the outcome reported as an accomplished fact) go
+        # further and *replace* the article's mixed claim set: a verdict must
+        # not be averaged down by the same article's color quotes.
+        settled_preds = [p for p in predictions if p.settled]
+        scored_preds = settled_preds or predictions
         avg_stance = claim_weighted_stance(
-            [p.stance for p in predictions],
-            [p.certainty for p in predictions],
-            [p.specificity for p in predictions],
+            [p.stance for p in scored_preds],
+            [p.certainty for p in scored_preds],
+            [p.specificity for p in scored_preds],
         )
+        if settled_preds:
+            settled_directions.append(1.0 if avg_stance >= 0 else -1.0)
         avg_certainty = sum(p.certainty for p in predictions) / len(predictions)
         # Hedged sources (low avg_certainty) are *down-weighted, not dropped*:
         # avg_certainty is a linear factor in `weight` below, so speculative claims
@@ -762,6 +772,7 @@ async def _run_forecast_inner(
             published_date=article_date,
             recency_weight=round(rweight, 3),
             relevance_score=round(relevance, 3),
+            settled=bool(settled_preds) or None,
         ))
 
     # Aggregate relevance safety net: if every surviving article is off-topic,
@@ -871,9 +882,36 @@ async def _run_forecast_inner(
             max_inflation=settings.thin_evidence_ci_inflation,
         )
 
+    # Step 4b: settlement override. Pooling is bounded by its most confident
+    # member, so a decided event can never read as decided from averaging alone
+    # (the Knicks "82% the day after the title" case). When enough independent
+    # sources carry settlement claims agreeing in direction, pin the estimate
+    # near the boundary and flag the response so callers can treat the forecast
+    # as a resolution candidate. Conflicting settlements resolve by majority; a
+    # tie leaves the pooled estimate untouched.
+    settled = False
+    if settings.settlement_min_sources > 0 and settled_directions:
+        pos = sum(1 for d in settled_directions if d > 0)
+        neg = len(settled_directions) - pos
+        direction = 1.0 if pos > neg else -1.0 if neg > pos else 0.0
+        if direction != 0.0 and max(pos, neg) >= settings.settlement_min_sources:
+            settled = True
+            mean = settings.settlement_stance * direction
+            pinned_p = stance_to_prob(mean)
+            if direction > 0:
+                lo_p, hi_p = pinned_p - 0.06, min(0.995, pinned_p + 0.025)
+            else:
+                lo_p, hi_p = max(0.005, pinned_p - 0.025), pinned_p + 0.06
+            ci_low, ci_high = prob_to_stance(lo_p), prob_to_stance(hi_p)
+            std = 0.06
+            logger.info(
+                "event=settlement_override direction=%+.0f settled_sources=%d of=%d mean=%.3f",
+                direction, max(pos, neg), n, mean,
+            )
+
     logger.info(
-        "Forecast: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d mass=%.3f (logit-pool)",
-        mean, std, ci_low, ci_high, n, evidence_mass,
+        "Forecast: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d mass=%.3f settled=%s (logit-pool)",
+        mean, std, ci_low, ci_high, n, evidence_mass, settled,
     )
 
     # Per-article outcome histogram on the success path too, plus a low_relevance
@@ -926,6 +964,7 @@ async def _run_forecast_inner(
         provider=search_provider,
         provider_chain=provider_chain,
         distilled_query=distilled_query,
+        settled=settled,
         debug=debug_info,
     )
 

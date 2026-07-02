@@ -30,6 +30,7 @@ class PredictionExtraction(BaseModel):
     claim: str = Field(description="One-sentence neutral summary in English")
     stance: float = Field(ge=-1.0, le=1.0, description="Directional outlook: -1=event won't happen, +1=event will happen")
     certainty: float = Field(ge=0.0, le=1.0, description="Linguistic confidence: 0=very hedged, 1=absolute")
+    settled: Optional[bool] = Field(default=None, description="True when the source reports the outcome as an accomplished fact (event occurred, or became permanently impossible) — not a prediction, however confident")
     # Not requested from LLM; kept Optional for backward compat with existing atlas entries
     sentiment: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     specificity: Optional[float] = Field(default=None, ge=0.0, le=1.0)

@@ -94,6 +94,7 @@ class SourceSignal(BaseModel):
     published_date: Optional[str] = Field(default=None, description="Article publish date (YYYY-MM-DD) if known; drives recency weighting")
     recency_weight: Optional[float] = Field(default=None, description="Time-decay weight applied to this source in aggregation [recency_floor, 1.0]")
     relevance_score: Optional[float] = Field(default=None, description="Graded topic relevance [0,1]; its square multiplies this source's aggregation weight")
+    settled: Optional[bool] = Field(default=None, description="True when this source reports the event's outcome as an accomplished fact (settlement claim), not a prediction")
 
 
 class ArticleDebug(BaseModel):
@@ -179,4 +180,5 @@ class ForecastResponse(BaseModel):
     provider: str = Field(default="", description="Search provider that served the underlying article search. May be a pseudo-provider: 'caller' (articles supplied by the request), 'search_cache', or 'none'.")
     provider_chain: list[str] = Field(default_factory=list, description="Full search fallback chain attempted, in order")
     distilled_query: Optional[str] = Field(default=None, description="Keywords the question was distilled to before searching; null when no distillation was applied")
+    settled: bool = Field(default=False, description="True when enough independent sources report the event's outcome as an accomplished fact (see settlement_min_sources). mean/ci are pinned near the boundary; the forecast is a candidate for resolution, not further updates.")
     debug: Optional[DebugInfo] = Field(default=None, description="Debug telemetry — only present when request includes debug=true")

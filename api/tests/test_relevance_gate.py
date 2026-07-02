@@ -41,7 +41,7 @@ class TestGatekeeperRelevanceScore:
 # --- run_forecast wiring ----------------------------------------------------
 
 def _preds(stance: float, certainty: float = 0.8):
-    return [SimpleNamespace(stance=stance, certainty=certainty, specificity=1.0, claim="c")]
+    return [SimpleNamespace(stance=stance, certainty=certainty, specificity=1.0, claim="c", settled=None)]
 
 
 def _wire(monkeypatch, articles, certainty: float = 0.8):

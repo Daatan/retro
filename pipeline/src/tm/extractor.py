@@ -50,6 +50,21 @@ Examples — related event: "Assad regime falls in Syria":
 Note: even factual/contextual sentences have a stance if they imply a direction.
 Do NOT use stance to indicate good/bad — only more/less likely to happen.
 
+## Numeric thresholds — compare the numbers, not the sentiment
+When the related event states a quantitative threshold ("more than 33 seats", \
+"below $50,000", "at least 10 medals", "reaches 2800 rating"), judge each signal \
+by COMPARING its number against the threshold — never by momentum or by how \
+positive the news sounds for the subject. A reported or projected value on the \
+wrong side of the threshold is NEGATIVE stance even when it is good news for \
+the subject; general success without a number that clears the bar is at most \
+weakly positive.
+
+Examples — related event: "Likud wins more than 33 seats in the election":
+  "Poll projects Likud at 31 seats"        → stance −0.6, certainty 0.7  (31 ≤ 33: contradicts)
+  "Likud is leading in the polls"          → stance +0.2, certainty 0.3  (leading ≠ >33 seats)
+  "Poll gives Likud 36 seats"              → stance +0.7, certainty 0.7  (36 > 33: supports)
+  "Likud gained two seats since last poll" → stance +0.2, certainty 0.3  (trend, no level given)
+
 ## SETTLED — the event already happened (or definitively cannot)
 When the article REPORTS THE OUTCOME AS AN ACCOMPLISHED FACT — the event occurred, \
 or became permanently impossible (deadline passed, subject died, contest decided) — \

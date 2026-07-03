@@ -1,10 +1,16 @@
-# Oracle temporal-model plan ("formula") — v2
+# Oracle temporal-model plan ("formula") — v2.1
 
 v2 incorporates the 45-agent adversarial review of v1 (48 findings raised, 47 confirmed,
 1 refuted, 4 gaps; full record in `temporal-plan/review_result.json`). Every change below is traceable
 to a confirmed finding. The three biggest corrections: **the recompute driver is the MVP
 and is now Stage 0**, **the clock lives outside the logit pool**, and **the fitting
 program is cut to what the data can actually identify**.
+
+v2.1 folds in five confirmed findings from an external (Gemini) review of v2: glide
+domain guards past T_eff (§3.3), the movement clamp scoped to fitted components only
+(§3.3), resolve-alert moved to the literal deadline (§4 Stage 0.5), commitment
+auto-lock restricted to non-LLM-derived pins (§4 Stage 0.6), and the silence covariate's
+forward-only availability (§4 Stage B).
 
 ## 1. Problem (unchanged from v1)
 
@@ -108,23 +114,44 @@ No pseudo-source, no weight schedule, no double-counted recency.
   m₀/(m₀+Σw), with Σw capped by a saturating transform so 30 syndicated copies of one
   wire story can't buy months of persistence). This restores the advertised "relaxes to
   base rate with time constant τ" semantics; the v1 ratio form plateaued instead.
-- This is an exponential-kernel **Hawkes/self-exciting process** — name it, reuse
-  standard MLE/EM fitting, and test a two-timescale/power-law kernel for geopolitics
+- Naming this precisely: the self-excitation lives on the **article stream** (a
+  genuinely repeated point process with an exponential memory kernel — Hawkes-style,
+  standard MLE/EM applies there); the resolution event itself is a *terminal* event
+  whose intensity λ_bg·e^{γM} is a modulated-Cox form, entering the likelihood as a
+  survival term. Test a two-timescale/power-law kernel for geopolitics
   (conflict-domain evidence says single-τ exponential underfits slow-relaxing cases).
 - Threshold claims (first-passage on an observed state variable) and state-variable
   spike pricing: deferred until the archetype census (§4.1) shows they earn a queue slot.
 
 ### 3.3 v1 pricing rule: the anchored constant-hazard glide (zero fitted parameters)
 
-    P(t) = 1 − (1 − P_last)^((T_eff − t) / (T_eff − t_last))     [arrival direction]
+    P(t) = 1 − (1 − P_last)^c,   c = clamp((T_eff − t) / (T_eff − t_last), 0, 1)
+                                                                  [arrival direction]
 
 with P_last, t_last from the last evidence-anchored (article- or settlement-driven)
-snapshot; survival claims apply it to the complement. Properties: reaches ~0/~100 at
-T_eff by construction; re-anchors on every push so it never fights fresh evidence; its
-implied λ = −ln(1−P_last)/(T_eff−t_last) is exactly the fixed-λ reference from the pilot.
-Known, accepted cost: ~25–30pt mid-life overpricing on quiet long NO-tranches vs the
-full model — that residual is precisely the evidence that will justify (or kill) the v2
-escalation. Guard rails: per-day movement clamp |ΔP| ≤ 3pts absent new evidence.
+snapshot; survival claims apply it to the complement. **Domain guards** (Gemini review):
+the exponent is clamped to [0, 1] — for t ≥ T_eff it holds at the boundary value
+instead of going negative (unclamped, P_last=0.8 one interval past T_eff gives
+1 − 0.2^(−1) = −400%); if T_eff ≤ t_last (anchor written at or after the horizon) the
+glide is skipped entirely and the pin/precedence logic decides. This matters because
+the past-T_eff domain is reachable: §3.5's divergence branch suppresses the hard pin
+while leaving the glide active.
+
+Properties: reaches ~0/~100 at T_eff by construction; re-anchors on every push so it
+never fights fresh evidence; its implied λ = −ln(1−P_last)/(T_eff−t_last) is exactly
+the fixed-λ reference from the pilot. Known, accepted cost: ~25–30pt mid-life
+overpricing on quiet long NO-tranches vs the full model — that residual is precisely
+the evidence that will justify (or kill) the v2 escalation.
+
+**Movement clamp — scoped to fitted components only** (Gemini review): the
+deterministic glide is exempt. Its travel is bounded by construction (it can never
+move farther than the remaining distance to the boundary) and its only inputs are
+metadata already gated by the §3.5 agreement rule; a flat per-day cap would contradict
+the boundary requirement outright (P_last=0.8 with 10 days left needs ~8pts/day —
+capped at 3, the glide arrives at the deadline stuck near 50 and the pin snaps it,
+recreating the jump the clamp was meant to prevent). The |ΔP| ≤ 3pts/day clamp applies
+to **fitted** clock components (v2: λ-learning, M(t) modulation), where poisoned
+parameters are the actual threat model.
 
 **Glide applies only when**: direction ∈ {arrival, survival}, claim_deadline parseable,
 archetype = diffuse-deadline (scheduled claims hold a base-rate band, NO clock decay),
@@ -158,8 +185,10 @@ error surface and a prompt-injection surface (a crafted claim could force a ~100
 lend platform credibility to a user's forecast). Therefore:
 
 - Hard-pin only when claimDeadline and resolveByDatetime **agree within tolerance, or
-  both have passed**. On divergence: apply only the bounded glide and send a one-click
-  "deadline disagreement" review alert.
+  both have passed**. On divergence: apply only the bounded glide — with the horizon set
+  to the **later** of the two dates, so a misparsed too-early deadline cannot crash the
+  estimate to ~0 without review — and send a one-click "deadline disagreement" review
+  alert.
 - Classifier-only pins (zero article evidence) are marked **provisional** in the API
   response and excluded from the 80%-alert trigger.
 - Classifier prompt hardened against instructions embedded in claim text; adversarial
@@ -188,13 +217,22 @@ The actual MVP. Deliverables:
    material change (≥1pt) — no 36k-rows/year timeline flood.
 5. **Cause-aware alerts**: `notifyIfCrossedHighConfidence` fires only for
    article/settlement-driven moves. Clock-driven crossings never alert; instead a
-   **single-shot "deadline passed quietly — resolve NO"** alert fires at T_eff (the
-   moment human action is actually possible). This also fixes the review's sharpest
-   product point: with crossing-based alerting, the actionable moment (deadline) would
-   otherwise be silent because the estimate is already above 80.
+   **single-shot "deadline passed quietly — resolve NO"** alert fires at the **literal
+   claim_deadline** — not at T_eff. T_eff is a pricing horizon; τ_lead is an LLM parse,
+   and prompting a resolver to act τ_lead days early on the strength of a parse would
+   mis-resolve any event still landing in the final window (Gemini review). For
+   τ_lead > 0 claims, T_eff instead sends a lower-key provisional note ("impossible per
+   lead-time analysis — verify the reasoning; early resolution optional"). This also
+   fixes the adversarial review's sharpest product point: with crossing-based alerting,
+   the actionable moment (deadline) would otherwise be silent because the estimate is
+   already above 80.
 6. **Persist `settled` + close the free-points window**: `Prediction.settled` column,
-   "outcome reported — awaiting resolution" banner on the forecast page, and
-   **lock new commitments once boundary-pinned** (settlement or impossibility). This
+   "outcome reported — awaiting resolution" banner on the forecast page, and lock new
+   commitments once boundary-pinned — with the lock trigger split by evidence class
+   (Gemini review; an LLM parse must not freeze a market on its own):
+   **auto-lock** on settlement pins (≥2 independent sources) and on literally-passed
+   calendar deadlines (pure arithmetic, no LLM in the loop); τ_lead-derived early
+   impossibility pins lock only after **one-click admin confirmation**. The free-points
    hole is live today post-#230, independent of everything else — a +100 commit after a
    97% pin yields ~+25 RS risk-free.
 7. **Failure isolation & rollback** (per gaps): per-day clamp (see §3.3); flag is
@@ -223,13 +261,20 @@ shipped settlement pin, and generates the residual data every escalation decisio
 - **Silence-strength**: fit on the **unconditional** sample (YES markets' pre-arrival
   segments included; NO-conditioning is survivorship bias — a martingale conditioned on
   NO decays fast under any model). Quiet segments identified by an article-flow
-  covariate (our own news-indexer counts), not assumed. Validate by quiet-streak-length
-  buckets vs realized frequency. Treat raw market decay as an upper bound.
-- **τ episode mining**: explicit bump-relax detector; deduplicate episodes across
+  covariate, not assumed — but note the covariate is **forward-only**: the news-indexer
+  has no archive covering market lifespans predating its own operation (Gemini review).
+  For historical trajectories use an external volume proxy (e.g. GDELT daily counts per
+  market keyword) or restrict the silence fit to markets overlapping the indexer's
+  window; where neither is clean, keep the stated upper-bound treatment. Validate by
+  quiet-streak-length buckets vs realized frequency.
+- **τ episode mining — count before building**: first run the cheap independent-family
+  census on the expanded scrape (the pilot has ~10–15, below threshold — building the
+  detector first would be guaranteed-wasted work). Only if the census clears ≥20
+  independent families: explicit bump-relax detector; deduplicate episodes across
   tranches of the same underlying event; mid-life episodes only (or fit jointly with the
   deadline decay — post-bump decline near deadline is clock, not relaxation); report
-  effective N and CI. Precommitted threshold: <20 independent episodes or CI wider than
-  2× ⇒ τ ships as a hand-set prior with sensitivity analysis, honestly labeled.
+  effective N and CI. Below threshold, or CI wider than 2× ⇒ τ ships as a hand-set
+  prior with sensitivity analysis, honestly labeled, and no detector is built.
 - **γ, m₀**: not identifiable from PM at all (no article stream in that data). Fit on
   daatan's own resolved forecasts (context_snapshots stance/weight series + outcomes)
   with a temporal train/test split; parameters **frozen before the shadow window**. If n

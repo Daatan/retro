@@ -98,6 +98,25 @@ predictions, odds, and expectations ("X is likely to win") are NOT settled, howe
 confident. Do not soften a settled outcome into a likelihood — a report that the \
 event happened is stance +1.0, not +0.7.
 
+### Numeric-threshold events — a mid-event tally is NOT settled
+When the related event is a threshold claim ("scores at least 8 goals", "wins more \
+than 33 seats") and the article reports a running tally from an ONGOING contest, \
+only mark settled true if the reported number ALREADY crosses the threshold — an \
+"at least N" claim is monotonic, so once N is reached it cannot be undone by later \
+events, even mid-contest. A tally that has NOT yet crossed the threshold is never \
+settled while the contest is still open, no matter how final-sounding the framing \
+("leading scorer", "tied for first") — the outcome is still undetermined. Judge the \
+number against the threshold exactly as in the Numeric thresholds section above; do \
+not treat a running total as an accomplished fact just because it's stated as fact.
+
+Examples — related event: "Messi scores at least 8 goals in the tournament":
+  "Messi has scored 9 goals so far, tournament still underway" \
+                                               → stance +1.0, certainty 0.95, settled true (9 ≥ 8: already locked in)
+  "Messi and Mbappe are tied for the tournament lead with 6 goals each, group stage ongoing" \
+                                               → stance −0.3, certainty 0.4, settled false (6 < 8, contest still open — a tally, not a verdict)
+  "The tournament has concluded; Messi finished with 7 goals" \
+                                               → stance −1.0, certainty 0.95, settled true (contest over, 7 < 8 is now permanent)
+
 ## Article language
 The article may be in Hebrew, Arabic, or English. Always write the claim in English.
 Quote the original language verbatim in the quote field.

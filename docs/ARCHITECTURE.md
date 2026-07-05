@@ -174,7 +174,7 @@ Used to compute per-category source accuracy scores for the forecasting model.
 ```
 
 ### Prediction (extracted by LLM)
-Each prediction has: `quote`, `claim`, `stance` (−1 to +1, event probability), `certainty`.
+Each prediction has: `quote`, `claim`, `stance` (−1 to +1, event probability), `certainty`, `settled` (bool — true when the source reports the outcome as an accomplished fact, not a prediction).
 Older atlas entries also carry: `sentiment`, `specificity`, `hedge_ratio`, `conditionality`, `magnitude`, `time_horizon`, `prediction_type`, `source_authority` (these fields were dropped from the extractor prompt in PR #102 to reduce latency; retained as Optional for backward compatibility).
 
 **stance** = how strongly the prediction implies the related event WILL occur.
@@ -235,7 +235,7 @@ git push → GitHub Actions → GitHub Pages
 | Role | Model | Notes |
 |---|---|---|
 | Gatekeeper | `bedrock/amazon.nova-micro-v1:0` | Topic-relevance filter: is this article on-topic for the event? Uses a directive coarse-gate prompt that passes INDIRECT evidence (rival collapse, coalition dynamics, etc.), not just explicit predictions; regression-guarded by `pipeline/eval_gatekeeper.py`. |
-| Extractor | `bedrock/amazon.nova-lite-v1:0` | Structured extraction of up to 5 predictions per article (4 fields: quote, claim, stance, certainty) |
+| Extractor | `bedrock/amazon.nova-lite-v1:0` | Structured extraction of up to 5 predictions per article (5 fields: quote, claim, stance, certainty, settled) |
 | Article Aggregator | `bedrock/amazon.nova-lite-v1:0` | Collapses high-spread (>0.4) predictions within a single article into one editorial signal |
 | Keywords | `bedrock/amazon.nova-micro-v1:0` | One-time: generate search keywords per event (via `tm.llm`) |
 
@@ -587,23 +587,30 @@ with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
 
 ### Deferral / insufficient-data
 
-Aggregation enforces three safety floors (`api/src/forecast_api/config.py`) so the
-Oracle defers rather than emit a meaningless number:
+Aggregation enforces two safety floors (`api/src/forecast_api/config.py`):
 
 - **`relevance_weight_floor` (0.05)** — if the summed relevance mass
   (Σ `relevance_score²` over surviving articles) is below this, the whole set is
-  treated as off-topic → `reason="all_articles_off_topic"`.
+  treated as off-topic → `insufficient_data=true`, `reason="all_articles_off_topic"`.
 - **`decisiveness_floor` (0.5)** — minimum total certainty-weighted evidence mass
-  (Σ `credibility·certainty·recency·relevance²`) required to forecast; below it the
-  pool is too thin → `reason="no_decisive_signal"`.
-- **`certainty_floor` (0.2)** — per-article gate: an article whose certainty-weighted
-  claims average below this is *dropped* before aggregation (hedged-speculation
-  filter), so a pool of only-speculative sources collapses to one of the floors above.
+  (Σ `credibility·certainty·recency·relevance²`) below which the pool is "thin."
+  By default (`defer_on_thin_evidence=False`) a thin-but-on-topic pool does **not**
+  defer: it still returns a forecast, with the CI **widened** toward maximal
+  uncertainty in proportion to the shortfall (`widen_ci_for_thin_evidence`,
+  capped by `thin_evidence_ci_inflation`), so thin evidence reads as a
+  low-confidence wide-band estimate rather than an abstention. Setting
+  `defer_on_thin_evidence=True` restores the old behavior — a thin pool then
+  returns `insufficient_data=true`, `reason="no_decisive_signal"` instead.
 
-When a floor isn't met the API returns `insufficient_data=true` plus a `reason`
-(`no_search_results`, `all_articles_off_topic`, `no_decisive_signal`,
-`all_low_certainty`, …) **instead of** a forecast. This is the deferral contract:
-the caller keeps its own base rate rather than overwriting it with a ~50% coin-flip.
+Hedged/low-certainty articles are no longer dropped pre-aggregation — `certainty`
+is purely a downweighting factor in `weight = credibility · certainty · recency ·
+relevance²` (Stage 3 above), so a pool of only-speculative sources naturally falls
+toward the `decisiveness_floor` case rather than being filtered out first.
+
+When `relevance_weight_floor` isn't met, or `no_search_results`/`timeout`/no
+usable extractions occurred, the API returns `insufficient_data=true` plus a
+`reason` **instead of** a forecast. This is the deferral contract: the caller
+keeps its own base rate rather than overwriting it with a ~50% coin-flip.
 
 ### Deployment (decided 2026-04-14)
 

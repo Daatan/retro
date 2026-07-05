@@ -182,6 +182,18 @@ Older atlas entries also carry: `sentiment`, `specificity`, `hedge_ratio`, `cond
 - `−1.0` = author is certain the event will NOT happen
 - `0.0`  = neutral / genuinely uncertain
 
+**certainty** = how much weight this claim should carry, independent of stance's
+direction or magnitude — it answers "how much should we trust that this signal
+really bears on the outcome," not "which way does it point."
+- `~1.0` = decisive/explicit ("they clinched it", "the vote failed")
+- `~0.2` = hedged, vague, or only loosely connected ("pressure is mounting")
+
+Stance and certainty are meant to be independent axes (a hedged claim can point
+strongly in one direction with low certainty; a flatly-stated fact can carry high
+certainty with only mild stance), but the extractor prompt (`pipeline/src/tm/extractor.py`)
+only ever demonstrates them via correlated examples — it never states the distinction
+as a rule. See "Known limitations" below.
+
 ---
 
 ## Pipeline Flow
@@ -556,6 +568,22 @@ with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
 > evidence accumulation), which reintroduces the overconfidence risk this design
 > removes. Near-certain numbers on daatan.com therefore come from the LLM-fallback
 > path, not the Oracle.
+
+### Known limitations
+
+> **Correlated sources, not just single outliers.** The bounded-pool design above
+> protects against a lone dissenter dragging a confident consensus back toward 0.5 —
+> but it does nothing against the mirror case: many sources independently repeating
+> the *same* narrow signal. Five match reports all framing a team as "favorite
+> entering the next round" of a multi-stage tournament each add a source-level vote,
+> even though none of them individually says anything about the full remaining
+> bracket — the pooled estimate can end up more confident than any single article
+> actually justifies (this was the root cause of a real Oracle/market divergence on
+> a 2026 World Cup forecast). `extractor.py`'s prompt carries narrow, symptom-level
+> patches for specific instances of this (numeric-threshold claims, multi-stage
+> bracket events), but the pool itself still has no notion of *shared* narrative
+> across sources. The root-cause fix — correlated-source downweighting — is gated
+> future work; see "Stage C" in [`TEMPORAL_MODEL_PLAN.md`](TEMPORAL_MODEL_PLAN.md).
 
 ### Deferral / insufficient-data
 

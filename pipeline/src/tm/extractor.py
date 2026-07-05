@@ -65,6 +65,30 @@ Examples — related event: "Likud wins more than 33 seats in the election":
   "Poll gives Likud 36 seats"              → stance +0.7, certainty 0.7  (36 > 33: supports)
   "Likud gained two seats since last poll" → stance +0.2, certainty 0.3  (trend, no level given)
 
+## Multi-stage / bracket events — discount single-stage "favorite" framing
+When the related event requires winning a SEQUENCE of separate future contests \
+(a tournament bracket, a playoff series, a multi-round election, a series of \
+confirmation votes) rather than one determination, an article's "favorite," \
+"front-runner," or "strong candidate" framing about ONE upcoming stage is weak \
+support for the event as a whole — it says nothing about the stages still to \
+come. Advancing past one stage narrows the field but does not itself imply the \
+final outcome; only raise stance as stages actually clear, and reserve high \
+certainty for articles that address the full remaining path, not just the next \
+match or round.
+
+Examples — related event: "France wins the 2026 World Cup" (tournament bracket):
+  "France is a strong favorite entering the Round of 16"     → stance +0.3, certainty 0.3  (one stage of several remaining)
+  "France beats Paraguay to reach the quarter-finals"        → stance +0.4, certainty 0.5  (one stage cleared, more remain)
+  "France reaches the final after a dominant semi-final win" → stance +0.6, certainty 0.6  (one stage left)
+
+Examples — related event: "Judge Alvarez is confirmed to the Supreme Court" (committee vote, then floor vote):
+  "Alvarez is seen as the clear favorite to be confirmed"       → stance +0.3, certainty 0.3  (favorite framing, no vote yet)
+  "The Judiciary Committee advances Alvarez's nomination 12-10" → stance +0.4, certainty 0.5  (one stage cleared, floor vote remains)
+
+Examples — related event: "Diaz wins the presidential runoff" (first round, then runoff):
+  "Diaz leads first-round polling by 8 points"        → stance +0.2, certainty 0.3  (first round ≠ runoff win)
+  "Diaz advances to the runoff after finishing first" → stance +0.4, certainty 0.5  (one stage cleared, runoff remains)
+
 ## SETTLED — the event already happened (or definitively cannot)
 When the article REPORTS THE OUTCOME AS AN ACCOMPLISHED FACT — the event occurred, \
 or became permanently impossible (deadline passed, subject died, contest decided) — \

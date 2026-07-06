@@ -62,7 +62,7 @@ Production runs the same app under gunicorn with uvicorn workers — see
 ## Test
 
 ```bash
-cd api && uv run pytest        # 50 tests; no network/secrets needed
+cd api && uv run pytest        # 154 tests; no network/secrets needed
 ```
 
 `tests/conftest.py` sets a dummy `ORACLE_API_KEY` so the suite runs without a real
@@ -72,9 +72,10 @@ secret. CI runs this on every PR and **gates the deploy** (see `.github/workflow
 
 `POST /forecast`, `POST /search`, `GET /search/health`, `POST /llm`,
 `POST /fetch-url`, `GET /bayes/nodes`, `GET /leaderboard`, `GET /health`,
-`GET /pm/markets`. All require the `x-api-key` header **except** `/health` and the
-deliberately-public `/fetch-url` (which is rate-limited and SSRF-guarded —
-http(s) only, no private/loopback/link-local hosts). Full details in the
+`GET /version`, `GET /pm/markets`. All require the `x-api-key` header **except**
+`/health`, `/version`, and the deliberately-public `/fetch-url` (which is
+rate-limited and SSRF-guarded — http(s) only, no private/loopback/link-local
+hosts). Full details in the
 [Oracle API contract](https://github.com/Daatan/docs/blob/main/oracle-api.md).
 
 Error-contract notes: `/search` returns **422** (not 500) on malformed date

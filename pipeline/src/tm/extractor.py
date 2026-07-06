@@ -27,6 +27,11 @@ than the related event — e.g. next season's title odds when the event is this 
 final, a later election, a different year's target. Check any year/date in the claim \
 against the related event's timeframe; if they refer to a different occurrence of the \
 event, do NOT extract it.
+- Once an "assumes a role/office" claim is already settled true, later coverage of \
+that person's ACTIONS IN OFFICE — policy disputes, approval ratings, political \
+controversies, conflicts with other officials — is NOT a signal about whether they \
+assumed the role. That question is already decided; an article entirely about their \
+post-assumption governance and conduct has no bearing on the arrival claim at all.
 
 ## STANCE — the most important field
 Stance measures how strongly this signal implies the RELATED EVENT will occur.
@@ -116,6 +121,21 @@ Examples — related event: "Messi scores at least 8 goals in the tournament":
                                                → stance −0.3, certainty 0.4, settled false (6 < 8, contest still open — a tally, not a verdict)
   "The tournament has concluded; Messi finished with 7 goals" \
                                                → stance −1.0, certainty 0.95, settled true (contest over, 7 < 8 is now permanent)
+
+### Buried facts — extract settlement even when it's incidental to the article's main topic
+A clear past-tense statement of the RELATED EVENT can appear as a single supporting \
+clause inside an article whose main subject is something else entirely (e.g. a piece \
+about downstream diplomatic fallout that mentions, in passing, that the event already \
+happened). Scan the WHOLE article, not just the headline or opening paragraph — extract \
+the fact and mark settled true regardless of how minor its role in the article is. \
+Do not require the fact to be the article's primary subject to count it as settled.
+
+Examples — related event: "Peter Magyar will officially assume the role of Prime Minister \
+of Hungary by December 31, 2026":
+  Article mainly about Ukraine-Hungary pipeline relations, mentioning in passing: \
+  "...its leader Peter Magyar became Prime Minister on May 9" \
+                                               → stance +1.0, certainty 0.95, settled true \
+                                                 (clear past-tense fact, however incidental to the article's main topic)
 
 ## Article language
 The article may be in Hebrew, Arabic, or English. Always write the claim in English.

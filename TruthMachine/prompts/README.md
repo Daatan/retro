@@ -16,7 +16,7 @@ Each prompt corresponds to a pipeline stage. They are designed to be composed se
 | Reference file | Live counterpart | Live model | Notes |
 |---|---|---|---|
 | `01_gatekeeper.md` | `tm/gatekeeper.py` (`PROMPT`) | `bedrock/amazon.nova-micro-v1:0` | Live prompt is a **topic-relevance** filter (softened from "is_prediction" in PR #47) |
-| `02_forensic_extraction.md` | `tm/extractor.py` (`PROMPT`) | `bedrock/amazon.nova-lite-v1:0` | Live extracts 4 fields (quote, claim, stance, certainty); 9 metrics dropped in PR #102 |
+| `02_forensic_extraction.md` | `tm/extractor.py` (`PROMPT`) | `bedrock/amazon.nova-lite-v1:0` | Live extracts 5 fields (quote, claim, stance, certainty, settled); 9 metrics dropped in PR #102 |
 | `02b_article_aggregator.md` | `tm/aggregator.py` (`AGGREGATOR_PROMPT`) | `bedrock/amazon.nova-lite-v1:0` | Article-level collapse of high-spread predictions |
 | `03_consensus_meter.md` | — | — | **Reference only** — no live call-site |
 | `03_ground_truth.md` | — | — | **Reference only** — outcomes are set by hand in `data/events/*.json` |
@@ -80,6 +80,7 @@ Page generation (run once per event, after all predictions scored):
 | `certainty` | 0.0 to 1.0 | Linguistic confidence: 0 = heavily hedged, 1 = absolute |
 | `claim` | string | One-sentence English summary |
 | `quote` | string | Exact sentence(s) from article (original language) |
+| `settled` | bool | True when the source reports the outcome as an accomplished fact, not a prediction |
 
 > **Note (PR #102):** Nine additional metrics (`sentiment`, `specificity`, `hedge_ratio`,
 > `conditionality`, `magnitude`, `time_horizon`, `time_horizon_days`, `prediction_type`,

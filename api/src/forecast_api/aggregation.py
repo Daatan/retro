@@ -114,6 +114,29 @@ def claim_weighted_stance(
     return weighted_mean(list(stances), weights)
 
 
+def resolve_stance_certainty(
+    stance: float,
+    certainty: float,
+    quantitative_estimate: Optional[float],
+    *,
+    min_certainty: float = 0.9,
+) -> tuple[float, float]:
+    """Resolve a source's (stance, certainty), overriding both from an explicit
+    cited ``quantitative_estimate`` rather than trusting the extractor to have
+    aligned them itself.
+
+    extractor.py's prompt instructs the LLM to set stance/certainty to match a
+    cited quantitative_estimate, but nothing enforces that — a misaligned
+    stance would get amplified, not fixed, by quantitative_anchor_multiplier's
+    weight premium below (a correctly-extracted number weighted onto the wrong
+    direction is worse than not extracting it at all). Returns ``(stance,
+    certainty)`` unchanged when ``quantitative_estimate`` is ``None``.
+    """
+    if quantitative_estimate is None:
+        return stance, certainty
+    return prob_to_stance(quantitative_estimate), max(certainty, min_certainty)
+
+
 def quantitative_anchor_multiplier(
     quantitative_estimates: Sequence[Optional[float]],
     *,

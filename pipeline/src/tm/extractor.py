@@ -106,13 +106,18 @@ anchor than qualitative "favorite"/"strong candidate" framing, even when several
 qualitative articles exist alongside it. Leave `quantitative_estimate` null when the \
 article has no such explicit cited figure — general "leading in the polls" or "seen \
 as the favorite" language without a stated number is NOT a quantitative estimate; \
-keep using the sections above for that.
+keep using the sections above for that. Also leave it null for a CASUAL or \
+CONVERSATIONAL figure of speech — a pundit, fan, coach, or player tossing out "I'd \
+give it a 50-50 chance" or "there's maybe a 90% chance" is voicing a personal opinion, \
+not citing a model/poll/market; only a NAMED formal source counts.
 
 Examples — related event: "France wins the 2026 World Cup":
   "Simulations by Opta give France the best chance of winning the tournament, at 18.83%" \
                                                → stance −0.62, certainty 0.85, quantitative_estimate 0.1883
   "Betting markets rank France as favorites to lift the trophy" \
                                                → stance +0.3, certainty 0.3, quantitative_estimate null (no number given)
+  "The team's own coach joked there's maybe a 90% chance they choke again" \
+                                               → stance −0.3, certainty 0.3, quantitative_estimate null (casual personal opinion, not a named model/poll/market)
 
 Examples — related event: "Likud wins more than 33 seats in the election":
   "A poll-aggregator model gives Likud a 22% chance of winning more than 33 seats" \

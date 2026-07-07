@@ -7,8 +7,6 @@ controlled ``(result, relevance, predictions)`` tuples, so these assertions are
 fully deterministic.
 """
 
-from types import SimpleNamespace
-
 import pytest
 from pydantic import ValidationError
 
@@ -16,7 +14,7 @@ from forecast_api import forecaster
 from forecast_api.config import settings as api_settings
 from forecast_api.models import ForecastRequest
 from tm.config import settings as pipeline_settings
-from tm.models import GatekeeperOutput
+from tm.models import GatekeeperOutput, PredictionExtraction
 from tm.web_search import SearchResult
 
 
@@ -41,9 +39,8 @@ class TestGatekeeperRelevanceScore:
 # --- run_forecast wiring ----------------------------------------------------
 
 def _preds(stance: float, certainty: float = 0.8):
-    return [SimpleNamespace(
-        stance=stance, certainty=certainty, specificity=1.0, claim="c", settled=None,
-        quantitative_estimate=None,
+    return [PredictionExtraction(
+        quote="q", claim="c", stance=stance, certainty=certainty, specificity=1.0, settled=None,
     )]
 
 

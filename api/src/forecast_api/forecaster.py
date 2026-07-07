@@ -31,6 +31,7 @@ from .aggregation import (
     prob_to_stance,
     quantitative_anchor_multiplier,
     recency_weight,
+    resolve_stance_certainty,
     stance_to_prob,
     widen_ci_for_thin_evidence,
 )
@@ -721,6 +722,14 @@ async def _run_forecast_inner(
         if outcome is None:
             continue
         _, relevance, predictions = outcome
+        # A source with an explicit quantitative_estimate has its stance/certainty
+        # resolved from that figure rather than trusted verbatim from the extractor
+        # — see resolve_stance_certainty() for why.
+        resolved_predictions = []
+        for p in predictions:
+            stance, certainty = resolve_stance_certainty(p.stance, p.certainty, p.quantitative_estimate)
+            resolved_predictions.append(p.model_copy(update={"stance": stance, "certainty": certainty}))
+        predictions = resolved_predictions
 
         source_id = _source_id_from_url(result.url)
         credibility = get_credibility_weight(source_id)

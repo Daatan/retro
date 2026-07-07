@@ -95,6 +95,7 @@ class SourceSignal(BaseModel):
     recency_weight: Optional[float] = Field(default=None, description="Time-decay weight applied to this source in aggregation [recency_floor, 1.0]")
     relevance_score: Optional[float] = Field(default=None, description="Graded topic relevance [0,1]; its square multiplies this source's aggregation weight")
     settled: Optional[bool] = Field(default=None, description="True when this source reports the event's outcome as an accomplished fact (settlement claim), not a prediction")
+    quantitative_estimate: Optional[float] = Field(default=None, description="Explicit modeled/poll/market probability [0,1] this source cited for the event itself, if any; carries a weight premium (see quantitative_anchor_multiplier)")
 
 
 class ArticleDebug(BaseModel):

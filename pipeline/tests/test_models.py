@@ -1,5 +1,8 @@
 """Basic model validation tests — no LLM calls."""
 
+import pytest
+from pydantic import ValidationError
+
 from tm.models import (
     GatekeeperOutput,
     PredictionExtraction,
@@ -34,6 +37,23 @@ def test_prediction_extraction_clamps():
     )
     assert pred.stance == 0.8
     assert pred.time_horizon_days == 90
+
+
+def test_prediction_extraction_quantitative_estimate_defaults_to_none():
+    pred = PredictionExtraction(quote="q", claim="c", stance=0.0, certainty=0.5)
+    assert pred.quantitative_estimate is None
+
+
+def test_prediction_extraction_quantitative_estimate_accepts_valid_probability():
+    pred = PredictionExtraction(
+        quote="q", claim="c", stance=-0.62, certainty=0.85, quantitative_estimate=0.1883,
+    )
+    assert pred.quantitative_estimate == 0.1883
+
+
+def test_prediction_extraction_quantitative_estimate_rejects_out_of_range():
+    with pytest.raises(ValidationError):
+        PredictionExtraction(quote="q", claim="c", stance=0.0, certainty=0.5, quantitative_estimate=1.5)
 
 
 def test_matrix_state_tracking():

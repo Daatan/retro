@@ -16,6 +16,7 @@ from forecast_api.aggregation import (
     logit,
     pool_sources,
     prob_to_stance,
+    quantitative_anchor_multiplier,
     recency_weight,
     sigmoid,
     stance_to_prob,
@@ -173,6 +174,65 @@ class TestPoolSources:
     def test_empty_raises(self):
         with pytest.raises(ValueError):
             pool_sources([], [])
+
+
+class TestQuantitativeAnchorMultiplier:
+    def test_neutral_when_no_estimates_present(self):
+        assert quantitative_anchor_multiplier([None, None], multiplier=4.0) == 1.0
+
+    def test_neutral_on_empty_list(self):
+        assert quantitative_anchor_multiplier([], multiplier=4.0) == 1.0
+
+    def test_applies_multiplier_when_one_estimate_present(self):
+        assert quantitative_anchor_multiplier([None, 0.1883, None], multiplier=4.0) == 4.0
+
+    def test_applies_multiplier_even_when_estimate_is_zero(self):
+        # 0.0 is a valid cited probability (not falsy-None) — must still count.
+        assert quantitative_anchor_multiplier([0.0], multiplier=4.0) == 4.0
+
+
+class TestFranceWorldCupRegression:
+    """Reproduces the pooled-overconfidence bug and proves the fix.
+
+    Five match-recap articles frame France as the "favorite"/"strong candidate"
+    entering later knockout rounds (stance +0.3 to +0.6, per the multi-stage
+    guidance in extractor.py), pooling to ~75% — while one of those very articles
+    also cites an explicit Opta model estimate of 18.83% for the tournament
+    outcome itself. Without a weight premium, the quantitative source is just one
+    of six equal-weight votes and gets outvoted by the qualitative majority.
+    """
+
+    # (stance, certainty, quantitative_estimate)
+    SOURCES = [
+        (0.30, 0.30, None),    # "favorite entering the Round of 16"
+        (0.40, 0.50, None),    # "beats Paraguay to reach the quarter-finals"
+        (0.46, 0.64, None),    # "strongest candidate to win the title"
+        (0.61, 0.60, None),    # "superior head-to-head record"
+        (0.43, 0.48, None),    # "historical coincidences" narrative piece
+        (-0.62, 0.85, 0.1883),  # cites Opta: 18.83% to win the tournament
+    ]
+
+    def _pool(self, *, apply_premium: bool, multiplier: float = 4.0):
+        stances = [s for s, _c, _q in self.SOURCES]
+        weights = []
+        for _s, cert, q in self.SOURCES:
+            mult = quantitative_anchor_multiplier([q], multiplier=multiplier) if apply_premium else 1.0
+            weights.append(cert * mult)
+        return pool_sources(stances, weights)
+
+    def test_without_premium_reproduces_overconfidence(self):
+        mean, *_ = self._pool(apply_premium=False)
+        # The bug: qualitative volume pools well above the cited 18.83% baseline
+        # (roughly 3x higher — the real incident pooled all the way to 75%).
+        assert _prob(mean) > 0.55
+
+    def test_premium_pulls_pooled_estimate_toward_the_cited_baseline(self):
+        without_mean, *_ = self._pool(apply_premium=False)
+        with_mean, *_ = self._pool(apply_premium=True)
+        assert _prob(with_mean) < _prob(without_mean)
+        # Still not literally 18.83% (qualitative sources retain some pull), but
+        # materially closer to the cited baseline than the unpremiumed pool.
+        assert _prob(with_mean) < 0.5
 
 
 class TestKnicksRegression:

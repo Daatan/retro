@@ -29,6 +29,7 @@ from .aggregation import (
     claim_weighted_stance,
     pool_sources,
     prob_to_stance,
+    quantitative_anchor_multiplier,
     recency_weight,
     stance_to_prob,
     widen_ci_for_thin_evidence,
@@ -755,7 +756,13 @@ async def _run_forecast_inner(
         # Layer C: down-weight off-topic articles by the gatekeeper's graded
         # relevance, applied convexly (squared) so a confident-but-tangential
         # article (relevance ~0.5 → 0.25× pull) can't drag the pooled mean.
-        weight = credibility * avg_certainty * rweight * (relevance ** 2)
+        # Layer D: up-weight a source that cites an explicit modeled/poll/market
+        # probability for the event itself — see quantitative_anchor_multiplier.
+        quantitative_estimates = [p.quantitative_estimate for p in predictions]
+        quantitative_multiplier = quantitative_anchor_multiplier(
+            quantitative_estimates, multiplier=settings.quantitative_anchor_weight,
+        )
+        weight = credibility * avg_certainty * rweight * (relevance ** 2) * quantitative_multiplier
 
         all_stances.append(avg_stance)
         all_weights.append(weight)
@@ -773,6 +780,7 @@ async def _run_forecast_inner(
             recency_weight=round(rweight, 3),
             relevance_score=round(relevance, 3),
             settled=bool(settled_preds) or None,
+            quantitative_estimate=next((q for q in quantitative_estimates if q is not None), None),
         ))
 
     # Aggregate relevance safety net: if every surviving article is off-topic,

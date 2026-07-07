@@ -60,6 +60,14 @@ class ApiSettings(BaseSettings):
     # 0.05 ≈ one article at relevance ~0.22. Tune down using daatan's logged
     # relevance_score / all_articles_off_topic data.
     relevance_weight_floor: float = 0.05
+    # Weight premium for a source whose extractor output carries an explicit
+    # quantitative_estimate (a named model/poll/market probability cited for the
+    # event itself, e.g. "Opta gives France 18.83%"). Without this, such a source
+    # is just one more equal-weight vote and gets outvoted by volume — several
+    # qualitative "favorite" match reports pooled a France World Cup forecast to
+    # 75% against a cited Opta baseline of 18.83%. 1.0 disables the premium
+    # (identical to pre-fix behaviour). See quantitative_anchor_multiplier().
+    quantitative_anchor_weight: float = 4.0
     # Syndication dedupe: two search results are treated as the same (re-hosted)
     # story when their title-token Jaccard is >= this. Kept high so genuinely
     # different stories sharing a topic word are not merged; only true re-prints

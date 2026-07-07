@@ -114,6 +114,27 @@ def claim_weighted_stance(
     return weighted_mean(list(stances), weights)
 
 
+def quantitative_anchor_multiplier(
+    quantitative_estimates: Sequence[Optional[float]],
+    *,
+    multiplier: float,
+) -> float:
+    """Weight premium for a source that cites an explicit modeled/poll/market
+    probability for the event itself, rather than only qualitative momentum.
+
+    A single named-model/poll/market baseline is materially stronger evidence than
+    qualitative "favorite"/"strong candidate" framing, and must not be diluted by
+    volume when several such qualitative articles are pooled alongside it — the
+    France 2026 World Cup regression (a 75% pooled estimate against a cited Opta
+    baseline of 18.83%) is exactly this failure. Returns ``multiplier`` when at
+    least one extracted claim from this source carries an explicit
+    ``quantitative_estimate``, else ``1.0`` (neutral, no change to today's weighting).
+    """
+    if any(q is not None for q in quantitative_estimates):
+        return multiplier
+    return 1.0
+
+
 def pool_sources(
     stances: Sequence[float],
     weights: Sequence[float],

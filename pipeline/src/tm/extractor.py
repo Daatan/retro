@@ -94,6 +94,32 @@ Examples — related event: "Diaz wins the presidential runoff" (first round, th
   "Diaz leads first-round polling by 8 points"        → stance +0.2, certainty 0.3  (first round ≠ runoff win)
   "Diaz advances to the runoff after finishing first" → stance +0.4, certainty 0.5  (one stage cleared, runoff remains)
 
+## Cited quantitative estimates — extract them as a distinct anchor
+When the article itself cites an explicit modeled probability, poll number, seat \
+projection, or market price FOR THE RELATED EVENT ITSELF (not a proxy stage) — e.g. \
+"a model gives Team X an 18.83% chance to win the tournament", "the poll puts \
+Candidate Y at 45%", "the prediction market prices the deal at 33%" — extract that \
+figure into `quantitative_estimate` as a probability in [0, 1] (convert percentages: \
+18.83% → 0.1883). Set `stance` to match it (`stance = 2 × quantitative_estimate − 1`) \
+and `certainty` high (≥ 0.8) — a named model, poll, or market is a much stronger \
+anchor than qualitative "favorite"/"strong candidate" framing, even when several \
+qualitative articles exist alongside it. Leave `quantitative_estimate` null when the \
+article has no such explicit cited figure — general "leading in the polls" or "seen \
+as the favorite" language without a stated number is NOT a quantitative estimate; \
+keep using the sections above for that.
+
+Examples — related event: "France wins the 2026 World Cup":
+  "Simulations by Opta give France the best chance of winning the tournament, at 18.83%" \
+                                               → stance −0.62, certainty 0.85, quantitative_estimate 0.1883
+  "Betting markets rank France as favorites to lift the trophy" \
+                                               → stance +0.3, certainty 0.3, quantitative_estimate null (no number given)
+
+Examples — related event: "Likud wins more than 33 seats in the election":
+  "A poll-aggregator model gives Likud a 22% chance of winning more than 33 seats" \
+                                               → stance −0.56, certainty 0.85, quantitative_estimate 0.22
+  "Likud is seen as gaining momentum heading into the vote" \
+                                               → stance +0.2, certainty 0.3, quantitative_estimate null (momentum, no cited figure)
+
 ## SETTLED — the event already happened (or definitively cannot)
 When the article REPORTS THE OUTCOME AS AN ACCOMPLISHED FACT — the event occurred, \
 or became permanently impossible (deadline passed, subject died, contest decided) — \
@@ -158,10 +184,12 @@ Related event: {event_name} — {event_description}
 IMPORTANT: Your response must be a JSON object with a "predictions" key containing a list.
 Example: {{"predictions": [ {{...}}, {{...}} ]}}
 
-Each prediction has exactly five fields:
+Each prediction has five core fields, plus a sixth used only when applicable:
   quote (string — original language), claim (string — English), \
 stance (float −1 to 1), certainty (float 0 to 1), settled (boolean — true only when \
-the source reports the outcome as an accomplished fact)
+the source reports the outcome as an accomplished fact), quantitative_estimate \
+(float 0 to 1, OMIT this field entirely unless the source cites an explicit modeled \
+probability/poll/market figure for the event itself — see the section above)
 
 Example — related event: "Assad regime falls in Syria":
 {{
@@ -179,6 +207,20 @@ Example — related event: "Assad regime falls in Syria":
       "stance": 1.0,
       "certainty": 0.95,
       "settled": true
+    }}
+  ]
+}}
+
+Example — related event: "France wins the 2026 World Cup" (a source citing a named model):
+{{
+  "predictions": [
+    {{
+      "quote": "Simulations by Opta indicate France has the highest chance of winning the 2026 World Cup at 18.83%",
+      "claim": "Opta's model gives France an 18.83% chance to win the tournament",
+      "stance": -0.62,
+      "certainty": 0.85,
+      "settled": false,
+      "quantitative_estimate": 0.1883
     }}
   ]
 }}

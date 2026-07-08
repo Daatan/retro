@@ -92,7 +92,7 @@ tolerance 72h.
    `Prediction.aiCiLow/High`; the UI-computed `aiEstimate`. They are allowed to
    disagree — and do: after a glide, `confidence` moves while the latest
    evidence snapshot doesn't, which is exactly why the glide is invisible on
-   the detail page while visible on feed cards (§5.2), and why `elections.ts`
+   the detail page while visible on feed cards (§4.2), and why `elections.ts`
    could misread `oracleSnapshot.mean`.
 2. **Three knobs encode "trust this source's number"**: `certainty` as a weight
    factor, the `min_certainty=0.9` floor, and the ×4 `quantitative_multiplier`.
@@ -141,7 +141,7 @@ What *is* redundant nearby:
   exponent as a **named config constant** (`relevance_exponent`) so it is
   visibly a calibration knob. No information is lost either way.
 - `relevance²` currently does triple duty (weight factor, `relevance_mass`
-  floor, inside `evidence_mass`) — §6 S3 collapses the floors.
+  floor, inside `evidence_mass`) — §5 S3 collapses the floors.
 
 Verdict: **keep relevance as a weight; delete the binary twin; make the
 exponent explicit.** The real relevance problem is not the formula but the
@@ -285,7 +285,60 @@ Net effect: ~40 → ~25 variables; three multiplicative trust knobs → one enum
 five estimate homes → one; the 2026-07-08 incident classes become structurally
 impossible rather than patched.
 
-## 6. Production evidence (2026-07-08)
+## 6. Evidence-pool design — making the paths symmetric (accepted direction)
+
+§4.3 showed the paths are asymmetric in evidence supply and persistence.
+"Symmetric" hides two different symmetries; one is free, one has real
+trade-offs. Both are adopted here as the target design.
+
+**Goals** (product intent behind the symmetry requirement):
+
+1. One forecast = one trustworthy estimate — never a number that depends on
+   *which mechanism* ran last.
+2. Every estimate built the same way, from the same evidence universe,
+   whichever path triggered it.
+3. Movement is explainable: a change is either new evidence or the clock,
+   visible on the page; one article never rewrites the whole basis.
+
+**Part 1 — persistence symmetry (the funnel; no downsides).** All paths write
+through one `recordEstimate(forecastId, oracleResponse, origin)`: identical
+fields every time (including `externalProbability` and `articles_used`),
+structured `origin` instead of a marker string, one cooldown and notification
+policy, single owner of the settled latch, one reader accessor (= S1).
+
+**Part 2 — evidence symmetry (the pool; the real change).** daatan maintains a
+canonical **evidence pool per forecast**. Every path only *adds* articles to
+the pool; every estimate is computed over the whole pool. Retro stays
+stateless — every call becomes the already-existing caller-articles form, and
+retro's own search chain is demoted to a discovery step that feeds the pool.
+The clock stays outside the pool as a post-transform (TEMPORAL_MODEL_PLAN
+§3.1).
+
+| aspect | current | target |
+|---|---|---|
+| evidence basis | whatever the triggering path had (push = matched articles only, uncapped; analyze/backfill = fresh 15-article search; creation = LLM opinion or question-only run) | the forecast's full pool, always |
+| news push | *replaces* the estimate with one computed from the pushed 1–8 articles | adds article(s) → recompute; a new article moves the number by its weight share only |
+| analyze | independent search that overwrites the push estimate (and vice versa) | search *discovers new* pool members → same universe, no flip-flop |
+| creation number | unlabeled LLM guess written into `Prediction.confidence`, no snapshot | labeled draft; the funnel produces the first pooled estimate asynchronously |
+| overwrite policy | none — a 1-article run clobbers a 15-article run | moot: estimates are cumulative, not competing (funnel persists `articles_used` regardless) |
+| glide visibility | chart filters clock rows; gauge shadowed by last evidence snapshot | automatic once every reader uses the funnel's accessor |
+
+**Known problems and their mitigations** (each is a precondition or a design
+constant, not a reason to drop the direction):
+
+| problem | mitigation |
+|---|---|
+| memory makes errors sticky — a false settled article keeps voting (today it washes out on the next run; the F-35 estimate "recovered" precisely because runs are memoryless) | settlement hardening (code-enforced settled-claim rules, clearable latch) **and** per-article admin exclusion ship *before* the pool |
+| stale-mass accumulation: with a weighted mean and recency floor 0.02, fifty stale articles ≈ weight 1.0, enough to outvote two fresh ones | drop the recency floor *inside* the pool (it exists to protect single-old-article calls, which the pool makes moot) + cap pool at top-N by current weight or hard age cutoff |
+| re-extracting the whole pool per update is too slow/expensive (~2–4 s, 1–2 k tokens per article) | cache extraction per (article, question): daatan persists extracted signals, or retro accepts pre-extracted signals / caches per-article; also kills the 25 s-timeout volatility |
+| identity change: the Oracle stops being "answer a question by searching" and becomes "score this evidence set" | conscious decision — same shape later needed for polls/market prices as first-class evidence (TEMPORAL_MODEL_PLAN §5 open question) |
+| duplicates across days (same wire story pushed repeatedly) | move syndication dedupe from per-call to per-pool |
+| what symmetry does **not** fix: single-source dominance is a weights problem (cluster 2) | S2 (`evidence_class`) proceeds independently |
+
+**Sequencing:** funnel (S1) → settlement hardening + exclusion → pool with
+pruning + extraction cache. S2 in parallel at any point.
+
+## 7. Production evidence (2026-07-08)
 
 - False settlement pins: F-35-to-Turkey pinned to 3 % at 09:26 by 2-of-6
   sources whose *background sentence* ("Turkey was removed from the F-35

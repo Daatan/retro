@@ -82,9 +82,14 @@ class ForecastCache:
         question: str,
         max_articles: Optional[int],
         articles_hash: Optional[str] = None,
+        claim_meta: Optional[str] = None,
     ) -> str:
+        """``claim_meta`` folds the request's temporal metadata (claim_direction +
+        claim_deadline) into the key — the settlement direction guard makes the
+        answer depend on it, so a metadata-less response must not be served to a
+        metadata-bearing request (or vice versa)."""
         normalized = question.strip().casefold()
-        payload = f"{normalized}|{max_articles or ''}|{articles_hash or ''}".encode("utf-8")
+        payload = f"{normalized}|{max_articles or ''}|{articles_hash or ''}|{claim_meta or ''}".encode("utf-8")
         return hashlib.sha256(payload).hexdigest()
 
     def get(self, key: str) -> Optional[ForecastResponse]:

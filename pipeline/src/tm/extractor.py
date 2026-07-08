@@ -168,6 +168,21 @@ of Hungary by December 31, 2026":
                                                → stance +1.0, certainty 0.95, settled true \
                                                  (clear past-tense fact, however incidental to the article's main topic)
 
+### Historical background is NOT a settlement of the current question
+A past-tense fact about an EARLIER, already-known episode — background that predates \
+the question's own timeframe — does not settle the current claim, no matter how \
+definitively it is stated. History that set the stage for the question is context, \
+not its outcome: treat it as ordinary (usually weak) signal, never as settled. Only \
+a past-tense report of THIS question's outcome, within its own window, settles it.
+
+Examples — related event: "The U.S. will formally approve an F-35 sale to Turkey by \
+December 31, 2026":
+  "Turkey was removed from the F-35 program in 2019 over its S-400 purchase" \
+                                               → stance −0.1, certainty 0.4, settled false \
+                                                 (background history predating the question's window — not this question's outcome)
+  "The State Department formally approved the F-35 sale to Turkey on Tuesday" \
+                                               → stance +1.0, certainty 0.95, settled true (this question's outcome, reported as fact)
+
 ## Article language
 The article may be in Hebrew, Arabic, or English. Always write the claim in English.
 Quote the original language verbatim in the quote field.

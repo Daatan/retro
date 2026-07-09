@@ -546,7 +546,7 @@ with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
 
 **Stage 3 — Weight by Source Credibility**
 1. `leaderboard.get_credibility_weight(source_id)` — OpenSkill conservative score (μ − 3σ) from `leaderboard.json`
-2. `weight = credibility × certainty × recency × relevance²` per prediction, times `quantitative_anchor_multiplier` (×4) when the source cites an explicit probability/poll/market number (see [ORACLE_VARIABLES.md](ORACLE_VARIABLES.md) for the audit of these knobs)
+2. `weight = credibility × class_weight[evidence_class] × recency × relevance²` per prediction (S2 cutover; `class_weight` keyed by the extractor's `evidence_class` — `cited_probability` carries the old ×4 anchor premium, `reported_fact`/`cited_share`/`reporting`/`opinion` fill out the rest of the lookup table; unclassified claims fall back to their own `certainty`) (see [ORACLE_VARIABLES.md](ORACLE_VARIABLES.md) for the audit of these knobs)
 
 **Stage 4 — Aggregate → Distribution** (`aggregation.pool_sources`)
 1. Each source's stance is converted to a probability, clamped to `[0.01, 0.99]`, and the sources are pooled in **log-odds (logit) space** — a weighted *mean* of log-odds (a logarithmic opinion pool), using the Stage 3 weights. The result is converted back to `{ mean, std, ci_low, ci_high }` on the stance scale.

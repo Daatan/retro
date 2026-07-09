@@ -264,7 +264,11 @@ Ordered by leverage; each independent.
   `reporting`, `opinion`. Source weight becomes
   `class_weight[evidence_class] × recency × relevance^k` — one lookup table
   replaces certainty-as-weight, the 0.9 floor, and the ×4 multiplier (cluster
-  2), and makes "confident op-ed ≠ confident fact" expressible.
+  2), and makes "confident op-ed ≠ confident fact" expressible. *Shipped in
+  two rounds (see §8): the weight-formula half above (shadow-classify → class
+  weight cutover); the stance→p schema rename ("one probability per claim")
+  did not — `PredictionExtraction.stance` is unchanged, evidence_class was
+  added alongside it rather than replacing it.*
 - **S3 — one evidence ladder.** Single monotone rule on `evidence_mass`:
   `< m_abstain` ⇒ insufficient_data; `< m_trust` ⇒ widen CI proportionally;
   else trust. Off-topic folds in naturally (relevance is already inside the
@@ -407,17 +411,32 @@ Shipped, in the accepted sequencing order (§6):
   discovery-only, dedup moved per-pool, recency floor dropped inside the
   pool) is still open, per the table below. `excluded` column reserved
   (unused) for the still-open per-article admin exclusion feature.
-- **S2 — shadow-classification only** — retro (this PR): extractor prompt +
+- **S2 — shadow-classification** — retro #248: extractor prompt +
   `PredictionExtraction.evidence_class` (`reported_fact` / `cited_probability`
   / `cited_share` / `reporting` / `opinion`, optional, fail-open to null on
-  ambiguity). Classified and logged (`event=evidence_class_shadow`) for
-  observability on real traffic; **provably does not affect pooling** — same
-  claims produce byte-identical `mean`/CI/per-source weight whether or not
-  `evidence_class` is populated (see `test_evidence_class.py`), and it's not
-  yet on the `/forecast` response. The actual `class_weight[evidence_class] ×
-  recency × relevance²` cutover replacing certainty-as-weight/the 0.9
-  floor/the ×4 multiplier is still open — the single-source-dominance
-  complaint is untouched until then.
+  ambiguity). Classified and logged (`event=evidence_class_shadow`, later
+  renamed `event=evidence_class_weighted` below) for observability on real
+  traffic before the cutover; not yet on the `/forecast` response.
+- **S2 — weight-formula cutover** — retro (this PR): `class_weight` lookup
+  table added to `ApiSettings.evidence_class_weight`, replacing
+  certainty-as-weight, `resolve_stance_certainty`'s 0.9 floor's effect on the
+  cross-article `weight` term, and the standalone ×4
+  `quantitative_anchor_multiplier` (deleted). Cross-article
+  `weight = credibility × class_weight[evidence_class] × recency ×
+  relevance²`; `class_weight["cited_probability"] = 4.0` keeps the old ×4
+  anchor premium verbatim (same France World Cup regression protection,
+  reproduced against the new formula in `TestFranceWorldCupRegression`).
+  Unclassified evidence (extractor omitted `evidence_class`) falls back to the
+  claim's own `certainty` rather than a lookup, so partial classification
+  coverage doesn't regress weighting quality — see `evidence_class_weight()`
+  in `aggregation.py`. Full table: `cited_probability=4.0`,
+  `reported_fact=1.0`, `cited_share=1.5`, `reporting=0.6`, `opinion=0.25`
+  (new calibration beyond the ported ×4 anchor value; expect retuning once
+  more real-traffic `event=evidence_class_weighted` volume accumulates).
+  `evidence_class` still isn't on the `/forecast` response — internal
+  weighting input only. **This is what actually fixes single-source
+  dominance** — the France World Cup and Opta-anchor classes of regression
+  are now protected end-to-end, not just at the pure-function level.
 
 Open, in suggested order:
 
@@ -428,11 +447,6 @@ Open, in suggested order:
   cutover itself.
 - Per-article admin exclusion (the pool's `excluded` column is reserved but
   unenforced) — the last §6 precondition still open.
-- S2 weight cutover: replace certainty-as-weight/the 0.9 floor/the ×4
-  quantitative-anchor multiplier with `class_weight[evidence_class] ×
-  recency × relevance²`, once the shadow-classification above has been
-  observed to be sane on real traffic. This is what actually fixes
-  single-source dominance — nothing shipped so far changes it.
 - S3–S6 and the remaining small known defect from §7: `credibilityWeight`
   still ≈1.0 for all real sources — **not a code bug** (investigated
   2026-07-09): `get_credibility_weight()` is correctly implemented, but

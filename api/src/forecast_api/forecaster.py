@@ -32,6 +32,8 @@ from .aggregation import (
     quantitative_anchor_multiplier,
     recency_weight,
     resolve_stance_certainty,
+    settlement_direction_allowed,
+    settlement_grade,
     stance_to_prob,
     widen_ci_for_thin_evidence,
 )
@@ -465,7 +467,8 @@ async def run_forecast(req: ForecastRequest) -> ForecastResponse:
         articles_hash = hashlib.md5(
             "|".join(sorted(a.url for a in req.articles)).encode()
         ).hexdigest()[:12]
-    cache_key = forecast_cache.make_key(req.question, req.max_articles, articles_hash)
+    claim_meta = f"{req.claim_direction or ''}|{req.claim_deadline or ''}" if (req.claim_direction or req.claim_deadline) else None
+    cache_key = forecast_cache.make_key(req.question, req.max_articles, articles_hash, claim_meta)
     cached = forecast_cache.get(cache_key)
     if cached is not None:
         _log_phase(
@@ -727,6 +730,12 @@ async def _run_forecast_inner(
         # — see resolve_stance_certainty() for why.
         resolved_predictions = []
         for p in predictions:
+            # Settled claims keep the extractor's own stance/certainty: a cited
+            # retrospective number in the same claim ("...defying models that
+            # gave him 22%") must not flip an accomplished fact's direction.
+            if p.settled:
+                resolved_predictions.append(p)
+                continue
             stance, certainty = resolve_stance_certainty(p.stance, p.certainty, p.quantitative_estimate)
             resolved_predictions.append(p.model_copy(update={"stance": stance, "certainty": certainty}))
         predictions = resolved_predictions
@@ -738,7 +747,24 @@ async def _run_forecast_inner(
         # Settlement claims (the outcome reported as an accomplished fact) go
         # further and *replace* the article's mixed claim set: a verdict must
         # not be averaged down by the same article's color quotes.
-        settled_preds = [p for p in predictions if p.settled]
+        # A settled claim counts as a settlement only when it is settlement-grade
+        # (near-boundary stance, high certainty — the extractor's own stated rule,
+        # now enforced in code). Failing claims are demoted to ordinary evidence:
+        # they still vote in the pool, they just cannot pin the estimate.
+        settled_preds = [
+            p for p in predictions
+            if p.settled and settlement_grade(
+                p.stance, p.certainty,
+                min_stance=settings.settlement_min_claim_stance,
+                min_certainty=settings.settlement_min_claim_certainty,
+            )
+        ]
+        demoted = sum(1 for p in predictions if p.settled) - len(settled_preds)
+        if demoted:
+            logger.info(
+                "event=settlement_demoted url=%s demoted=%d (below stance/certainty gates)",
+                result.url, demoted,
+            )
         scored_preds = settled_preds or predictions
         avg_stance = claim_weighted_stance(
             [p.stance for p in scored_preds],
@@ -911,6 +937,20 @@ async def _run_forecast_inner(
         pos = sum(1 for d in settled_directions if d > 0)
         neg = len(settled_directions) - pos
         direction = 1.0 if pos > neg else -1.0 if neg > pos else 0.0
+        if (
+            direction != 0.0
+            and max(pos, neg) >= settings.settlement_min_sources
+            and not settlement_direction_allowed(direction, req.claim_direction, req.claim_deadline)
+        ):
+            # Temporally incoherent early settlement (e.g. "won't happen" pinned
+            # months before an arrival claim's deadline — the F-35 false pin):
+            # suppress the pin, keep the pooled estimate. The sources still vote
+            # as ordinary evidence.
+            logger.info(
+                "event=settlement_suppressed direction=%+.0f claim_direction=%s claim_deadline=%s settled_sources=%d",
+                direction, req.claim_direction, req.claim_deadline, max(pos, neg),
+            )
+            direction = 0.0
         if direction != 0.0 and max(pos, neg) >= settings.settlement_min_sources:
             settled = True
             mean = settings.settlement_stance * direction

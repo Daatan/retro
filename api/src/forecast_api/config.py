@@ -109,6 +109,14 @@ class ApiSettings(BaseSettings):
     # Stance the pinned estimate takes on settlement (0.94 stance = 0.97
     # probability). Deliberately short of 1.0 — sources can be wrong together.
     settlement_stance: float = 0.94
+    # A settlement claim counts toward the pin only when the extractor followed
+    # its own accomplished-fact rules: near-boundary stance and high certainty
+    # (the prompt mandates ±1.0 / ≥0.9). Enforced in code because the 2026-07-08
+    # F-35 false pin was driven by "settled" claims at stance −0.8 / certainty
+    # 0.52 — hedged half-settlements the prompt should never produce. Claims
+    # failing the gates are demoted to ordinary (non-settled) evidence.
+    settlement_min_claim_stance: float = 0.9
+    settlement_min_claim_certainty: float = 0.9
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.

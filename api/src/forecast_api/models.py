@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -81,6 +81,18 @@ class ForecastRequest(BaseModel):
         ),
     )
     debug: bool = Field(default=False, description="Include debug telemetry in response (token counts, gatekeeper scores, prompts)")
+    # Optional temporal metadata (daatan's claim classifier; TEMPORAL_MODEL_PLAN.md #3.4).
+    # Additive and fail-open: callers that don't classify claims omit them and get
+    # today's behavior. When present they gate EARLY settlement direction — before
+    # claim_deadline only "the event occurred" may pin (arrival → YES, survival → NO).
+    claim_direction: Optional[Literal["arrival", "survival"]] = Field(
+        default=None,
+        description="Temporal direction of the claim: arrival = true only if the event happens by the deadline; survival = true if it does not.",
+    )
+    claim_deadline: Optional[str] = Field(
+        default=None,
+        description="Claim deadline (ISO date, e.g. 2026-12-31). Before it, only occurrence-direction settlements may pin the estimate.",
+    )
 
 
 class SourceSignal(BaseModel):

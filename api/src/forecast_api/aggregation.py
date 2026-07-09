@@ -137,6 +137,55 @@ def resolve_stance_certainty(
     return prob_to_stance(quantitative_estimate), max(certainty, min_certainty)
 
 
+def settlement_grade(
+    stance: float,
+    certainty: float,
+    *,
+    min_stance: float,
+    min_certainty: float,
+) -> bool:
+    """Whether a ``settled`` claim is decisive enough to count toward the
+    settlement pin.
+
+    The extractor's prompt mandates that an accomplished-fact claim carry the
+    full ±1.0 stance at certainty ≥ 0.9 — but prompts are advisory. A hedged,
+    half-confident "settlement" (the 2026-07-08 F-35 false pin rode on claims
+    at stance −0.8 / certainty 0.52) is treated as ordinary evidence instead:
+    it still votes in the pool, it just cannot pin the estimate to a boundary.
+    """
+    return abs(stance) >= min_stance and certainty >= min_certainty
+
+
+def settlement_direction_allowed(
+    direction: float,
+    claim_direction: Optional[str],
+    claim_deadline: Optional[str],
+    today: Optional[str] = None,
+) -> bool:
+    """Whether a settlement pin in ``direction`` is temporally coherent.
+
+    Before a claim's deadline, the only reportable accomplished fact is that
+    the event OCCURRED — for an *arrival* claim that settles YES (+1), for a
+    *survival* claim ("X will NOT happen by D") it settles NO (−1). The
+    opposite direction ("it didn't happen") is not a fact until the window
+    closes: the F-35 forecast was falsely pinned to 3% five months before its
+    deadline by background history, which no genuine early settlement could
+    assert. Once the deadline has passed, either direction is coherent.
+
+    Fail-open: without direction metadata or a parseable deadline (callers
+    that don't classify claims), behavior is unchanged.
+    """
+    if claim_direction not in ("arrival", "survival"):
+        return True
+    deadline = _parse_date(claim_deadline)
+    if deadline is None:
+        return True
+    ref = _parse_date(today) or datetime.now().date()
+    if deadline <= ref:
+        return True
+    return direction > 0 if claim_direction == "arrival" else direction < 0
+
+
 def quantitative_anchor_multiplier(
     quantitative_estimates: Sequence[Optional[float]],
     *,

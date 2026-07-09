@@ -33,6 +33,17 @@ Already shipped (retro #230, daatan #1001/#1002): settlement detection — ≥2 
 sources reporting the outcome as accomplished fact pins the estimate to ±0.94 stance
 (97/3) with `settled: true`; Telegram alert on crossing 80 from below.
 
+Also shipped since (2026-07): settlement hardening (retro #244) — settlement-grade
+gates (`|stance| ≥ 0.9`, `certainty ≥ 0.9`), settled claims skip stance/certainty
+realignment, and a direction guard on early settlements driven by optional
+`claim_direction`/`claim_deadline` request fields (§3.4; fail-open until callers pass
+them). On the daatan side, the `recordEstimate` funnel + reader accessor
+(daatan #1053/#1055) made the daily glide visible: the probability chart now includes
+`kind='clock'` snapshots (hollow dots) and the gauge reads the funnel's cache instead
+of the latest evidence snapshot. Background of both: the 2026-07-08 false-settlement
+incident, documented with the full variable audit in
+[ORACLE_VARIABLES.md](ORACLE_VARIABLES.md).
+
 User-accepted requirements: resolved ⇒ ~0/~100; graceful degradation is fine ("won't
 always work"); private/never-newsworthy forecasts are out of scope.
 

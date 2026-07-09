@@ -17,9 +17,9 @@ from .cache import forecast_cache
 from .config import settings
 from .forecaster import run_forecast
 from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache
-from .net_guard import UnsafeURLError, is_safe_url, safe_get
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
+from tm.net_guard import UnsafeURLError, is_safe_url, safe_get
 from .limiter import limiter
 from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, LlmRequest, LlmResponse, SearchRequest, SearchResponse, SearchHealthResponse, VersionResponse
 from .searcher import run_search, run_search_health

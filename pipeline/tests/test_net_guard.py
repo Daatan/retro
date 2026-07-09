@@ -5,6 +5,7 @@ keeps them offline; IP-literal / ``localhost`` hosts resolve without network DNS
 import httpx
 import pytest
 
+from tm import net_guard
 from tm.net_guard import UnsafeURLError, is_safe_url, safe_get, safe_get_async
 
 
@@ -14,6 +15,7 @@ from tm.net_guard import UnsafeURLError, is_safe_url, safe_get, safe_get_async
         "file:///etc/passwd",
         "ftp://example.com/x",
         "example.com/no-scheme",
+        "gopher://127.0.0.1:8001/",
         "",
         "http://169.254.169.254/latest/meta-data/",
         "http://127.0.0.1/",
@@ -69,6 +71,30 @@ def test_safe_get_follows_safe_redirect():
 def test_safe_get_returns_direct_response():
     with _sync_client(lambda r: httpx.Response(200, text="hi")) as c:
         assert safe_get("http://93.184.216.34/", client=c).text == "hi"
+
+
+def test_safe_get_caps_redirects():
+    # A public host looping through public hops never trips is_safe_url, so the
+    # hop cap is the only thing that stops it.
+    def handler(request):
+        return httpx.Response(302, headers={"location": "http://8.8.8.8/loop"})
+
+    with _sync_client(handler) as c:
+        with pytest.raises(UnsafeURLError):
+            safe_get("http://8.8.8.8/loop", client=c, max_redirects=2)
+
+
+def test_safe_get_opens_its_own_client_when_none_given(monkeypatch):
+    # forecast_api's /fetch-url calls safe_get(url) with no client; the guard has
+    # to open (and close) one itself.
+    real_client = httpx.Client
+
+    def _factory(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(lambda r: httpx.Response(200, text="hi"))
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr(net_guard.httpx, "Client", _factory)
+    assert safe_get("http://93.184.216.34/").text == "hi"
 
 
 async def test_safe_get_async_blocks_redirect_to_internal():

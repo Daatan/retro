@@ -24,6 +24,7 @@ from tm.extractor import extract_predictions, PROMPT as EXTRACTOR_PROMPT
 from tm.web_search import search_articles, SearchResult, get_last_search_provider, get_last_search_provider_chain
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
+from tm.net_guard import UnsafeURLError, safe_get
 
 from .aggregation import (
     claim_weighted_stance,
@@ -37,7 +38,6 @@ from .aggregation import (
     stance_to_prob,
     widen_ci_for_thin_evidence,
 )
-from .net_guard import UnsafeURLError, safe_get
 from .cache import forecast_cache, search_cache
 from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight

@@ -127,10 +127,10 @@ def resolve_stance_certainty(
 
     extractor.py's prompt instructs the LLM to set stance/certainty to match a
     cited quantitative_estimate, but nothing enforces that — a misaligned
-    stance would get amplified, not fixed, by quantitative_anchor_multiplier's
-    weight premium below (a correctly-extracted number weighted onto the wrong
-    direction is worse than not extracting it at all). Returns ``(stance,
-    certainty)`` unchanged when ``quantitative_estimate`` is ``None``.
+    stance would get amplified, not fixed, by evidence_class_weight's
+    cited_probability premium below (a correctly-extracted number weighted onto
+    the wrong direction is worse than not extracting it at all). Returns
+    ``(stance, certainty)`` unchanged when ``quantitative_estimate`` is ``None``.
     """
     if quantitative_estimate is None:
         return stance, certainty
@@ -186,25 +186,35 @@ def settlement_direction_allowed(
     return direction > 0 if claim_direction == "arrival" else direction < 0
 
 
-def quantitative_anchor_multiplier(
-    quantitative_estimates: Sequence[Optional[float]],
+def evidence_class_weight(
+    evidence_class: Optional[str],
+    certainty: float,
     *,
-    multiplier: float,
+    weights: dict[str, float],
+    default: float = 0.6,
 ) -> float:
-    """Weight premium for a source that cites an explicit modeled/poll/market
-    probability for the event itself, rather than only qualitative momentum.
+    """Per-claim weight component for the cross-article ``weight`` term (S2
+    cutover, retro docs/ORACLE_VARIABLES.md §5).
 
-    A single named-model/poll/market baseline is materially stronger evidence than
-    qualitative "favorite"/"strong candidate" framing, and must not be diluted by
-    volume when several such qualitative articles are pooled alongside it — the
-    France 2026 World Cup regression (a 75% pooled estimate against a cited Opta
-    baseline of 18.83%) is exactly this failure. Returns ``multiplier`` when at
-    least one extracted claim from this source carries an explicit
-    ``quantitative_estimate``, else ``1.0`` (neutral, no change to today's weighting).
+    Classified evidence (``evidence_class`` set by the extractor) is weighted by
+    its evidence type via ``weights`` — one lookup table replacing
+    certainty-as-weight, the 0.9 certainty floor :func:`resolve_stance_certainty`
+    applied on a cited quantitative estimate, and the old standalone ×4
+    quantitative-anchor multiplier. A single named-model/poll/market baseline
+    (``cited_probability``) is materially stronger evidence than qualitative
+    "favorite"/"strong candidate" framing and must not be diluted by volume when
+    several such qualitative articles are pooled alongside it — the France 2026
+    World Cup regression (a 75% pooled estimate against a cited Opta baseline of
+    18.83%) is exactly this failure; see ``weights["cited_probability"]``.
+
+    Unclassified evidence (``evidence_class`` is ``None`` — the extractor omitted
+    it) falls back to the claim's own ``certainty`` instead of a lookup, so
+    partial classification coverage doesn't regress weighting quality for claims
+    the classifier skipped.
     """
-    if any(q is not None for q in quantitative_estimates):
-        return multiplier
-    return 1.0
+    if evidence_class is None:
+        return certainty
+    return weights.get(evidence_class, default)
 
 
 def pool_sources(

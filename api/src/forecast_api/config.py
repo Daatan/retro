@@ -60,14 +60,36 @@ class ApiSettings(BaseSettings):
     # 0.05 ≈ one article at relevance ~0.22. Tune down using daatan's logged
     # relevance_score / all_articles_off_topic data.
     relevance_weight_floor: float = 0.05
-    # Weight premium for a source whose extractor output carries an explicit
-    # quantitative_estimate (a named model/poll/market probability cited for the
-    # event itself, e.g. "Opta gives France 18.83%"). Without this, such a source
-    # is just one more equal-weight vote and gets outvoted by volume — several
-    # qualitative "favorite" match reports pooled a France World Cup forecast to
-    # 75% against a cited Opta baseline of 18.83%. 1.0 disables the premium
-    # (identical to pre-fix behaviour). See quantitative_anchor_multiplier().
-    quantitative_anchor_weight: float = 4.0
+    # ── Evidence-class weighting (S2 cutover, retro docs/ORACLE_VARIABLES.md §5) ─
+    # Per-claim weight component for the cross-article `weight` term, keyed by
+    # PredictionExtraction.evidence_class. Replaces the old certainty-as-weight
+    # term, the 0.9 certainty floor resolve_stance_certainty applied on a cited
+    # quantitative_estimate, and the standalone ×4 quantitative_anchor_multiplier
+    # with one lookup table (see evidence_class_weight() in aggregation.py).
+    # cited_probability keeps the old ×4 premium verbatim — it protects the same
+    # France World Cup regression (a 75% pooled estimate against a cited Opta
+    # baseline of 18.83%; see TestFranceWorldCupRegression). The other four are
+    # new calibration: reported_fact and cited_share sit below the anchor premium
+    # since neither is a stated probability for the event itself; reporting and
+    # opinion are down-weighted relative to the old ~0.5-0.7 typical certainty
+    # range to make room for that separation. Expect retuning once more
+    # real-traffic evidence_class_weighted log volume accumulates.
+    evidence_class_weight: dict[str, float] = {
+        "cited_probability": 4.0,
+        "reported_fact": 1.0,
+        "cited_share": 1.5,
+        "reporting": 0.6,
+        "opinion": 0.25,
+    }
+    # Fallback for an evidence_class string absent from the map above (defensive
+    # only — PredictionExtraction.evidence_class is a Literal of the five keys
+    # above, so pydantic already rejects anything else at extraction time).
+    # Unclassified evidence (evidence_class is None — the extractor omitted it)
+    # does NOT use this: it falls back to the claim's own certainty instead, so
+    # partial classification coverage doesn't regress weighting quality for
+    # claims the classifier skipped. See evidence_class_weight() in
+    # aggregation.py.
+    evidence_class_weight_default: float = 0.6
     # Syndication dedupe: two search results are treated as the same (re-hosted)
     # story when their title-token Jaccard is >= this. Kept high so genuinely
     # different stories sharing a topic word are not merged; only true re-prints

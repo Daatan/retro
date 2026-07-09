@@ -1,10 +1,11 @@
-"""S2 shadow-classification tests (retro docs/ORACLE_VARIABLES.md §5).
+"""S2 weight-cutover tests (retro docs/ORACLE_VARIABLES.md §5).
 
-evidence_class is EXPERIMENTAL and shadow-only this round: the extractor may
-classify it, but nothing in the pooling/weighting math reads it yet. These
-tests pin the pydantic contract (only the five listed values are accepted)
-and prove the shadow property (identical claims produce an identical pooled
-result whether or not evidence_class is populated).
+evidence_class now drives the cross-article `weight` term via
+evidence_class_weight() (see test_aggregation.py's TestEvidenceClassWeight and
+TestFranceWorldCupRegression for the pure-function coverage). These tests pin
+the pydantic contract (only the five listed values are accepted) and prove
+evidence_class is load-bearing end-to-end through run_forecast — no longer the
+shadow-only property this file locked in before the cutover.
 """
 
 import pytest
@@ -39,9 +40,9 @@ def _gate_ok():
     ), {"total_tokens": 10}
 
 
-def _prediction(evidence_class=None) -> PredictionExtraction:
+def _prediction(evidence_class=None, stance=0.4, certainty=0.6) -> PredictionExtraction:
     return PredictionExtraction(
-        quote="quote", claim="claim", stance=0.4, certainty=0.6,
+        quote="quote", claim="claim", stance=stance, certainty=certainty,
         evidence_class=evidence_class,
     )
 
@@ -72,44 +73,45 @@ class TestPydanticContract:
             _prediction(evidence_class="strong_opinion")
 
 
-class TestShadowOnly:
-    async def test_evidence_class_does_not_change_the_pooled_result(self, monkeypatch):
-        """Same stance/certainty, only evidence_class differs — the pooled
-        mean, CI, and per-source weight must be byte-identical either way."""
+class TestWeightCutover:
+    async def test_evidence_class_changes_the_pooled_weight(self, monkeypatch):
+        """Two sources disagree in stance (+0.9 vs -0.9), same certainty, same
+        credibility (both unknown test domains → neutral 1.0), same recency and
+        relevance (same published_date, gatekeeper mock relevance_score=1.0).
+        Only evidence_class differs, so whichever source is classified
+        cited_probability (4.0×) must dominate the pool — proving evidence_class
+        is now load-bearing, not shadow. Swapping which source carries the
+        cited_probability label flips the pooled direction, ruling out a
+        source-ordering artifact."""
         _patch_pipeline(monkeypatch, {
-            "source-1": [_prediction(evidence_class=None)],
-            "source-2": [_prediction(evidence_class="reporting")],
+            "source-1": [_prediction(evidence_class="cited_probability", stance=0.9)],
+            "source-2": [_prediction(evidence_class="opinion", stance=-0.9)],
         })
-        resp_without = await forecaster.run_forecast(ForecastRequest(
-            question="evidence class shadow — without A",
+        resp_a = await forecaster.run_forecast(ForecastRequest(
+            question="evidence class weight cutover — source-1 dominant",
             articles=[_article(1), _article(2)],
         ))
+        assert resp_a.mean > 0
 
         _patch_pipeline(monkeypatch, {
-            "source-1": [_prediction(evidence_class="cited_probability")],
-            "source-2": [_prediction(evidence_class="opinion")],
+            "source-1": [_prediction(evidence_class="opinion", stance=0.9)],
+            "source-2": [_prediction(evidence_class="cited_probability", stance=-0.9)],
         })
-        resp_with = await forecaster.run_forecast(ForecastRequest(
-            question="evidence class shadow — with B",
+        resp_b = await forecaster.run_forecast(ForecastRequest(
+            question="evidence class weight cutover — source-2 dominant",
             articles=[_article(1), _article(2)],
         ))
-
-        assert resp_with.mean == pytest.approx(resp_without.mean)
-        assert resp_with.ci_low == pytest.approx(resp_without.ci_low)
-        assert resp_with.ci_high == pytest.approx(resp_without.ci_high)
-        for s_with, s_without in zip(resp_with.sources, resp_without.sources):
-            assert s_with.stance == pytest.approx(s_without.stance)
-            assert s_with.certainty == pytest.approx(s_without.certainty)
-            assert s_with.credibility_weight == pytest.approx(s_without.credibility_weight)
+        assert resp_b.mean < 0
 
     async def test_evidence_class_is_not_surfaced_on_the_response(self, monkeypatch):
-        """Foundation round doesn't change the API contract — SourceSignal
-        (and therefore the /forecast response) has no evidence_class field."""
+        """The weight cutover doesn't change the API contract — SourceSignal
+        (and therefore the /forecast response) still has no evidence_class
+        field; it's an internal weighting input only."""
         _patch_pipeline(monkeypatch, {
             "source-1": [_prediction(evidence_class="reported_fact")],
         })
         resp = await forecaster.run_forecast(ForecastRequest(
-            question="evidence class shadow — not on response",
+            question="evidence class weight cutover — not on response",
             articles=[_article(1)],
         ))
         assert not hasattr(resp.sources[0], "evidence_class")

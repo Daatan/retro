@@ -27,9 +27,9 @@ from tm.llm import complete_text_once
 
 from .aggregation import (
     claim_weighted_stance,
+    evidence_class_weight,
     pool_sources,
     prob_to_stance,
-    quantitative_anchor_multiplier,
     recency_weight,
     resolve_stance_certainty,
     settlement_direction_allowed,
@@ -714,9 +714,9 @@ async def _run_forecast_inner(
     relevances: list[float] = []
     settled_directions: list[float] = []
     ref_date = datetime.now().strftime("%Y-%m-%d")
-    # S2 shadow-classification observability only (retro docs/ORACLE_VARIABLES.md
-    # §5) — not read by anything below; lets us judge real-traffic classification
-    # quality/coverage before any weight-formula cutover.
+    # S2 cutover (retro docs/ORACLE_VARIABLES.md §5) — evidence_class now drives
+    # `weight` below via evidence_class_weight(); this dict remains for
+    # operational visibility into real-traffic classification coverage/mix.
     evidence_class_counts: dict[str, int] = {}
 
     for result, outcome in zip(search_results, outcomes):
@@ -743,7 +743,7 @@ async def _run_forecast_inner(
             # A settled=true claim that doesn't clear the settlement_grade bar
             # (hedged, below-boundary) is not trusted as an accomplished fact —
             # it must still go through the same realignment as ordinary evidence,
-            # or it keeps quantitative_anchor_multiplier's weight premium below
+            # or it keeps evidence_class_weight's cited_probability premium below
             # while carrying an unrealigned, possibly wrong-direction stance.
             if p.settled and settlement_grade(
                 p.stance, p.certainty,
@@ -790,12 +790,22 @@ async def _run_forecast_inner(
         if settled_preds:
             settled_directions.append(1.0 if avg_stance >= 0 else -1.0)
         avg_certainty = sum(p.certainty for p in predictions) / len(predictions)
-        # Hedged sources (low avg_certainty) are *down-weighted, not dropped*:
-        # avg_certainty is a linear factor in `weight` below, so speculative claims
-        # tug the pool weakly and contribute little evidence mass. A pool of only
-        # such sources ends up below decisiveness_floor and surfaces as a wide-CI
+        # Layer A.5 (S2 cutover): evidence-class-weight the article's claims for
+        # the cross-article `weight` below, replacing avg_certainty as that
+        # term's linear factor. Classified claims (evidence_class set) look up
+        # class_weight; unclassified claims fall back to their own certainty —
+        # see evidence_class_weight(). A pool of only weak/hedged sources still
+        # ends up below decisiveness_floor and surfaces as a wide-CI
         # low-confidence estimate (see the thin-evidence widening after pooling),
         # rather than being deleted and forcing an abstention on on-topic coverage.
+        avg_evidence_weight = sum(
+            evidence_class_weight(
+                p.evidence_class, p.certainty,
+                weights=settings.evidence_class_weight,
+                default=settings.evidence_class_weight_default,
+            )
+            for p in predictions
+        ) / len(predictions)
         # Layer B: down-weight older articles via exponential recency decay.
         article_date = result.published_date or None
         rweight = recency_weight(
@@ -807,13 +817,8 @@ async def _run_forecast_inner(
         # Layer C: down-weight off-topic articles by the gatekeeper's graded
         # relevance, applied convexly (squared) so a confident-but-tangential
         # article (relevance ~0.5 → 0.25× pull) can't drag the pooled mean.
-        # Layer D: up-weight a source that cites an explicit modeled/poll/market
-        # probability for the event itself — see quantitative_anchor_multiplier.
         quantitative_estimates = [p.quantitative_estimate for p in predictions]
-        quantitative_multiplier = quantitative_anchor_multiplier(
-            quantitative_estimates, multiplier=settings.quantitative_anchor_weight,
-        )
-        weight = credibility * avg_certainty * rweight * (relevance ** 2) * quantitative_multiplier
+        weight = credibility * avg_evidence_weight * rweight * (relevance ** 2)
 
         all_stances.append(avg_stance)
         all_weights.append(weight)
@@ -835,7 +840,7 @@ async def _run_forecast_inner(
         ))
 
     if evidence_class_counts:
-        logger.info("event=evidence_class_shadow question=%s counts=%s", _question_hash(req.question), evidence_class_counts)
+        logger.info("event=evidence_class_weighted question=%s counts=%s", _question_hash(req.question), evidence_class_counts)
 
     # Aggregate relevance safety net: if every surviving article is off-topic,
     # the relevance² weights collapse and pool_sources would fall back to an

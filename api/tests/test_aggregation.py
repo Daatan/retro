@@ -13,10 +13,10 @@ import pytest
 
 from forecast_api.aggregation import (
     claim_weighted_stance,
+    evidence_class_weight,
     logit,
     pool_sources,
     prob_to_stance,
-    quantitative_anchor_multiplier,
     recency_weight,
     resolve_stance_certainty,
     sigmoid,
@@ -24,6 +24,7 @@ from forecast_api.aggregation import (
     weighted_mean,
     widen_ci_for_thin_evidence,
 )
+from forecast_api.config import settings as api_settings
 
 
 class TestWidenCiForThinEvidence:
@@ -206,8 +207,9 @@ class TestQuantitativeMisalignmentRegression:
     the LLM to align stance/certainty with a cited quantitative_estimate, but
     nothing enforces it. An extractor that cites Opta's 18.83% correctly but
     leaves a stale positive stance (a plausible LLM inconsistency) would, under
-    quantitative_anchor_multiplier's weight premium, amplify the overconfidence
-    bug instead of fixing it — resolve_stance_certainty must close that gap.
+    evidence_class_weight's cited_probability premium, amplify the
+    overconfidence bug instead of fixing it — resolve_stance_certainty must
+    close that gap.
     """
 
     # 5 qualitative "favorite" match-recap sources, unchanged from
@@ -218,9 +220,12 @@ class TestQuantitativeMisalignmentRegression:
 
     def test_without_the_fix_misalignment_amplifies_overconfidence(self):
         stances = [s for s, _c in self.QUALITATIVE] + [self.MISALIGNED_STANCE]
-        # 4x premium applied to the misaligned *positive* stance — exactly
-        # what quantitative_anchor_multiplier does today without resolution.
-        weights = [c for _s, c in self.QUALITATIVE] + [self.MISALIGNED_CERTAINTY * 4.0]
+        # cited_probability's class_weight applied to the misaligned *positive*
+        # stance — exactly what evidence_class_weight does today without
+        # resolution.
+        weights = [c for _s, c in self.QUALITATIVE] + [
+            api_settings.evidence_class_weight["cited_probability"],
+        ]
         mean, *_ = pool_sources(stances, weights)
         assert _prob(mean) > 0.6  # bug amplified, not fixed
 
@@ -231,24 +236,42 @@ class TestQuantitativeMisalignmentRegression:
         assert resolved_stance < 0  # flipped to match the cited 18.83%
 
         stances = [s for s, _c in self.QUALITATIVE] + [resolved_stance]
-        weights = [c for _s, c in self.QUALITATIVE] + [resolved_certainty * 4.0]
+        weights = [c for _s, c in self.QUALITATIVE] + [
+            api_settings.evidence_class_weight["cited_probability"],
+        ]
         mean, *_ = pool_sources(stances, weights)
         assert _prob(mean) < 0.5
 
 
-class TestQuantitativeAnchorMultiplier:
-    def test_neutral_when_no_estimates_present(self):
-        assert quantitative_anchor_multiplier([None, None], multiplier=4.0) == 1.0
+class TestEvidenceClassWeight:
+    WEIGHTS = {
+        "cited_probability": 4.0,
+        "reported_fact": 1.0,
+        "cited_share": 1.5,
+        "reporting": 0.6,
+        "opinion": 0.25,
+    }
 
-    def test_neutral_on_empty_list(self):
-        assert quantitative_anchor_multiplier([], multiplier=4.0) == 1.0
+    def test_unclassified_falls_back_to_certainty(self):
+        # evidence_class omitted by the extractor — don't regress weighting
+        # quality for claims the classifier skipped.
+        assert evidence_class_weight(None, 0.73, weights=self.WEIGHTS) == 0.73
+        assert evidence_class_weight(None, 0.0, weights=self.WEIGHTS) == 0.0
 
-    def test_applies_multiplier_when_one_estimate_present(self):
-        assert quantitative_anchor_multiplier([None, 0.1883, None], multiplier=4.0) == 4.0
+    def test_known_classes_use_the_lookup_table(self):
+        for cls, expected in self.WEIGHTS.items():
+            # certainty is ignored once evidence_class is known.
+            assert evidence_class_weight(cls, 0.05, weights=self.WEIGHTS) == expected
 
-    def test_applies_multiplier_even_when_estimate_is_zero(self):
-        # 0.0 is a valid cited probability (not falsy-None) — must still count.
-        assert quantitative_anchor_multiplier([0.0], multiplier=4.0) == 4.0
+    def test_unrecognized_class_uses_the_default(self):
+        # Defensive only — PredictionExtraction.evidence_class is a Literal of
+        # the WEIGHTS keys, so pydantic already rejects anything else.
+        assert evidence_class_weight("mystery", 0.05, weights=self.WEIGHTS, default=0.42) == 0.42
+
+    def test_matches_the_configured_production_defaults(self):
+        # Locks in that config.py's ApiSettings.evidence_class_weight is what
+        # actually ships, not a value that drifted from this test's WEIGHTS.
+        assert api_settings.evidence_class_weight == self.WEIGHTS
 
 
 class TestFranceWorldCupRegression:
@@ -258,40 +281,46 @@ class TestFranceWorldCupRegression:
     entering later knockout rounds (stance +0.3 to +0.6, per the multi-stage
     guidance in extractor.py), pooling to ~75% — while one of those very articles
     also cites an explicit Opta model estimate of 18.83% for the tournament
-    outcome itself. Without a weight premium, the quantitative source is just one
-    of six equal-weight votes and gets outvoted by the qualitative majority.
+    outcome itself. Without evidence-class weighting, the quantitative source is
+    just one of six equal-weight votes and gets outvoted by the qualitative
+    majority.
     """
 
-    # (stance, certainty, quantitative_estimate)
+    # (stance, certainty, evidence_class) — unclassified qualitative "favorite"
+    # framing vs. the one explicit cited_probability claim (S2, retro
+    # docs/ORACLE_VARIABLES.md §5).
     SOURCES = [
         (0.30, 0.30, None),    # "favorite entering the Round of 16"
         (0.40, 0.50, None),    # "beats Paraguay to reach the quarter-finals"
         (0.46, 0.64, None),    # "strongest candidate to win the title"
         (0.61, 0.60, None),    # "superior head-to-head record"
         (0.43, 0.48, None),    # "historical coincidences" narrative piece
-        (-0.62, 0.85, 0.1883),  # cites Opta: 18.83% to win the tournament
+        (-0.62, 0.85, "cited_probability"),  # cites Opta: 18.83% to win the tournament
     ]
 
-    def _pool(self, *, apply_premium: bool, multiplier: float = 4.0):
-        stances = [s for s, _c, _q in self.SOURCES]
-        weights = []
-        for _s, cert, q in self.SOURCES:
-            mult = quantitative_anchor_multiplier([q], multiplier=multiplier) if apply_premium else 1.0
-            weights.append(cert * mult)
+    def _pool(self, *, classify: bool):
+        stances = [s for s, _c, _e in self.SOURCES]
+        weights = [
+            evidence_class_weight(
+                cls if classify else None, cert,
+                weights=api_settings.evidence_class_weight,
+            )
+            for _s, cert, cls in self.SOURCES
+        ]
         return pool_sources(stances, weights)
 
-    def test_without_premium_reproduces_overconfidence(self):
-        mean, *_ = self._pool(apply_premium=False)
+    def test_without_classification_reproduces_overconfidence(self):
+        mean, *_ = self._pool(classify=False)
         # The bug: qualitative volume pools well above the cited 18.83% baseline
         # (roughly 3x higher — the real incident pooled all the way to 75%).
         assert _prob(mean) > 0.55
 
-    def test_premium_pulls_pooled_estimate_toward_the_cited_baseline(self):
-        without_mean, *_ = self._pool(apply_premium=False)
-        with_mean, *_ = self._pool(apply_premium=True)
+    def test_classification_pulls_pooled_estimate_toward_the_cited_baseline(self):
+        without_mean, *_ = self._pool(classify=False)
+        with_mean, *_ = self._pool(classify=True)
         assert _prob(with_mean) < _prob(without_mean)
         # Still not literally 18.83% (qualitative sources retain some pull), but
-        # materially closer to the cited baseline than the unpremiumed pool.
+        # materially closer to the cited baseline than the unclassified pool.
         assert _prob(with_mean) < 0.5
 
 

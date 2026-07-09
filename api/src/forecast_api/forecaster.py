@@ -730,10 +730,19 @@ async def _run_forecast_inner(
         # — see resolve_stance_certainty() for why.
         resolved_predictions = []
         for p in predictions:
-            # Settled claims keep the extractor's own stance/certainty: a cited
-            # retrospective number in the same claim ("...defying models that
-            # gave him 22%") must not flip an accomplished fact's direction.
-            if p.settled:
+            # Settlement-grade claims keep the extractor's own stance/certainty:
+            # a cited retrospective number in the same claim ("...defying models
+            # that gave him 22%") must not flip an accomplished fact's direction.
+            # A settled=true claim that doesn't clear the settlement_grade bar
+            # (hedged, below-boundary) is not trusted as an accomplished fact —
+            # it must still go through the same realignment as ordinary evidence,
+            # or it keeps quantitative_anchor_multiplier's weight premium below
+            # while carrying an unrealigned, possibly wrong-direction stance.
+            if p.settled and settlement_grade(
+                p.stance, p.certainty,
+                min_stance=settings.settlement_min_claim_stance,
+                min_certainty=settings.settlement_min_claim_certainty,
+            ):
                 resolved_predictions.append(p)
                 continue
             stance, certainty = resolve_stance_certainty(p.stance, p.certainty, p.quantitative_estimate)

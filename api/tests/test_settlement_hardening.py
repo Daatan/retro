@@ -169,6 +169,32 @@ class TestDirectionGuard:
         assert resp.mean == pytest.approx(-api_settings.settlement_stance)
 
 
+class TestBelowGradeRealignment:
+    async def test_below_grade_settled_claim_is_still_realigned(self, monkeypatch):
+        # A settled=true claim that fails the settlement_grade gate (hedged,
+        # low certainty) is demoted to ordinary evidence — but pre-fix it kept
+        # its raw, unrealigned stance/certainty even when it cited an explicit
+        # quantitative_estimate, while still earning quantitative_anchor_multiplier's
+        # weight premium via that same estimate. That let a misaligned stance
+        # get amplified rather than corrected — exactly what
+        # resolve_stance_certainty exists to prevent (see its docstring).
+        _patch_pipeline(monkeypatch, {
+            "source-1": [_prediction(-0.7, 0.5, settled=True, quantitative_estimate=0.7)],
+            "source-2": [_prediction(0.0, 0.5)],
+        })
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="settlement hardening — below-grade realignment G",
+            articles=[_article(1), _article(2)],
+        ))
+
+        # Demoted: doesn't clear settlement_grade even after realignment.
+        assert not resp.sources[0].settled
+        # Realigned to the cited number (2*0.7-1 = 0.4, certainty forced to
+        # 0.9), not left at the raw, extractor-asserted (-0.7, 0.5).
+        assert resp.sources[0].stance == pytest.approx(0.4)
+        assert resp.sources[0].certainty == pytest.approx(0.9)
+
+
 class TestPureHelpers:
     def test_settlement_grade_gates(self):
         kw = {"min_stance": 0.9, "min_certainty": 0.9}

@@ -714,6 +714,10 @@ async def _run_forecast_inner(
     relevances: list[float] = []
     settled_directions: list[float] = []
     ref_date = datetime.now().strftime("%Y-%m-%d")
+    # S2 shadow-classification observability only (retro docs/ORACLE_VARIABLES.md
+    # §5) — not read by anything below; lets us judge real-traffic classification
+    # quality/coverage before any weight-formula cutover.
+    evidence_class_counts: dict[str, int] = {}
 
     for result, outcome in zip(search_results, outcomes):
         if isinstance(outcome, Exception):
@@ -725,6 +729,9 @@ async def _run_forecast_inner(
         if outcome is None:
             continue
         _, relevance, predictions = outcome
+        for p in predictions:
+            if p.evidence_class is not None:
+                evidence_class_counts[p.evidence_class] = evidence_class_counts.get(p.evidence_class, 0) + 1
         # A source with an explicit quantitative_estimate has its stance/certainty
         # resolved from that figure rather than trusted verbatim from the extractor
         # — see resolve_stance_certainty() for why.
@@ -826,6 +833,9 @@ async def _run_forecast_inner(
             settled=bool(settled_preds) or None,
             quantitative_estimate=next((q for q in quantitative_estimates if q is not None), None),
         ))
+
+    if evidence_class_counts:
+        logger.info("event=evidence_class_shadow question=%s counts=%s", _question_hash(req.question), evidence_class_counts)
 
     # Aggregate relevance safety net: if every surviving article is off-topic,
     # the relevance² weights collapse and pool_sources would fall back to an

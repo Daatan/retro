@@ -837,6 +837,7 @@ async def _run_forecast_inner(
             relevance_score=round(relevance, 3),
             settled=bool(settled_preds) or None,
             quantitative_estimate=next((q for q in quantitative_estimates if q is not None), None),
+            evidence_weight=round(avg_evidence_weight, 3),
         ))
 
     if evidence_class_counts:

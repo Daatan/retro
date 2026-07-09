@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from tm import net_guard
-from tm.net_guard import UnsafeURLError, is_safe_url, safe_get, safe_get_async
+from tm.net_guard import UnsafeURLError, is_safe_url, safe_get, safe_get_async, unsafe_reason
 
 
 @pytest.mark.parametrize(
@@ -33,6 +33,44 @@ def test_is_safe_url_rejects(url):
 @pytest.mark.parametrize("url", ["http://93.184.216.34/", "https://8.8.8.8/path"])
 def test_is_safe_url_accepts_public(url):
     assert is_safe_url(url)
+
+
+@pytest.mark.parametrize("url", ["http://93.184.216.34/", "https://8.8.8.8/path"])
+def test_unsafe_reason_is_none_for_public(url):
+    assert unsafe_reason(url) is None
+
+
+def test_unsafe_reason_separates_dead_link_from_ssrf_attempt():
+    """The whole point of the reason: these two must not read the same in a log.
+
+    ``.invalid`` is reserved by RFC 2606 and never resolves, so this stays offline.
+    """
+    dead_link = unsafe_reason("http://x.invalid")
+    ssrf = unsafe_reason("http://169.254.169.254/latest/meta-data/")
+
+    assert dead_link is not None and "does not resolve" in dead_link
+    assert ssrf is not None and "non-public address" in ssrf
+    assert dead_link != ssrf
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("file:///etc/passwd", "scheme not allowed"),
+        ("example.com/no-scheme", "scheme not allowed"),
+        ("http://", "no host"),
+        ("http://127.0.0.1/", "non-public address"),
+    ],
+)
+def test_unsafe_reason_classifies(url, expected):
+    reason = unsafe_reason(url)
+    assert reason is not None and expected in reason
+
+
+def test_safe_get_error_names_the_reason():
+    with _sync_client(lambda r: httpx.Response(200)) as c:
+        with pytest.raises(UnsafeURLError, match="non-public address"):
+            safe_get("http://127.0.0.1/secrets", client=c)
 
 
 def _sync_client(handler):

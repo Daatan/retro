@@ -125,6 +125,56 @@ Examples — related event: "Likud wins more than 33 seats in the election":
   "Likud is seen as gaining momentum heading into the vote" \
                                                → stance +0.2, certainty 0.3, quantitative_estimate null (momentum, no cited figure)
 
+## EVIDENCE CLASS — optional; classify the KIND of evidence this claim is
+This is a new, EXPERIMENTAL field. It is not yet used to weight anything —
+classify it independently and honestly; do not let it influence stance or
+certainty, and vice versa. If a claim genuinely does not fit one category
+cleanly, OMIT the field entirely rather than guessing — a missing
+evidence_class is fine, a wrong one is worse than none.
+
+Choose exactly one of:
+  reported_fact      — a plain declarative statement of something that
+                        happened or is currently true (not hedged, not a
+                        forecast). Independent of `settled`: a reported_fact
+                        can be about a sub-event that doesn't itself settle
+                        the related event (e.g. "the committee voted 12-10"
+                        is a reported_fact but the confirmation isn't settled).
+  cited_probability   — the claim cites an explicit modeled/poll/market
+                        PROBABILITY for the related event itself (same
+                        figure that would populate `quantitative_estimate`
+                        as a genuine probability of the event occurring).
+  cited_share         — the claim cites a poll SHARE, vote share, or seat
+                        count. This is explicitly NOT a probability the
+                        event occurs — "the party polls at 28%" is a share
+                        of the vote, not a 28% chance of winning. Use this
+                        even when the same figure would also populate
+                        `quantitative_estimate` under today's (separate,
+                        unrelated) rules for that field.
+  reporting           — ordinary hedged or prospective news coverage: "is
+                        expected to", "sources say", "is likely to" — a
+                        genuine report, but about a future or uncertain
+                        state, not a settled fact.
+  opinion             — a pundit's, fan's, or individual's subjective view,
+                        speculation, or casual figure of speech — "seen as
+                        the favorite", "I'd give it 50-50" from an unnamed
+                        or non-expert voice.
+
+Examples — related event: "Assad regime falls in Syria":
+  "Rebels seized the capital on Sunday as Assad fled to Moscow" \
+                                               → evidence_class reported_fact
+  "Analysts expect the rebel offensive to reach Damascus within weeks" \
+                                               → evidence_class reporting
+  "One commentator said Assad is basically finished at this point" \
+                                               → evidence_class opinion
+
+Examples — related event: "Likud wins more than 33 seats in the election":
+  "A poll-aggregator model gives Likud a 22% chance of winning more than 33 seats" \
+                                               → evidence_class cited_probability
+  "The latest poll puts Likud at 28% of the vote" \
+                                               → evidence_class cited_share
+  "Likud is seen as gaining momentum heading into the vote" \
+                                               → evidence_class reporting
+
 ## SETTLED — the event already happened (or definitively cannot)
 When the article REPORTS THE OUTCOME AS AN ACCOMPLISHED FACT — the event occurred, \
 or became permanently impossible (deadline passed, subject died, contest decided) — \
@@ -204,12 +254,14 @@ Related event: {event_name} — {event_description}
 IMPORTANT: Your response must be a JSON object with a "predictions" key containing a list.
 Example: {{"predictions": [ {{...}}, {{...}} ]}}
 
-Each prediction has five core fields, plus a sixth used only when applicable:
+Each prediction has five core fields, plus two used only when applicable:
   quote (string — original language), claim (string — English), \
 stance (float −1 to 1), certainty (float 0 to 1), settled (boolean — true only when \
 the source reports the outcome as an accomplished fact), quantitative_estimate \
 (float 0 to 1, OMIT this field entirely unless the source cites an explicit modeled \
-probability/poll/market figure for the event itself — see the section above)
+probability/poll/market figure for the event itself — see the section above), \
+evidence_class (one of reported_fact / cited_probability / cited_share / reporting / \
+opinion, OMIT this field entirely if none fits cleanly — see the section above)
 
 Example — related event: "Assad regime falls in Syria":
 {{
@@ -219,14 +271,16 @@ Example — related event: "Assad regime falls in Syria":
       "claim": "Rebel advances toward Hama make Assad's fall increasingly likely",
       "stance": 0.7,
       "certainty": 0.6,
-      "settled": false
+      "settled": false,
+      "evidence_class": "reporting"
     }},
     {{
       "quote": "Rebels seized the capital on Sunday as Assad fled to Moscow",
       "claim": "The Assad regime has fallen; rebels control Damascus",
       "stance": 1.0,
       "certainty": 0.95,
-      "settled": true
+      "settled": true,
+      "evidence_class": "reported_fact"
     }}
   ]
 }}
@@ -240,7 +294,8 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
       "stance": -0.62,
       "certainty": 0.85,
       "settled": false,
-      "quantitative_estimate": 0.1883
+      "quantitative_estimate": 0.1883,
+      "evidence_class": "cited_probability"
     }}
   ]
 }}

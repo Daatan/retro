@@ -1,6 +1,6 @@
 import json as _json
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional, Any
+from typing import Literal, Optional, Any
 from enum import Enum
 
 
@@ -38,6 +38,15 @@ class PredictionExtraction(BaseModel):
                     "probability in [0,1]. Null when the source has no such cited figure — "
                     "qualitative 'favorite'/'front-runner' framing without a stated number "
                     "does not count.",
+    )
+    evidence_class: Optional[Literal[
+        "reported_fact", "cited_probability", "cited_share", "reporting", "opinion",
+    ]] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow-classification only (S2, retro "
+                    "docs/ORACLE_VARIABLES.md §5) — not yet used to weight anything. "
+                    "The kind of evidence this claim is, independent of stance/certainty. "
+                    "Omit entirely rather than guessing when none fits cleanly.",
     )
     # Not requested from LLM; kept Optional for backward compat with existing atlas entries
     sentiment: Optional[float] = Field(default=None, ge=0.0, le=1.0)

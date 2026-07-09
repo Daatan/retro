@@ -386,17 +386,62 @@ Shipped, in the accepted sequencing order (§6):
   unrealigned stance while still earning the ×4 anchor weight premium from
   that estimate; it now goes through `resolve_stance_certainty` like ordinary
   evidence.
+- **daatan claim-field wiring** — daatan #1061: analyze, news-indexer push,
+  the admin Oracle-sources backfill, and bot voting now forward the
+  prediction's stored `claimDirection`/`claimDeadline` on every Oracle call,
+  arming the #244 direction guard (previously fail-open everywhere — nothing
+  sent the fields). `ClaimDirection.NONE`/null are omitted, never sent as the
+  literal string `"none"` (this API's `claim_direction` is a strict
+  `Literal["arrival", "survival"]` — anything else 422s).
+- **Clearable settled latch** — daatan #1062: `clearSettledLatch` +
+  `DELETE /api/admin/forecasts/[id]/settled`, admin-gated, surfaced as a
+  "Clear settlement" button on the forecast page when `settled=true`. Was
+  the §6 precondition alongside settlement hardening; the F-35 incident's fix
+  is no longer a one-off manual DB `UPDATE`.
+- **Evidence pool — foundation layer only** — daatan #1063: new
+  `EvidencePoolArticle` table, one row per `(predictionId, urlHash)`, the row
+  itself doubling as the extraction cache. analyze/news-indexer/backfill
+  shadow-write their per-source signal here in addition to their existing
+  writes. **Nothing reads this table to compute an estimate yet** — the
+  recompute-over-pool cutover (per path, plus retro's search demoted to
+  discovery-only, dedup moved per-pool, recency floor dropped inside the
+  pool) is still open, per the table below. `excluded` column reserved
+  (unused) for the still-open per-article admin exclusion feature.
+- **S2 — shadow-classification only** — retro (this PR): extractor prompt +
+  `PredictionExtraction.evidence_class` (`reported_fact` / `cited_probability`
+  / `cited_share` / `reporting` / `opinion`, optional, fail-open to null on
+  ambiguity). Classified and logged (`event=evidence_class_shadow`) for
+  observability on real traffic; **provably does not affect pooling** — same
+  claims produce byte-identical `mean`/CI/per-source weight whether or not
+  `evidence_class` is populated (see `test_evidence_class.py`), and it's not
+  yet on the `/forecast` response. The actual `class_weight[evidence_class] ×
+  recency × relevance²` cutover replacing certainty-as-weight/the 0.9
+  floor/the ×4 multiplier is still open — the single-source-dominance
+  complaint is untouched until then.
 
 Open, in suggested order:
 
-- daatan wiring: pass stored `claimDirection`/`claimDeadline` on Oracle calls
-  so the #244 direction guard actually arms (currently fail-open everywhere).
-- Clearable settled latch (admin one-click clear; auto-clear deliberately
-  deferred) — precondition for the pool, per §6.
-- Evidence pool (§6 part 2) with per-(article, question) extraction cache and
-  pruning policy.
-- S2 (`evidence_class` replacing certainty-floor/×4-anchor/certainty triple) —
-  independent, any time; the single-source-dominance complaint is untouched
-  until then.
+- Evidence pool — the recompute-over-pool cutover (all four estimate paths
+  read from the pool instead of their own fetch; retro's search becomes
+  discovery-only; extraction re-use across updates; dedup + recency-floor
+  changes inside the pool). Foundation above is a precondition, not the
+  cutover itself.
+- Per-article admin exclusion (the pool's `excluded` column is reserved but
+  unenforced) — the last §6 precondition still open.
+- S2 weight cutover: replace certainty-as-weight/the 0.9 floor/the ×4
+  quantitative-anchor multiplier with `class_weight[evidence_class] ×
+  recency × relevance²`, once the shadow-classification above has been
+  observed to be sane on real traffic. This is what actually fixes
+  single-source dominance — nothing shipped so far changes it.
 - S3–S6 and the remaining small known defect from §7: `credibilityWeight`
-  still 1.0 for all real sources.
+  still ≈1.0 for all real sources — **not a code bug** (investigated
+  2026-07-09): `get_credibility_weight()` is correctly implemented, but
+  `data/leaderboard.json` on the Oracle host has been frozen since
+  2026-03-28 (no cron/systemd timer/workflow anywhere regenerates it), and
+  even that stale snapshot only ever scored 5 Israeli outlets against a
+  2022-dated historical backtesting harness (`data/events/*.json`)
+  architecturally disconnected from the live production pipeline's 19+
+  actively-scraped international sources. Fixing this for real means
+  building a resolution-outcome feedback loop (daatan `Prediction` resolves
+  → which sources contributed → retro scoring) — its own design pass, on par
+  with the evidence pool / S2 above, not a quick fix.

@@ -375,6 +375,17 @@ Shipped, in the accepted sequencing order (§6):
 - **Prod data fixes (2026-07-08)** — F-35 `settled` latch cleared (audit found
   no other bad latches); all 409 pre-v1.31.2 `oracleSnapshot` rows normalized
   to percent, removing the two-scale historical caveat from live data.
+- **elections.ts scale fix** — daatan #1057 + elections #18: `meanToProbability`
+  rewritten as a percent pass-through (round + clamp [0, 100]) instead of
+  converting `oracleSnapshot.mean` as if it were stance-scale; moved into
+  `forecast-view.ts` next to `stanceToConfidence` (which correctly stays
+  stance-scale — it reads per-source `sources[].stance`, not the aggregate).
+- **Settlement realignment gate** — retro #246: the #244 realignment-skip now
+  keys off `settlement_grade(...)`, not the raw `settled` flag. A below-grade
+  `settled` claim citing a `quantitative_estimate` previously kept its raw,
+  unrealigned stance while still earning the ×4 anchor weight premium from
+  that estimate; it now goes through `resolve_stance_certainty` like ordinary
+  evidence.
 
 Open, in suggested order:
 
@@ -387,7 +398,5 @@ Open, in suggested order:
 - S2 (`evidence_class` replacing certainty-floor/×4-anchor/certainty triple) —
   independent, any time; the single-source-dominance complaint is untouched
   until then.
-- S3–S6 and the small known defects from §2.5/§7: daatan
-  `elections.ts meanToProbability` still converts as if `mean` were
-  stance-scale (dead only while `externalProbability` is set);
-  `credibilityWeight` still 1.0 for all real sources.
+- S3–S6 and the remaining small known defect from §7: `credibilityWeight`
+  still 1.0 for all real sources.

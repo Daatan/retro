@@ -108,6 +108,7 @@ class SourceSignal(BaseModel):
     relevance_score: Optional[float] = Field(default=None, description="Graded topic relevance [0,1]; its square multiplies this source's aggregation weight")
     settled: Optional[bool] = Field(default=None, description="True when this source reports the event's outcome as an accomplished fact (settlement claim), not a prediction")
     quantitative_estimate: Optional[float] = Field(default=None, description="Explicit modeled/poll/market probability [0,1] this source cited for the event itself, if any; carries a weight premium via evidence_class=cited_probability (see evidence_class_weight)")
+    evidence_weight: Optional[float] = Field(default=None, description="This source's evidence_class-derived weight component (S2 cutover) — the linear factor `credibility * evidence_weight * recency * relevance^2` reduces to when recomputing a pool of already-extracted sources without redoing extraction. NOT credibility/recency/relevance combined, just the evidence_class-weighting term; see evidence_class_weight() in aggregation.py. evidence_class itself stays internal — only its resolved weight is exposed.")
 
 
 class ArticleDebug(BaseModel):

@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from forecast_api import forecaster
+from forecast_api.config import settings as api_settings
 from forecast_api.models import ArticleInput, ForecastRequest
 from tm.models import ExtractionOutput, GatekeeperOutput, PredictionExtraction
 
@@ -106,7 +107,9 @@ class TestWeightCutover:
     async def test_evidence_class_is_not_surfaced_on_the_response(self, monkeypatch):
         """The weight cutover doesn't change the API contract — SourceSignal
         (and therefore the /forecast response) still has no evidence_class
-        field; it's an internal weighting input only."""
+        field; it's an internal weighting input only. Its *resolved weight* is
+        exposed instead — see TestEvidenceWeightExposure below — so the
+        class_weight lookup table itself stays internal to retro."""
         _patch_pipeline(monkeypatch, {
             "source-1": [_prediction(evidence_class="reported_fact")],
         })
@@ -115,3 +118,33 @@ class TestWeightCutover:
             articles=[_article(1)],
         ))
         assert not hasattr(resp.sources[0], "evidence_class")
+
+
+class TestEvidenceWeightExposure:
+    """evidence_weight (the resolved per-source weighting factor, not the
+    evidence_class taxonomy itself) is exposed on SourceSignal so a caller can
+    later recompute a pool of already-extracted sources without re-deriving
+    class_weight lookups outside retro — see docs/ORACLE_VARIABLES.md's
+    recompute-over-pool item."""
+
+    async def test_classified_source_exposes_its_class_weight(self, monkeypatch):
+        _patch_pipeline(monkeypatch, {
+            "source-1": [_prediction(evidence_class="cited_probability", certainty=0.5)],
+        })
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="evidence weight exposure — classified",
+            articles=[_article(1)],
+        ))
+        assert resp.sources[0].evidence_weight == pytest.approx(
+            api_settings.evidence_class_weight["cited_probability"],
+        )
+
+    async def test_unclassified_source_exposes_its_own_certainty(self, monkeypatch):
+        _patch_pipeline(monkeypatch, {
+            "source-1": [_prediction(evidence_class=None, certainty=0.73)],
+        })
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="evidence weight exposure — unclassified",
+            articles=[_article(1)],
+        ))
+        assert resp.sources[0].evidence_weight == pytest.approx(0.73)

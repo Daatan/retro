@@ -437,16 +437,32 @@ Shipped, in the accepted sequencing order (§6):
   weighting input only. **This is what actually fixes single-source
   dominance** — the France World Cup and Opta-anchor classes of regression
   are now protected end-to-end, not just at the pure-function level.
+- **Per-article admin exclusion** — daatan #1068: admin-only "Evidence pool"
+  panel on the forecast page, `PATCH .../evidence-pool/[articleId]` toggles
+  `EvidencePoolArticle.excluded`. Not yet enforced by any computation — the
+  last §6 precondition is now buildable-on-top-of, not itself the cutover.
+- **`evidence_weight` exposed on `/forecast`'s `SourceSignal`** — retro (this
+  PR): the per-source `avg_evidence_weight` forecaster.py already computes
+  internally (S2's resolved `class_weight`/certainty-fallback value) is now a
+  response field, so a caller can persist it per pooled article. The
+  `evidence_class` taxonomy itself and the `class_weight` lookup table stay
+  internal to retro — only the resolved number crosses the API boundary.
+  First concrete step of the recompute-over-pool cutover below: without this,
+  a future recompute would silently fall back to certainty for every article,
+  since evidence_class was never persisted anywhere outside retro's own
+  request lifetime.
 
 Open, in suggested order:
 
-- Evidence pool — the recompute-over-pool cutover (all four estimate paths
-  read from the pool instead of their own fetch; retro's search becomes
-  discovery-only; extraction re-use across updates; dedup + recency-floor
-  changes inside the pool). Foundation above is a precondition, not the
-  cutover itself.
-- Per-article admin exclusion (the pool's `excluded` column is reserved but
-  unenforced) — the last §6 precondition still open.
+- Evidence pool — the recompute-over-pool cutover: daatan persists
+  `evidenceWeight` into `EvidencePoolArticle` (next step, using the field
+  above); retro gains a pure aggregate-only endpoint that reruns the pooling
+  math over a list of already-extracted per-source signals (no search, no
+  LLM); daatan shadow-compares before cutting any path over; all four
+  estimate paths eventually read from the pool instead of their own fetch;
+  retro's search becomes discovery-only; dedup + recency-floor changes move
+  inside the pool. Foundation above is a precondition, not the cutover
+  itself.
 - S3–S6 and the remaining small known defect from §7: `credibilityWeight`
   still ≈1.0 for all real sources — **not a code bug** (investigated
   2026-07-09): `get_credibility_weight()` is correctly implemented, but

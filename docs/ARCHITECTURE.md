@@ -174,7 +174,7 @@ Used to compute per-category source accuracy scores for the forecasting model.
 ```
 
 ### Prediction (extracted by LLM)
-Each prediction has: `quote`, `claim`, `stance` (−1 to +1, event probability), `certainty`, `settled` (bool — true when the source reports the outcome as an accomplished fact, not a prediction).
+Each prediction has: `quote`, `claim`, `stance` (−1 to +1, event probability), `certainty`, `settled` (bool — true when the source reports the outcome as an accomplished fact, not a prediction; the prompt explicitly excludes historical background such as a past removal/ban, see #244), and `quantitative_estimate` (optional [0,1] — an explicit modeled probability, poll number, or market price the source cites for the event itself; carries the quantitative-anchor weight premium).
 Older atlas entries also carry: `sentiment`, `specificity`, `hedge_ratio`, `conditionality`, `magnitude`, `time_horizon`, `prediction_type`, `source_authority` (these fields were dropped from the extractor prompt in PR #102 to reduce latency; retained as Optional for backward compatibility).
 
 **stance** = how strongly the prediction implies the related event WILL occur.
@@ -235,7 +235,7 @@ git push → GitHub Actions → GitHub Pages
 | Role | Model | Notes |
 |---|---|---|
 | Gatekeeper | `bedrock/amazon.nova-micro-v1:0` | Topic-relevance filter: is this article on-topic for the event? Uses a directive coarse-gate prompt that passes INDIRECT evidence (rival collapse, coalition dynamics, etc.), not just explicit predictions; regression-guarded by `pipeline/eval_gatekeeper.py`. |
-| Extractor | `bedrock/amazon.nova-lite-v1:0` | Structured extraction of up to 5 predictions per article (5 fields: quote, claim, stance, certainty, settled) |
+| Extractor | `bedrock/amazon.nova-lite-v1:0` | Structured extraction of up to 5 predictions per article (6 fields: quote, claim, stance, certainty, settled, quantitative_estimate) |
 | Article Aggregator | `bedrock/amazon.nova-lite-v1:0` | Collapses high-spread (>0.4) predictions within a single article into one editorial signal |
 | Keywords | `bedrock/amazon.nova-micro-v1:0` | One-time: generate search keywords per event (via `tm.llm`) |
 
@@ -546,11 +546,12 @@ with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
 
 **Stage 3 — Weight by Source Credibility**
 1. `leaderboard.get_credibility_weight(source_id)` — OpenSkill conservative score (μ − 3σ) from `leaderboard.json`
-2. `weight = credibility × certainty` per prediction
+2. `weight = credibility × certainty × recency × relevance²` per prediction, times `quantitative_anchor_multiplier` (×4) when the source cites an explicit probability/poll/market number (see [ORACLE_VARIABLES.md](ORACLE_VARIABLES.md) for the audit of these knobs)
 
 **Stage 4 — Aggregate → Distribution** (`aggregation.pool_sources`)
-1. Each source's stance is converted to a probability, clamped to `[0.01, 0.99]`, and the sources are pooled in **log-odds (logit) space** — a weighted *mean* of log-odds (a logarithmic opinion pool), weighted by `credibility × certainty × recency`. The result is converted back to `{ mean, std, ci_low, ci_high }` on the stance scale.
+1. Each source's stance is converted to a probability, clamped to `[0.01, 0.99]`, and the sources are pooled in **log-odds (logit) space** — a weighted *mean* of log-odds (a logarithmic opinion pool), using the Stage 3 weights. The result is converted back to `{ mean, std, ci_low, ci_high }` on the stance scale.
 2. Convert to probability: `p = (mean + 1) / 2`
+3. **Settlement override** — when ≥ `settlement_min_sources` (2) independent sources report the outcome as an accomplished fact, the estimate is pinned to ±0.94 stance (97/3%) and the response carries `settled: true`. Since #244 a source only counts as settlement-grade when its claim is decisive (`|stance| ≥ settlement_min_claim_stance` and `certainty ≥ settlement_min_claim_certainty`, both 0.9), settled claims skip the stance/certainty realignment step (no retro-fitted odds), and when the caller supplies `claim_direction`/`claim_deadline` an early settlement may only pin in the occurrence direction (arrival → YES, survival → NO) before the deadline. Both request fields are optional and fail-open.
 
 > **Why Oracle probabilities stay in ~20–80% (by design, not a clamp).** There is
 > no hard cap on the output. The only hard clamp is *per-source* (`logit_clamp`,

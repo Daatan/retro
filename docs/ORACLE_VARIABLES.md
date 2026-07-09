@@ -1,7 +1,7 @@
 # Oracle math — variable audit and simplification plan
 
-Audited 2026-07-08/09 against retro `1fb87ce3b` and daatan `d742ce90`. Read-only
-audit; nothing here is implemented yet. Companion to `TEMPORAL_MODEL_PLAN.md`
+Audited 2026-07-08/09 against retro `1fb87ce3b` and daatan `d742ce90`. Written
+as a read-only audit; §8 tracks what has shipped since. Companion to `TEMPORAL_MODEL_PLAN.md`
 (the glide this document references is that plan's Stage 0, live in daatan since
 2026-07-05). Production evidence cited below is from the 2026-07-08
 investigation (Oracle host log + prod requote runs + public page JSON).
@@ -353,3 +353,41 @@ pruning + extraction cache. S2 in parallel at any point.
 - Volatility: same-question estimates swung 30–50 probability points across
   same-day re-runs on 1–4 surviving articles (search nondeterminism + 25 s
   per-article timeouts + memoryless runs).
+
+## 8. Implementation status (2026-07-09)
+
+Shipped, in the accepted sequencing order (§6):
+
+- **S1 / funnel (persistence symmetry)** — daatan #1053: every estimate path
+  (creation, analyze, news-indexer push, backfill, requote clock) writes
+  through one `recordEstimate` with an `ORIGIN_POLICY` table; snapshots gain
+  structured `origin` + `articles_used`; needle+band updates are atomic;
+  backfill now sets `externalProbability`. Reader side — daatan #1055: one
+  `getProbabilityHistory` accessor (includes clock rows), chart renders glide
+  as hollow dots, gauge reads the funnel cache instead of the latest evidence
+  snapshot. DB semantics documented in daatan `docs/DATABASE.md` (#1054).
+- **Settlement hardening** — retro #244: settlement-grade gates
+  (`settlement_min_claim_stance`/`_certainty` = 0.9), settled claims skip
+  stance/certainty realignment, direction guard via optional
+  `claim_direction`/`claim_deadline` (fail-open), extractor prompt rule
+  against historical-background "settlements" (the F-35 failure mode),
+  demotions/suppressions logged (`settlement_demoted`/`settlement_suppressed`).
+- **Prod data fixes (2026-07-08)** — F-35 `settled` latch cleared (audit found
+  no other bad latches); all 409 pre-v1.31.2 `oracleSnapshot` rows normalized
+  to percent, removing the two-scale historical caveat from live data.
+
+Open, in suggested order:
+
+- daatan wiring: pass stored `claimDirection`/`claimDeadline` on Oracle calls
+  so the #244 direction guard actually arms (currently fail-open everywhere).
+- Clearable settled latch (admin one-click clear; auto-clear deliberately
+  deferred) — precondition for the pool, per §6.
+- Evidence pool (§6 part 2) with per-(article, question) extraction cache and
+  pruning policy.
+- S2 (`evidence_class` replacing certainty-floor/×4-anchor/certainty triple) —
+  independent, any time; the single-source-dominance complaint is untouched
+  until then.
+- S3–S6 and the small known defects from §2.5/§7: daatan
+  `elections.ts meanToProbability` still converts as if `mean` were
+  stance-scale (dead only while `externalProbability` is set);
+  `credibilityWeight` still 1.0 for all real sources.

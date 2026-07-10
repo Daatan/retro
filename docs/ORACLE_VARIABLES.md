@@ -537,10 +537,24 @@ Small-tasks breakdown, in order:
   real data before the scoring design (incremental per-resolution OpenSkill
   update vs. `Scorer.run()`-style full replay from the accumulated JSONL —
   still an open question, see below) is settled.
+- **`evidence_class` exposed on `/forecast`'s `SourceSignal`** — retro (this
+  PR): found while scoping the resolution hook below — daatan's
+  `EvidencePoolArticle` only ever persisted the *resolved* `evidence_weight`
+  number (#251/#1071), never the `evidence_class` label itself (deliberately
+  kept internal by #251). The opinion-exclusion rule above needs the actual
+  label — `evidence_weight` alone can't tell an opinion-class article apart
+  from a low-certainty unclassified one, since both can land at a similar
+  numeric weight. Same class of gap as the `relevance_score` discovery during
+  the pool-recompute cutover (§8 step 2b) — a consumer need emerged that the
+  original "stays internal" design didn't anticipate. Exposed as the
+  article's most common non-null `evidence_class` among its claims (a claim-
+  level field collapsed to article level, same shape as `avg_evidence_weight`
+  itself). 4 new tests.
 - **daatan: resolution hook** — when a `Prediction` resolves, gather its
-  `EvidencePoolArticle` rows, exclude `opinion`-class, and fire-and-forget
-  POST to the endpoint above (same `.catch()`-wrapped pattern as
-  `addArticlesToPool` / `shadowCompareRecompute`).
+  `EvidencePoolArticle` rows (once `evidenceClass` is persisted there, mirroring
+  #1071's funnel for `evidenceWeight`), exclude `opinion`-class, and
+  fire-and-forget POST to the endpoint above (same `.catch()`-wrapped pattern
+  as `addArticlesToPool` / `shadowCompareRecompute`).
 - **retro: shadow scoring** — an incremental OpenSkill update per ingested
   resolution, written to a new field separate from the vault-curated
   `skill_conservative` `get_credibility_weight()` reads today. Open question

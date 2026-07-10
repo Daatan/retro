@@ -104,28 +104,28 @@ class TestWeightCutover:
         ))
         assert resp_b.mean < 0
 
-    async def test_evidence_class_is_not_surfaced_on_the_response(self, monkeypatch):
-        """The weight cutover doesn't change the API contract — SourceSignal
-        (and therefore the /forecast response) still has no evidence_class
-        field; it's an internal weighting input only. Its *resolved weight* is
-        exposed instead — see TestEvidenceWeightExposure below — so the
-        class_weight lookup table itself stays internal to retro."""
+    async def test_evidence_class_is_surfaced_on_the_response(self, monkeypatch):
+        """evidence_class IS exposed on SourceSignal (see
+        TestEvidenceClassExposure below) — the credibility feedback loop
+        (docs/ORACLE_VARIABLES.md §9) needs the actual label, not just its
+        resolved weight, to exclude opinion-class articles from the
+        resolution-outcome signal: evidence_weight alone can't distinguish an
+        opinion-class article from a low-certainty unclassified one."""
         _patch_pipeline(monkeypatch, {
             "source-1": [_prediction(evidence_class="reported_fact")],
         })
         resp = await forecaster.run_forecast(ForecastRequest(
-            question="evidence class weight cutover — not on response",
+            question="evidence class weight cutover — on response",
             articles=[_article(1)],
         ))
-        assert not hasattr(resp.sources[0], "evidence_class")
+        assert resp.sources[0].evidence_class == "reported_fact"
 
 
 class TestEvidenceWeightExposure:
-    """evidence_weight (the resolved per-source weighting factor, not the
-    evidence_class taxonomy itself) is exposed on SourceSignal so a caller can
-    later recompute a pool of already-extracted sources without re-deriving
-    class_weight lookups outside retro — see docs/ORACLE_VARIABLES.md's
-    recompute-over-pool item."""
+    """evidence_weight (the resolved per-source weighting factor) is exposed
+    on SourceSignal so a caller can later recompute a pool of already-extracted
+    sources without re-deriving class_weight lookups outside retro — see
+    docs/ORACLE_VARIABLES.md's recompute-over-pool item."""
 
     async def test_classified_source_exposes_its_class_weight(self, monkeypatch):
         _patch_pipeline(monkeypatch, {
@@ -148,3 +148,62 @@ class TestEvidenceWeightExposure:
             articles=[_article(1)],
         ))
         assert resp.sources[0].evidence_weight == pytest.approx(0.73)
+
+
+class TestEvidenceClassExposure:
+    """evidence_class itself (the label, not just its resolved weight) is
+    exposed on SourceSignal — added for the credibility feedback loop
+    (docs/ORACLE_VARIABLES.md §9), which needs to exclude opinion-class
+    articles from the resolution-outcome signal and can't do that from
+    evidence_weight alone. evidence_class is a per-claim field, so an
+    article with several claims exposes the most common non-null label."""
+
+    async def test_single_claim_exposes_its_class(self, monkeypatch):
+        _patch_pipeline(monkeypatch, {
+            "source-1": [_prediction(evidence_class="opinion")],
+        })
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="evidence class exposure — single claim",
+            articles=[_article(1)],
+        ))
+        assert resp.sources[0].evidence_class == "opinion"
+
+    async def test_unclassified_single_claim_exposes_none(self, monkeypatch):
+        _patch_pipeline(monkeypatch, {
+            "source-1": [_prediction(evidence_class=None)],
+        })
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="evidence class exposure — unclassified",
+            articles=[_article(1)],
+        ))
+        assert resp.sources[0].evidence_class is None
+
+    async def test_multiple_claims_exposes_the_most_common_class(self, monkeypatch):
+        _patch_pipeline(monkeypatch, {
+            "source-1": [
+                _prediction(evidence_class="reported_fact"),
+                _prediction(evidence_class="reported_fact"),
+                _prediction(evidence_class="opinion"),
+            ],
+        })
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="evidence class exposure — majority label",
+            articles=[_article(1)],
+        ))
+        assert resp.sources[0].evidence_class == "reported_fact"
+
+    async def test_multiple_claims_ignores_unclassified_ones_when_picking_the_label(self, monkeypatch):
+        """A mix of one classified and one unclassified claim on the same
+        article must expose the classified label, not None — an unclassified
+        claim shouldn't be able to blank out real signal from a sibling claim."""
+        _patch_pipeline(monkeypatch, {
+            "source-1": [
+                _prediction(evidence_class=None),
+                _prediction(evidence_class="cited_share"),
+            ],
+        })
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="evidence class exposure — mixed classified/unclassified",
+            articles=[_article(1)],
+        ))
+        assert resp.sources[0].evidence_class == "cited_share"

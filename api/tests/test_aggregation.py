@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from forecast_api.aggregation import (
+    aggregate_pool,
     claim_weighted_stance,
     evidence_class_weight,
     logit,
@@ -25,6 +26,20 @@ from forecast_api.aggregation import (
     widen_ci_for_thin_evidence,
 )
 from forecast_api.config import settings as api_settings
+
+
+def _aggregate_kwargs(**overrides):
+    kw = dict(
+        relevance_weight_floor=api_settings.relevance_weight_floor,
+        decisiveness_floor=api_settings.decisiveness_floor,
+        thin_evidence_ci_inflation=api_settings.thin_evidence_ci_inflation,
+        defer_on_thin_evidence=False,
+        settlement_min_sources=api_settings.settlement_min_sources,
+        settlement_stance=api_settings.settlement_stance,
+        logit_clamp=api_settings.logit_clamp,
+    )
+    kw.update(overrides)
+    return kw
 
 
 class TestWidenCiForThinEvidence:
@@ -381,3 +396,108 @@ class TestKnicksRegression:
         assert _prob(mean) > 0.90
         assert _prob(mean) > self._old_prob() + 0.15  # substantial improvement
         assert ci_low <= mean <= ci_high
+
+
+class TestAggregatePool:
+    """aggregate_pool() is every post-extraction-loop step of
+    forecaster.run_forecast() extracted into a pure function, so a recompute
+    over an already-extracted evidence pool can never drift from a fresh
+    run. These tests exercise it directly, independent of the live pipeline —
+    see test_forecaster_helpers.py / the endpoint's own tests for the wiring.
+    """
+
+    def test_empty_input_returns_none(self):
+        assert aggregate_pool([], [], [], [], **_aggregate_kwargs()) is None
+
+    def test_all_off_topic_returns_insufficient_reason(self):
+        result = aggregate_pool(
+            [0.5, 0.5], [1.0, 1.0], [0.05, 0.05], [False, False],
+            **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.insufficient_reason == "all_articles_off_topic"
+
+    def test_thin_evidence_deferred_returns_insufficient_reason(self):
+        result = aggregate_pool(
+            [0.5], [0.01], [1.0], [False],
+            **_aggregate_kwargs(defer_on_thin_evidence=True, decisiveness_floor=0.5),
+        )
+        assert result is not None
+        assert result.insufficient_reason == "no_decisive_signal"
+
+    def test_thin_evidence_not_deferred_still_pools_with_widened_ci(self):
+        thin = aggregate_pool(
+            [0.5], [0.01], [1.0], [False],
+            **_aggregate_kwargs(defer_on_thin_evidence=False, decisiveness_floor=0.5),
+        )
+        solid = aggregate_pool(
+            [0.5], [1.0], [1.0], [False],
+            **_aggregate_kwargs(defer_on_thin_evidence=False, decisiveness_floor=0.5),
+        )
+        assert thin is not None and solid is not None
+        assert thin.insufficient_reason is None
+        assert thin.thin_evidence is True
+        assert solid.thin_evidence is False
+        assert (thin.ci_high - thin.ci_low) > (solid.ci_high - solid.ci_low)
+
+    def test_matches_pool_sources_directly_when_no_settlement(self):
+        stances = [0.3, -0.1, 0.6]
+        weights = [0.8, 0.5, 1.2]
+        relevances = [0.9, 0.8, 1.0]
+        expected_mean, expected_std, expected_ci_low, expected_ci_high = pool_sources(
+            stances, weights, clamp_eps=api_settings.logit_clamp,
+        )
+        result = aggregate_pool(
+            stances, weights, relevances, [False, False, False],
+            **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.insufficient_reason is None
+        assert result.mean == pytest.approx(expected_mean)
+        assert result.std == pytest.approx(expected_std)
+        assert result.ci_low == pytest.approx(expected_ci_low)
+        assert result.ci_high == pytest.approx(expected_ci_high)
+        assert result.settled is False
+
+    def test_settlement_override_pins_when_enough_agreeing_sources(self):
+        result = aggregate_pool(
+            [0.9, 0.85, -0.2], [1.0, 1.0, 0.3], [1.0, 1.0, 0.5],
+            [True, True, False],
+            **_aggregate_kwargs(settlement_min_sources=2),
+        )
+        assert result is not None
+        assert result.settled is True
+        assert result.mean == pytest.approx(api_settings.settlement_stance)
+        assert result.settled_sources == 2
+        assert result.settlement_suppressed is False
+
+    def test_settlement_tie_does_not_pin(self):
+        result = aggregate_pool(
+            [0.9, -0.9], [1.0, 1.0], [1.0, 1.0], [True, True],
+            **_aggregate_kwargs(settlement_min_sources=1),
+        )
+        assert result is not None
+        assert result.settled is False
+
+    def test_settlement_respects_direction_guard(self):
+        # Early "won't happen" settlement on an unexpired arrival claim (the
+        # F-35 false-pin class) must be suppressed even with enough sources.
+        result = aggregate_pool(
+            [-0.95, -0.9], [1.0, 1.0], [1.0, 1.0], [True, True],
+            **_aggregate_kwargs(
+                settlement_min_sources=2,
+                claim_direction="arrival",
+                claim_deadline="2099-01-01",
+            ),
+        )
+        assert result is not None
+        assert result.settled is False
+        assert result.settlement_suppressed is True
+
+    def test_below_settlement_threshold_does_not_pin(self):
+        result = aggregate_pool(
+            [0.9], [1.0], [1.0], [True],
+            **_aggregate_kwargs(settlement_min_sources=2),
+        )
+        assert result is not None
+        assert result.settled is False

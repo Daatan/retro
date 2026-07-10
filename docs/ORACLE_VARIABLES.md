@@ -441,8 +441,8 @@ Shipped, in the accepted sequencing order (§6):
   panel on the forecast page, `PATCH .../evidence-pool/[articleId]` toggles
   `EvidencePoolArticle.excluded`. Not yet enforced by any computation — the
   last §6 precondition is now buildable-on-top-of, not itself the cutover.
-- **`evidence_weight` exposed on `/forecast`'s `SourceSignal`** — retro (this
-  PR): the per-source `avg_evidence_weight` forecaster.py already computes
+- **`evidence_weight` exposed on `/forecast`'s `SourceSignal`** — retro #251:
+  the per-source `avg_evidence_weight` forecaster.py already computes
   internally (S2's resolved `class_weight`/certainty-fallback value) is now a
   response field, so a caller can persist it per pooled article. The
   `evidence_class` taxonomy itself and the `class_weight` lookup table stay
@@ -451,18 +451,45 @@ Shipped, in the accepted sequencing order (§6):
   a future recompute would silently fall back to certainty for every article,
   since evidence_class was never persisted anywhere outside retro's own
   request lifetime.
+- **`evidenceWeight`/`relevanceScore` persisted into daatan's pool** — daatan
+  #1071 + #1073: `EvidencePoolArticle` gained both columns, threaded through
+  the full `OracleSource` → `enrichOracleSources` → `addArticlesToPool`
+  funnel. `relevance_score` was a second, independently-discovered gap of the
+  same class — never captured anywhere in daatan's pipeline at all, not just
+  missing from the pool; without it a recompute would have treated every
+  article as fully on-topic. The pool now carries everything
+  `aggregate_pool()` below needs.
+- **`POST /pool/aggregate` — the recompute endpoint** — retro (this PR):
+  every step of `run_forecast()` *after* its per-article extraction loop
+  (relevance off-topic safety net, logit pooling, thin-evidence CI widening,
+  settlement override) extracted into one pure function,
+  `aggregate_pool()` (`aggregation.py`), now shared by the live pipeline
+  **and** the new endpoint — a recompute over an accumulated evidence pool
+  can never silently drift from what a fresh run of the same evidence would
+  produce. The new endpoint takes a list of already-extracted per-source
+  signals (stance/certainty/credibility/relevance/evidence_weight/
+  published_date/settled — exactly what a `SourceSignal` or a persisted
+  `EvidencePoolArticle` row already has) and reruns this math — no search,
+  no LLM calls. Recency is recomputed fresh against "now" for each source's
+  `published_date`, not a stored value, so an article decays further by the
+  time of a *later* recompute even if nothing else about it changed — the
+  whole point of recomputing over a pool. `forecaster.run_forecast()` itself
+  now calls `aggregate_pool()` too (full existing test suite passed
+  unchanged post-refactor — 200/200 — proving the extraction preserved
+  behavior exactly). 8 new tests for `aggregate_pool()`, 8 more for the
+  endpoint.
 
 Open, in suggested order:
 
-- Evidence pool — the recompute-over-pool cutover: daatan persists
-  `evidenceWeight` into `EvidencePoolArticle` (next step, using the field
-  above); retro gains a pure aggregate-only endpoint that reruns the pooling
-  math over a list of already-extracted per-source signals (no search, no
-  LLM); daatan shadow-compares before cutting any path over; all four
-  estimate paths eventually read from the pool instead of their own fetch;
-  retro's search becomes discovery-only; dedup + recency-floor changes move
-  inside the pool. Foundation above is a precondition, not the cutover
-  itself.
+- Evidence pool — the recompute-over-pool cutover, remaining steps: daatan
+  shadow-compares `/pool/aggregate`'s result against each `analyze` run's
+  live estimate (log only, not user-visible); cut `analyze` over to trust
+  the recompute (highest-traffic, most self-correcting path); extend to
+  `news-indexer` + `backfill` once stable in prod; move dedup + drop the
+  recency floor inside the pool; decide `creation`-path scope (structurally
+  harder than the others — creation uses `expressPrediction.ts`, not
+  retro's Oracle at all, so it can't reuse this funnel without its own
+  design pass).
 - S3–S6 and the remaining small known defect from §7: `credibilityWeight`
   still ≈1.0 for all real sources — **not a code bug** (investigated
   2026-07-09): `get_credibility_weight()` is correctly implemented, but

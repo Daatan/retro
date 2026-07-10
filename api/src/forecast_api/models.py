@@ -196,3 +196,38 @@ class ForecastResponse(BaseModel):
     distilled_query: Optional[str] = Field(default=None, description="Keywords the question was distilled to before searching; null when no distillation was applied")
     settled: bool = Field(default=False, description="True when enough independent sources report the event's outcome as an accomplished fact (see settlement_min_sources). mean/ci are pinned near the boundary; the forecast is a candidate for resolution, not further updates.")
     debug: Optional[DebugInfo] = Field(default=None, description="Debug telemetry — only present when request includes debug=true")
+
+
+# ── Pool aggregate (recompute-over-pool) ────────────────────────────────────
+
+class PoolSourceInput(BaseModel):
+    """One already-extracted per-source signal, as a caller's evidence pool
+    would persist it — the same fields a live /forecast call's SourceSignal
+    already returns (see docs/DATABASE.md "Evidence pool" in the daatan repo)."""
+    stance: float = Field(ge=-1.0, le=1.0, description="This source's already-computed avg_stance")
+    certainty: float = Field(ge=0.0, le=1.0, description="Fallback weight component used only when evidence_weight is unset (legacy rows predating the S2 cutover, PR #248/#249)")
+    credibility_weight: float = Field(ge=0.0, description="Source trust from the leaderboard; 1.0 = neutral")
+    relevance_score: float = Field(ge=0.0, le=1.0, description="Graded topic relevance; squared in the weight formula")
+    evidence_weight: Optional[float] = Field(default=None, ge=0.0, description="This source's evidence_class-derived weight (see SourceSignal.evidence_weight); falls back to certainty when unset")
+    published_date: Optional[str] = Field(default=None, description="Article publish date (YYYY-MM-DD); recency is recomputed against now, not a stored value")
+    settled: bool = Field(default=False, description="True when this source cleared the settlement grade (SourceSignal.settled)")
+
+
+class PoolAggregateRequest(BaseModel):
+    """Recompute a pooled estimate over an already-extracted evidence pool —
+    no search, no LLM calls. Same claim_direction/claim_deadline semantics as
+    ForecastRequest (gates early settlement direction)."""
+    sources: list[PoolSourceInput] = Field(default_factory=list)
+    claim_direction: Optional[Literal["arrival", "survival"]] = Field(default=None)
+    claim_deadline: Optional[str] = Field(default=None)
+
+
+class PoolAggregateResponse(BaseModel):
+    mean: float = Field(description="Credibility-weighted mean stance [-1, 1]. Convert to probability: (mean + 1) / 2")
+    std: float = Field(description="Weighted standard deviation")
+    ci_low: float = Field(description="95% confidence interval lower bound")
+    ci_high: float = Field(description="95% confidence interval upper bound")
+    articles_used: int
+    settled: bool = Field(default=False, description="Same settlement-override semantics as ForecastResponse.settled")
+    insufficient_data: bool = Field(default=False, description="True when no usable estimate could be pooled. mean/ci are NOT a real estimate.")
+    reason: Optional[str] = Field(default=None, description="When insufficient_data: no_sources | all_articles_off_topic | no_decisive_signal")

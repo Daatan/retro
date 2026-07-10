@@ -15,13 +15,13 @@ from .auth import verify_api_key
 from .bayesoracle import compute_nodes
 from .cache import forecast_cache
 from .config import settings
-from .forecaster import run_forecast
+from .forecaster import run_forecast, run_pool_aggregate
 from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache
 from .net_guard import UnsafeURLError, is_safe_url, safe_get
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
 from .limiter import limiter
-from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, LlmRequest, LlmResponse, SearchRequest, SearchResponse, SearchHealthResponse, VersionResponse
+from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, SearchRequest, SearchResponse, SearchHealthResponse, VersionResponse
 from .searcher import run_search, run_search_health
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
@@ -175,6 +175,24 @@ async def forecast(
     Convert to probability [0, 1] with: `p = (mean + 1) / 2`
     """
     return await run_forecast(body)
+
+
+@app.post("/pool/aggregate", response_model=PoolAggregateResponse, tags=["Forecast"])
+@limiter.limit("60/minute")
+async def pool_aggregate(
+    request: Request,  # required by slowapi
+    body: PoolAggregateRequest,
+    _: None = Depends(verify_api_key),
+):
+    """
+    Recompute a pooled estimate over an already-extracted evidence pool —
+    no search, no LLM calls. Reuses the exact same pooling math `/forecast`
+    uses live, so a recompute can never silently drift from a fresh run of
+    the same evidence (retro docs/ORACLE_VARIABLES.md, recompute-over-pool).
+
+    The `mean` field is in stance space [-1, 1], same as `/forecast`.
+    """
+    return await run_pool_aggregate(body)
 
 
 @app.post("/search", response_model=SearchResponse, tags=["Search"])

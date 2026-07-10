@@ -26,22 +26,27 @@ from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
 
 from .aggregation import (
+    aggregate_pool,
     claim_weighted_stance,
     evidence_class_weight,
-    pool_sources,
-    prob_to_stance,
     recency_weight,
     resolve_stance_certainty,
-    settlement_direction_allowed,
     settlement_grade,
-    stance_to_prob,
-    widen_ci_for_thin_evidence,
 )
 from .net_guard import UnsafeURLError, safe_get
 from .cache import forecast_cache, search_cache
 from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight
-from .models import ArticleDebug, ArticleInput, DebugInfo, ForecastRequest, ForecastResponse, SourceSignal
+from .models import (
+    ArticleDebug,
+    ArticleInput,
+    DebugInfo,
+    ForecastRequest,
+    ForecastResponse,
+    PoolAggregateRequest,
+    PoolAggregateResponse,
+    SourceSignal,
+)
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -712,7 +717,7 @@ async def _run_forecast_inner(
     all_stances: list[float] = []
     all_weights: list[float] = []
     relevances: list[float] = []
-    settled_directions: list[float] = []
+    all_settled: list[bool] = []
     ref_date = datetime.now().strftime("%Y-%m-%d")
     # S2 cutover (retro docs/ORACLE_VARIABLES.md §5) — evidence_class now drives
     # `weight` below via evidence_class_weight(); this dict remains for
@@ -787,8 +792,7 @@ async def _run_forecast_inner(
             [p.certainty for p in scored_preds],
             [p.specificity for p in scored_preds],
         )
-        if settled_preds:
-            settled_directions.append(1.0 if avg_stance >= 0 else -1.0)
+        all_settled.append(bool(settled_preds))
         avg_certainty = sum(p.certainty for p in predictions) / len(predictions)
         # Layer A.5 (S2 cutover): evidence-class-weight the article's claims for
         # the cross-article `weight` below, replacing avg_certainty as that
@@ -843,28 +847,25 @@ async def _run_forecast_inner(
     if evidence_class_counts:
         logger.info("event=evidence_class_weighted question=%s counts=%s", _question_hash(req.question), evidence_class_counts)
 
-    # Aggregate relevance safety net: if every surviving article is off-topic,
-    # the relevance² weights collapse and pool_sources would fall back to an
-    # *unweighted* mean — re-admitting the off-topic articles at full strength.
-    # Treat that as insufficient data instead. See settings.relevance_weight_floor.
-    relevance_mass = sum(r * r for r in relevances)
-    all_off_topic = bool(all_stances) and relevance_mass < settings.relevance_weight_floor
-
-    # Thin-evidence detection. `all_weights` already folds credibility × certainty ×
-    # recency × relevance², so their sum is the certainty-weighted evidence mass.
-    # Below decisiveness_floor the pool is thin/hedged. We no longer abstain on this
-    # (that surfaced as "no AI estimate" even for on-topic coverage like the Mythos
-    # case); instead we pool and *widen the CI* in proportion to the shortfall, so a
-    # thin pool reads as a low-confidence estimate with a wide band. The old
-    # deferral is still available behind settings.defer_on_thin_evidence.
-    evidence_mass = sum(all_weights)
-    thin_evidence = (
-        bool(all_stances) and not all_off_topic
-        and evidence_mass < settings.decisiveness_floor
+    # Steps 4-4b: relevance off-topic safety net, logit pooling, thin-evidence
+    # CI widening, and the settlement override — all delegated to
+    # aggregate_pool() (see aggregation.py) so a future recompute over an
+    # accumulated evidence pool can never silently drift from what a fresh
+    # run produces here.
+    agg = aggregate_pool(
+        all_stances, all_weights, relevances, all_settled,
+        relevance_weight_floor=settings.relevance_weight_floor,
+        decisiveness_floor=settings.decisiveness_floor,
+        thin_evidence_ci_inflation=settings.thin_evidence_ci_inflation,
+        defer_on_thin_evidence=settings.defer_on_thin_evidence,
+        settlement_min_sources=settings.settlement_min_sources,
+        settlement_stance=settings.settlement_stance,
+        logit_clamp=settings.logit_clamp,
+        claim_direction=req.claim_direction,
+        claim_deadline=req.claim_deadline,
     )
-    no_decisive_signal = thin_evidence and settings.defer_on_thin_evidence
 
-    if not all_stances or all_off_topic or no_decisive_signal:
+    if agg is None or agg.insufficient_reason is not None:
         # Outcome histogram tells us *why* we got nothing — were articles
         # rejected by the gatekeeper, did extraction return empty, or did
         # fetch fail? Without this the warning is uninvestigatable.
@@ -872,10 +873,10 @@ async def _run_forecast_inner(
         for t in timings:
             key = str(t.get("outcome", "unknown"))
             outcome_counts[key] = outcome_counts.get(key, 0) + 1
-        if all_off_topic:
+        if agg is not None and agg.insufficient_reason == "all_articles_off_topic":
             outcome_counts["all_low_relevance"] = len(relevances)
             reason = "all_articles_off_topic"
-        elif no_decisive_signal:
+        elif agg is not None and agg.insufficient_reason == "no_decisive_signal":
             outcome_counts["low_evidence_mass"] = len(all_weights)
             reason = "no_decisive_signal"
         else:
@@ -924,72 +925,20 @@ async def _run_forecast_inner(
             debug=empty_debug,
         )
 
-    # Step 4: logit (log-odds) pooling + 95% CI.
-    # Pooling in log-odds space (a logarithmic opinion pool) is robust to
-    # outliers: a single dissenting source can't drag a confident consensus back
-    # to the middle the way an arithmetic mean does. Combined with the per-claim
-    # certainty weighting (Layer A) and recency weighting (Layer B), a decided
-    # event reads decisive instead of the old wishy-washy ~0.5.
-    n = len(all_stances)
-    mean, std, ci_low, ci_high = pool_sources(
-        all_stances, all_weights, clamp_eps=settings.logit_clamp
+    n, mean, std, ci_low, ci_high, settled, evidence_mass, thin_evidence = (
+        agg.n, agg.mean, agg.std, agg.ci_low, agg.ci_high, agg.settled,
+        agg.evidence_mass, agg.thin_evidence,
     )
-
-    # Evidence-mass-aware CI: pool_sources' interval reflects only how much the
-    # sources *disagree*, not how *much* evidence backs them, so a thin pool that
-    # happens to agree gets a deceptively tight band. Widen it toward maximal
-    # uncertainty in proportion to the decisiveness shortfall (mass → 0 ⇒ widest),
-    # so a thin on-topic pool self-reports as low-confidence instead of either a
-    # false-confident point or an abstention.
-    floor = settings.decisiveness_floor
-    if floor > 0 and evidence_mass < floor:
-        deficit = (floor - evidence_mass) / floor
-        ci_low, ci_high, std = widen_ci_for_thin_evidence(
-            mean, ci_low, ci_high, std,
-            deficit=deficit,
-            max_inflation=settings.thin_evidence_ci_inflation,
+    if agg.settlement_suppressed:
+        logger.info(
+            "event=settlement_suppressed claim_direction=%s claim_deadline=%s",
+            req.claim_direction, req.claim_deadline,
         )
-
-    # Step 4b: settlement override. Pooling is bounded by its most confident
-    # member, so a decided event can never read as decided from averaging alone
-    # (the Knicks "82% the day after the title" case). When enough independent
-    # sources carry settlement claims agreeing in direction, pin the estimate
-    # near the boundary and flag the response so callers can treat the forecast
-    # as a resolution candidate. Conflicting settlements resolve by majority; a
-    # tie leaves the pooled estimate untouched.
-    settled = False
-    if settings.settlement_min_sources > 0 and settled_directions:
-        pos = sum(1 for d in settled_directions if d > 0)
-        neg = len(settled_directions) - pos
-        direction = 1.0 if pos > neg else -1.0 if neg > pos else 0.0
-        if (
-            direction != 0.0
-            and max(pos, neg) >= settings.settlement_min_sources
-            and not settlement_direction_allowed(direction, req.claim_direction, req.claim_deadline)
-        ):
-            # Temporally incoherent early settlement (e.g. "won't happen" pinned
-            # months before an arrival claim's deadline — the F-35 false pin):
-            # suppress the pin, keep the pooled estimate. The sources still vote
-            # as ordinary evidence.
-            logger.info(
-                "event=settlement_suppressed direction=%+.0f claim_direction=%s claim_deadline=%s settled_sources=%d",
-                direction, req.claim_direction, req.claim_deadline, max(pos, neg),
-            )
-            direction = 0.0
-        if direction != 0.0 and max(pos, neg) >= settings.settlement_min_sources:
-            settled = True
-            mean = settings.settlement_stance * direction
-            pinned_p = stance_to_prob(mean)
-            if direction > 0:
-                lo_p, hi_p = pinned_p - 0.06, min(0.995, pinned_p + 0.025)
-            else:
-                lo_p, hi_p = max(0.005, pinned_p - 0.025), pinned_p + 0.06
-            ci_low, ci_high = prob_to_stance(lo_p), prob_to_stance(hi_p)
-            std = 0.06
-            logger.info(
-                "event=settlement_override direction=%+.0f settled_sources=%d of=%d mean=%.3f",
-                direction, max(pos, neg), n, mean,
-            )
+    if agg.settled:
+        logger.info(
+            "event=settlement_override settled_sources=%d of=%d mean=%.3f",
+            agg.settled_sources, n, mean,
+        )
 
     logger.info(
         "Forecast: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d mass=%.3f settled=%s (logit-pool)",
@@ -1061,6 +1010,72 @@ async def _run_forecast_inner(
     )
 
     return response
+
+
+async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse:
+    """Recompute a pooled estimate over a caller-supplied set of already-
+    extracted per-source signals — no search, no LLM calls (retro
+    docs/ORACLE_VARIABLES.md, recompute-over-pool). Reuses aggregate_pool()
+    (aggregation.py), the exact same pooling math run_forecast() uses live,
+    so a recompute over an accumulated evidence pool can never silently
+    drift from what a fresh run of the same evidence would produce.
+
+    Recency is recomputed fresh against "now" for each source's
+    published_date, exactly like the live pipeline — an article decays
+    further by the time of a LATER recompute even if nothing else about it
+    changed, which is the whole point of recomputing over an accumulated
+    pool rather than trusting a stale weight from first extraction.
+    """
+    ref_date = datetime.now().strftime("%Y-%m-%d")
+    stances: list[float] = []
+    weights: list[float] = []
+    relevances: list[float] = []
+    settled_flags: list[bool] = []
+    for s in req.sources:
+        rweight = recency_weight(
+            s.published_date, ref_date,
+            settings.recency_half_life_days, floor=settings.recency_floor,
+        )
+        evidence_weight = s.evidence_weight if s.evidence_weight is not None else s.certainty
+        weight = s.credibility_weight * evidence_weight * rweight * (s.relevance_score ** 2)
+        stances.append(s.stance)
+        weights.append(weight)
+        relevances.append(s.relevance_score)
+        settled_flags.append(s.settled)
+
+    agg = aggregate_pool(
+        stances, weights, relevances, settled_flags,
+        relevance_weight_floor=settings.relevance_weight_floor,
+        decisiveness_floor=settings.decisiveness_floor,
+        thin_evidence_ci_inflation=settings.thin_evidence_ci_inflation,
+        defer_on_thin_evidence=settings.defer_on_thin_evidence,
+        settlement_min_sources=settings.settlement_min_sources,
+        settlement_stance=settings.settlement_stance,
+        logit_clamp=settings.logit_clamp,
+        claim_direction=req.claim_direction,
+        claim_deadline=req.claim_deadline,
+    )
+
+    if agg is None:
+        return PoolAggregateResponse(
+            mean=0.0, std=0.0, ci_low=-0.2, ci_high=0.2, articles_used=0,
+            settled=False, insufficient_data=True, reason="no_sources",
+        )
+    if agg.insufficient_reason is not None:
+        return PoolAggregateResponse(
+            mean=0.0, std=0.0, ci_low=-0.2, ci_high=0.2, articles_used=agg.n,
+            settled=False, insufficient_data=True, reason=agg.insufficient_reason,
+        )
+
+    logger.info(
+        "Pool aggregate: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d mass=%.3f settled=%s",
+        agg.mean, agg.std, agg.ci_low, agg.ci_high, agg.n, agg.evidence_mass, agg.settled,
+    )
+    return PoolAggregateResponse(
+        mean=round(agg.mean, 4), std=round(agg.std, 4),
+        ci_low=round(agg.ci_low, 4), ci_high=round(agg.ci_high, 4),
+        articles_used=agg.n, settled=agg.settled,
+    )
 
 
 def _reason_from_outcomes(outcome_counts: dict[str, int]) -> str:

@@ -502,3 +502,60 @@ Open, in suggested order:
   building a resolution-outcome feedback loop (daatan `Prediction` resolves
   → which sources contributed → retro scoring) — its own design pass, on par
   with the evidence pool / S2 above, not a quick fix.
+
+## 9. Credibility feedback loop (scoped 2026-07-10)
+
+Design: extend the existing OpenSkill/ELO/Brier scorer (`tm/scorer.py`) to
+score sources against real daatan resolutions instead of only the frozen,
+hand-curated vault (`data/events/*.json`) — rather than build a second,
+parallel credibility mechanism. Ships in shadow mode: the resolution-informed
+score is computed and logged alongside the live `credibility_weight`, but
+does not affect live Oracle forecasting math until it's been watched for a
+while, mirroring the pool-recompute shadow-compare rollout in §6/§8.
+Excludes `opinion`-class articles from the signal — an op-ed disagreeing
+with how a claim resolved isn't the same kind of credibility failure as a
+reported fact being wrong. Relies on OpenSkill's own `μ − 3σ` conservative
+estimate to protect established sources from one bad resolution, rather than
+a second bespoke decay layer.
+
+retro has no code path that calls out to daatan or reads its DB — the whole
+system is one-directional (daatan always initiates). So daatan pushes;
+retro never pulls.
+
+Small-tasks breakdown, in order:
+
+- **Ingestion endpoint (storage only)** — retro (this PR): `POST
+  /leaderboard/ingest` accepts one resolved forecast's per-source stances
+  (`ResolutionSourceInput`: source, stance, evidence_class,
+  credibility_weight, evidence_weight) plus the outcome, and appends them to
+  `data/resolution_feedback.jsonl`. Idempotent on `prediction_id` (an
+  in-memory guard, reloaded from disk at first use, same lazy-cache shape as
+  `leaderboard.py`'s `_cache`) — a fire-and-forget retry from daatan can
+  never double-count a source's history. Does **not** yet compute a score or
+  touch `leaderboard.json` / `get_credibility_weight()` at all — that's
+  deliberately a separate step so ingestion can ship and start accumulating
+  real data before the scoring design (incremental per-resolution OpenSkill
+  update vs. `Scorer.run()`-style full replay from the accumulated JSONL —
+  still an open question, see below) is settled.
+- **daatan: resolution hook** — when a `Prediction` resolves, gather its
+  `EvidencePoolArticle` rows, exclude `opinion`-class, and fire-and-forget
+  POST to the endpoint above (same `.catch()`-wrapped pattern as
+  `addArticlesToPool` / `shadowCompareRecompute`).
+- **retro: shadow scoring** — an incremental OpenSkill update per ingested
+  resolution, written to a new field separate from the vault-curated
+  `skill_conservative` `get_credibility_weight()` reads today. Open question
+  going in: `Scorer.run()` today always replays *all* vault history from a
+  fresh `PlackettLuce()` model rather than mutating a persisted `Rating`
+  between runs — genuine incremental per-match updates (what was scoped) is
+  an architectural departure from that pattern, not just a new data source
+  for the same one. Needs a concrete decision once this step starts, not
+  before.
+- **Observe** — watch the shadow score against live `credibility_weight` on
+  real resolutions for a while.
+- **Cutover decision** — wire the resolution-informed score into
+  `get_credibility_weight()` (replace or blend with the vault-curated
+  skill), gated so it can be reverted.
+- **Decide the manual vault's fate** — keep `data/events/*.json` /
+  `Scorer.run()` as a supplementary override for sources with too few
+  resolutions to trust yet, or retire it once resolution-driven scoring is
+  proven.

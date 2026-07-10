@@ -33,32 +33,37 @@ class UnsafeURLError(Exception):
     """Raised when a URL (or a redirect target) is not a public http(s) endpoint."""
 
 
-def is_safe_url(url: str) -> bool:
-    """True iff ``url`` is http(s) and its host resolves entirely to public IPs.
+def unsafe_reason(url: str) -> str | None:
+    """``None`` if ``url`` is a public http(s) endpoint, else why it was rejected.
 
     Requiring every resolved address to be public guards the basic DNS-rebinding
     trick of returning one public and one private A record.
+
+    The reason exists so callers can log the two rejection classes apart. A host
+    that does not resolve is a dead link; a host that resolves into private space
+    is an SSRF attempt. Both are refused, but reporting them identically buries
+    the second in a stream of the first.
     """
     try:
         parsed = urlparse(url)
     except ValueError:
-        return False
+        return "malformed URL"
     if parsed.scheme not in _ALLOWED_SCHEMES:
-        return False
+        return f"scheme not allowed: {parsed.scheme!r}"
     host = parsed.hostname
     if not host:
-        return False
+        return "no host"
     try:
         infos = socket.getaddrinfo(host, None)
     except (socket.gaierror, UnicodeError, ValueError):
-        return False
+        return f"host does not resolve: {host!r}"
     if not infos:
-        return False
+        return f"host does not resolve: {host!r}"
     for info in infos:
         try:
             ip = ipaddress.ip_address(info[4][0])
         except ValueError:
-            return False
+            return f"unparsable resolved address for {host!r}"
         if (
             ip.is_private
             or ip.is_loopback
@@ -67,8 +72,13 @@ def is_safe_url(url: str) -> bool:
             or ip.is_multicast
             or ip.is_unspecified
         ):
-            return False
-    return True
+            return f"host resolves to non-public address {ip}"
+    return None
+
+
+def is_safe_url(url: str) -> bool:
+    """True iff ``url`` is http(s) and its host resolves entirely to public IPs."""
+    return unsafe_reason(url) is None
 
 
 def _next_hop(resp: httpx.Response, current: str) -> str | None:
@@ -92,8 +102,8 @@ def safe_get(
     try:
         current = url
         for _ in range(max_redirects + 1):
-            if not is_safe_url(current):
-                raise UnsafeURLError(current)
+            if (reason := unsafe_reason(current)) is not None:
+                raise UnsafeURLError(f"{current}: {reason}")
             resp = client.get(current, follow_redirects=False, **kwargs)
             nxt = _next_hop(resp, current)
             if nxt is None:
@@ -113,8 +123,8 @@ async def safe_get_async(
     (its redirect behaviour is overridden per request)."""
     current = url
     for _ in range(max_redirects + 1):
-        if not is_safe_url(current):
-            raise UnsafeURLError(current)
+        if (reason := unsafe_reason(current)) is not None:
+            raise UnsafeURLError(f"{current}: {reason}")
         resp = await client.get(current, follow_redirects=False, **kwargs)
         nxt = _next_hop(resp, current)
         if nxt is None:

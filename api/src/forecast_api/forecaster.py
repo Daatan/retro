@@ -12,6 +12,7 @@ import hashlib
 import logging
 import re
 import time
+from collections import Counter
 from datetime import datetime
 from typing import Optional
 from urllib.parse import urlparse
@@ -823,6 +824,18 @@ async def _run_forecast_inner(
         # article (relevance ~0.5 → 0.25× pull) can't drag the pooled mean.
         quantitative_estimates = [p.quantitative_estimate for p in predictions]
         weight = credibility * avg_evidence_weight * rweight * (relevance ** 2)
+        # Credibility feedback loop (docs/ORACLE_VARIABLES.md §9) needs the
+        # actual evidence_class label, not just its resolved weight, to
+        # exclude opinion-class articles from the resolution-outcome signal.
+        # evidence_class is a per-claim field; an article can carry several
+        # claims, so expose the most common non-null label among them as this
+        # article's representative class (None if every claim was
+        # unclassified) — same collapse-to-article-level shape as
+        # avg_evidence_weight itself.
+        article_evidence_classes = [p.evidence_class for p in predictions if p.evidence_class is not None]
+        representative_evidence_class = (
+            Counter(article_evidence_classes).most_common(1)[0][0] if article_evidence_classes else None
+        )
 
         all_stances.append(avg_stance)
         all_weights.append(weight)
@@ -842,6 +855,7 @@ async def _run_forecast_inner(
             settled=bool(settled_preds) or None,
             quantitative_estimate=next((q for q in quantitative_estimates if q is not None), None),
             evidence_weight=round(avg_evidence_weight, 3),
+            evidence_class=representative_evidence_class,
         ))
 
     if evidence_class_counts:

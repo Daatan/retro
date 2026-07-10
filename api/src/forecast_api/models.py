@@ -231,3 +231,35 @@ class PoolAggregateResponse(BaseModel):
     settled: bool = Field(default=False, description="Same settlement-override semantics as ForecastResponse.settled")
     insufficient_data: bool = Field(default=False, description="True when no usable estimate could be pooled. mean/ci are NOT a real estimate.")
     reason: Optional[str] = Field(default=None, description="When insufficient_data: no_sources | all_articles_off_topic | no_decisive_signal")
+
+
+# ── Resolution feedback ingest (credibility feedback loop, step 1) ─────────
+# docs/ORACLE_VARIABLES.md "Open, in suggested order" — resolution-outcome
+# feedback loop. Storage-only for now: daatan pushes one resolved forecast's
+# per-source stances here; nothing reads this yet (that's step 2+).
+
+class ResolutionSourceInput(BaseModel):
+    """One source's stance on a forecast that has since resolved — the same
+    fields daatan's EvidencePoolArticle already persists per article."""
+    source: str = Field(description="Outlet/source id, matches leaderboard.json's source_id")
+    stance: float = Field(ge=-1.0, le=1.0, description="This source's stance at the time it was extracted")
+    evidence_class: Optional[Literal["reported_fact", "cited_probability", "cited_share", "reporting", "opinion"]] = Field(default=None, description="opinion-class articles are excluded from scoring downstream — recorded here regardless so the exclusion rule can be changed without re-ingesting")
+    credibility_weight: Optional[float] = Field(default=None, ge=0.0)
+    evidence_weight: Optional[float] = Field(default=None, ge=0.0)
+
+
+class IngestResolutionRequest(BaseModel):
+    """One resolved forecast's per-source stances, pushed by daatan once a
+    Prediction resolves. Idempotent on prediction_id — re-ingesting the same
+    prediction_id is a no-op, not an error, so a fire-and-forget retry on the
+    daatan side can never double-count a source's history."""
+    prediction_id: str
+    outcome: bool = Field(description="True if the claim resolved YES/TRUE (Prediction.status == RESOLVED_CORRECT for a claim asserting YES)")
+    resolved_at: Optional[str] = Field(default=None)
+    sources: list[ResolutionSourceInput] = Field(default_factory=list)
+
+
+class IngestResolutionResponse(BaseModel):
+    accepted: bool = Field(default=True)
+    already_ingested: bool = Field(description="True when prediction_id was already on record — sources_recorded is 0 in that case, nothing was written")
+    sources_recorded: int

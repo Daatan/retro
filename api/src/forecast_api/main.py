@@ -17,11 +17,12 @@ from .cache import forecast_cache
 from .config import settings
 from .forecaster import run_forecast, run_pool_aggregate
 from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache
+from .resolution_feedback import ingest_resolution
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
 from tm.net_guard import UnsafeURLError, is_safe_url, safe_get
 from .limiter import limiter
-from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, SearchRequest, SearchResponse, SearchHealthResponse, VersionResponse
+from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, IngestResolutionRequest, IngestResolutionResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, SearchRequest, SearchResponse, SearchHealthResponse, VersionResponse
 from .searcher import run_search, run_search_health
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
@@ -134,6 +135,26 @@ async def leaderboard(_: None = Depends(verify_api_key)):
     Refreshed every N seconds from leaderboard.json (no restart required).
     """
     return {"sources": get_leaderboard_data(), "count": leaderboard_size()}
+
+
+@app.post("/leaderboard/ingest", response_model=IngestResolutionResponse, tags=["Meta"])
+@limiter.limit("60/minute")
+async def leaderboard_ingest(
+    request: Request,  # required by slowapi
+    body: IngestResolutionRequest,
+    _: None = Depends(verify_api_key),
+):
+    """
+    Credibility feedback loop, step 1 (docs/ORACLE_VARIABLES.md). Ingest one
+    resolved forecast's per-source stances so the leaderboard can eventually
+    be scored against real outcomes instead of the frozen, hand-curated vault.
+
+    Storage only — does not affect get_credibility_weight() or
+    leaderboard.json yet. Idempotent on prediction_id: re-sending the same
+    prediction_id is a no-op (already_ingested=true), safe for a
+    fire-and-forget retry on the caller's side.
+    """
+    return await ingest_resolution(settings.resolved_resolution_feedback_path, body)
 
 
 @app.get("/health", tags=["Meta"])

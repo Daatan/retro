@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 from datetime import date, datetime
-from typing import Optional, Sequence
+from typing import NamedTuple, Optional, Sequence
 
 
 def clamp(x: float, lo: float, hi: float) -> float:
@@ -294,3 +294,152 @@ def widen_ci_for_thin_evidence(
     # it can't claim more precision than the widened band.
     new_std = max(std, 2.0 * extra_p)
     return prob_to_stance(lo_p), prob_to_stance(hi_p), new_std
+
+
+class PoolAggregateResult(NamedTuple):
+    """Result of :func:`aggregate_pool` pooling a set of already-weighted
+    per-source signals into a final estimate.
+
+    ``insufficient_reason`` is ``None`` on a usable result. When set
+    (``"all_articles_off_topic"`` or ``"no_decisive_signal"``), ``mean``/
+    ``std``/``ci_low``/``ci_high``/``settled`` are not computed (pooling was
+    skipped entirely, matching the live pipeline's early-return) and carry
+    placeholder zeros — callers must check ``insufficient_reason`` first,
+    the same way the live pipeline checks it before touching those fields.
+    """
+    mean: float
+    std: float
+    ci_low: float
+    ci_high: float
+    settled: bool
+    n: int
+    evidence_mass: float
+    thin_evidence: bool
+    insufficient_reason: Optional[str]
+    # Settlement diagnostics for callers that want to log the outcome without
+    # re-deriving settled_directions themselves. settlement_suppressed is True
+    # only when a would-be pin was blocked by the temporal direction guard
+    # (settled/settled_sources still reflect the *applied* outcome, i.e. no pin).
+    settled_sources: int
+    settlement_suppressed: bool
+
+
+def aggregate_pool(
+    stances: Sequence[float],
+    weights: Sequence[float],
+    relevances: Sequence[float],
+    settled_flags: Sequence[bool],
+    *,
+    relevance_weight_floor: float,
+    decisiveness_floor: float,
+    thin_evidence_ci_inflation: float,
+    defer_on_thin_evidence: bool,
+    settlement_min_sources: int,
+    settlement_stance: float,
+    logit_clamp: float,
+    claim_direction: Optional[str] = None,
+    claim_deadline: Optional[str] = None,
+) -> Optional[PoolAggregateResult]:
+    """Pool a set of already-extracted, already-weighted per-source signals
+    into a final estimate: the relevance off-topic safety net, logit
+    pooling, thin-evidence CI widening, and the settlement override.
+
+    This is every step ``forecast_api.forecaster.run_forecast`` performs
+    *after* its per-article extraction loop, extracted here so a recompute
+    over an accumulated evidence pool (retro docs/ORACLE_VARIABLES.md,
+    recompute-over-pool — no search, no LLM, just already-extracted signals)
+    can never silently drift from what a fresh run would produce. Each
+    ``stances[i]``/``weights[i]``/``relevances[i]``/``settled_flags[i]``
+    corresponds to one source's already-computed
+    ``avg_stance``/``credibility * evidence_weight * recency * relevance**2``/
+    ``relevance``/``bool(settled_preds)`` — exactly the fields a caller
+    already has from ``SourceSignal`` (live) or a persisted evidence-pool row
+    (recompute).
+
+    Returns ``None`` only when there is nothing to pool at all (empty
+    input) — an unambiguous "no sources" case every caller handles the same
+    way. When sources exist but the set is entirely off-topic
+    (``relevance_weight_floor``) or too thin to trust with
+    ``defer_on_thin_evidence`` set, pooling is skipped and the result's
+    ``insufficient_reason`` says why (``"all_articles_off_topic"`` /
+    ``"no_decisive_signal"``) — each caller builds its own
+    insufficient-data response around that reason (the live pipeline adds
+    request-specific fetch/gate/extract diagnostics a pool recompute has no
+    equivalent of).
+    """
+    if not stances:
+        return None
+
+    relevance_mass = sum(r * r for r in relevances)
+    all_off_topic = relevance_mass < relevance_weight_floor
+
+    evidence_mass = sum(weights)
+    thin_evidence = not all_off_topic and evidence_mass < decisiveness_floor
+    no_decisive_signal = thin_evidence and defer_on_thin_evidence
+
+    if all_off_topic or no_decisive_signal:
+        reason = "all_articles_off_topic" if all_off_topic else "no_decisive_signal"
+        return PoolAggregateResult(
+            mean=0.0, std=0.0, ci_low=0.0, ci_high=0.0, settled=False,
+            n=len(stances), evidence_mass=evidence_mass, thin_evidence=thin_evidence,
+            insufficient_reason=reason, settled_sources=0, settlement_suppressed=False,
+        )
+
+    n = len(stances)
+    mean, std, ci_low, ci_high = pool_sources(stances, weights, clamp_eps=logit_clamp)
+
+    if decisiveness_floor > 0 and evidence_mass < decisiveness_floor:
+        deficit = (decisiveness_floor - evidence_mass) / decisiveness_floor
+        ci_low, ci_high, std = widen_ci_for_thin_evidence(
+            mean, ci_low, ci_high, std,
+            deficit=deficit,
+            max_inflation=thin_evidence_ci_inflation,
+        )
+
+    # Settlement override: pooling is bounded by its most confident member, so
+    # a decided event can never read as decided from averaging alone (the
+    # Knicks "82% the day after the title" case). settled_flags[i] is already
+    # the settlement-grade-filtered value (bool(settled_preds) in the live
+    # loop) — its direction is simply the sign of that same source's stance,
+    # which the live loop also already computed preferentially from
+    # settled_preds when present.
+    settled_directions = [
+        1.0 if s >= 0 else -1.0
+        for s, is_settled in zip(stances, settled_flags)
+        if is_settled
+    ]
+    settled = False
+    settled_sources = 0
+    settlement_suppressed = False
+    if settlement_min_sources > 0 and settled_directions:
+        pos = sum(1 for d in settled_directions if d > 0)
+        neg = len(settled_directions) - pos
+        direction = 1.0 if pos > neg else -1.0 if neg > pos else 0.0
+        if (
+            direction != 0.0
+            and max(pos, neg) >= settlement_min_sources
+            and not settlement_direction_allowed(direction, claim_direction, claim_deadline)
+        ):
+            # Temporally incoherent early settlement (e.g. "won't happen"
+            # pinned months before an arrival claim's deadline — the F-35
+            # false pin): suppress the pin, keep the pooled estimate.
+            settlement_suppressed = True
+            direction = 0.0
+        if direction != 0.0 and max(pos, neg) >= settlement_min_sources:
+            settled = True
+            settled_sources = max(pos, neg)
+            mean = settlement_stance * direction
+            pinned_p = stance_to_prob(mean)
+            if direction > 0:
+                lo_p, hi_p = pinned_p - 0.06, min(0.995, pinned_p + 0.025)
+            else:
+                lo_p, hi_p = max(0.005, pinned_p - 0.025), pinned_p + 0.06
+            ci_low, ci_high = prob_to_stance(lo_p), prob_to_stance(hi_p)
+            std = 0.06
+
+    return PoolAggregateResult(
+        mean=mean, std=std, ci_low=ci_low, ci_high=ci_high, settled=settled,
+        n=n, evidence_mass=evidence_mass, thin_evidence=thin_evidence,
+        insufficient_reason=None, settled_sources=settled_sources,
+        settlement_suppressed=settlement_suppressed,
+    )

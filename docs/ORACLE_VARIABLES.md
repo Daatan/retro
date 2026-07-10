@@ -524,21 +524,16 @@ retro never pulls.
 
 Small-tasks breakdown, in order:
 
-- **Ingestion endpoint (storage only)** — retro (this PR): `POST
+- **Ingestion endpoint (storage only)** — retro #254 (merged): `POST
   /leaderboard/ingest` accepts one resolved forecast's per-source stances
   (`ResolutionSourceInput`: source, stance, evidence_class,
   credibility_weight, evidence_weight) plus the outcome, and appends them to
   `data/resolution_feedback.jsonl`. Idempotent on `prediction_id` (an
   in-memory guard, reloaded from disk at first use, same lazy-cache shape as
   `leaderboard.py`'s `_cache`) — a fire-and-forget retry from daatan can
-  never double-count a source's history. Does **not** yet compute a score or
-  touch `leaderboard.json` / `get_credibility_weight()` at all — that's
-  deliberately a separate step so ingestion can ship and start accumulating
-  real data before the scoring design (incremental per-resolution OpenSkill
-  update vs. `Scorer.run()`-style full replay from the accumulated JSONL —
-  still an open question, see below) is settled.
-- **`evidence_class` exposed on `/forecast`'s `SourceSignal`** — retro (this
-  PR): found while scoping the resolution hook below — daatan's
+  never double-count a source's history.
+- **`evidence_class` exposed on `/forecast`'s `SourceSignal`** — retro #255
+  (merged): found while scoping the resolution hook below — daatan's
   `EvidencePoolArticle` only ever persisted the *resolved* `evidence_weight`
   number (#251/#1071), never the `evidence_class` label itself (deliberately
   kept internal by #251). The opinion-exclusion rule above needs the actual
@@ -550,22 +545,44 @@ Small-tasks breakdown, in order:
   article's most common non-null `evidence_class` among its claims (a claim-
   level field collapsed to article level, same shape as `avg_evidence_weight`
   itself). 4 new tests.
-- **daatan: resolution hook** — when a `Prediction` resolves, gather its
-  `EvidencePoolArticle` rows (once `evidenceClass` is persisted there, mirroring
-  #1071's funnel for `evidenceWeight`), exclude `opinion`-class, and
-  fire-and-forget POST to the endpoint above (same `.catch()`-wrapped pattern
-  as `addArticlesToPool` / `shadowCompareRecompute`).
-- **retro: shadow scoring** — an incremental OpenSkill update per ingested
-  resolution, written to a new field separate from the vault-curated
-  `skill_conservative` `get_credibility_weight()` reads today. Open question
-  going in: `Scorer.run()` today always replays *all* vault history from a
-  fresh `PlackettLuce()` model rather than mutating a persisted `Rating`
-  between runs — genuine incremental per-match updates (what was scoped) is
-  an architectural departure from that pattern, not just a new data source
-  for the same one. Needs a concrete decision once this step starts, not
-  before.
-- **Observe** — watch the shadow score against live `credibility_weight` on
-  real resolutions for a while.
+- **daatan: resolution hook** — daatan #1083 (merged, v1.45.0, same PR
+  persisted `evidenceClass` on `EvidencePoolArticle`, mirroring #1071's
+  funnel for `evidenceWeight`): when a **BINARY** `Prediction` resolves with
+  a definite outcome, `pushCredibilityFeedback()` fire-and-forget POSTs the
+  forecast's non-excluded, non-`opinion`-class pool articles to the endpoint
+  above (same `.catch()`-wrapped pattern as `addArticlesToPool` /
+  `shadowCompareRecompute`). Skips VOID/UNRESOLVABLE (no outcome to score
+  against) and MULTIPLE_CHOICE (stance has no clean meaning for an option's
+  correctness).
+- **retro: shadow scoring** — retro (this PR): **replay-from-scratch per
+  ingest, not true incremental updates** — resolved via `AskUserQuestion`
+  once this step actually started, because scoping it surfaced a fact the
+  original interview didn't have: `Scorer.run()` has never mutated a
+  persisted `Rating` between runs — every run rebuilds all ratings from a
+  fresh `PlackettLuce()` model and replays the *entire* vault from scratch.
+  True incremental updates (the interview's literal Q4 answer) would have
+  been a new architectural pattern in this codebase; replay reuses
+  `Scorer.run()`'s exact proven logic, costs nothing extra at realistic
+  resolution volumes, and is self-healing (a future scoring-logic fix
+  applies to all history on the next call, not just new data) — while still
+  satisfying Q4's actual goal of no new scheduled job, since the replay runs
+  synchronously inside the `/leaderboard/ingest` request handler itself.
+  `resolution_scorer.py`'s `rescore_from_disk()` reuses `tm.scorer`'s
+  `brier_score`/`stance_to_prob` helpers and the same winners-beat-losers
+  `PlackettLuce.rate()` call `Scorer._update_skill()` makes, replaying
+  `data/resolution_feedback.jsonl` into a **separate**
+  `data/resolution_leaderboard.json` — `get_credibility_weight()` never
+  reads it. Re-enforces the opinion-class exclusion itself (not just
+  trusting the caller already filtered it) so a future `/leaderboard/ingest`
+  caller can't silently bypass the rule. A single-source resolution (no
+  ranking counterparty) still contributes its plain Brier accuracy, just no
+  OpenSkill rating movement — mirrors `Scorer.run()`'s own two-tier
+  behavior (global stats always accumulate; the skill/ELO update is
+  separately gated on ≥2 competing sources), a gap caught in review before
+  merging. New `GET /leaderboard/resolution-shadow` exposes the shadow board
+  for the observe step below. 9 new tests.
+- **Observe** — watch `GET /leaderboard/resolution-shadow` against the live
+  `GET /leaderboard` on real resolutions for a while.
 - **Cutover decision** — wire the resolution-informed score into
   `get_credibility_weight()` (replace or blend with the vault-curated
   skill), gated so it can be reverted.

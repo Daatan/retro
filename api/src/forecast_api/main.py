@@ -18,6 +18,7 @@ from .config import settings
 from .forecaster import run_forecast, run_pool_aggregate
 from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache
 from .resolution_feedback import ingest_resolution
+from .resolution_scorer import load_shadow_leaderboard, rescore_from_disk
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
 from tm.net_guard import UnsafeURLError, is_safe_url, safe_get
@@ -145,16 +146,38 @@ async def leaderboard_ingest(
     _: None = Depends(verify_api_key),
 ):
     """
-    Credibility feedback loop, step 1 (docs/ORACLE_VARIABLES.md). Ingest one
-    resolved forecast's per-source stances so the leaderboard can eventually
-    be scored against real outcomes instead of the frozen, hand-curated vault.
+    Credibility feedback loop, steps 1+3 (docs/ORACLE_VARIABLES.md §9).
+    Ingest one resolved forecast's per-source stances, then (if it's new,
+    not a duplicate) replay the full accumulated history through OpenSkill
+    to refresh the resolution-informed shadow score — see
+    GET /leaderboard/resolution-shadow.
 
-    Storage only — does not affect get_credibility_weight() or
-    leaderboard.json yet. Idempotent on prediction_id: re-sending the same
+    Storage/shadow only — does not affect get_credibility_weight() or
+    leaderboard.json. Idempotent on prediction_id: re-sending the same
     prediction_id is a no-op (already_ingested=true), safe for a
     fire-and-forget retry on the caller's side.
     """
-    return await ingest_resolution(settings.resolved_resolution_feedback_path, body)
+    result = await ingest_resolution(settings.resolved_resolution_feedback_path, body)
+    if not result.already_ingested:
+        await asyncio.to_thread(
+            rescore_from_disk,
+            settings.resolved_resolution_feedback_path,
+            settings.resolved_resolution_leaderboard_path,
+        )
+    return result
+
+
+@app.get("/leaderboard/resolution-shadow", tags=["Meta"])
+async def leaderboard_resolution_shadow(_: None = Depends(verify_api_key)):
+    """
+    Credibility feedback loop, step 3 (docs/ORACLE_VARIABLES.md §9) — the
+    resolution-informed shadow score, recomputed from scratch on every
+    /leaderboard/ingest call. For comparing against the live /leaderboard
+    (vault-curated) during the observation step (step 4). Does not affect
+    get_credibility_weight() or /forecast.
+    """
+    data = await asyncio.to_thread(load_shadow_leaderboard, settings.resolved_resolution_leaderboard_path)
+    return {"sources": data, "count": len(data)}
 
 
 @app.get("/health", tags=["Meta"])

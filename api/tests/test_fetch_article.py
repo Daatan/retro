@@ -116,7 +116,7 @@ class TestFetchArticleText:
     def test_falls_back_on_unsafe_url(self):
         """An SSRF-blocked URL (safe_get raises UnsafeURLError) yields the fallback,
         never a fetched internal response."""
-        from forecast_api.net_guard import UnsafeURLError
+        from tm.net_guard import UnsafeURLError
 
         with patch(
             "forecast_api.forecaster.safe_get",

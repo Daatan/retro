@@ -1,17 +1,19 @@
-"""SSRF guard for the ingest/search pipeline's outbound article fetches.
+"""SSRF guard for every outbound fetch in this repo.
 
-The pipeline fetches URLs that come from third-party search results, GDELT/GNews
-JSON, and scraped sitemaps/result pages — all attacker-influenceable — so every
-such fetch must refuse non-http(s) schemes and any host that resolves to a
-non-public address (loopback, RFC1918, link-local incl. the cloud metadata IP
-169.254.169.254, reserved/multicast/unspecified).
+Both the pipeline (third-party search results, GDELT/GNews JSON, scraped
+sitemaps) and the api's public ``/fetch-url`` proxy fetch attacker-influenceable
+URLs, so every such fetch must refuse non-http(s) schemes and any host that
+resolves to a non-public address (loopback, RFC1918, link-local incl. the cloud
+metadata IP 169.254.169.254, reserved/multicast/unspecified).
 
 ``safe_get`` / ``safe_get_async`` follow redirects manually and re-validate each
 hop, because a validated public host can still 30x-redirect to an internal one.
 
-This mirrors ``forecast_api.net_guard`` in the api/ project; the two live in
-separate deployables (separate venvs) so the logic is intentionally duplicated
-rather than shared across the project boundary.
+This is the single copy. ``forecast_api`` imports it from here: the api declares
+``truthmachine-pipeline`` as a dependency (``api/pyproject.toml`` [tool.uv.sources]
+→ ``../pipeline``, editable), so ``tm`` is always present in the api's venv. Keep
+it that way — a second copy means a DNS-rebinding fix can land in one and not the
+other.
 """
 
 import ipaddress

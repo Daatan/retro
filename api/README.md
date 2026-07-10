@@ -20,11 +20,10 @@ for deploy/rollback see [`docs/ORACLE_DEPLOY.md`](../docs/ORACLE_DEPLOY.md).
 | `models.py` | Pydantic request/response schemas |
 | `config.py` | Settings (env-driven; reuses the `tm` pipeline package) |
 | `auth.py` | `x-api-key` dependency (constant-time compare via `hmac.compare_digest`) |
-| `net_guard.py` | SSRF guard: `safe_get`/`is_safe_url`, re-checks every redirect hop |
 | `limiter.py` / `cache.py` | slowapi rate limiting; forecast + search caches |
 
-It imports `tm.gatekeeper`, `tm.extractor`, and `tm.web_search` from the
-`pipeline/` package (a path dependency) — no code is duplicated.
+It imports `tm.gatekeeper`, `tm.extractor`, `tm.web_search`, and `tm.net_guard`
+from the `pipeline/` package (a path dependency) — no code is duplicated.
 
 **CORS.** Allowed origins are `https://daatan.github.io` and
 `https://bayes.daatan.com`; localhost dev origins (`http://localhost` /
@@ -33,7 +32,7 @@ Starlette's `allow_origins` list requires exact matches (wildcard ports don't
 work there).
 
 **Fetching external URLs.** Never fetch a caller- or search-supplied URL with a
-raw `httpx` client. Use `forecast_api.net_guard.safe_get`, which rejects
+raw `httpx` client. Use `tm.net_guard.safe_get`, which rejects
 non-http(s) schemes and hosts that resolve to private/loopback/link-local
 addresses (including the cloud metadata IP `169.254.169.254`) and re-validates
 every redirect hop — a validated public host can still 30x-redirect to an

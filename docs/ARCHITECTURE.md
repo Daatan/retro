@@ -22,8 +22,7 @@ retro/
 │   │   ├── models.py            # Pydantic request/response schemas
 │   │   ├── config.py            # Settings (extends tm.config pattern)
 │   │   ├── auth.py              # x-api-key dependency (hmac.compare_digest)
-│   │   ├── net_guard.py         # SSRF guard: safe_get/is_safe_url, re-checks redirect hops
-│   │   └── limiter.py           # slowapi rate limiting
+│   │   └── limiter.py           # slowapi rate limiting  (SSRF guard: imported from tm.net_guard)
 │   └── pyproject.toml
 ├── pipeline/                    # Python pipeline (uv project)
 │   ├── src/tm/

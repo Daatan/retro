@@ -8,7 +8,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 from forecast_api.main import app
-from forecast_api.net_guard import UnsafeURLError
+from tm.net_guard import UnsafeURLError
 
 client = TestClient(app)
 

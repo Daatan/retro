@@ -12,11 +12,15 @@ class ApiSettings(BaseSettings):
     data_dir: Path = Path("/home/ubuntu/truthmachine/data")
     leaderboard_path: Path = Path("")  # empty = data_dir/leaderboard.json
     leaderboard_refresh_seconds: int = 86400  # pipeline writes this at most once/day
-    # Credibility feedback loop, step 1 (docs/ORACLE_VARIABLES.md "Open, in
-    # suggested order" — resolution-outcome feedback loop). Append-only JSONL
-    # of resolved forecasts' per-source stances, pushed by daatan via
-    # POST /leaderboard/ingest. Storage only for now — nothing reads this yet.
+    # Credibility feedback loop, step 1 (docs/ORACLE_VARIABLES.md §9 —
+    # resolution-outcome feedback loop). Append-only JSONL of resolved
+    # forecasts' per-source stances, pushed by daatan via
+    # POST /leaderboard/ingest.
     resolution_feedback_path: Path = Path("")  # empty = data_dir/resolution_feedback.jsonl
+    # Step 3: shadow-scored output of replaying resolution_feedback_path
+    # through OpenSkill on every ingest (resolution_scorer.py). Separate from
+    # leaderboard_path — get_credibility_weight() never reads this file.
+    resolution_leaderboard_path: Path = Path("")  # empty = data_dir/resolution_leaderboard.json
 
     max_articles: int = 10
     host: str = "127.0.0.1"
@@ -167,6 +171,12 @@ class ApiSettings(BaseSettings):
         if self.resolution_feedback_path != Path(""):
             return self.resolution_feedback_path
         return self.data_dir / "resolution_feedback.jsonl"
+
+    @property
+    def resolved_resolution_leaderboard_path(self) -> Path:
+        if self.resolution_leaderboard_path != Path(""):
+            return self.resolution_leaderboard_path
+        return self.data_dir / "resolution_leaderboard.json"
 
 
 settings = ApiSettings()

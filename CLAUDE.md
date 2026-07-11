@@ -32,7 +32,7 @@ Three related systems, one repo:
 - Oracle logs: `/home/ubuntu/truthmachine/oracle_log.txt` — **not** journald; `journalctl` finds nothing useful.
 - Services on the box: `truthmachine.service` (batch pipeline loop) + `oracle-api.service` (FastAPI).
 - Latency profile: `/forecast` slow tail is dominated by the LLM article phase (p99 ≈ 226 s) and slow GDELT failures — not by the search providers themselves.
-- LLM: AWS Bedrock — Nova Micro (gatekeeper) + Nova Lite (extractor/aggregator). Prompts are served from Bedrock via SSM parameter ARNs (shared prod+staging, 5-min cache) — editing a repo fallback prompt alone does **not** change prod.
+- LLM: AWS Bedrock — Nova Micro (gatekeeper) + Nova Lite (extractor/aggregator). The gatekeeper/extractor/aggregator prompts live in this repo (`pipeline/src/tm/*.py`) and reach prod on merge like any code change. (The Bedrock-prompt-via-SSM-ARN mechanism with the 5-min cache is the **daatan** app's — all `/*/prompts/*` SSM params are `/daatan/`-namespaced; there is no prompt-fetch layer in `tm`/`forecast_api`.)
 - Live pages: atlas https://daatan.github.io/retro/ · test console `/oracle-test.html` · Polymarket duel `/duel.html`
 
 ## Before opening a PR

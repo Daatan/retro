@@ -233,6 +233,31 @@ December 31, 2026":
   "The State Department formally approved the F-35 sale to Turkey on Tuesday" \
                                                → stance +1.0, certainty 0.95, settled true (this question's outcome, reported as fact)
 
+## THE EVENT ITSELF vs. ADJACENT EVENTS — match subject AND action, not topic
+Before assigning |stance| >= 0.9 or settled=true, decompose the RELATED EVENT into WHO \
+(the subject, including its type — a person, a party, a company, a country, an \
+institution), WHAT (the exact action or outcome), and WITHIN WHAT SCOPE (threshold, \
+deadline, arena). The reported fact must match ALL three. A fact about:
+- a DIFFERENT SUBJECT TYPE — a member of the organization when the claim is about the \
+organization itself, a subsidiary when the claim is about the parent, an official when \
+the claim is about the government;
+- a SIMILAR BUT DIFFERENT ACTION — leaving an organization vs. the organization \
+withdrawing from a contest, resigning a post vs. the body being dissolved, suspending a \
+program vs. cancelling it;
+- or a DIFFERENT ARENA — primaries vs. the general election, a qualifier vs. the final;
+is ADJACENT evidence. Score its real bearing on likelihood honestly (typically |stance| \
+<= 0.5), but it is NEVER settled and never carries the full +-1.0, no matter how \
+definitively it is reported. The test: could a fact-checker cite this article alone as \
+proof that the related event itself occurred? If not, it is not settled.
+
+Examples — related event: "At least one party withdraws from the parliamentary race":
+  "MK X announced he is leaving Party Y and won't run in its primaries"     → stance +0.3, certainty 0.5, settled false (a member leaving a party is not a party leaving the race)
+  "Party Y announced it will not submit a candidate list"                   → stance +1.0, certainty 0.95, settled true
+
+Examples — related event: "Company X exits the European market by year-end":
+  "Company X's CEO resigned amid the European losses"                       → stance +0.2, certainty 0.4, settled false (leadership change is not a market exit)
+  "Company X announced the closure of all European operations"              → stance +1.0, certainty 0.95, settled true
+
 ## Article language
 The article may be in Hebrew, Arabic, or English. Always write the claim in English.
 Quote the original language verbatim in the quote field.

@@ -6,6 +6,7 @@ added to ``_search_gdelt_bq``. Skipped only when core deps are absent.
 """
 
 import json
+from datetime import datetime
 
 import pytest
 
@@ -84,6 +85,58 @@ class TestSqlDomainFilter:
         clause = ws._sql_domain_filter(["ev'il.com"])
         assert "'" not in clause.split("IN (", 1)[1].replace("'evil.com'", "")
         assert "evil.com" in clause
+
+
+class TestSpreadSample:
+    def test_empty_and_nonpositive_k(self):
+        assert g._spread_sample([1, 2, 3], 0) == []
+        assert g._spread_sample([1, 2, 3], -1) == []
+
+    def test_returns_all_when_fewer_than_k(self):
+        assert g._spread_sample([1, 2], 5) == [1, 2]
+
+    def test_k_one_takes_middle(self):
+        assert g._spread_sample(list(range(10)), 1) == [5]
+
+    def test_spreads_across_full_range(self):
+        # First and last are always included; picks are spread, not clustered.
+        out = g._spread_sample(list(range(10)), 3)
+        assert out == [0, 4, 9]
+        assert out[0] == 0 and out[-1] == 9
+
+    def test_no_duplicate_indices_on_small_n(self):
+        out = g._spread_sample(list(range(4)), 3)
+        assert out == sorted(set(out))  # no repeats
+        assert out[0] == 0 and out[-1] == 3
+
+
+class TestIngestWindowAlignment:
+    """The ingest window must match the backtest's scored window
+    [outcome − MAX_DAYS, outcome − MIN_DAYS], not run up to the outcome."""
+
+    async def _capture_window(self, monkeypatch, tmp_path, t_days):
+        captured = {}
+
+        async def fake_to_thread(fn, *args, **kw):
+            # ingest_event calls to_thread(_search_gdelt_bq, query, cap, start, end, domains, cap)
+            captured["start"], captured["end"] = args[2], args[3]
+            return []  # empty → ingest_event returns before any fetch
+
+        monkeypatch.setattr(g.asyncio, "to_thread", fake_to_thread)
+        event = {"id": "E1", "outcome_date": "2024-12-08",
+                 "name": "Test", "search_keywords": ["Netanyahu"]}
+        await g.ingest_event(event, {"ynet.co.il": "ynet"}, tmp_path,
+                             per_source_limit=5, force=False, t_days=t_days, allow_live=False)
+        return captured
+
+    async def test_default_window_ends_3d_before_outcome(self, monkeypatch, tmp_path):
+        c = await self._capture_window(monkeypatch, tmp_path, t_days=0)
+        assert c["end"] == datetime(2024, 12, 5)    # outcome − MIN_DAYS_BEFORE_EVENT (3)
+        assert c["start"] == datetime(2024, 11, 8)   # outcome − MAX_DAYS_BEFORE_EVENT (30)
+
+    async def test_t_days_pushes_end_earlier(self, monkeypatch, tmp_path):
+        c = await self._capture_window(monkeypatch, tmp_path, t_days=7)
+        assert c["end"] == datetime(2024, 12, 1)     # outcome − 7 (t_days > MIN)
 
 
 class TestSourceLevelInvariants:

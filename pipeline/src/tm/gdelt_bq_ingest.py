@@ -58,6 +58,8 @@ from .article_text import BROWSER_HEADERS, extract_article_body
 from .net_guard import safe_get_async, UnsafeURLError
 # Reuse the date/evergreen helpers rather than re-implement them.
 from .web_search_ingest import _is_evergreen_domain, _date_from_url, _date_from_html
+# Keep the ingest window identical to the window the backtest actually scores.
+from .backtest import MIN_DAYS_BEFORE_EVENT, MAX_DAYS_BEFORE_EVENT
 
 console = Console()
 
@@ -101,6 +103,26 @@ def build_domain_map(sources_dir: Path) -> Dict[str, str]:
         if host and host not in mapping:
             mapping[host] = sid
     return mapping
+
+
+def _spread_sample(items: list, k: int) -> list:
+    """Pick up to ``k`` items spread evenly across ``items`` (order preserved).
+
+    Chooses which of a source's in-window articles to fetch. Taking the first
+    ``k`` clusters on one end of the date range (GKG rows arrive DATE-sorted),
+    over-sampling the reactive tail; spreading gives coverage across the whole
+    predictive window, where forward-looking predictions actually live.
+    """
+    n = len(items)
+    if k <= 0:
+        return []
+    if n <= k:
+        return list(items)
+    if k == 1:
+        return [items[n // 2]]
+    step = (n - 1) / (k - 1)
+    idxs = sorted({round(i * step) for i in range(k)})
+    return [items[i] for i in idxs]
 
 
 def _raw_snapshot_url(snapshot_url: str) -> str:
@@ -204,9 +226,15 @@ async def ingest_event(
     eid = event["id"]
     outcome_date = event["outcome_date"]
     outcome_dt = datetime.strptime(outcome_date, "%Y-%m-%d")
-    end_dt = outcome_dt - timedelta(days=t_days) if t_days > 0 else outcome_dt
-    window = int(event.get("predictive_window_days", 30))
-    start_dt = end_dt - timedelta(days=window)
+    # Align the ingest window with the window the backtest actually scores:
+    # [outcome − MAX_DAYS, outcome − MIN_DAYS]. The last MIN_DAYS_BEFORE_EVENT days
+    # are reactive news the backtest discards, so fetching them just wastes
+    # requests and clogs cells with non-predictive articles. t_days (the duel's
+    # T-day protocol) can push the end earlier, never later.
+    min_gap = max(t_days, MIN_DAYS_BEFORE_EVENT)
+    end_dt = outcome_dt - timedelta(days=min_gap)
+    window = int(event.get("predictive_window_days", MAX_DAYS_BEFORE_EVENT))
+    start_dt = outcome_dt - timedelta(days=max(window, min_gap + 1))
 
     keywords = event.get("duel_keywords") or event.get("search_keywords") or []
     query = " ".join(keywords) if keywords else event.get("name", "")
@@ -252,7 +280,12 @@ async def ingest_event(
                 continue
             idx = len(existing)
             saved = 0
-            for res in items:
+            # Sort by publish date, then fetch a candidate pool spread across the
+            # window (3× the target, capped) so a run of fetch failures can't
+            # collapse the cell onto one end of the date range.
+            items_by_date = sorted(items, key=lambda r: (r.published_date or ""))
+            candidates = _spread_sample(items_by_date, min(per_source_limit * 3, len(items_by_date)))
+            for res in candidates:
                 if saved >= per_source_limit:
                     break
                 if _is_evergreen_domain(res.url):

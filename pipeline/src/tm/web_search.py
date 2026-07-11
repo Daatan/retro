@@ -999,6 +999,12 @@ def _search_gdelt(
 # GDELT DOC API covers a rolling 3-month window. Beyond that, fall back to BQ.
 _GDELT_DOC_WINDOW_DAYS = 90
 
+# Cost fuse for BigQuery: a partition-pruned retro window scans ~10 GB; an
+# accidental unpruned scan of the full ~15 TB GKG table would bill ~$80. Cap
+# every job so such a query fails fast instead of running up a bill. 200 GB
+# comfortably clears any legitimate multi-month window while blocking catastrophe.
+_GDELT_BQ_MAX_BYTES_BILLED = 200 * 1024**3
+
 
 def _slug_to_title(url: str) -> str:
     """Derive a human-readable title from a URL path slug.
@@ -1045,17 +1051,52 @@ def _extract_bq_terms(query: str) -> list[str]:
     return terms[:8]  # cap to keep SQL manageable
 
 
+def _sql_domain_filter(domains: Optional[List[str]]) -> str:
+    """Build an ``AND SourceCommonName IN (...)`` clause, or '' when no domains.
+
+    Domains are normalised to bare hostnames (scheme/``www.``/path stripped) so a
+    source's configured ``url`` (e.g. ``https://www.ynet.co.il``) matches GKG's
+    ``SourceCommonName`` (``ynet.co.il``). Single quotes are stripped as a defensive
+    measure — hostnames never contain them, so this can only reject bad input, not
+    corrupt a real domain.
+    """
+    if not domains:
+        return ""
+    cleaned = []
+    for d in domains:
+        host = re.sub(r"^https?://", "", d.strip().lower())
+        host = re.sub(r"^www\.", "", host).split("/")[0].replace("'", "")
+        if host:
+            cleaned.append(host)
+    if not cleaned:
+        return ""
+    joined = ",".join(f"'{h}'" for h in dict.fromkeys(cleaned))
+    return f"AND SourceCommonName IN ({joined})"
+
+
 def _search_gdelt_bq(
     query: str,
     limit: int,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
+    domains: Optional[List[str]] = None,
+    max_rows: Optional[int] = None,
 ) -> List[SearchResult]:
     """Search GDELT GKG via BigQuery for historical coverage beyond the DOC API 3-month window.
 
     Matches against V2Persons, V2Locations, V2Organizations, and AllNames using
     REGEXP_CONTAINS. Partition pruning via _PARTITIONTIME on gkg_partitioned keeps scan costs low.
     Article titles are synthesized from the URL slug since GKG stores no titles.
+
+    ``domains`` (optional): restrict to these outlets via ``SourceCommonName IN (...)``.
+    This is what makes per-source retro cells possible (the live Oracle chain leaves it
+    None). It is *free*: the predicate adds no scanned columns, so a domain-filtered query
+    costs the same bytes as an unfiltered one over the same window.
+
+    ``max_rows`` (optional): override the SQL row cap (default ``min(limit*4, 100)``).
+    ``LIMIT`` does not change bytes scanned in BigQuery, so a retro backfill can raise this
+    to pull many outlets' URLs from a single per-event scan instead of paying for one scan
+    per source. The live Oracle path leaves it None and keeps the original cap.
     """
     client = _get_bq_client()  # raises if not configured
 
@@ -1072,6 +1113,8 @@ def _search_gdelt_bq(
         for t in terms
     )
 
+    domain_filter = _sql_domain_filter(domains)
+
     # Use gkg_partitioned (DAY-partitioned by ingestion time) — not the legacy
     # unpartitioned `gkg` table which lacks _PARTITIONTIME support.
     if date_from:
@@ -1081,6 +1124,8 @@ def _search_gdelt_bq(
         ts_from = (datetime.utcnow() - timedelta(days=_GDELT_DOC_WINDOW_DAYS)).strftime("%Y-%m-%d")
     ts_to = date_to.strftime("%Y-%m-%d") if date_to else datetime.utcnow().strftime("%Y-%m-%d")
 
+    row_cap = max_rows if max_rows is not None else min(limit * 4, 100)
+
     sql = f"""
         SELECT
             DocumentIdentifier AS url,
@@ -1089,14 +1134,18 @@ def _search_gdelt_bq(
         FROM `gdelt-bq.gdeltv2.gkg_partitioned`
         WHERE _PARTITIONTIME BETWEEN TIMESTAMP('{ts_from}') AND TIMESTAMP('{ts_to}')
           AND ({entity_conditions})
+          {domain_filter}
           AND DocumentIdentifier IS NOT NULL
           AND DocumentIdentifier != ''
         ORDER BY DATE DESC
-        LIMIT {min(limit * 4, 100)}
+        LIMIT {row_cap}
     """
 
     logger.debug("GDELT BQ query for %r (terms: %s)", query[:60], terms)
-    job = client.query(sql)
+    job = client.query(
+        sql,
+        job_config=_bigquery.QueryJobConfig(maximum_bytes_billed=_GDELT_BQ_MAX_BYTES_BILLED),
+    )
     rows = list(job.result())
 
     seen_urls: set[str] = set()

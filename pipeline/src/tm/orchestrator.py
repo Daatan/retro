@@ -14,7 +14,7 @@ from .models import CellStatus, ExtractionOutput, PredictionExtraction
 from .aggregator import aggregate_predictions, needs_aggregation, aggregate_article_predictions
 from .runner import run_article, ArticleInput, PipelineResult
 from .progress import update_cell, load_state
-from .utils import KNOWN_SOURCE_IDS
+from .utils import KNOWN_SOURCE_IDS, predates_outcome
 from .gnews_ingest import _is_stub_page
 import httpx
 from bs4 import BeautifulSoup
@@ -396,6 +396,20 @@ class Orchestrator:
             console.print(f"    [dim red]cell_signal failed {eid}/{sid}: {e}[/dim red]")
 
     def create_atlas_link(self, eid: str, sid: str, art_hash: str, extract_path: Path, raw_art: dict, event_date: str = ""):
+        # Anti-lookahead backstop. local_file_search filters the window on the
+        # search path, but create_atlas_link is also reached via the near-duplicate
+        # reuse and cached-extraction paths, which bypass that filter. A "prediction"
+        # published after the outcome leaks future knowledge into the source's
+        # credibility score, so refuse to write it here regardless of how we got here.
+        # (predates_outcome is permissive on missing/unparseable dates — the 3-day
+        # reactive-window trim stays in backtest.filter_by_window, where it belongs.)
+        article_date = raw_art.get("published_at", "")
+        if event_date and not predates_outcome(article_date, event_date):
+            console.print(
+                f"    [yellow]Anti-lookahead: dropping post-outcome article "
+                f"({article_date[:10]} > {event_date[:10]}) for {eid}/{sid}[/yellow]"
+            )
+            return
         link_dir = self.atlas_dir / eid / sid
         link_dir.mkdir(parents=True, exist_ok=True)
         link_path = link_dir / f"entry_{art_hash[:8]}.json"

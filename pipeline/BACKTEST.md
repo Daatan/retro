@@ -156,6 +156,53 @@ def oracle_search_historical(query, date_from, date_to, limit=15):
 
 ---
 
+## Free, deterministic backfill via GDELT-BigQuery (`tm.gdelt_bq_ingest`)
+
+The Oracle `/search` loop above works but pays for SERP fallback and drifts
+run-to-run. For retro backfill prefer **`tm.gdelt_bq_ingest`** — a batch ingestor
+that queries GDELT's GKG table in **BigQuery** directly:
+
+- **Free.** A per-event 27-day window scans ~10 GB; the full 70-event recompute is
+  ~0.7 TB, inside BigQuery's free 1 TB/month. (Measured, not estimated.)
+- **Deterministic.** Same fixed table + window → same URLs every run — what a
+  scientific backtest needs. No provider drift.
+- **Free-only.** Never calls a paid provider; an outlet with no GKG coverage is a
+  logged "miss", so cost stays provably bounded.
+- **Per-source & cheap by construction.** ONE scan per event over a
+  `SourceCommonName IN (tracked outlets)` filter (the filter is *free* — it adds no
+  scanned bytes), then URLs are bucketed by `source_id` locally. Never query
+  per-(event × source): that re-scans the same partitions 20× (~14 TB ≈ $80).
+- **Wayback-first text.** GKG stores the URL, not the body. Each URL is fetched from
+  the Internet Archive snapshot nearest its publish date (recovers dead 3-year-old
+  URLs *and* reads the pre-outcome version, hardening anti-lookahead); `--allow-live`
+  opts into a live fallback.
+
+Requires the `daatan/gcp-service-account-key` secret (a BigQuery Job User SA). It
+writes to `data/raw_ingest/{source_id}/{event_id}/`, so extraction → Atlas is the
+unchanged `orchestrator local_file` step.
+
+```bash
+# Backfill specific events (Wayback-only, ≤8 articles/source)
+DATA_DIR=$PWD/data uv run python -m tm.gdelt_bq_ingest --events A19 C07 B10
+
+# Backfill everything, allow a live fetch when no pre-outcome snapshot exists
+DATA_DIR=$PWD/data uv run python -m tm.gdelt_bq_ingest --all --allow-live
+
+# Discovery: which tracked outlets covered a topic in a window (NO-event hunting)
+DATA_DIR=$PWD/data uv run python -m tm.gdelt_bq_ingest --discover "Rafah offensive" \
+    --date-from 2024-01-01 --date-to 2024-05-01
+
+# Then extract → atlas as usual:
+DATA_DIR=$PWD/data uv run python -m tm.orchestrator local_file
+```
+
+> A second anti-lookahead backstop now also lives at the Atlas write itself
+> (`orchestrator.create_atlas_link` refuses any article dated after the outcome),
+> covering the near-duplicate-reuse and cached-extraction paths that bypass the
+> search-time window filter.
+
+---
+
 ## How to Run
 
 ```bash

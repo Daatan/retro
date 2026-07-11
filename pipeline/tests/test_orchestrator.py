@@ -603,6 +603,35 @@ class TestCreateAtlasLink:
         assert data["extractor_model"] == "nova-lite"
         assert len(data["predictions"]) == 1
 
+    def test_post_outcome_article_is_not_written(self, tmp_path):
+        # Anti-lookahead backstop: an article dated after the outcome must not
+        # reach the atlas even via create_atlas_link (near-dup / cached-extract
+        # paths that bypass local_file_search's window filter).
+        orch = _make_orch(tmp_path)
+        art_hash = "d" * 64
+        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_v1.json"
+        _write_json(extract_path, {
+            "extraction": {"predictions": [{"quote": "q", "claim": "c", "stance": 0.5, "certainty": 0.8}]},
+            "extractor_model": "m", "gatekeeper_model": "g", "gatekeeper_reason": "",
+        })
+        raw_art = {"headline": "Leak", "url": "https://ynet.com/x", "author": "A", "published_at": "2024-12-20"}
+        orch.create_atlas_link("E1", "ynet", art_hash, extract_path, raw_art, event_date="2024-12-08")
+        assert not (orch.atlas_dir / "E1" / "ynet" / f"entry_{art_hash[:8]}.json").exists()
+
+    def test_missing_article_date_is_conservatively_written(self, tmp_path):
+        # predates_outcome is permissive on missing dates (ingest filters undated),
+        # so create_atlas_link still writes — matching existing behavior.
+        orch = _make_orch(tmp_path)
+        art_hash = "e" * 64
+        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_v1.json"
+        _write_json(extract_path, {
+            "extraction": {"predictions": []},
+            "extractor_model": "m", "gatekeeper_model": "g", "gatekeeper_reason": "",
+        })
+        raw_art = {"headline": "H", "url": "https://ynet.com/y", "author": "A", "published_at": ""}
+        orch.create_atlas_link("E1", "ynet", art_hash, extract_path, raw_art, event_date="2024-12-08")
+        assert (orch.atlas_dir / "E1" / "ynet" / f"entry_{art_hash[:8]}.json").exists()
+
 
 # ─────────────────────────────────────────────
 # run_event — main run loop

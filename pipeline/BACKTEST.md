@@ -176,6 +176,11 @@ that queries GDELT's GKG table in **BigQuery** directly:
   the Internet Archive snapshot nearest its publish date (recovers dead 3-year-old
   URLs *and* reads the pre-outcome version, hardening anti-lookahead); `--allow-live`
   opts into a live fallback.
+- **Windowed + spread-sampled.** The ingest window matches the backtest's scored
+  range `[outcome − MAX_DAYS, outcome − MIN_DAYS]` (default 30d…3d), so it never
+  wastes fetches on the reactive last-3-days the backtest discards. Within each
+  source it samples articles **spread across the window** rather than taking the
+  newest N, so cells carry forward-looking coverage, not just the reactive tail.
 
 Requires the `daatan/gcp-service-account-key` secret (a BigQuery Job User SA). It
 writes to `data/raw_ingest/{source_id}/{event_id}/`, so extraction → Atlas is the

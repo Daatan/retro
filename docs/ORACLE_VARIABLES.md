@@ -376,6 +376,17 @@ Shipped, in the accepted sequencing order (§6):
   `claim_direction`/`claim_deadline` (fail-open), extractor prompt rule
   against historical-background "settlements" (the F-35 failure mode),
   demotions/suppressions logged (`settlement_demoted`/`settlement_suppressed`).
+- **Adjacent-event prompt hardening (2026-07-12)** — extractor prompt section
+  "THE EVENT ITSELF vs. ADJACENT EVENTS": a definitively reported fact about an
+  adjacent event (a member leaving when the claim is about the organization, a
+  similar-but-different action, a different arena) must not settle the claim or
+  carry ±1.0 (the Illouz/Likud incident: "MK leaves Likud" scored stance +1.0
+  settled=true for "a party withdraws from the race", pushing the estimate to
+  93–99%). A/B sampling on the incident article (temp 0, n=10): nova-lite fails
+  10/10 without the section, 8/10 with it — the section is hardening, not a fix;
+  nova-lite at temp 0 is NOT deterministic and is sensitive to prompt whitespace.
+  The reliable lever is a stronger extractor model (nova-pro 2/5; gemini-2.5-flash
+  and flash-lite 0/3; gemini-2.5-pro 0/2 — all on the unmodified prompt).
 - **Prod data fixes (2026-07-08)** — F-35 `settled` latch cleared (audit found
   no other bad latches); all 409 pre-v1.31.2 `oracleSnapshot` rows normalized
   to percent, removing the two-scale historical caveat from live data.

@@ -386,7 +386,12 @@ Shipped, in the accepted sequencing order (§6):
   10/10 without the section, 8/10 with it — the section is hardening, not a fix;
   nova-lite at temp 0 is NOT deterministic and is sensitive to prompt whitespace.
   The reliable lever is a stronger extractor model (nova-pro 2/5; gemini-2.5-flash
-  and flash-lite 0/3; gemini-2.5-pro 0/2 — all on the unmodified prompt).
+  and flash-lite 0/3; gemini-2.5-pro 0/2 — all on the unmodified prompt). DONE
+  2026-07-12: prod extractor switched to Claude Haiku 4.5 (0/10 failures, stance
+  +0.37 deterministic, 3.7s, $1/$5 per M) via systemd drop-in on the Oracle host +
+  Bedrock IAM grant (see infra/iam/README.md §4); verified live — the incident
+  article now scores stance +0.31 / settled=false (~66%) instead of +1.0/settled
+  (99%). Batch pipeline (`truthmachine.service`) deliberately stays on nova-lite.
 - **Prod data fixes (2026-07-08)** — F-35 `settled` latch cleared (audit found
   no other bad latches); all 409 pre-v1.31.2 `oracleSnapshot` rows normalized
   to percent, removing the two-scale historical caveat from live data.

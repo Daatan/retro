@@ -1,0 +1,28 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream"
+            ],
+            "Resource": [
+                "arn:aws:bedrock:*::foundation-model/amazon.nova-micro-v1:0",
+                "arn:aws:bedrock:*::foundation-model/amazon.nova-lite-v1:0",
+                "arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0",
+                "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+                "arn:aws:bedrock:us-east-1:<ACCOUNT_ID>:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+                "arn:aws:bedrock:eu-central-1:<ACCOUNT_ID>:inference-profile/eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
+            ],
+            "Resource": "arn:aws:secretsmanager:eu-central-1:<ACCOUNT_ID>:secret:openclaw/*"
+        }
+    ]
+}

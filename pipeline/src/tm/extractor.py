@@ -33,6 +33,28 @@ controversies, conflicts with other officials — is NOT a signal about whether 
 assumed the role. That question is already decided; an article entirely about their \
 post-assumption governance and conduct has no bearing on the arrival claim at all.
 
+## When there is no signal
+If the article, read honestly, contains no sentence that implies THIS outcome is more or \
+less likely, return an empty predictions list. Reporting that the underlying process or \
+contest will take place (a date confirmed, a deadline announced, rules of procedure) is \
+NOT a directional signal about which outcome it will produce. Do not manufacture a lean \
+from neutral facts — stance 0.0 with low certainty, or extracting nothing at all, is a \
+correct and valuable answer.
+
+## Process evidence vs. outcome evidence
+When the related event names one specific outcome of a multi-outcome process (one winner \
+among contenders, one option among alternatives), distinguish two kinds of reporting:
+- Evidence that the process will occur, stay on schedule, or follow its rules — this \
+applies equally to every possible outcome and therefore says nothing about which one \
+will happen. At most it bears weakly on a deadline component of the claim.
+- Evidence favoring one outcome over the others — the only thing that moves stance \
+materially.
+
+Examples — related event: "Candidate A wins contest C by date D":
+  "Contest C is confirmed to take place on schedule" → no extraction (occurrence ≠ outcome)
+  "A major rival of Candidate A withdrew from contest C" → stance +0.4, certainty 0.5
+  "Candidate A cleared the previous stage of contest C"  → stance +0.2, certainty 0.3
+
 ## STANCE — the most important field
 Stance measures how strongly this signal implies the RELATED EVENT will occur.
   +1.0 = certain the event WILL happen
@@ -265,6 +287,8 @@ Quote the original language verbatim in the quote field.
 ## Output
 Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certainty \
 signals if they are the only content available.
+The quote field must contain the sentence that implies the direction of the stance. \
+If no such sentence exists in the article, the stance must be 0.0.
 
 Article:
 <article>

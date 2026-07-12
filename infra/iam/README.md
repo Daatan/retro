@@ -54,6 +54,37 @@ sudo systemctl reload oracle-api
 sudo systemctl restart truthmachine
 ```
 
+## 4. TruthMachine EC2 → Bedrock (LLM invocation, `truthmachine-pipeline-policy`)
+
+Inline policy for the existing `truthmachine-ec2-role` — the live source of truth for
+which Bedrock models the Oracle/pipeline may invoke. Nova (gatekeeper/extractor default)
+plus Claude Haiku 4.5 (extractor override; both the cross-region inference profiles and
+the underlying foundation-model ARN, which cross-region routing requires in every member
+region — hence the `*` region). Adding a new extractor model = add its ARNs here and
+re-apply, or the host gets `AccessDenied` and every extraction fails (`reason:
+extraction_errors`, discovered 2026-07-12).
+
+| File | Purpose |
+|------|---------|
+| `truthmachine-ec2-pipeline-policy.json` | Bedrock `InvokeModel` on the allow-listed models + read of the `openclaw/*` secret namespace (legacy name — see the openclaw rename note in `CLAUDE.md`). |
+
+**Apply:**
+```bash
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+sed "s/<ACCOUNT_ID>/$ACCOUNT_ID/g" infra/iam/truthmachine-ec2-pipeline-policy.json > /tmp/pipeline-policy.json
+aws iam put-role-policy \
+  --role-name truthmachine-ec2-role \
+  --policy-name truthmachine-pipeline-policy \
+  --policy-document file:///tmp/pipeline-policy.json
+```
+
+**Related host config (not IAM):** the extractor model override lives in a systemd
+drop-in on the Oracle host — `/etc/systemd/system/oracle-api.service.d/extractor-model.conf`
+sets `Environment=EXTRACTOR_MODEL=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0`,
+scoped to `oracle-api.service` only (the batch `truthmachine.service` stays on the
+`tm/config.py` default, nova-lite). Rollback = delete the drop-in, `daemon-reload`,
+restart `oracle-api`.
+
 ## Placeholders to replace
 
 Before applying:

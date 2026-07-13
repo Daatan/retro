@@ -606,3 +606,39 @@ Small-tasks breakdown, in order:
   `Scorer.run()` as a supplementary override for sources with too few
   resolutions to trust yet, or retire it once resolution-driven scoring is
   proven.
+
+## 10. Recency weighting is only as good as the upstream date (2026-07-13)
+
+A single mis-dated source can dominate a pool exactly like a mis-scored one.
+The Netanyahu "next government" forecast on elections.daatan.com sat at
+83–91 % against a curated panel's 45 % even after the process-vs-outcome
+prompt fix (§7-adjacent gatekeeper/extractor work, retro #262) shipped. Root
+cause was one source: a Dec 29, 2022 JNS opinion column — confirmed via its
+own `article:published_time` / JSON-LD `datePublished` metadata — got
+re-crawled by news-indexer and stamped `published_at ≈ 2026-07-11`, then fed
+to the Oracle as fresh, near-certain settlement evidence
+(`stance=1.0, certainty=0.95, settled=true`) for an election three and a
+half months in the future. At this repo's 7-day `recency_half_life_days`
+(`api/src/forecast_api/config.py`), the wrong date alone gave the source
+~50× its correct weight (`recency_weight≈1.0` vs. the ~0.02 floor it should
+have gotten) — enough on its own to anchor the pooled mean high regardless
+of gatekeeper/extractor prompt logic. `evidence_class_weight`'s
+`opinion: 0.25` discount (§5) never got a chance to apply either: the
+extractor classified the claim as `reported_fact`, not `opinion` — a
+correctly-labeled op-ed would still have been weighted down, but recency was
+the dominant term either way.
+
+**This was a data-quality bug at ingestion, not a poolable-signal bug** —
+fixed upstream in `news-indexer` (PR #122): `trafilatura.bare_extraction()`
+defaults `with_metadata=False`, which skips `extract_metadata()` entirely, so
+`result.date` was always `None` and every article — not just this one —
+silently fell back to crawl time instead of its real publish date. An
+extractor-prompt attempt at catching this class of error at the LLM level
+("a 'next X' claim needs its precipitating milestone confirmed, not just the
+outcome asserted") was drafted and validated against it first — 0/5 effect
+on the live production model (Haiku 4.5), because the article body (byline
+stripped) reads identically to a genuine fresh report; the one differentiator
+(true publish date) is exactly the field the ingestion bug corrupts. Not
+pursued further. If a pooled estimate looks anomalously confident again,
+check the suspect source's `published_at` against its own page metadata
+before assuming the extractor or gatekeeper prompt is at fault.

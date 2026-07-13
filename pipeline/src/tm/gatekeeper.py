@@ -39,14 +39,25 @@ How much would a forecaster update their estimate of THIS outcome after reading 
   advance or hinder it — INCLUDING the process leading to it (accession talks for "will
   the EU admit members?"; territorial gains/losses or military setbacks for "will they
   lose territory?"; a leader's failing health for "will they die?"). If a reasonable
-  reader would treat it as evidence either way, it belongs here — be generous, not stingy.
+  reader would treat it as evidence either way, it belongs here — be generous, not stingy
+  (sole exception: the process-only cap below).
 - **0.3–0.6** — partial/background bearing: about the situation and somewhat informative,
-  but only loosely tied to the specific outcome.
+  but only loosely tied to the specific outcome — including articles that confirm the
+  underlying process or situation is on track (schedules, dates, procedures) without
+  distinguishing between its possible outcomes.
 - **0.0–0.2** — no bearing: about the actor/topic but a DIFFERENT matter (Musk's bitcoin
   views for "will Musk tweet about Daatan?"), or merely shares a name/keyword.
 Most articles a search returns for a well-formed claim are genuinely relevant — the
 0.0–0.2 band is for the actor-but-different-matter case, not for solid evidence that
 merely isn't laser-focused on the outcome.
+
+**Process-only cap.** When the claim names ONE specific outcome of a multi-outcome
+process (one winner among contenders, one option among alternatives) and the article
+only confirms the process itself — its schedule, timetable, procedure, or rules, which
+hold equally under every possible outcome — it is on-topic background, not evidence of
+WHICH outcome will occur. Such articles still PASS the gate (is_prediction=true), but
+their relevance_score is capped: score them 0.3–0.5, never 0.7 or higher. Reserve
+0.7–1.0 for reporting that favors or disfavors a specific outcome.
 
 Article:
 <article>

@@ -21,7 +21,7 @@ import httpx
 import trafilatura
 
 from tm.gatekeeper import check_is_prediction, PROMPT as GATEKEEPER_PROMPT
-from tm.extractor import extract_predictions, PROMPT as EXTRACTOR_PROMPT
+from tm.extractor import extract_predictions, enforce_deadline_arithmetic, PROMPT as EXTRACTOR_PROMPT
 from tm.web_search import search_articles, SearchResult, get_last_search_provider, get_last_search_provider_chain
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
@@ -281,6 +281,8 @@ async def _process_article_bounded(
     timings: list[dict],
     article_debugs: list[ArticleDebug],
     timeout_s: float,
+    claim_deadline: str | None = None,
+    claim_direction: str | None = None,
 ) -> tuple[SearchResult, float, list] | None:
     """Run _process_article under a per-article wall-clock ceiling.
 
@@ -296,6 +298,8 @@ async def _process_article_bounded(
                 max_article_chars=max_article_chars,
                 timings=timings,
                 article_debugs=article_debugs,
+                claim_deadline=claim_deadline,
+                claim_direction=claim_direction,
             ),
             timeout=timeout_s,
         )
@@ -313,6 +317,8 @@ async def _process_article(
     max_article_chars: int,
     timings: list[dict],
     article_debugs: list[ArticleDebug],
+    claim_deadline: str | None = None,
+    claim_direction: str | None = None,
 ) -> tuple[SearchResult, float, list] | None:
     """
     Run gatekeeper + extractor for one article.
@@ -393,6 +399,13 @@ async def _process_article(
             article_date=article_date,
             event_name=question,
             event_description=question,
+            claim_deadline=claim_deadline,
+        )
+        # The model reports the date; arithmetic decides the sign. See
+        # enforce_deadline_arithmetic — an LLM asked whether "Friday" beat a July 15
+        # deadline answered +1.0/0.95 five times out of five, and Friday was July 17.
+        extraction.predictions = enforce_deadline_arithmetic(
+            extraction.predictions, claim_deadline, claim_direction,
         )
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", result.url, exc)
@@ -694,6 +707,8 @@ async def _run_forecast_inner(
                 timings=timings,
                 article_debugs=article_debugs,
                 timeout_s=settings.per_article_timeout_seconds,
+                claim_deadline=req.claim_deadline,
+                claim_direction=req.claim_direction,
             )
             for r in search_results
         ],

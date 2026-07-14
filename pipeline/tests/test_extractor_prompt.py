@@ -33,4 +33,5 @@ def test_prompt_placeholders_still_format():
         article_date="d",
         event_name="e",
         event_description="x",
+        claim_deadline="2026-07-15",
     )

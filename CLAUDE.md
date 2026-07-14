@@ -17,7 +17,7 @@ Three related systems, one repo:
 - **PR-only.** Never push to `main`, even for docs. Merge via the GitHub UI so CI runs.
 - **Merging to `main` deploys.** `deploy-oracle.yml` redeploys the Oracle host on any push to `main` touching `api/**` or `pipeline/**`; `deploy-atlas.yml` republishes the GitHub Pages atlas on changes to the root HTML files. There is no separate prod tag — treat every merge as a deploy.
 - **`net_guard` is duplicated on purpose.** `pipeline/src/tm/net_guard.py` has a second copy in news-indexer (`src/news_indexer/net_guard.py`). Fix both together — a nightly drift-check CI in news-indexer fails if they diverge.
-- **Don't "fix" leftover `openclaw` references.** The openclaw→daatan rename (819f188) was deliberately code/docs-only; live secret names and the local `infra/openclaw/` dir stay `openclaw` until a separate migration.
+- **Secrets fail open — a missing one is silent.** `_secret()` (`web_search.py`) returns `None` when a secret is absent, so the provider is skipped rather than erroring: the chain gets quieter, nothing raises. The openclaw→daatan rename pointed the code at `daatan/*` without migrating the live secrets, which is exactly how that bites. Both namespaces now exist (`daatan/*` is the one the code reads). After adding or renaming any provider secret, run `bash infra/check_keys.sh`. The local `infra/openclaw/` dir (gitignored `.env`) keeps the old name — that part is cosmetic and can stay.
 - **Terraform**: state key `retro/` in `daatan-terraform-state`; never blanket `apply`, use `-target` (workspace rule).
 
 ## Running & testing

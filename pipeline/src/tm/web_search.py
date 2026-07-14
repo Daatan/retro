@@ -331,46 +331,110 @@ _GOOGLE_CSE_QUOTA_EXHAUSTED: bool = False
 
 _QUOTA_STATE_PATH = Path(tempfile.gettempdir()) / "quota_exhausted.json"
 
+# Provider name (as persisted) -> the module global holding its flag.
+_QUOTA_FLAG_GLOBALS: dict[str, str] = {
+    "dataforseo":  "_DATAFORSEO_QUOTA_EXHAUSTED",
+    "serpapi":     "_SERPAPI_QUOTA_EXHAUSTED",
+    "serper":      "_SERPER_QUOTA_EXHAUSTED",
+    "brave":       "_BRAVE_QUOTA_EXHAUSTED",
+    "brightdata":  "_BRIGHTDATA_QUOTA_EXHAUSTED",
+    "nimbleway":   "_NIMBLEWAY_QUOTA_EXHAUSTED",
+    "scrapingbee": "_SCRAPINGBEE_QUOTA_EXHAUSTED",
+    "newsdata":    "_NEWSDATA_QUOTA_EXHAUSTED",
+    "tavily":      "_TAVILY_QUOTA_EXHAUSTED",
+    "google_cse":  "_GOOGLE_CSE_QUOTA_EXHAUSTED",
+}
+
+# A quota flag is sticky on purpose — once a provider answers "out of credit" we must
+# not re-ask it on every search. But it must not be *permanent*: provider quotas reset
+# on their own schedule (Google CSE daily, Serper/SerpAPI monthly), and any transient
+# 401/429 trips the same flag. Nothing ever cleared it, so a single bad response
+# disabled a provider for the life of the host — and, because the flag is persisted,
+# for every process started afterwards. Re-probe once a flag is older than this.
+_QUOTA_TTL_SECONDS: float = 86400.0  # 24h
+
+# Provider name -> epoch seconds when its flag was last set. Stamped by
+# _persist_quota_state(), so the many sites that just assign the global keep working.
+_QUOTA_SET_AT: dict[str, float] = {}
+
 
 def _load_quota_state() -> None:
-    """Seed in-process quota flags from disk so a gunicorn SIGHUP reload doesn't forget exhausted providers."""
-    global _DATAFORSEO_QUOTA_EXHAUSTED, _SERPAPI_QUOTA_EXHAUSTED, _SERPER_QUOTA_EXHAUSTED
-    global _BRAVE_QUOTA_EXHAUSTED, _BRIGHTDATA_QUOTA_EXHAUSTED, _NIMBLEWAY_QUOTA_EXHAUSTED
-    global _SCRAPINGBEE_QUOTA_EXHAUSTED, _NEWSDATA_QUOTA_EXHAUSTED, _TAVILY_QUOTA_EXHAUSTED
-    global _GOOGLE_CSE_QUOTA_EXHAUSTED
+    """Seed in-process quota flags from disk so a gunicorn SIGHUP reload doesn't forget exhausted providers.
+
+    Accepts both the current `{provider: {"exhausted": bool, "set_at": float}}` shape and
+    the legacy `{provider: bool}` one. A legacy entry carries no timestamp, so it is stamped
+    as first-seen *now*: it still expires, just a full TTL from the first load rather than
+    immediately. Every True flag therefore always has a timestamp, and nothing stays
+    disabled forever.
+    """
+    now = time.time()
     try:
         data = _json.loads(_QUOTA_STATE_PATH.read_text())
-        _DATAFORSEO_QUOTA_EXHAUSTED  = data.get("dataforseo",  False)
-        _SERPAPI_QUOTA_EXHAUSTED     = data.get("serpapi",     False)
-        _SERPER_QUOTA_EXHAUSTED      = data.get("serper",      False)
-        _BRAVE_QUOTA_EXHAUSTED       = data.get("brave",       False)
-        _BRIGHTDATA_QUOTA_EXHAUSTED  = data.get("brightdata",  False)
-        _NIMBLEWAY_QUOTA_EXHAUSTED   = data.get("nimbleway",   False)
-        _SCRAPINGBEE_QUOTA_EXHAUSTED = data.get("scrapingbee", False)
-        _NEWSDATA_QUOTA_EXHAUSTED    = data.get("newsdata",    False)
-        _TAVILY_QUOTA_EXHAUSTED      = data.get("tavily",      False)
-        _GOOGLE_CSE_QUOTA_EXHAUSTED  = data.get("google_cse",  False)
     except Exception:
-        pass
+        return
+    for name, attr in _QUOTA_FLAG_GLOBALS.items():
+        entry = data.get(name, False)
+        if isinstance(entry, dict):
+            exhausted = bool(entry.get("exhausted", False))
+            set_at = float(entry.get("set_at") or now)
+        else:
+            exhausted = bool(entry)
+            set_at = now
+        globals()[attr] = exhausted
+        if exhausted:
+            _QUOTA_SET_AT[name] = set_at
+        else:
+            _QUOTA_SET_AT.pop(name, None)
 
 
 def _persist_quota_state() -> None:
-    """Write current quota exhaustion flags to disk so they survive worker reloads."""
+    """Write current quota exhaustion flags to disk so they survive worker reloads.
+
+    Stamps `set_at` for any flag that is newly True, so callers can keep setting the
+    module global directly and still get a TTL.
+    """
+    now = time.time()
+    payload = {}
+    for name, attr in _QUOTA_FLAG_GLOBALS.items():
+        exhausted = bool(globals()[attr])
+        if exhausted:
+            _QUOTA_SET_AT.setdefault(name, now)
+        else:
+            _QUOTA_SET_AT.pop(name, None)
+        payload[name] = {"exhausted": exhausted, "set_at": _QUOTA_SET_AT.get(name, 0.0)}
     try:
-        _QUOTA_STATE_PATH.write_text(_json.dumps({
-            "dataforseo":  _DATAFORSEO_QUOTA_EXHAUSTED,
-            "serpapi":     _SERPAPI_QUOTA_EXHAUSTED,
-            "serper":      _SERPER_QUOTA_EXHAUSTED,
-            "brave":       _BRAVE_QUOTA_EXHAUSTED,
-            "brightdata":  _BRIGHTDATA_QUOTA_EXHAUSTED,
-            "nimbleway":   _NIMBLEWAY_QUOTA_EXHAUSTED,
-            "scrapingbee": _SCRAPINGBEE_QUOTA_EXHAUSTED,
-            "newsdata":    _NEWSDATA_QUOTA_EXHAUSTED,
-            "tavily":      _TAVILY_QUOTA_EXHAUSTED,
-            "google_cse":  _GOOGLE_CSE_QUOTA_EXHAUSTED,
-        }))
+        _QUOTA_STATE_PATH.write_text(_json.dumps(payload))
     except Exception:
         pass
+
+
+def _expire_stale_quota_flags() -> None:
+    """Clear any quota flag older than _QUOTA_TTL_SECONDS so the provider is retried.
+
+    Costs at most one failed request per provider per TTL when a provider really is out
+    of credit; in exchange, a provider that has been topped up (or was flagged by a
+    transient error) comes back on its own instead of staying dark forever.
+    """
+    now = time.time()
+    revived = []
+    for name, attr in _QUOTA_FLAG_GLOBALS.items():
+        if not globals()[attr]:
+            _QUOTA_SET_AT.pop(name, None)
+            continue
+        # A flag set in-process (the callers just assign the global) has no timestamp
+        # yet — stamp it now rather than reading it as epoch 0, which would expire the
+        # flag on the very next sweep and defeat its purpose. Only _load_quota_state()
+        # records an explicit 0.0, for the legacy on-disk booleans that carry no time.
+        set_at = _QUOTA_SET_AT.setdefault(name, now)
+        if now - set_at > _QUOTA_TTL_SECONDS:
+            revived.append(name)
+    if not revived:
+        return
+    for name in revived:
+        globals()[_QUOTA_FLAG_GLOBALS[name]] = False
+        _QUOTA_SET_AT.pop(name, None)
+    logger.info("Quota flag TTL expired — re-enabling provider(s): %s", ", ".join(revived))
+    _persist_quota_state()
 
 
 _load_quota_state()
@@ -1511,6 +1575,7 @@ def _search_articles_chain(
     """
     global _GDELT_DOC_FAIL_COUNT, _GDELT_DOC_BROKEN_UNTIL
     _refresh_keys_if_stale()
+    _expire_stale_quota_flags()
     _provider_local.name = "none"
     _provider_local.chain = []
 

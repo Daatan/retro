@@ -735,3 +735,101 @@ class TestGdeltDocCircuitBreaker:
             ws.search_articles("query")
 
         assert ws._GDELT_DOC_FAIL_COUNT == 0
+
+
+# ---------------------------------------------------------------------------
+# Quota flag TTL — a sticky flag must not be a permanent one
+# ---------------------------------------------------------------------------
+
+@needs_deps
+class TestQuotaFlagTTL:
+    """Regression: a quota flag, once set, was persisted and never cleared by any code
+    path — so one transient 429/401 disabled a provider permanently, across restarts."""
+
+    def _isolate_state(self, ws, tmp_path):
+        ws._QUOTA_STATE_PATH = tmp_path / "quota_exhausted.json"
+        ws._QUOTA_SET_AT.clear()
+
+    def test_flag_older_than_ttl_is_cleared(self, tmp_path):
+        ws = _fresh_ws()
+        self._isolate_state(ws, tmp_path)
+        ws._SERPAPI_QUOTA_EXHAUSTED = True
+        ws._QUOTA_SET_AT["serpapi"] = time.time() - ws._QUOTA_TTL_SECONDS - 1
+
+        ws._expire_stale_quota_flags()
+
+        assert ws._SERPAPI_QUOTA_EXHAUSTED is False
+        assert "serpapi" not in ws._QUOTA_SET_AT
+
+    def test_fresh_flag_is_kept(self, tmp_path):
+        ws = _fresh_ws()
+        self._isolate_state(ws, tmp_path)
+        ws._SERPAPI_QUOTA_EXHAUSTED = True
+        ws._QUOTA_SET_AT["serpapi"] = time.time()
+
+        ws._expire_stale_quota_flags()
+
+        assert ws._SERPAPI_QUOTA_EXHAUSTED is True
+
+    def test_persist_stamps_set_at_for_newly_set_flag(self, tmp_path):
+        """Callers assign the global directly; _persist_quota_state must supply the timestamp."""
+        ws = _fresh_ws()
+        self._isolate_state(ws, tmp_path)
+        ws._BRAVE_QUOTA_EXHAUSTED = True
+
+        ws._persist_quota_state()
+
+        assert ws._QUOTA_SET_AT["brave"] == pytest.approx(time.time(), abs=5)
+
+    def test_clearing_flag_drops_its_timestamp(self, tmp_path):
+        ws = _fresh_ws()
+        self._isolate_state(ws, tmp_path)
+        ws._BRAVE_QUOTA_EXHAUSTED = True
+        ws._persist_quota_state()
+
+        ws._BRAVE_QUOTA_EXHAUSTED = False
+        ws._persist_quota_state()
+
+        assert "brave" not in ws._QUOTA_SET_AT
+
+    def test_legacy_bool_file_gets_a_timestamp_so_it_can_expire(self, tmp_path):
+        """The pre-TTL on-disk format has no timestamp. It must still be honoured on load
+        (a real exhaustion shouldn't be forgotten), but must be stamped so the TTL can
+        eventually clear it — the old format could pin a provider off forever."""
+        ws = _fresh_ws()
+        state = tmp_path / "quota_exhausted.json"
+        state.write_text('{"serpapi": true, "brave": false}')
+        ws._QUOTA_STATE_PATH = state
+        ws._QUOTA_SET_AT.clear()
+
+        ws._load_quota_state()
+
+        assert ws._SERPAPI_QUOTA_EXHAUSTED is True
+        assert ws._BRAVE_QUOTA_EXHAUSTED is False
+        # Stamped as first-seen now — so it survives this sweep...
+        assert ws._QUOTA_SET_AT["serpapi"] == pytest.approx(time.time(), abs=5)
+        ws._expire_stale_quota_flags()
+        assert ws._SERPAPI_QUOTA_EXHAUSTED is True
+
+        # ...but is cleared once it ages past the TTL, which the old format never did.
+        ws._QUOTA_SET_AT["serpapi"] = time.time() - ws._QUOTA_TTL_SECONDS - 1
+        ws._expire_stale_quota_flags()
+        assert ws._SERPAPI_QUOTA_EXHAUSTED is False
+
+    def test_state_survives_a_round_trip(self, tmp_path):
+        ws = _fresh_ws()
+        self._isolate_state(ws, tmp_path)
+        ws._TAVILY_QUOTA_EXHAUSTED = True
+        ws._persist_quota_state()
+
+        ws._TAVILY_QUOTA_EXHAUSTED = False
+        ws._QUOTA_SET_AT.clear()
+        ws._load_quota_state()
+
+        assert ws._TAVILY_QUOTA_EXHAUSTED is True
+        assert ws._QUOTA_SET_AT["tavily"] > 0
+
+    def test_chain_sweeps_stale_flags(self, tmp_path):
+        """search_articles must run the sweep, so a stale flag can't skip a provider."""
+        src = inspect.getsource(_fresh_ws()._search_articles_chain)
+        assert "_expire_stale_quota_flags()" in src

@@ -35,6 +35,27 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  TruthMachine Key Check  $(date '+%Y-%m-%d %H:%M:%S')"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# ── Every secret web_search.py reads must actually resolve ──────────────
+#
+# `_secret()` falls back to Secrets Manager and returns None on a miss, so a secret
+# that doesn't exist doesn't raise — the provider is just silently skipped, and the
+# search chain quietly degrades instead of failing. Assert existence explicitly.
+echo ""
+echo "  SECRET EXISTENCE (names read by pipeline/src/tm/web_search.py)"
+MISSING=0
+for S in dataforseo-key serpapi-key serperdev-key brave-api-key brightdata-api-key \
+         nimbleway-api-key scrapingbee-api-key tavily-api-key oracle-api-key \
+         news-indexer-url news-indexer-api-key gcp-service-account-key; do
+  if aws secretsmanager get-secret-value --secret-id "daatan/$S" --region "$REGION" \
+       --query SecretString --output text >/dev/null 2>&1; then
+    ok "daatan/$S"
+  else
+    fail "daatan/$S — MISSING; this provider will be silently skipped"
+    MISSING=$((MISSING + 1))
+  fi
+done
+[[ "$MISSING" -gt 0 ]] && warn "$MISSING secret(s) missing — the search chain is degraded, not broken, so nothing will alarm"
+
 # ── Serper.dev ──────────────────────────────────────────
 echo ""
 echo "  SEARCH KEYS"

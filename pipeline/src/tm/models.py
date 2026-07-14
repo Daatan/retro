@@ -48,6 +48,14 @@ class PredictionExtraction(BaseModel):
                     "The kind of evidence this claim is, independent of stance/certainty. "
                     "Omit entirely rather than guessing when none fits cleanly.",
     )
+    event_date: Optional[str] = Field(
+        default=None,
+        description="ISO date (YYYY-MM-DD) on which the article says the RELATED EVENT "
+                    "itself occurs or occurred. Resolve relative references ('on Friday', "
+                    "'tomorrow', 'next week') against the article's date to an absolute "
+                    "calendar date. The date of the event in the claim — NOT of any adjacent "
+                    "or downstream event. Omit entirely when the article states no date for it.",
+    )
     # Not requested from LLM; kept Optional for backward compat with existing atlas entries
     sentiment: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     specificity: Optional[float] = Field(default=None, ge=0.0, le=1.0)

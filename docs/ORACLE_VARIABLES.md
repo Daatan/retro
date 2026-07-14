@@ -25,8 +25,43 @@ consequences of that redundancy, not of any single bug.
 | `certainty` | 0..1 | linguistic confidence (0 = hedged, 1 = absolute) | weight factor AND within-article claim weight |
 | `quantitative_estimate` | 0..1, optional | cited model/poll/market probability | overrides stance+certainty via `resolve_stance_certainty`; triggers the 4× premium |
 | `settled` | bool | outcome reported as accomplished fact | feeds the ±0.94 settlement pin |
+| `event_date` | ISO date, optional | when the article says the event itself occurs/occurred | compared against `claim_deadline` by `enforce_deadline_arithmetic` — see below |
 | `specificity` | 0..1, optional | **dead** — live extractor never emits it; defaults 1.0 | remove |
 | `claim`, `quote` | text | provenance | — |
+
+#### Deadline claims are decided by arithmetic, not by the LLM
+
+A "by DATE" claim is settled by comparing two dates, and the extractor is unreliable at
+exactly that — while failing *confidently*. Measured against the live prod model
+(Haiku 4.5) on the forecast *"The Israeli parliament will be dissolved by July 15, 2026"*:
+
+- Given the Guardian's *"the Knesset will dissolve **on Friday**"* (article dated Mon 2026-07-13),
+  it returned **stance +1.0 / certainty 0.95 on 5 of 5 runs** — once rendering the claim as
+  *"dissolved on Friday, July 15"*, snapping the weekday onto the deadline. That Friday was
+  **July 17**: the claim was false, and the extractor was maximally confident it was true.
+- Given Middle East Eye's article, which spells out *"July 17"* in plain text, the same model
+  returned **−1.0 on 4 of 4 runs**. The only difference between a right and a wrong answer was
+  whether the article had done the arithmetic for it.
+
+So `claim_deadline` is now passed into the extractor prompt, the model reports `event_date`
+(with relative references like "on Friday" resolved against the article's date), and
+`enforce_deadline_arithmetic` in `extractor.py` does the comparison in Python:
+
+    arrival  ("X happens BY D"):          event_date ≤ D → supports (+) ; after D → contradicts (−)
+    survival ("X does NOT happen by D"):  mirrored
+
+Only *confident* signals (|stance| ≥ 0.9 or `settled`) are corrected — a hedged "might slip
+past the deadline" is a real judgement, not an arithmetic error. Magnitude and certainty are
+preserved; only the sign moves. Every correction logs `event=deadline_arithmetic_override`.
+Fail-open throughout: no deadline, no `event_date`, an unparseable date, or an unclassified
+claim leaves the prediction exactly as the model returned it.
+
+**Known limitation — the model still cannot resolve weekdays.** With the prompt above it now
+resolves "Friday" *and states the date*, which flips the Guardian case to −1.0 on 4 of 4 runs
+(the incident is fixed). But it resolves it to **2026-07-18** — a Saturday, off by one. The sign
+survives only because both 07-17 and 07-18 fall after the deadline; a ±1-day error against a
+date sitting *on* the deadline would still invert the answer. Resolving the relative expression
+in Python (the model reports the phrase, the calendar is computed) is the follow-up.
 
 ### 2.2 Per-article (gatekeeper LLM — `pipeline/src/tm/gatekeeper.py`)
 

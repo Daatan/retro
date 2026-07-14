@@ -1,6 +1,12 @@
-from .models import ExtractionOutput
+import logging
+from datetime import date
+from typing import Optional
+
+from .models import ExtractionOutput, PredictionExtraction
 from .config import settings
 from .llm import complete_structured
+
+logger = logging.getLogger(__name__)
 
 PROMPT = """\
 You are a forensic prediction analyst. Your job is to extract EVERY signal — \
@@ -280,6 +286,44 @@ Examples — related event: "Company X exits the European market by year-end":
   "Company X's CEO resigned amid the European losses"                       → stance +0.2, certainty 0.4, settled false (leadership change is not a market exit)
   "Company X announced the closure of all European operations"              → stance +1.0, certainty 0.95, settled true
 
+## DATES — resolve first, compare second, never assert a comparison you did not compute
+Deadline claims ("by July 15", "before year-end") are decided by ARITHMETIC, not by tone. \
+An article can be euphoric that the event is certain and still be evidence AGAINST the \
+claim, if the date it names falls after the deadline. Certainty that the event happens \
+LATE is certainty the claim is FALSE.
+
+Two rules, in order:
+
+1. RESOLVE. A relative date reference — "on Friday", "today", "tomorrow", "next week", \
+"this weekend", "in three days" — is not a date. Convert it to an absolute calendar date \
+using the article's date, given below. Put that absolute date in `event_date` (YYYY-MM-DD). \
+Never carry a weekday forward as if it were a date, and never assume a weekday lands on \
+the deadline: if the article says "Friday" and the deadline is the 15th, "Friday" is \
+whatever date it actually is — work it out from the article's date.
+
+2. COMPARE. Only once you have the absolute date, compare it with the claim's deadline \
+(given below as "Claim deadline"). State the absolute date in the `claim` field, not the \
+weekday, so the comparison is auditable.
+  - event_date on or before the deadline → the claim is SUPPORTED (positive stance)
+  - event_date after the deadline        → the claim is CONTRADICTED (negative stance), \
+however affirmative the article sounds
+
+Set `event_date` whenever the article gives a date for the RELATED EVENT ITSELF — omit it \
+for the date of an adjacent or downstream event (the election that follows a dissolution, \
+the trial that follows an indictment).
+
+Examples — related event: "The Israeli parliament will be dissolved by July 15, 2026" \
+(article dated Monday 2026-07-13):
+  "The Knesset will dissolve on Friday" \
+    → "Friday" is 2026-07-17 (the Friday after Monday the 13th), which is AFTER July 15 \
+    → event_date "2026-07-17", stance −1.0, certainty 0.95 \
+      claim: "The parliament will be dissolved on 2026-07-17, after the July 15 deadline" \
+    (WRONG: reading "Friday" as "by July 15" and returning +1.0 — the event is certain, \
+     but it is certain to happen TOO LATE, which contradicts the claim)
+  "The Knesset dissolved yesterday" \
+    → "yesterday" is 2026-07-12, on or before July 15 \
+    → event_date "2026-07-12", stance +1.0, certainty 0.95, settled true
+
 ## Article language
 The article may be in Hebrew, Arabic, or English. Always write the claim in English.
 Quote the original language verbatim in the quote field.
@@ -299,18 +343,23 @@ Source: {source_name}
 Journalist: {journalist}
 Date: {article_date}
 Related event: {event_name} — {event_description}
+Claim deadline: {claim_deadline}
 
 IMPORTANT: Your response must be a JSON object with a "predictions" key containing a list.
 Example: {{"predictions": [ {{...}}, {{...}} ]}}
 
-Each prediction has five core fields, plus two used only when applicable:
+Each prediction has five core fields, plus three used only when applicable:
   quote (string — original language), claim (string — English), \
 stance (float −1 to 1), certainty (float 0 to 1), settled (boolean — true only when \
 the source reports the outcome as an accomplished fact), quantitative_estimate \
 (float 0 to 1, OMIT this field entirely unless the source cites an explicit modeled \
 probability/poll/market figure for the event itself — see the section above), \
 evidence_class (one of reported_fact / cited_probability / cited_share / reporting / \
-opinion, OMIT this field entirely if none fits cleanly — see the section above)
+opinion, OMIT this field entirely if none fits cleanly — see the section above), \
+event_date (string YYYY-MM-DD — the absolute date the article gives for the RELATED \
+EVENT ITSELF, with any relative reference like "Friday" already resolved against the \
+article's date; OMIT this field entirely when the article states no date for it — \
+see the DATES section above)
 
 Example — related event: "Assad regime falls in Syria":
 {{
@@ -358,8 +407,15 @@ async def extract_predictions(
     event_name: str,
     event_description: str,
     journalist: str = "unknown",
+    claim_deadline: Optional[str] = None,
 ) -> tuple["ExtractionOutput", dict]:
-    """Returns (ExtractionOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens."""
+    """Returns (ExtractionOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
+
+    ``claim_deadline`` (ISO date) is rendered into the prompt so the model can compare a
+    resolved ``event_date`` against it rather than hunting the deadline out of the claim's
+    prose. Callers that don't classify claims may omit it — the prompt then says "not given"
+    and behaviour is unchanged.
+    """
     prompt = PROMPT.format(
         article_text=article_text,
         source_name=source_name,
@@ -367,7 +423,72 @@ async def extract_predictions(
         article_date=article_date,
         event_name=event_name,
         event_description=event_description,
+        claim_deadline=claim_deadline or "not given",
     )
     return await complete_structured(
         settings.extractor_model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
     )
+
+
+def _parse_iso_date(value: Optional[str]) -> Optional[date]:
+    """Lenient ISO-8601 date parse — accepts a bare date or a full timestamp. None on anything else."""
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except (ValueError, TypeError):
+        return None
+
+
+def enforce_deadline_arithmetic(
+    predictions: list[PredictionExtraction],
+    claim_deadline: Optional[str],
+    claim_direction: Optional[str],
+) -> list[PredictionExtraction]:
+    """Let arithmetic, not the LLM, decide the SIGN of a confidently-dated deadline claim.
+
+    A deadline claim is settled by comparing two dates. LLMs are unreliable at exactly that,
+    and they fail *confidently*: asked whether a parliament dissolving "on Friday" met a
+    July 15 deadline, the extractor returned stance +1.0 / certainty 0.95 on 5 of 5 runs —
+    once rendering the claim as "dissolved on Friday, July 15", snapping the weekday onto
+    the deadline. That Friday was July 17. The same model, given an article that spelled out
+    "July 17" in plain text, returned −1.0 on 4 of 4 runs. The only difference between a
+    right and a wrong answer was whether the article did the arithmetic for it.
+
+    So: the model reports the date (``event_date``), and we do the comparison here.
+
+        arrival  ("X happens BY D"):     event_date <= D → supports (+) ; after D → contradicts (−)
+        survival ("X does NOT happen by D"): mirrored.
+
+    Only *confident* signals are corrected (|stance| >= 0.9 or settled) — those are the ones
+    that pin an estimate, and a hedged "might slip past the deadline" is a genuine judgement
+    we have no business overriding. Magnitude and certainty are preserved; only the sign moves.
+
+    Fail-open in every direction: no deadline, no ``event_date``, an unparseable date, or an
+    unclassified claim leaves the prediction exactly as the model returned it.
+    """
+    deadline = _parse_iso_date(claim_deadline)
+    if deadline is None or claim_direction not in ("arrival", "survival"):
+        return predictions
+
+    for p in predictions:
+        event_date = _parse_iso_date(p.event_date)
+        if event_date is None:
+            continue
+        if abs(p.stance) < 0.9 and not p.settled:
+            continue
+
+        within = event_date <= deadline
+        expects_positive = within if claim_direction == "arrival" else not within
+        if (p.stance > 0) == expects_positive:
+            continue
+
+        logger.warning(
+            "event=deadline_arithmetic_override claim_direction=%s deadline=%s event_date=%s "
+            "stance=%+.2f -> %+.2f settled=%s claim=%r",
+            claim_direction, deadline.isoformat(), event_date.isoformat(),
+            p.stance, -p.stance, p.settled, p.claim[:120],
+        )
+        p.stance = -p.stance
+
+    return predictions

@@ -264,3 +264,26 @@ class IngestResolutionResponse(BaseModel):
     accepted: bool = Field(default=True)
     already_ingested: bool = Field(description="True when prediction_id was already on record — sources_recorded is 0 in that case, nothing was written")
     sources_recorded: int
+
+
+# ── Relevance ─────────────────────────────────────────────────────────────────
+
+class RelevanceRequest(BaseModel):
+    """One (claim, article) pair to judge. Exposes the gatekeeper on its own so a
+    caller can ask 'does this article bear on this claim?' *before* committing to a
+    full /forecast run — news-indexer uses it to rescue articles its embedding
+    cosine ranks poorly (the cosine misranks; see docs/ORACLE_API.md)."""
+    claim: str = Field(..., min_length=3, description="The claim to judge against — daatan's Prediction.claimText")
+    article_text: str = Field(..., min_length=1, description="Article body text")
+    source_name: str = Field(default="", description="Outlet/source name, as the gatekeeper prompt's Source line")
+    article_date: str = Field(default="", description="Article date, as the gatekeeper prompt's Date line")
+
+
+class RelevanceResponse(BaseModel):
+    """`tm.gatekeeper.GatekeeperOutput` over the wire, plus the model that judged —
+    callers persist `model` so a verdict can always be traced to what produced it."""
+    is_prediction: bool = Field(description="Coarse gate: could a forecaster's estimate of THIS outcome move after reading the article?")
+    relevance_score: float = Field(ge=0.0, le=1.0, description="Graded relevance [0,1]; its square multiplies the source's aggregation weight in /forecast")
+    reason: str
+    prediction_count_estimate: int = Field(ge=0)
+    model: str = Field(description="litellm model ID that produced this verdict")

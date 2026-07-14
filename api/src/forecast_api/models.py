@@ -277,6 +277,15 @@ class RelevanceRequest(BaseModel):
     article_text: str = Field(..., min_length=1, description="Article body text")
     source_name: str = Field(default="", description="Outlet/source name, as the gatekeeper prompt's Source line")
     article_date: str = Field(default="", description="Article date, as the gatekeeper prompt's Date line")
+    short_form: bool = Field(
+        default=False,
+        description=(
+            "The item is a social-media / messaging post (e.g. a journalist's Telegram channel), "
+            "not a news article. Judge it on content rather than length: the gatekeeper's default "
+            "'under ~200 words is insubstantial' rule targets paywall stubs, and misfires on terse "
+            "posts that carry real evidence. Off by default; /forecast never sets it."
+        ),
+    )
 
 
 class RelevanceResponse(BaseModel):

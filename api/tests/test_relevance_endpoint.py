@@ -97,3 +97,19 @@ def test_relevance_requires_the_api_key():
         r = client.post("/relevance", json=BODY, headers={"x-api-key": "wrong"})
     assert r.status_code == 401
     gk.assert_not_awaited()
+
+
+def test_short_form_is_off_by_default_so_forecast_is_untouched():
+    """The safety property. The base prompt rejects anything "under ~200 meaningful words" — aimed at
+    paywall stubs. Relaxing that for social posts must not relax it for /forecast, so the override is
+    APPENDED and only when asked: with short_form off, the prompt text is byte-for-byte today's."""
+    with patch("forecast_api.main.check_is_prediction", new=AsyncMock(return_value=(_verdict(), {}))) as gk:
+        client.post("/relevance", json=BODY, headers=HEADERS)
+    assert gk.await_args.kwargs["short_form"] is False
+
+
+def test_short_form_is_passed_through_when_requested():
+    with patch("forecast_api.main.check_is_prediction", new=AsyncMock(return_value=(_verdict(), {}))) as gk:
+        r = client.post("/relevance", json={**BODY, "short_form": True}, headers=HEADERS)
+    assert r.status_code == 200
+    assert gk.await_args.kwargs["short_form"] is True

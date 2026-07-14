@@ -20,10 +20,11 @@ from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderbo
 from .resolution_feedback import ingest_resolution
 from .resolution_scorer import load_shadow_leaderboard, rescore_from_disk
 from tm.config import settings as _pipeline_settings
+from tm.gatekeeper import check_is_prediction
 from tm.llm import complete_text_once
 from tm.net_guard import UnsafeURLError, is_safe_url, safe_get
 from .limiter import limiter
-from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, IngestResolutionRequest, IngestResolutionResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, SearchRequest, SearchResponse, SearchHealthResponse, VersionResponse
+from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, IngestResolutionRequest, IngestResolutionResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, RelevanceRequest, RelevanceResponse, SearchRequest, SearchResponse, SearchHealthResponse, VersionResponse
 from .searcher import run_search, run_search_health
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
@@ -237,6 +238,47 @@ async def pool_aggregate(
     The `mean` field is in stance space [-1, 1], same as `/forecast`.
     """
     return await run_pool_aggregate(body)
+
+
+@app.post("/relevance", response_model=RelevanceResponse, tags=["Forecast"])
+@limiter.limit("120/minute")
+async def relevance(
+    request: Request,  # required by slowapi
+    body: RelevanceRequest,
+    _: None = Depends(verify_api_key),
+):
+    """
+    Judge one (claim, article) pair with the gatekeeper — the same claim-aware
+    screener `/forecast` already runs on every article it aggregates
+    (`tm.gatekeeper.check_is_prediction`, Nova Micro). Same prompt, same model:
+    this endpoint only exposes it standalone, so a caller can ask "does this
+    article bear on this claim?" without paying for a whole `/forecast` run.
+
+    Why it exists: news-indexer gates forecast↔article matching on embedding
+    cosine, which *misranks* — a tangential article can outscore an on-topic one,
+    so genuinely relevant coverage never reaches the Oracle at all. news-indexer
+    calls this to give poorly-ranked candidates a second, claim-aware opinion.
+
+    Stateless, and no search — one LLM call. It does not aggregate, does not
+    touch the leaderboard, and does not affect `/forecast`'s behaviour.
+    """
+    try:
+        out, _usage = await check_is_prediction(
+            article_text=body.article_text,
+            source_name=body.source_name,
+            article_date=body.article_date,
+            event_name=body.claim,
+        )
+    except Exception as exc:
+        logger.warning("relevance check failed claim=%.60s err=%s", body.claim, exc)
+        return JSONResponse({"detail": f"Relevance check failed: {exc}"}, status_code=502)
+    return RelevanceResponse(
+        is_prediction=out.is_prediction,
+        relevance_score=out.relevance_score,
+        reason=out.reason,
+        prediction_count_estimate=out.prediction_count_estimate,
+        model=_pipeline_settings.gatekeeper_model,
+    )
 
 
 @app.post("/search", response_model=SearchResponse, tags=["Search"])

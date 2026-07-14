@@ -133,6 +133,11 @@ async def _check_serper() -> ProviderStatus:
         if not r.is_success:
             return ProviderStatus(configured=True, exhausted=False, status="error", error=f"HTTP {r.status_code}")
         credits = r.json().get("balance")
+        # Serper reports a *negative* balance once the plan is overdrawn, so "not None"
+        # isn't enough — treat <= 0 as exhausted (same rule as scrapingbee below).
+        if credits is not None and credits <= 0:
+            _ws._SERPER_QUOTA_EXHAUSTED = True
+            return ProviderStatus(configured=True, exhausted=True, status="exhausted", credits=credits)
         return ProviderStatus(configured=True, exhausted=False, status="ok", credits=credits)
     except Exception as e:
         return ProviderStatus(configured=True, exhausted=False, status="error", error=str(e))
@@ -228,6 +233,9 @@ async def _check_google_cse() -> ProviderStatus:
 
 async def run_search_health() -> SearchHealthResponse:
     _ws._refresh_keys_if_stale()
+    # Same TTL sweep the search chain runs, so /search/health can't report a provider
+    # as "exhausted" when the next real search would already have re-enabled it.
+    _ws._expire_stale_quota_flags()
 
     # Each entry: (provider_name, check_coroutine)
     provider_checks = [

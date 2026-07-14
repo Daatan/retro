@@ -365,7 +365,9 @@ recovery. Full design + IAM in [`docs/ATLAS_SNAPSHOTS.md`](ATLAS_SNAPSHOTS.md).
 | `daatan/github-pat` | Push `factum_atlas.html` to repo |
 | `daatan/oracle-api-key` | Shared auth key between Oracle API and daatan |
 
-> **Note:** The actual AWS Secrets Manager entries were originally created as `openclaw/*` (a decommissioned stack's namespace). Code and docs now use `daatan/*`. Rename the live secrets with `aws secretsmanager update-secret --secret-id openclaw/X --secret-string "$(aws secretsmanager get-secret-value --secret-id openclaw/X --query SecretString --output text)"` then `aws secretsmanager create-secret --name daatan/X --secret-string ...` for each entry, then delete the old names.
+> **Note (resolved 2026-07-14):** these entries were originally created under `openclaw/*` (a decommissioned stack's namespace). PR #198 pointed the *code* at `daatan/*`; the `daatan/*` entries now exist to match, and the `openclaw/*` copies are retained but read by nothing.
+>
+> **A missing secret does not fail loudly here.** `_secret()` returns `None` on a miss and the provider is then treated as *not configured* and skipped — no exception, no log line, just a quieter search chain. After adding or renaming any provider secret, run `bash infra/check_keys.sh`, which asserts that every secret `web_search.py` reads actually resolves.
 
 ### Bootstrap on an existing EC2 instance
 

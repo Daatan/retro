@@ -75,19 +75,54 @@ outcome (but pass them).
 """
 
 
+# Appended ONLY for short_form callers. The base PROMPT above rejects anything "under ~200
+# meaningful words" — a rule aimed at paywall stubs and 404 pages, which quietly misfires on an
+# entire class of source we ingest ON PURPOSE.
+#
+# Telegram posts arrive as text over MTProto, and news-indexer's `build_pushed_article` explicitly
+# bypasses its own length minimum because (its words) "short breaking-news messages are exactly the
+# kind of content this path exists for". Measured on the live index: 460 of 552 indexed Telegram
+# posts run under 70 words — including 154 of Ben Caspit's 169. So the pipeline deliberately
+# collects terse posts from serious journalists, and the gatekeeper then discards every one of them
+# for being terse.
+#
+# This does not weaken the stub protection for real articles: it is opt-in, off by default, and the
+# emptiness and different-matter rejections both stay in force.
+_SHORT_FORM_OVERRIDE = """
+
+**Short-form source.** This item is a social-media / messaging post (e.g. a journalist's Telegram
+channel), NOT a news article. The length rule above does not apply to it: do NOT set
+is_prediction=false merely because it runs under ~200 words. Terse posts from serious journalists
+are a deliberate part of this corpus and routinely carry real evidence — "elections are now final
+for Oct 27" is one line and decisive. Judge it on what it SAYS about the claim, exactly as you
+would judge a long article, and score its relevance on the same bands.
+
+Still reject it if it is genuinely empty (an image or video with no caption), or if it is about a
+different matter. Brevity alone is not a reason.
+"""
+
+
 async def check_is_prediction(
     article_text: str,
     source_name: str,
     article_date: str,
     event_name: str,
+    short_form: bool = False,
 ) -> tuple["GatekeeperOutput", dict]:
-    """Returns (GatekeeperOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens."""
+    """Returns (GatekeeperOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
+
+    `short_form` opts into judging a social-media post on its content rather than its length. It
+    defaults to False and only ever APPENDS to the prompt, so the text every existing caller sends —
+    the entire /forecast path — is byte-for-byte unchanged.
+    """
     prompt = PROMPT.format(
         article_text=article_text,
         source_name=source_name,
         article_date=article_date,
         event_name=event_name,
     )
+    if short_form:
+        prompt += _SHORT_FORM_OVERRIDE
     return await complete_structured(
         settings.gatekeeper_model, GatekeeperOutput, prompt, max_tokens=200, timeout=90,
     )

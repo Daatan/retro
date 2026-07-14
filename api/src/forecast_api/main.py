@@ -268,6 +268,7 @@ async def relevance(
             source_name=body.source_name,
             article_date=body.article_date,
             event_name=body.claim,
+            short_form=body.short_form,
         )
     except Exception as exc:
         logger.warning("relevance check failed claim=%.60s err=%s", body.claim, exc)

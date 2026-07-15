@@ -423,9 +423,24 @@ async def pm_markets(
 if _mcp is not None:
     from mcp.server.auth.routes import create_protected_resource_routes
 
+    # Which authorization server the protected-resource metadata points clients
+    # at. With the DCR façade configured (human Claude-connector login), the
+    # Oracle origin advertises itself as the AS so it can inject a
+    # registration_endpoint Cognito lacks (see mcp_dcr.py); otherwise the metadata
+    # points straight at the Cognito issuer (the M2M path needs no registration).
+    if settings.dcr_enabled:
+        from .mcp_dcr import create_dcr_routes
+
+        _authorization_servers = [settings.mcp_as_issuer]
+        for _route in create_dcr_routes(settings):
+            app.router.routes.append(_route)
+        logger.info("MCP DCR façade enabled (AS metadata + /register at origin)")
+    else:
+        _authorization_servers = [settings.cognito_issuer]
+
     for _route in create_protected_resource_routes(
         resource_url=settings.mcp_resource_url,
-        authorization_servers=[settings.cognito_issuer],
+        authorization_servers=_authorization_servers,
         scopes_supported=[SCOPE_READ, SCOPE_FORECAST],
     ):
         app.router.routes.append(_route)

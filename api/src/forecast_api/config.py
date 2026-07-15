@@ -188,6 +188,16 @@ class ApiSettings(BaseSettings):
     # `resource` value in the protected-resource metadata. Must match what
     # clients request tokens for.
     mcp_resource_url: str = "https://oracle.daatan.com/mcp"
+    # ── DCR façade (human Claude-connector login) ──────────────────────────
+    # Cognito has no Dynamic Client Registration, which Claude's MCP connector
+    # requires (it refuses a static client_id and hard-fails discovery without a
+    # registration_endpoint in the AS metadata). When BOTH of these are set, the
+    # Oracle origin advertises ITSELF as the authorization server (mcp_dcr.py) so
+    # it can inject a registration_endpoint that hands back the one pre-provisioned
+    # public client. Unset = the protected-resource metadata points straight at
+    # Cognito (M2M client_credentials path only, no human login). See ORACLE_MCP.md.
+    cognito_hosted_ui_domain: Optional[str] = None  # e.g. https://daatan-oracle.auth.eu-central-1.amazoncognito.com
+    cognito_claude_client_id: Optional[str] = None  # public PKCE client id the /register façade returns
 
     @property
     def cognito_region_resolved(self) -> Optional[str]:
@@ -248,6 +258,40 @@ class ApiSettings(BaseSettings):
             return []
         origin = f"{parsed.scheme}://{parsed.netloc}"
         return [origin, f"{origin}:*"]
+
+    @property
+    def mcp_as_issuer(self) -> Optional[str]:
+        """The authorization-server issuer the Oracle advertises for the DCR
+        façade — its own origin (scheme://host of mcp_resource_url). This is the
+        value clients fetch the AS metadata from, so it must equal metadata.issuer."""
+        from urllib.parse import urlparse
+
+        parsed = urlparse(self.mcp_resource_url)
+        return f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else None
+
+    @property
+    def cognito_authorize_endpoint(self) -> Optional[str]:
+        """Cognito hosted-UI OAuth2 authorize endpoint (browser login)."""
+        d = (self.cognito_hosted_ui_domain or "").rstrip("/")
+        return f"{d}/oauth2/authorize" if d else None
+
+    @property
+    def cognito_token_endpoint(self) -> Optional[str]:
+        """Cognito hosted-UI OAuth2 token endpoint (code→token exchange)."""
+        d = (self.cognito_hosted_ui_domain or "").rstrip("/")
+        return f"{d}/oauth2/token" if d else None
+
+    @property
+    def dcr_enabled(self) -> bool:
+        """True when the DCR façade should be served (the human Claude login
+        flow). Requires the RS enabled plus the Cognito hosted-UI domain and the
+        static public client id. When False the M2M-only path is served unchanged."""
+        return bool(
+            self.mcp_enabled
+            and self.cognito_hosted_ui_domain
+            and self.cognito_claude_client_id
+            and self.mcp_as_issuer
+        )
 
     @property
     def resolved_leaderboard_path(self) -> Path:

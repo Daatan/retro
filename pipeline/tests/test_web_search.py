@@ -833,3 +833,63 @@ class TestQuotaFlagTTL:
         """search_articles must run the sweep, so a stale flag can't skip a provider."""
         src = inspect.getsource(_fresh_ws()._search_articles_chain)
         assert "_expire_stale_quota_flags()" in src
+
+
+# ---------------------------------------------------------------------------
+# Secret loading — _secret() fails open by design, but must fail LOUDLY
+# ---------------------------------------------------------------------------
+
+class TestSecretLoadingLogsLoudly:
+    @needs_deps
+    def test_secret_failure_logs_at_warning_not_debug(self, caplog, monkeypatch):
+        """A Secrets Manager failure must be visible without debug logging enabled —
+        this used to be logger.debug(), which silently hid missing providers."""
+        ws = _fresh_ws()
+        monkeypatch.delenv("SOME_TEST_ENV_VAR", raising=False)
+
+        class _FailingClient:
+            def get_secret_value(self, SecretId):
+                raise RuntimeError("simulated Secrets Manager failure")
+
+        with patch("boto3.client", return_value=_FailingClient()):
+            with caplog.at_level("WARNING", logger="tm.web_search"):
+                result = ws._secret("SOME_TEST_ENV_VAR", "daatan/some-test-key")
+
+        assert result is None
+        assert any(
+            r.levelname == "WARNING" and "daatan/some-test-key" in r.message
+            for r in caplog.records
+        ), "secret-load failure must log at WARNING with the secret name"
+
+    @needs_deps
+    def test_log_unresolved_secrets_reports_missing_keys(self, caplog):
+        """_log_unresolved_secrets() must name every unresolved provider secret in one line."""
+        ws = _fresh_ws()
+        ws.DATAFORSEO_API_KEY = None
+        ws.SERPAPI_API_KEY = "present"
+
+        caplog.clear()  # _fresh_ws() import may itself have logged real unresolved-secret warnings
+        with caplog.at_level("WARNING", logger="tm.web_search"):
+            ws._log_unresolved_secrets()
+
+        messages = [r.message for r in caplog.records if r.levelname == "WARNING"]
+        assert any("daatan/dataforseo-key" in m for m in messages)
+        assert not any("daatan/serpapi-key" in m for m in messages)
+
+    @needs_deps
+    def test_log_unresolved_secrets_silent_when_all_present(self, caplog):
+        """No warning at all once every provider secret has resolved."""
+        ws = _fresh_ws()
+        for name in (
+            "DATAFORSEO_API_KEY", "SERPAPI_API_KEY", "SERPER_API_KEY", "BRAVE_API_KEY",
+            "BRIGHTDATA_API_KEY", "NIMBLEWAY_API_KEY", "SCRAPINGBEE_API_KEY",
+            "NEWSDATA_API_KEY", "TAVILY_API_KEY", "GOOGLE_CSE_API_KEY", "GOOGLE_CSE_CX",
+            "GCP_SA_KEY_JSON",
+        ):
+            setattr(ws, name, "present")
+
+        caplog.clear()  # _fresh_ws() import may itself have logged real unresolved-secret warnings
+        with caplog.at_level("WARNING", logger="tm.web_search"):
+            ws._log_unresolved_secrets()
+
+        assert not any(r.levelname == "WARNING" for r in caplog.records)

@@ -128,7 +128,13 @@ def get_last_search_provider_chain() -> list[str]:
 
 
 def _secret(env_var: str, secret_name: str) -> Optional[str]:
-    """Return env var if set, otherwise fetch from AWS Secrets Manager."""
+    """Return env var if set, otherwise fetch from AWS Secrets Manager.
+
+    Fails open by design (a provider with no key is simply unavailable, not a
+    startup error) — but that means a renamed/missing secret silently disables
+    a provider with no other signal. Logged at WARNING, and summarized by
+    _log_unresolved_secrets(), so it shows up without debug logging enabled.
+    """
     val = os.environ.get(env_var)
     if val:
         return val
@@ -139,7 +145,11 @@ def _secret(env_var: str, secret_name: str) -> Optional[str]:
         logger.info("Loaded %s from Secrets Manager", secret_name)
         return val
     except Exception as e:
-        logger.debug("Could not load %s from Secrets Manager: %s", secret_name, e)
+        logger.warning(
+            "Could not load %s from Secrets Manager (env %s not set either): %s "
+            "— this provider is silently disabled",
+            secret_name, env_var, e,
+        )
         return None
 
 
@@ -161,6 +171,38 @@ GCP_SA_KEY_JSON: Optional[str] = _secret("GCP_SA_KEY_JSON", "daatan/gcp-service-
 # news-indexer — local semantic index (https://scrapper.daatan.com)
 NEWS_INDEXER_URL: Optional[str] = _secret("NEWS_INDEXER_URL", "daatan/news-indexer-url")
 NEWS_INDEXER_API_KEY: Optional[str] = _secret("NEWS_INDEXER_API_KEY", "daatan/news-indexer-api-key")
+
+
+def _log_unresolved_secrets() -> None:
+    """Startup/refresh summary of which provider secrets failed to resolve.
+
+    _secret()'s fail-open behavior means a missing key silently disables a
+    provider with no other signal — this makes that visible in one line
+    instead of requiring someone to notice 13 separate per-key log lines.
+    """
+    keys = {
+        "daatan/dataforseo-key": DATAFORSEO_API_KEY,
+        "daatan/serpapi-key": SERPAPI_API_KEY,
+        "daatan/serperdev-key": SERPER_API_KEY,
+        "daatan/brave-api-key": BRAVE_API_KEY,
+        "daatan/brightdata-api-key": BRIGHTDATA_API_KEY,
+        "daatan/nimbleway-api-key": NIMBLEWAY_API_KEY,
+        "daatan/scrapingbee-api-key": SCRAPINGBEE_API_KEY,
+        "daatan/newsdata-api-key": NEWSDATA_API_KEY,
+        "daatan/tavily-api-key": TAVILY_API_KEY,
+        "daatan/google-cse-api-key": GOOGLE_CSE_API_KEY,
+        "daatan/google-cse-cx": GOOGLE_CSE_CX,
+        "daatan/gcp-service-account-key": GCP_SA_KEY_JSON,
+    }
+    missing = [name for name, value in keys.items() if not value]
+    if missing:
+        logger.warning(
+            "%d/%d search-provider secrets unresolved, providers silently disabled: %s",
+            len(missing), len(keys), ", ".join(missing),
+        )
+
+
+_log_unresolved_secrets()
 
 _KEY_LOADED_AT: float = time.time()
 
@@ -217,6 +259,7 @@ def _refresh_keys_if_stale() -> None:
         GCP_SA_KEY_JSON = new_gcp
         _BQ_CLIENT = None  # force client rebuild with new credentials
     _KEY_LOADED_AT = time.time()
+    _log_unresolved_secrets()
 
 
 

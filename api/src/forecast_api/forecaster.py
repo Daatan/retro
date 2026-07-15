@@ -284,6 +284,7 @@ async def _process_article_bounded(
     timeout_s: float,
     claim_deadline: str | None = None,
     claim_direction: str | None = None,
+    prediction_id: str | None = None,
 ) -> tuple[SearchResult, float, list] | None:
     """Run _process_article under a per-article wall-clock ceiling.
 
@@ -301,6 +302,7 @@ async def _process_article_bounded(
                 article_debugs=article_debugs,
                 claim_deadline=claim_deadline,
                 claim_direction=claim_direction,
+                prediction_id=prediction_id,
             ),
             timeout=timeout_s,
         )
@@ -331,6 +333,7 @@ async def _process_article(
     article_debugs: list[ArticleDebug],
     claim_deadline: str | None = None,
     claim_direction: str | None = None,
+    prediction_id: str | None = None,
 ) -> tuple[SearchResult, float, list] | None:
     """
     Run gatekeeper + extractor for one article.
@@ -377,8 +380,8 @@ async def _process_article(
         )
         gate_usage = {}
         logger.info(
-            "event=article_outcome outcome=gate_reused url=%s is_prediction=%s relevance=%.3f",
-            result.url, is_pred, relevance_score,
+            "event=article_outcome outcome=gate_reused url=%s is_prediction=%s relevance=%.3f prediction_id=%s",
+            result.url, is_pred, relevance_score, prediction_id or "",
         )
     else:
         try:
@@ -742,6 +745,7 @@ async def _run_forecast_inner(
                 timeout_s=settings.per_article_timeout_seconds,
                 claim_deadline=req.claim_deadline,
                 claim_direction=req.claim_direction,
+                prediction_id=req.prediction_id,
             )
             for r in search_results
         ],

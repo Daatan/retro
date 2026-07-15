@@ -43,7 +43,7 @@ def _gk_spy(is_prediction=True, relevance=0.42):
     ))
 
 
-async def _process(monkeypatch, result, *, flag, gk):
+async def _process(monkeypatch, result, *, flag, gk, prediction_id=None):
     monkeypatch.setattr(api_settings, "reuse_supplied_relevance", flag)
     monkeypatch.setattr(forecaster, "check_is_prediction", gk)
     monkeypatch.setattr(forecaster, "extract_predictions", _extractor_stub())
@@ -51,6 +51,7 @@ async def _process(monkeypatch, result, *, flag, gk):
     return await forecaster._process_article(
         result, "Will the event happen by 2026-12-31?",
         max_article_chars=4000, timings=[], article_debugs=[],
+        prediction_id=prediction_id,
     )
 
 
@@ -91,3 +92,18 @@ class TestReuseSuppliedVerdict:
         gk.assert_awaited_once()
         _, relevance, _ = out
         assert relevance == 0.42
+
+    async def test_gate_reused_log_carries_the_caller_prediction_id(self, monkeypatch, caplog):
+        # So a future check can join daatan's context_snapshots rows to this log line
+        # directly instead of correlating by timestamp.
+        import logging
+        caplog.set_level(logging.INFO, logger=forecaster.logger.name)
+        gk = _gk_spy()
+        await _process(
+            monkeypatch, _sr(relevance=0.83, is_prediction=True), flag=True, gk=gk,
+            prediction_id="cmrm4byby02nw01qtvnoqenc3",
+        )
+        assert any(
+            "outcome=gate_reused" in r.message and "prediction_id=cmrm4byby02nw01qtvnoqenc3" in r.message
+            for r in caplog.records
+        )

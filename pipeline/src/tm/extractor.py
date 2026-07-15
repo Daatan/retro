@@ -76,9 +76,9 @@ Examples — related event: "Assad regime falls in Syria":
   "The conflict has dragged on for two years"  → stance +0.2, certainty 0.2
   "International sanctions remain in place"   → stance +0.3, certainty 0.3
   "Rebels have taken Damascus; Assad has fled the country" \
-                                               → stance +1.0, certainty 0.95, settled true
+                                               → stance +1.0, certainty 0.95, settled true (+ event_date — see SETTLED)
   "Assad crushed the uprising; the rebellion is over" \
-                                               → stance −1.0, certainty 0.95, settled true
+                                               → stance −1.0, certainty 0.95, settled true (no event_date — see SETTLED)
 
 Note: even factual/contextual sentences have a stance if they imply a direction.
 Do NOT use stance to indicate good/bad — only more/less likely to happen.
@@ -212,6 +212,21 @@ predictions, odds, and expectations ("X is likely to win") are NOT settled, howe
 confident. Do not soften a settled outcome into a likelihood — a report that the \
 event happened is stance +1.0, not +0.7.
 
+### A settlement that the event OCCURRED must be dated — no event_date, no settled
+A positive settlement (stance +1.0: the event happened) asserts that THIS question's \
+outcome has verifiably occurred, and that assertion must be anchored to a calendar \
+date: every such claim MUST also carry event_date — the absolute date on which the \
+event itself occurred, resolved exactly as described in the DATES section below. If \
+the article does not let you date the occurrence, settled must be false: \
+accomplished-fact language with no discoverable date is the signature of historical \
+background about an earlier episode (a standing government, a title won in a past \
+season, a long-ago deal), not news of this question's outcome. Report your honest \
+stance, but do not settle. Never substitute the article's own publication date for \
+an event the article does not actually date. \
+A negative settlement (stance −1.0: the event became permanently impossible) is the \
+opposite case: the related event never occurred, so event_date stays EMPTY — never \
+date an impossibility with the date of whatever foreclosed it.
+
 ### Numeric-threshold events — a mid-event tally is NOT settled
 When the related event is a threshold claim ("scores at least 8 goals", "wins more \
 than 33 seats") and the article reports a running tally from an ONGOING contest, \
@@ -223,13 +238,14 @@ settled while the contest is still open, no matter how final-sounding the framin
 number against the threshold exactly as in the Numeric thresholds section above; do \
 not treat a running total as an accomplished fact just because it's stated as fact.
 
-Examples — related event: "Messi scores at least 8 goals in the tournament":
-  "Messi has scored 9 goals so far, tournament still underway" \
-                                               → stance +1.0, certainty 0.95, settled true (9 ≥ 8: already locked in)
+Examples — related event: "Messi scores at least 8 goals in the tournament" \
+(article dated Monday 2026-06-22):
+  "Messi bagged his ninth goal of the tournament in Saturday's rout; the group stage continues" \
+                                               → event_date "2026-06-20", stance +1.0, certainty 0.95, settled true (9 ≥ 8: already locked in, dated by the ninth goal)
   "Messi and Mbappe are tied for the tournament lead with 6 goals each, group stage ongoing" \
                                                → stance −0.3, certainty 0.4, settled false (6 < 8, contest still open — a tally, not a verdict)
-  "The tournament has concluded; Messi finished with 7 goals" \
-                                               → stance −1.0, certainty 0.95, settled true (contest over, 7 < 8 is now permanent)
+  "The tournament concluded on Sunday; Messi finished with 7 goals" \
+                                               → stance −1.0, certainty 0.95, settled true, no event_date (contest over, 7 < 8 is now permanent — the 8th goal never occurred, so there is no date for it)
 
 ### Buried facts — extract settlement even when it's incidental to the article's main topic
 A clear past-tense statement of the RELATED EVENT can appear as a single supporting \
@@ -243,7 +259,7 @@ Examples — related event: "Peter Magyar will officially assume the role of Pri
 of Hungary by December 31, 2026":
   Article mainly about Ukraine-Hungary pipeline relations, mentioning in passing: \
   "...its leader Peter Magyar became Prime Minister on May 9" \
-                                               → stance +1.0, certainty 0.95, settled true \
+                                               → event_date "2026-05-09", stance +1.0, certainty 0.95, settled true \
                                                  (clear past-tense fact, however incidental to the article's main topic)
 
 ### Historical background is NOT a settlement of the current question
@@ -259,7 +275,8 @@ December 31, 2026":
                                                → stance −0.1, certainty 0.4, settled false \
                                                  (background history predating the question's window — not this question's outcome)
   "The State Department formally approved the F-35 sale to Turkey on Tuesday" \
-                                               → stance +1.0, certainty 0.95, settled true (this question's outcome, reported as fact)
+                                               → stance +1.0, certainty 0.95, settled true, event_date resolved from \
+                                                 "Tuesday" against the article's date (this question's outcome, reported as fact)
 
 ## THE EVENT ITSELF vs. ADJACENT EVENTS — match subject AND action, not topic
 Before assigning |stance| >= 0.9 or settled=true, decompose the RELATED EVENT into WHO \
@@ -280,11 +297,11 @@ proof that the related event itself occurred? If not, it is not settled.
 
 Examples — related event: "At least one party withdraws from the parliamentary race":
   "MK X announced he is leaving Party Y and won't run in its primaries"     → stance +0.3, certainty 0.5, settled false (a member leaving a party is not a party leaving the race)
-  "Party Y announced it will not submit a candidate list"                   → stance +1.0, certainty 0.95, settled true
+  "Party Y announced it will not submit a candidate list"                   → stance +1.0, certainty 0.95, settled true (+ event_date of the announcement)
 
 Examples — related event: "Company X exits the European market by year-end":
   "Company X's CEO resigned amid the European losses"                       → stance +0.2, certainty 0.4, settled false (leadership change is not a market exit)
-  "Company X announced the closure of all European operations"              → stance +1.0, certainty 0.95, settled true
+  "Company X announced the closure of all European operations"              → stance +1.0, certainty 0.95, settled true (+ event_date of the announcement)
 
 ## DATES — resolve first, compare second, never assert a comparison you did not compute
 Deadline claims ("by July 15", "before year-end") are decided by ARITHMETIC, not by tone. \
@@ -310,7 +327,9 @@ however affirmative the article sounds
 
 Set `event_date` whenever the article gives a date for the RELATED EVENT ITSELF — omit it \
 for the date of an adjacent or downstream event (the election that follows a dissolution, \
-the trial that follows an indictment).
+the trial that follows an indictment). It is REQUIRED on every POSITIVE settled=true \
+claim (see SETTLED above): a settlement that the event occurred, which you cannot \
+date, is not a settlement.
 
 Examples — related event: "The Israeli parliament will be dissolved by July 15, 2026" \
 (article dated Monday 2026-07-13):
@@ -490,5 +509,64 @@ def enforce_deadline_arithmetic(
             p.stance, -p.stance, p.settled, p.claim[:120],
         )
         p.stance = -p.stance
+
+    return predictions
+
+
+def enforce_settlement_event_date(
+    predictions: list[PredictionExtraction],
+    article_date: Optional[str],
+) -> list[PredictionExtraction]:
+    """A settlement vote must be anchored to a date the outcome occurred.
+
+    ``settled=true`` is the highest-impact bit the extractor emits: once
+    ``settlement_min_sources`` of them agree, the pooled estimate is pinned to
+    ±settlement_stance (aggregation.py). The 2026-07-15 Netanyahu false pin rode
+    on exactly two such votes — accomplished-fact language about the sitting
+    64-seat coalition (formed after the PREVIOUS election) settling a claim
+    about the NEXT one. Neither article dated the "outcome", because the outcome
+    they described wasn't this question's: undatable past-tense language is the
+    signature of historical background, which the prompt already forbids — but
+    prompts are advisory, so this is the enforcement.
+
+    Applies to POSITIVE settlements only (stance > 0: the event occurred).
+    A negative settlement asserts the event became permanently impossible — the
+    related event never happened, so it has no ``event_date`` by definition
+    (and giving it one would misfire :func:`enforce_deadline_arithmetic`, which
+    reads ``event_date`` as the occurrence date and flips confident negatives
+    dated within the deadline). Premature negative pins have their own guard:
+    ``settlement_direction_allowed`` (aggregation.py).
+
+    Two deterministic checks; a claim failing either keeps its stance and
+    certainty (it still votes as ordinary evidence) but loses ``settled``:
+
+      - no parseable ``event_date``: the settlement is unanchored — demote.
+      - ``event_date`` after the article's own date: the article "reports" an
+        outcome that hadn't happened yet when it was written — a scheduled
+        event, not an accomplished fact — demote.
+
+    Unlike :func:`enforce_deadline_arithmetic` this deliberately fails CLOSED on
+    a missing date. The cost of a wrong demotion is a slower settlement pin (the
+    estimate still moves on the stance); the cost of a wrong settlement is a
+    market stuck at 97% on history — asymmetric, so the date is mandatory.
+    Missing/unparseable ``article_date`` skips only the future-dated check.
+    """
+    article = _parse_iso_date(article_date)
+    for p in predictions:
+        if not p.settled or p.stance <= 0:
+            continue
+        event_date = _parse_iso_date(p.event_date)
+        if event_date is None:
+            reason = "missing_event_date"
+        elif article is not None and event_date > article:
+            reason = "event_date_after_article"
+        else:
+            continue
+        logger.warning(
+            "event=settlement_demoted reason=%s event_date=%s article_date=%s "
+            "stance=%+.2f certainty=%.2f claim=%r",
+            reason, p.event_date, article_date, p.stance, p.certainty, p.claim[:120],
+        )
+        p.settled = False
 
     return predictions

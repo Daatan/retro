@@ -53,9 +53,15 @@ def _prediction(
     settled: bool | None = None,
     quantitative_estimate: float | None = None,
 ) -> PredictionExtraction:
+    # Positive settled claims carry an event_date on/before the article date
+    # (2026-07-01): enforce_settlement_event_date demotes undated positive
+    # settlements, and these tests exercise the gates DOWNSTREAM of that guard.
+    # Negative settlements carry none by definition (the event never occurred).
+    # test_settlement_event_date.py (pipeline) covers the guard itself.
     return PredictionExtraction(
         quote="quote", claim="claim", stance=stance, certainty=certainty,
         settled=settled, quantitative_estimate=quantitative_estimate,
+        event_date="2026-06-30" if settled and stance > 0 else None,
     )
 
 

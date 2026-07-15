@@ -89,6 +89,22 @@ class TestToolRegistration:
         monkeypatch.setattr(settings, "cognito_user_pool_id", None)
         assert mcp_server.build_mcp() is None
 
+    @pytest.mark.asyncio
+    async def test_transport_security_allows_resource_host(self, monkeypatch):
+        # Regression: behind nginx the transport sees Host: oracle.daatan.com; the
+        # mcp SDK's DNS-rebinding guard defaults to localhost-only and would 421
+        # every authenticated call unless the public host is explicitly allowed.
+        monkeypatch.setattr(settings, "cognito_user_pool_id", "eu-central-1_TESTPOOL")
+        monkeypatch.setattr(settings, "cognito_allowed_client_ids", CLIENT_ID)
+        monkeypatch.setattr(settings, "mcp_resource_url", "https://oracle.daatan.com/mcp")
+        mcp = mcp_server.build_mcp()
+        ts = mcp.settings.transport_security
+        assert ts is not None and ts.enable_dns_rebinding_protection is True
+        assert "oracle.daatan.com" in ts.allowed_hosts
+        assert "oracle.daatan.com:*" in ts.allowed_hosts
+        assert "localhost:*" in ts.allowed_hosts
+        assert "https://oracle.daatan.com" in ts.allowed_origins
+
 
 # ── forecast tool shaping ───────────────────────────────────────────────────
 

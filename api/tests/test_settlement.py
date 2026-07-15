@@ -50,8 +50,11 @@ def _gate_ok():
 
 
 def _prediction(stance: float, certainty: float, settled: bool | None = None) -> PredictionExtraction:
+    # Positive settlements must be dated (enforce_settlement_event_date) — on/before
+    # the article date (2026-06-16). Negative ones carry no date by definition.
     return PredictionExtraction(
         quote="quote", claim="claim", stance=stance, certainty=certainty, settled=settled,
+        event_date="2026-06-15" if settled and stance > 0 else None,
     )
 
 

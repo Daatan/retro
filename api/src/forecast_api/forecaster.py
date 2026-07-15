@@ -21,7 +21,12 @@ import httpx
 import trafilatura
 
 from tm.gatekeeper import check_is_prediction, PROMPT as GATEKEEPER_PROMPT
-from tm.extractor import extract_predictions, enforce_deadline_arithmetic, PROMPT as EXTRACTOR_PROMPT
+from tm.extractor import (
+    extract_predictions,
+    enforce_deadline_arithmetic,
+    enforce_settlement_event_date,
+    PROMPT as EXTRACTOR_PROMPT,
+)
 from tm.models import GatekeeperOutput
 from tm.web_search import search_articles, SearchResult, get_last_search_provider, get_last_search_provider_chain
 from tm.config import settings as _pipeline_settings
@@ -440,6 +445,13 @@ async def _process_article(
         # deadline answered +1.0/0.95 five times out of five, and Friday was July 17.
         extraction.predictions = enforce_deadline_arithmetic(
             extraction.predictions, claim_deadline, claim_direction,
+        )
+        # And a settlement vote must be anchored to a date the outcome occurred —
+        # undated accomplished-fact language is historical background (the Netanyahu
+        # false pin: the sitting coalition "settling" the NEXT election). Runs after
+        # deadline arithmetic so settled-but-weak stances keep their sign correction.
+        extraction.predictions = enforce_settlement_event_date(
+            extraction.predictions, article_date,
         )
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", result.url, exc)

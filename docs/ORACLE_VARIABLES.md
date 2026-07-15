@@ -24,8 +24,8 @@ consequences of that redundancy, not of any single bug.
 | `stance` | −1..1 | direction & strength of "event will happen" | pydantic-bounded, no clamping (out-of-range ⇒ article dropped) |
 | `certainty` | 0..1 | linguistic confidence (0 = hedged, 1 = absolute) | weight factor AND within-article claim weight |
 | `quantitative_estimate` | 0..1, optional | cited model/poll/market probability | overrides stance+certainty via `resolve_stance_certainty`; triggers the 4× premium |
-| `settled` | bool | outcome reported as accomplished fact | feeds the ±0.94 settlement pin |
-| `event_date` | ISO date, optional | when the article says the event itself occurs/occurred | compared against `claim_deadline` by `enforce_deadline_arithmetic` — see below |
+| `settled` | bool | outcome reported as accomplished fact | feeds the ±0.94 settlement pin; a POSITIVE settlement is demoted unless dated — see `enforce_settlement_event_date` below |
+| `event_date` | ISO date, optional | when the article says the event itself occurs/occurred | compared against `claim_deadline` by `enforce_deadline_arithmetic`; REQUIRED for a positive `settled` (negative settlements carry none — the event never occurred) — see below |
 | `specificity` | 0..1, optional | **dead** — live extractor never emits it; defaults 1.0 | remove |
 | `claim`, `quote` | text | provenance | — |
 
@@ -62,6 +62,40 @@ resolves "Friday" *and states the date*, which flips the Guardian case to −1.0
 survives only because both 07-17 and 07-18 fall after the deadline; a ±1-day error against a
 date sitting *on* the deadline would still invert the answer. Resolving the relative expression
 in Python (the model reports the phrase, the calendar is computed) is the follow-up.
+
+#### A positive settlement must be dated — `enforce_settlement_event_date`
+
+The 2026-07-15 Netanyahu false pin: *"Netanyahu will win the 2026 Israeli general election
+and be appointed PM"* was pinned to 97%/settled by exactly two settlement-grade votes — a
+jns.org opinion piece (*"Netanyahu secured a 64-seat Likud-led coalition, confirming his
+electoral victory"*) and a Guardian claim (*"Netanyahu will serve out his full term"*) — both
+describing the **sitting** government formed after the *previous* election, while the election
+the claim asks about was scheduled for 2026-10-27 and hadn't happened. Both cleared the
+stance/certainty gates (that guard targets *hedged* settlements, not *misattributed* ones),
+and `settlement_min_sources=2` was satisfied because the two errors were correlated — raising
+the count doesn't help against a narrative shared across outlets.
+
+The tell: neither article dated the "outcome", because the outcome described wasn't this
+question's. The prompt's "historical background is not settlement" rule is advisory, so —
+mirroring `enforce_deadline_arithmetic` — `enforce_settlement_event_date` in `extractor.py`
+enforces it deterministically. A `settled=true` claim with **positive** stance (the event
+occurred) is demoted to ordinary evidence (keeps stance/certainty, loses the settlement bit,
+logs `event=settlement_demoted`) when:
+
+- it has no parseable `event_date` — an occurrence you cannot date is not this question's
+  outcome; or
+- its `event_date` falls **after the article's own date** — the article "reports" an outcome
+  that hadn't happened when it was written (a scheduled event, not an accomplished fact).
+
+**Negative** settlements ("became permanently impossible") are exempt: the related event never
+occurred, so they carry no `event_date` by definition (dating them would also misfire
+`enforce_deadline_arithmetic`, which reads `event_date` as the occurrence date). Premature
+negative pins are already guarded by `settlement_direction_allowed` (§ settlement override).
+
+Deliberately fails **closed** on a missing date — the asymmetry is the point: a wrong demotion
+costs a slower pin (the stance still votes), a wrong settlement sticks a market at 97% on
+history. The prompt (SETTLED section) states the same contract, so a compliant extraction is
+never demoted; the guard exists for the non-compliant ones.
 
 ### 2.2 Per-article (gatekeeper LLM — `pipeline/src/tm/gatekeeper.py`)
 

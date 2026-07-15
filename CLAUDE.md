@@ -10,7 +10,7 @@ Three related systems, one repo:
 - **`api/`** — the **Oracle**: FastAPI microservice at `oracle.daatan.com` (`forecast_api` package). Takes a binary question, returns a calibrated probability with per-source credibility weighting. The `tm` package (search/LLM) is shared internally.
 - **`bayesoracle/`** — BayesOracle at `bayes.daatan.com`.
 
-[`readme.md`](./readme.md) is the product/vision doc. The technical map lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — start there. Oracle API contract: [`docs/ORACLE_API.md`](./docs/ORACLE_API.md); deploy: [`docs/ORACLE_DEPLOY.md`](./docs/ORACLE_DEPLOY.md).
+[`readme.md`](./readme.md) is the product/vision doc. The technical map lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — start there. Oracle API contract: [`docs/ORACLE_API.md`](./docs/ORACLE_API.md); deploy: [`docs/ORACLE_DEPLOY.md`](./docs/ORACLE_DEPLOY.md); MCP server (agent-facing tools, OAuth via Cognito): [`docs/ORACLE_MCP.md`](./docs/ORACLE_MCP.md).
 
 ## Hard rules
 

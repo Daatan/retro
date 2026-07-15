@@ -21,6 +21,8 @@ for deploy/rollback see [`docs/ORACLE_DEPLOY.md`](../docs/ORACLE_DEPLOY.md).
 | `config.py` | Settings (env-driven; reuses the `tm` pipeline package) |
 | `auth.py` | `x-api-key` dependency (constant-time compare via `hmac.compare_digest`) |
 | `limiter.py` / `cache.py` | slowapi rate limiting; forecast + search caches |
+| `mcp_server.py` / `mcp_auth.py` | MCP server at `/mcp` (agent tools) + Cognito OAuth Resource-Server auth — see [`../docs/ORACLE_MCP.md`](../docs/ORACLE_MCP.md) |
+| `article_fetch.py` / `polymarket_live.py` | `/fetch-url` extraction (shared with the MCP `fetch_article` tool); live Polymarket lookup for `polymarket_edge` |
 
 It imports `tm.gatekeeper`, `tm.extractor`, `tm.web_search`, and `tm.net_guard`
 from the `pipeline/` package (a path dependency) — no code is duplicated.

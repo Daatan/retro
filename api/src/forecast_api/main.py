@@ -22,13 +22,21 @@ from .resolution_scorer import load_shadow_leaderboard, rescore_from_disk
 from tm.config import settings as _pipeline_settings
 from tm.gatekeeper import check_is_prediction
 from tm.llm import complete_text_once
-from tm.net_guard import UnsafeURLError, is_safe_url, safe_get
+from .article_fetch import ArticleFetchError, fetch_and_extract
 from .limiter import limiter
+from .mcp_auth import SCOPE_FORECAST, SCOPE_READ
+from .mcp_server import build_mcp
 from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, IngestResolutionRequest, IngestResolutionResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, RelevanceRequest, RelevanceResponse, SearchRequest, SearchResponse, SearchHealthResponse, VersionResponse
 from .searcher import run_search, run_search_health
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 logger = logging.getLogger(__name__)
+
+
+# MCP server (None when Cognito OAuth isn't configured — then /mcp is not mounted
+# and the REST API runs unaffected). Built once at import; its stateless-HTTP
+# session manager is driven by the lifespan below.
+_mcp = build_mcp()
 
 
 @asynccontextmanager
@@ -40,14 +48,22 @@ async def lifespan(app: FastAPI):
     refresh_task = asyncio.create_task(
         background_refresh_loop(path, settings.leaderboard_refresh_seconds)
     )
-    yield
-    # Shutdown
-    refresh_task.cancel()
     try:
-        await refresh_task
-    except asyncio.CancelledError:
-        pass
-    logger.info("Oracle API shut down")
+        if _mcp is not None:
+            # StreamableHTTPSessionManager must be running for the mounted /mcp
+            # app to serve requests.
+            async with _mcp.session_manager.run():
+                yield
+        else:
+            yield
+    finally:
+        # Shutdown
+        refresh_task.cancel()
+        try:
+            await refresh_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Oracle API shut down")
 
 
 _CORS_ORIGIN = "https://daatan.github.io"
@@ -347,46 +363,14 @@ async def fetch_url(request: Request, body: FetchUrlRequest):
     Uses trafilatura. Intentionally public (no x-api-key) so the IBI tool works
     without a key, but rate-limited and SSRF-guarded: rejects non-http(s) schemes
     and hosts that resolve to non-public addresses.
-    """
-    if not is_safe_url(body.url):
-        return JSONResponse(
-            {"detail": "URL must be a public http(s) address"}, status_code=422
-        )
-    import trafilatura
 
-    # Fetch through safe_get rather than trafilatura.fetch_url: the latter
-    # re-resolves the host independently of the is_safe_url check above, leaving a
-    # DNS-rebinding (TOCTOU) window. safe_get validates the host it actually
-    # connects to and re-checks every redirect hop; trafilatura only parses the
-    # HTML we hand it. Run the sync fetch off the event loop.
+    Extraction logic lives in article_fetch.fetch_and_extract, shared with the
+    MCP `fetch_article` tool so the SSRF-sensitive path has one implementation.
+    """
     try:
-        resp = await asyncio.to_thread(
-            safe_get,
-            body.url,
-            timeout=10.0,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; TruthMachine/1.0)"},
-        )
-    except UnsafeURLError:
-        return JSONResponse(
-            {"detail": "URL must be a public http(s) address"}, status_code=422
-        )
-    except Exception:
-        return JSONResponse({"detail": "Could not fetch URL"}, status_code=422)
-    if resp.status_code != 200 or not resp.text:
-        return JSONResponse({"detail": "Could not fetch URL"}, status_code=422)
-    downloaded = resp.text
-    metadata = trafilatura.extract_metadata(downloaded)
-    text = trafilatura.extract(downloaded, include_comments=False, include_tables=False) or ""
-    date_str: str | None = None
-    if metadata and metadata.date:
-        # trafilatura returns date as string already
-        date_str = str(metadata.date)[:10]
-    return FetchUrlResponse(
-        text=text,
-        title=metadata.title if metadata else None,
-        date=date_str,
-        source=metadata.sitename if metadata else None,
-    )
+        return await fetch_and_extract(body.url)
+    except ArticleFetchError as exc:
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status)
 
 
 _GAMMA_BASE = "https://gamma-api.polymarket.com"
@@ -428,3 +412,22 @@ async def pm_markets(
         )
     except httpx.HTTPError:
         return JSONResponse({"detail": "Upstream Polymarket request failed"}, status_code=504)
+
+
+# ── MCP server mount (only when Cognito OAuth is configured) ─────────────────
+# The MCP protocol endpoint is mounted at /mcp. Its OAuth 2.0 protected-resource
+# metadata (RFC 9728) must be served at the ORIGIN root so clients can discover
+# the Authorization Server from the bare resource URL — mounting the whole
+# sub-app would bury it under /mcp/.well-known/…, so the metadata routes are
+# added to the main app directly while only the protocol endpoint is mounted.
+if _mcp is not None:
+    from mcp.server.auth.routes import create_protected_resource_routes
+
+    for _route in create_protected_resource_routes(
+        resource_url=settings.mcp_resource_url,
+        authorization_servers=[settings.cognito_issuer],
+        scopes_supported=[SCOPE_READ, SCOPE_FORECAST],
+    ):
+        app.router.routes.append(_route)
+    app.mount("/mcp", _mcp.streamable_http_app())
+    logger.info("Mounted MCP server at /mcp (OAuth RS via Cognito)")

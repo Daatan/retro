@@ -170,6 +170,57 @@ class ApiSettings(BaseSettings):
     search_cache_ttl_seconds: int = 14400  # 4 hours
     search_cache_max_entries: int = 256
 
+    # ── MCP server / OAuth 2.1 (Cognito) ───────────────────────────────────
+    # The /mcp endpoint (docs/ORACLE_MCP.md) is a Model Context Protocol server
+    # exposing the Oracle's tools to AI agents. Auth is MCP-native OAuth 2.1:
+    # the Oracle is a Resource Server that verifies Cognito-issued JWT access
+    # tokens. The whole mount is CONDITIONAL on cognito_user_pool_id being set —
+    # a deploy without these vars simply omits /mcp rather than failing startup,
+    # so the REST API is never held hostage to Cognito config. (Unset here rather
+    # than required precisely so the two-PR rollout — Cognito infra, then this
+    # code — can't crash the box if the env lags the merge.)
+    cognito_user_pool_id: Optional[str] = None  # e.g. eu-central-1_ABC123 — presence enables /mcp
+    cognito_region: Optional[str] = None  # falls back to the region prefix of the pool id
+    # Comma-separated Cognito app-client IDs allowed to call /mcp (the Claude
+    # public client + daatan's M2M client). Empty = reject all (fail closed).
+    cognito_allowed_client_ids: str = ""
+    # Public URL of this Resource Server — the OAuth resource indicator and the
+    # `resource` value in the protected-resource metadata. Must match what
+    # clients request tokens for.
+    mcp_resource_url: str = "https://oracle.daatan.com/mcp"
+
+    @property
+    def cognito_region_resolved(self) -> Optional[str]:
+        """Region for the Cognito issuer/JWKS. Explicit override, else the
+        prefix of the pool id (Cognito pool ids are '<region>_<hash>')."""
+        if self.cognito_region:
+            return self.cognito_region
+        if self.cognito_user_pool_id and "_" in self.cognito_user_pool_id:
+            return self.cognito_user_pool_id.split("_", 1)[0]
+        return None
+
+    @property
+    def cognito_issuer(self) -> Optional[str]:
+        region = self.cognito_region_resolved
+        if not (self.cognito_user_pool_id and region):
+            return None
+        return f"https://cognito-idp.{region}.amazonaws.com/{self.cognito_user_pool_id}"
+
+    @property
+    def cognito_jwks_url(self) -> Optional[str]:
+        iss = self.cognito_issuer
+        return f"{iss}/.well-known/jwks.json" if iss else None
+
+    @property
+    def cognito_allowed_client_id_set(self) -> set[str]:
+        return {c.strip() for c in self.cognito_allowed_client_ids.split(",") if c.strip()}
+
+    @property
+    def mcp_enabled(self) -> bool:
+        """True when enough Cognito config is present to mount /mcp. When False,
+        main.py skips the mount entirely (REST API unaffected)."""
+        return bool(self.cognito_issuer)
+
     @property
     def resolved_leaderboard_path(self) -> Path:
         if self.leaderboard_path != Path(""):

@@ -68,6 +68,19 @@ class ArticleInput(BaseModel):
         default=None,
         description="Pre-fetched article body. If omitted, oracle fetches via trafilatura.",
     )
+    # Caller-supplied gatekeeper verdict (news-indexer's POST /relevance, threaded through
+    # daatan). When BOTH are set and settings.reuse_supplied_relevance is on, the Oracle
+    # reuses them instead of re-running check_is_prediction — the SAME judge already ran once
+    # upstream. Additive and fail-open: omit them and today's behavior (re-judge) is unchanged.
+    # The extractor still runs regardless; only the duplicate relevance judgment is skipped.
+    relevance: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Caller's graded gatekeeper relevance [0,1]; reused with is_prediction when reuse_supplied_relevance is on.",
+    )
+    is_prediction: Optional[bool] = Field(
+        default=None,
+        description="Caller's gatekeeper pass/reject verdict; reused with relevance when reuse_supplied_relevance is on.",
+    )
 
 
 class ForecastRequest(BaseModel):

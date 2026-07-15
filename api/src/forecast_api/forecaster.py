@@ -22,6 +22,7 @@ import trafilatura
 
 from tm.gatekeeper import check_is_prediction, PROMPT as GATEKEEPER_PROMPT
 from tm.extractor import extract_predictions, enforce_deadline_arithmetic, PROMPT as EXTRACTOR_PROMPT
+from tm.models import GatekeeperOutput
 from tm.web_search import search_articles, SearchResult, get_last_search_provider, get_last_search_provider_chain
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
@@ -310,6 +311,17 @@ async def _process_article_bounded(
         return None
 
 
+def _supplied_verdict(result: SearchResult) -> tuple[bool, float] | None:
+    """The caller's gatekeeper verdict carried on the SearchResult (news-indexer's POST
+    /relevance result, threaded through daatan), or None when absent/incomplete. Both
+    fields must be present — a relevance without a pass/reject is not a usable verdict."""
+    rel = getattr(result, "_supplied_relevance", None)
+    is_pred = getattr(result, "_supplied_is_prediction", None)
+    if rel is None or is_pred is None:
+        return None
+    return bool(is_pred), float(rel)
+
+
 async def _process_article(
     result: SearchResult,
     question: str,
@@ -350,25 +362,44 @@ async def _process_article(
     article_date = result.published_date or datetime.now().strftime("%Y-%m-%d")
 
     gate_start = time.perf_counter()
-    try:
-        gate, gate_usage = await check_is_prediction(
-            article_text=text,
-            source_name=source_name,
-            article_date=article_date,
-            event_name=question,
+    supplied = _supplied_verdict(result) if settings.reuse_supplied_relevance else None
+    if supplied is not None:
+        # Reuse the caller's gatekeeper verdict instead of re-judging. The SAME claim-aware
+        # judge (tm.gatekeeper) already ran once upstream — in news-indexer's POST /relevance —
+        # before this article was pushed. Only the duplicate RELEVANCE call is skipped; the
+        # extractor below still runs (the Oracle is the only place stance/predictions are
+        # produced). Design: news-indexer docs/MATCHING_ARCHITECTURE.md §3.
+        is_pred, relevance_score = supplied
+        gate = GatekeeperOutput(
+            is_prediction=is_pred,
+            reason="reused: gatekeeper verdict supplied by caller",
+            relevance_score=relevance_score,
         )
-    except Exception as exc:
-        logger.warning("Gatekeeper failed for %s: %s", result.url, exc)
-        gate_ms = (time.perf_counter() - gate_start) * 1000
-        timings.append({
-            "url": result.url, "fetch_ms": fetch_ms,
-            "gate_ms": gate_ms, "outcome": "gate_error",
-        })
-        article_debugs.append(ArticleDebug(
-            url=result.url, outcome="gate_error",
-            fetch_ms=round(fetch_ms, 1), gate_ms=round(gate_ms, 1),
-        ))
-        return None
+        gate_usage = {}
+        logger.info(
+            "event=article_outcome outcome=gate_reused url=%s is_prediction=%s relevance=%.3f",
+            result.url, is_pred, relevance_score,
+        )
+    else:
+        try:
+            gate, gate_usage = await check_is_prediction(
+                article_text=text,
+                source_name=source_name,
+                article_date=article_date,
+                event_name=question,
+            )
+        except Exception as exc:
+            logger.warning("Gatekeeper failed for %s: %s", result.url, exc)
+            gate_ms = (time.perf_counter() - gate_start) * 1000
+            timings.append({
+                "url": result.url, "fetch_ms": fetch_ms,
+                "gate_ms": gate_ms, "outcome": "gate_error",
+            })
+            article_debugs.append(ArticleDebug(
+                url=result.url, outcome="gate_error",
+                fetch_ms=round(fetch_ms, 1), gate_ms=round(gate_ms, 1),
+            ))
+            return None
     gate_ms = (time.perf_counter() - gate_start) * 1000
 
     if not gate.is_prediction:
@@ -564,6 +595,8 @@ async def _run_forecast_inner(
                 source=a.source,
                 published_date=a.published_date,
                 _prefetched_text=a.text,
+                _supplied_relevance=a.relevance,
+                _supplied_is_prediction=a.is_prediction,
             )
             for a in req.articles
         ]

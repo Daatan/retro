@@ -196,6 +196,12 @@ false, and `/mcp` reverts to inert 404 with the REST API untouched.
   sessions.
 - **No nginx change** — the existing `location /` catch-all proxies `/mcp` and the
   root `.well-known/*`. MCP calls share the per-IP 60 r/min budget.
+- **Transport host allowlist** — the streamable-HTTP transport enforces DNS-rebinding
+  protection. Because the app binds `127.0.0.1`, the SDK would otherwise allow only
+  localhost and reject nginx-forwarded `Host: oracle.daatan.com` with `421 Invalid
+  Host header`. The allowed `Host`/`Origin` values are derived from `MCP_RESOURCE_URL`
+  (`config.mcp_allowed_hosts` / `mcp_allowed_origins`), so they follow the resource
+  host automatically — no separate config to keep in sync.
 - **Slow forecasts** inherit the 120s nginx/gunicorn cap; long tails can 504. A
   dedicated `location /mcp` with a longer `proxy_read_timeout` is a possible
   follow-up.

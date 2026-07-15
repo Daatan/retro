@@ -222,6 +222,34 @@ class ApiSettings(BaseSettings):
         return bool(self.cognito_issuer)
 
     @property
+    def mcp_allowed_hosts(self) -> list[str]:
+        """Host header values the MCP streamable-HTTP transport accepts.
+
+        The mcp SDK's DNS-rebinding guard auto-restricts to localhost when the
+        app binds 127.0.0.1; behind nginx the app sees the public Host header
+        (e.g. oracle.daatan.com) and every authenticated call would 421. Allow
+        the resource URL's host (exact + any explicit port) plus localhost for
+        in-box health probes."""
+        from urllib.parse import urlparse
+
+        host = urlparse(self.mcp_resource_url).netloc
+        localhost = ["127.0.0.1:*", "localhost:*"]
+        return [host, f"{host}:*", *localhost] if host else localhost
+
+    @property
+    def mcp_allowed_origins(self) -> list[str]:
+        """Origin header values the MCP transport accepts. Non-browser clients
+        omit Origin (allowed outright); a browser client on the resource host's
+        own origin is allowed."""
+        from urllib.parse import urlparse
+
+        parsed = urlparse(self.mcp_resource_url)
+        if not parsed.netloc:
+            return []
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        return [origin, f"{origin}:*"]
+
+    @property
     def resolved_leaderboard_path(self) -> Path:
         if self.leaderboard_path != Path(""):
             return self.leaderboard_path

@@ -16,6 +16,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.auth.settings import AuthSettings
+from mcp.server.transport_security import TransportSecuritySettings
 
 from tm.scorer import stance_to_prob
 
@@ -271,6 +272,14 @@ def build_mcp() -> Optional[FastMCP]:
         json_response=True,
         streamable_http_path="/",
         token_verifier=verifier,
+        # Without this, the SDK auto-restricts the transport's DNS-rebinding guard
+        # to localhost (the app binds 127.0.0.1), so authenticated calls arriving
+        # through nginx as Host: oracle.daatan.com get a 421. Allow the real host.
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=settings.mcp_allowed_hosts,
+            allowed_origins=settings.mcp_allowed_origins,
+        ),
         auth=AuthSettings(
             issuer_url=settings.cognito_issuer,
             resource_server_url=settings.mcp_resource_url,

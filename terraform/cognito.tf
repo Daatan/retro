@@ -147,7 +147,11 @@ resource "aws_cognito_user_pool_client" "claude" {
 }
 
 # Machine-to-machine client for daatan's own agents: client_credentials only.
-# M2M tokens may carry custom scopes only (no openid/email).
+# M2M tokens may carry custom scopes only (no openid/email). Both scopes are
+# granted because the Resource Server enforces a global `oracle-mcp/read` floor on
+# EVERY /mcp request (AuthSettings.required_scopes in mcp_server.py) — a
+# forecast-only token would be 403'd before reaching any tool. The M2M client must
+# therefore request both at token time: scope=oracle-mcp/read oracle-mcp/forecast.
 resource "aws_cognito_user_pool_client" "m2m" {
   name         = "oracle-mcp-m2m"
   user_pool_id = aws_cognito_user_pool.oracle_mcp.id
@@ -156,7 +160,7 @@ resource "aws_cognito_user_pool_client" "m2m" {
 
   allowed_oauth_flows                  = ["client_credentials"]
   allowed_oauth_flows_user_pool_client = true
-  allowed_oauth_scopes                 = ["oracle-mcp/forecast"]
+  allowed_oauth_scopes                 = ["oracle-mcp/read", "oracle-mcp/forecast"]
 
   access_token_validity = 60
   token_validity_units {

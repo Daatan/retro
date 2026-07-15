@@ -63,12 +63,15 @@ claude mcp add --transport http oracle https://oracle.daatan.com/mcp
 # then complete the OAuth flow when prompted
 ```
 
-For a service (M2M), fetch a token and call with a bearer header:
+For a service (M2M), fetch a token and call with a bearer header. Request **both**
+scopes — the RS enforces a global `oracle-mcp/read` floor, so a forecast-only token
+is 403'd before it reaches a tool:
 
 ```bash
 TOKEN=$(curl -s -X POST "https://<pool-domain>.auth.eu-central-1.amazoncognito.com/oauth2/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials&client_id=$CID&client_secret=$CSECRET&scope=oracle-mcp/forecast" \
+  -d "grant_type=client_credentials&client_id=$CID&client_secret=$CSECRET" \
+  --data-urlencode "scope=oracle-mcp/read oracle-mcp/forecast" \
   | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
 ```
 
@@ -87,6 +90,104 @@ COGNITO_ALLOWED_CLIENT_IDS=<claude-client-id>,<m2m-client-id>
 ```
 
 The Cognito user pool itself is provisioned in `terraform/cognito.tf`.
+
+## Provisioning runbook (first-time enablement)
+
+End-to-end steps to flip `/mcp` from inert 404 to live. All AWS work is
+`eu-central-1`, account `272007598366`; the Oracle box (`i-00ac444b94c5ff9b2`) is
+**SSM-only, no SSH**.
+
+### 1. Google OAuth client + Secrets Manager
+
+The Cognito hosted-UI domain is deterministic from `var.cognito_domain_prefix`
+(default `daatan-oracle`), so you can set Google's redirect URI up front:
+`https://daatan-oracle.auth.eu-central-1.amazoncognito.com/oauth2/idpresponse`.
+
+Create the Google OAuth 2.0 client (Google Cloud Console), then store its creds —
+never as a literal in tf/state; the IdP resource reads them via a data source:
+
+```bash
+aws secretsmanager create-secret --region eu-central-1 \
+  --name daatan/cognito-google-oauth \
+  --secret-string '{"client_id":"<GOOGLE_CLIENT_ID>","client_secret":"<GOOGLE_CLIENT_SECRET>"}'
+```
+
+### 2. Apply Cognito (`-target`, in dependency order)
+
+Never a blanket apply (workspace rule). From `terraform/` on the latest `main`,
+pass the **real** Claude redirect URIs (the tf default is a placeholder):
+
+```bash
+cd terraform
+terraform init          # real S3 backend (state key retro/)
+export TF_VAR_claude_callback_urls='["https://claude.ai/api/mcp/auth_callback"]'
+# export TF_VAR_cognito_domain_prefix=daatan-oracle   # only if the default is taken
+
+terraform apply -target=aws_cognito_user_pool.oracle_mcp
+terraform apply -target=aws_cognito_resource_server.oracle_mcp
+terraform apply -target=aws_cognito_identity_provider.google      # reads the Step-1 secret
+terraform apply -target=aws_cognito_user_pool_domain.oracle_mcp
+terraform apply -target=aws_cognito_user_pool_client.claude
+terraform apply -target=aws_cognito_user_pool_client.m2m
+
+# Capture what the box + smoke tests need:
+terraform output -raw cognito_user_pool_id
+terraform output -raw cognito_allowed_client_ids
+terraform output -raw cognito_m2m_client_secret     # sensitive
+```
+
+### 3. Set the env on the box + restart (SSM)
+
+`systemd` only re-reads `EnvironmentFile` on **restart**, not on the deploy's SIGHUP
+reload — so this needs a real `restart` (one-time ~2–5s 502 window). SSM runs as
+root; the `chown` keeps `.env` owned by `ubuntu`.
+
+```bash
+# from terraform/
+POOL_ID=$(terraform output -raw cognito_user_pool_id)
+CLIENT_IDS=$(terraform output -raw cognito_allowed_client_ids)
+
+CMD_ID=$(aws ssm send-command \
+  --region eu-central-1 \
+  --instance-ids i-00ac444b94c5ff9b2 \
+  --document-name AWS-RunShellScript \
+  --comment "enable Oracle MCP: Cognito env + restart" \
+  --parameters "{\"commands\":[
+    \"sed -i '/^COGNITO_USER_POOL_ID=/d;/^COGNITO_ALLOWED_CLIENT_IDS=/d;/^MCP_RESOURCE_URL=/d' /home/ubuntu/truthmachine/.env\",
+    \"echo COGNITO_USER_POOL_ID=$POOL_ID >> /home/ubuntu/truthmachine/.env\",
+    \"echo COGNITO_ALLOWED_CLIENT_IDS=$CLIENT_IDS >> /home/ubuntu/truthmachine/.env\",
+    \"echo MCP_RESOURCE_URL=https://oracle.daatan.com/mcp >> /home/ubuntu/truthmachine/.env\",
+    \"chown ubuntu:ubuntu /home/ubuntu/truthmachine/.env\",
+    \"systemctl restart oracle-api\",
+    \"sleep 4\",
+    \"curl -s -o /dev/null -w health:%{http_code} http://127.0.0.1:8001/health\"
+  ]}" \
+  --query 'Command.CommandId' --output text)
+
+aws ssm get-command-invocation --region eu-central-1 \
+  --instance-id i-00ac444b94c5ff9b2 --command-id "$CMD_ID" \
+  --query '{Status:Status, Out:StandardOutputContent, Err:StandardErrorContent}'
+```
+
+### 4. Verify
+
+```bash
+# /mcp was 404 (inert) — now 401 (mounted, needs a token):
+curl -s -o /dev/null -w "%{http_code}\n" -X POST https://oracle.daatan.com/mcp \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# Discovery metadata (should list the Cognito issuer):
+curl -s https://oracle.daatan.com/.well-known/oauth-protected-resource/mcp
+
+# M2M auth smoke test — with a valid token you must NOT get 401 (a JSON-RPC
+# "initialize first" error is fine; it's past auth). Full listing is cleanest via
+# `claude mcp add`. Token request uses the M2M snippet in Auth (both scopes).
+```
+
+**Rollback:** re-run the Step-3 SSM with just the `sed` delete line +
+`systemctl restart oracle-api` — the Cognito env drops, `config.mcp_enabled` goes
+false, and `/mcp` reverts to inert 404 with the REST API untouched.
 
 ## Operational notes
 

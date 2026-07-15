@@ -74,11 +74,11 @@ class ApiSettings(BaseSettings):
     # reuse it instead of re-running check_is_prediction. The SAME claim-aware judge already
     # ran once upstream before the article was pushed; re-judging is a duplicate call whose
     # only effect is to let the push decision and the aggregation weight disagree by
-    # nondeterministic noise. Off by default: flip AFTER the news-indexer + daatan legs
-    # deploy, so the flag (not the merge) is the go-live moment. Oracle-discovered
-    # (SERP/GDELT) articles carry no verdict and are always judged. Design: news-indexer
-    # docs/MATCHING_ARCHITECTURE.md §3.
-    reuse_supplied_relevance: bool = False
+    # nondeterministic noise. On by default; the flag remains as a kill switch —
+    # setting REUSE_SUPPLIED_RELEVANCE=false restores re-judging without a code change.
+    # Oracle-discovered (SERP/GDELT) articles carry no verdict and are always judged.
+    # Design: news-indexer docs/MATCHING_ARCHITECTURE.md §3.
+    reuse_supplied_relevance: bool = True
     # ── Evidence-class weighting (S2 cutover, retro docs/ORACLE_VARIABLES.md §5) ─
     # Per-claim weight component for the cross-article `weight` term, keyed by
     # PredictionExtraction.evidence_class. Replaces the old certainty-as-weight

@@ -106,6 +106,10 @@ class ForecastRequest(BaseModel):
         default=None,
         description="Claim deadline (ISO date, e.g. 2026-12-31). Before it, only occurrence-direction settlements may pin the estimate.",
     )
+    prediction_id: Optional[str] = Field(
+        default=None,
+        description="Caller's identifier for the prediction this forecast relates to (e.g. daatan's context_snapshots key). Log correlation only — never used in scoring.",
+    )
 
 
 class SourceSignal(BaseModel):

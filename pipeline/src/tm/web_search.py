@@ -448,6 +448,11 @@ class SearchResult:
     source: str = ""
     published_date: str = ""
     _prefetched_text: Optional[str] = field(default=None)
+    # Caller-supplied gatekeeper verdict, carried through so _process_article can reuse it
+    # instead of re-judging (see forecast_api.forecaster._supplied_verdict). Both must be
+    # present to count as a verdict. Unused by the pipeline's own search providers.
+    _supplied_relevance: Optional[float] = field(default=None)
+    _supplied_is_prediction: Optional[bool] = field(default=None)
 
 
 # ──────────────────────────────────────────────

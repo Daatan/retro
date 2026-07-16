@@ -319,13 +319,27 @@ weighted_brier  = brier × weight
 ## Deployment
 
 ### Infrastructure
-- **EC2**: `t4g.small`, Ubuntu, `eu-central-1` (Frankfurt)
+- **EC2**: `t4g.small` (2 GiB RAM), Ubuntu, `eu-central-1` (Frankfurt)
 - **Access**: AWS SSM Session Manager (no SSH key — instance has no key pair)
 - **Instance name**: `truthmachine-pipeline` (`i-00ac444b94c5ff9b2`)
 - **Public IP**: `3.120.185.111` (dynamic — reassigned on stop/start)
-- **Terraform**: not in this repo. The EC2 instance was originally provisioned by
-  a decommissioned stack and continues to run manually; a fresh Terraform module
-  for TruthMachine would need to be authored if a replacement is ever required.
+- **Terraform**: imported and managed in [`terraform/`](../terraform/) (`aws_instance.oracle`,
+  state key `retro/` in `daatan-terraform-state`). `lifecycle.prevent_destroy = true` guards
+  the box; `ignore_changes = [ami, user_data]` means the stack tracks the AWS-level resource
+  only — it does not provision or enforce anything inside the OS (see the swap note below).
+- **Swap**: 2 GiB swapfile at `/swapfile` (added 2026-07-16 via SSM, persisted in `/etc/fstab`).
+
+> **Note (2026-07-16): `truthmachine.service` OOM-kill crash loop, swap added as a stopgap.**
+> The box has no cgroup `MemoryMax` — the kernel OOM killer was reacting to genuine memory
+> pressure on a 2 GiB instance running an LLM-orchestration + search pipeline. The journal
+> showed repeated `oom-kill` restarts with wildly inconsistent run lengths before each kill
+> (8 min to 7+ h), which points at specific memory-heavy inputs (e.g. large evidence
+> batches) rather than a steady leak. Even a "stable" 17h run showed only ~280 Mi memory
+> "available". The 2 GiB swapfile above converts a hard kill (which discards that cycle's
+> in-progress work) into graceful degradation, but doesn't fix the underlying pressure. If
+> OOM kills recur, the next step is resizing to `t4g.medium` — that requires a stop/start,
+> and this box also serves `oracle-api.service`, so it's a real (if brief) outage window,
+> not a quiet SSM tweak.
 
 ### Two checkouts on one box
 

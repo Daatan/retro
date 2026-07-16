@@ -50,3 +50,10 @@ resource "aws_instance" "oracle" {
     ignore_changes  = [ami, user_data]
   }
 }
+
+# Note: a 2 GiB swapfile (/swapfile) was added on the running instance via SSM on
+# 2026-07-16 — a truthmachine.service OOM-kill mitigation. That's OS-level state
+# this resource doesn't (and, per ignore_changes above, can't) model or enforce; it
+# only exists on this specific box, not in any image or bootstrap script. See the
+# "Swap" note in docs/ARCHITECTURE.md § Infrastructure for the incident + rationale,
+# and re-provision it by hand if this instance is ever rebuilt.

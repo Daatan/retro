@@ -26,6 +26,7 @@ consequences of that redundancy, not of any single bug.
 | `quantitative_estimate` | 0..1, optional | cited model/poll/market probability | overrides stance+certainty via `resolve_stance_certainty`; triggers the 4× premium |
 | `settled` | bool | outcome reported as accomplished fact | feeds the ±0.94 settlement pin; a POSITIVE settlement is demoted unless dated — see `enforce_settlement_event_date` below |
 | `event_date` | ISO date, optional | when the article says the event itself occurs/occurred | compared against `claim_deadline` by `enforce_deadline_arithmetic`; REQUIRED for a positive `settled` (negative settlements carry none — the event never occurred) — see below |
+| `event_date_reference` | text, optional | the article's verbatim relative expression behind `event_date` ("on Friday", "yesterday") | code redoes the calendar walk from it and overrides a disagreeing `event_date` (`enforce_relative_date_resolution`) — see below |
 | `specificity` | 0..1, optional | **dead** — live extractor never emits it; defaults 1.0 | remove |
 | `claim`, `quote` | text | provenance | — |
 
@@ -56,12 +57,18 @@ preserved; only the sign moves. Every correction logs `event=deadline_arithmetic
 Fail-open throughout: no deadline, no `event_date`, an unparseable date, or an unclassified
 claim leaves the prediction exactly as the model returned it.
 
-**Known limitation — the model still cannot resolve weekdays.** With the prompt above it now
+**The model still cannot resolve weekdays — so code does.** With the prompt above it
 resolves "Friday" *and states the date*, which flips the Guardian case to −1.0 on 4 of 4 runs
-(the incident is fixed). But it resolves it to **2026-07-18** — a Saturday, off by one. The sign
-survives only because both 07-17 and 07-18 fall after the deadline; a ±1-day error against a
-date sitting *on* the deadline would still invert the answer. Resolving the relative expression
-in Python (the model reports the phrase, the calendar is computed) is the follow-up.
+(the incident is fixed). But it resolved it to **2026-07-18** — a Saturday, off by one; the sign
+survived only because both 07-17 and 07-18 fall after the deadline, and a ±1-day error against a
+date sitting *on* the deadline would still invert the answer. The prompt therefore also asks for
+the verbatim expression (`event_date_reference`), and `enforce_relative_date_resolution` in
+`extractor.py` redoes the calendar walk in Python, overriding a disagreeing `event_date` before
+either date-consuming guard runs. Vocabulary is deliberately small — today/tonight/yesterday/
+tomorrow and a weekday with an optional on/this/coming/last modifier; "next Friday" is skipped
+on purpose (speakers disagree on its meaning), as is anything non-English. Every correction logs
+`event=relative_date_override`; a reference never *creates* a missing `event_date` (settlement
+gating stays anchored to a date the model itself asserted). Fail-open throughout.
 
 #### A positive settlement must be dated — `enforce_settlement_event_date`
 

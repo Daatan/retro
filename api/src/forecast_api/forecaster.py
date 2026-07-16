@@ -24,6 +24,7 @@ from tm.gatekeeper import check_is_prediction, PROMPT as GATEKEEPER_PROMPT
 from tm.extractor import (
     extract_predictions,
     enforce_deadline_arithmetic,
+    enforce_relative_date_resolution,
     enforce_settlement_event_date,
     PROMPT as EXTRACTOR_PROMPT,
 )
@@ -439,6 +440,13 @@ async def _process_article(
             event_name=question,
             event_description=question,
             claim_deadline=claim_deadline,
+        )
+        # Before any date is compared, make sure the date itself is right: when the
+        # article spoke in relative terms ("on Friday"), redo that calendar walk in
+        # code — post-#267 the model still resolved the Knesset "Friday" to a
+        # Saturday, and a ±1-day miss against a date ON the deadline flips the sign.
+        extraction.predictions = enforce_relative_date_resolution(
+            extraction.predictions, article_date,
         )
         # The model reports the date; arithmetic decides the sign. See
         # enforce_deadline_arithmetic — an LLM asked whether "Friday" beat a July 15

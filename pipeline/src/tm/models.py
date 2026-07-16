@@ -56,6 +56,14 @@ class PredictionExtraction(BaseModel):
                     "calendar date. The date of the event in the claim — NOT of any adjacent "
                     "or downstream event. Omit entirely when the article states no date for it.",
     )
+    event_date_reference: Optional[str] = Field(
+        default=None,
+        description="The article's VERBATIM relative expression behind event_date ('on "
+                    "Friday', 'yesterday', 'tomorrow'), copied unchanged so code can redo "
+                    "the calendar arithmetic and audit the resolution "
+                    "(enforce_relative_date_resolution). Omit when the article states the "
+                    "absolute date outright.",
+    )
     # Not requested from LLM; kept Optional for backward compat with existing atlas entries
     sentiment: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     specificity: Optional[float] = Field(default=None, ge=0.0, le=1.0)

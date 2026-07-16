@@ -1,5 +1,6 @@
 import logging
-from datetime import date
+import re
+from datetime import date, timedelta
 from typing import Optional
 
 from .models import ExtractionOutput, PredictionExtraction
@@ -316,7 +317,11 @@ Two rules, in order:
 using the article's date, given below. Put that absolute date in `event_date` (YYYY-MM-DD). \
 Never carry a weekday forward as if it were a date, and never assume a weekday lands on \
 the deadline: if the article says "Friday" and the deadline is the 15th, "Friday" is \
-whatever date it actually is — work it out from the article's date.
+whatever date it actually is — work it out from the article's date. Whenever you resolve \
+a relative reference this way, ALSO copy the article's verbatim expression into \
+`event_date_reference` (e.g. "on Friday", "yesterday") — code re-does the calendar \
+arithmetic from it and corrects `event_date` when the two disagree. Omit \
+`event_date_reference` when the article names the absolute date outright.
 
 2. COMPARE. Only once you have the absolute date, compare it with the claim's deadline \
 (given below as "Claim deadline"). State the absolute date in the `claim` field, not the \
@@ -335,13 +340,13 @@ Examples — related event: "The Israeli parliament will be dissolved by July 15
 (article dated Monday 2026-07-13):
   "The Knesset will dissolve on Friday" \
     → "Friday" is 2026-07-17 (the Friday after Monday the 13th), which is AFTER July 15 \
-    → event_date "2026-07-17", stance −1.0, certainty 0.95 \
+    → event_date "2026-07-17", event_date_reference "on Friday", stance −1.0, certainty 0.95 \
       claim: "The parliament will be dissolved on 2026-07-17, after the July 15 deadline" \
     (WRONG: reading "Friday" as "by July 15" and returning +1.0 — the event is certain, \
      but it is certain to happen TOO LATE, which contradicts the claim)
   "The Knesset dissolved yesterday" \
     → "yesterday" is 2026-07-12, on or before July 15 \
-    → event_date "2026-07-12", stance +1.0, certainty 0.95, settled true
+    → event_date "2026-07-12", event_date_reference "yesterday", stance +1.0, certainty 0.95, settled true
 
 ## Article language
 The article may be in Hebrew, Arabic, or English. Always write the claim in English.
@@ -367,7 +372,7 @@ Claim deadline: {claim_deadline}
 IMPORTANT: Your response must be a JSON object with a "predictions" key containing a list.
 Example: {{"predictions": [ {{...}}, {{...}} ]}}
 
-Each prediction has five core fields, plus three used only when applicable:
+Each prediction has five core fields, plus four used only when applicable:
   quote (string — original language), claim (string — English), \
 stance (float −1 to 1), certainty (float 0 to 1), settled (boolean — true only when \
 the source reports the outcome as an accomplished fact), quantitative_estimate \
@@ -378,7 +383,10 @@ opinion, OMIT this field entirely if none fits cleanly — see the section above
 event_date (string YYYY-MM-DD — the absolute date the article gives for the RELATED \
 EVENT ITSELF, with any relative reference like "Friday" already resolved against the \
 article's date; OMIT this field entirely when the article states no date for it — \
-see the DATES section above)
+see the DATES section above), \
+event_date_reference (string — the article's VERBATIM relative expression behind \
+event_date, e.g. "on Friday" or "yesterday"; OMIT it when the article names the \
+absolute date outright — see the DATES section above)
 
 Example — related event: "Assad regime falls in Syria":
 {{
@@ -457,6 +465,87 @@ def _parse_iso_date(value: Optional[str]) -> Optional[date]:
         return date.fromisoformat(value[:10])
     except (ValueError, TypeError):
         return None
+
+
+_WEEKDAYS = {
+    "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+    "friday": 4, "saturday": 5, "sunday": 6,
+}
+
+_DAY_WORDS = {"today": 0, "tonight": 0, "yesterday": -1, "tomorrow": 1}
+
+_WEEKDAY_REFERENCE = re.compile(
+    r"^(?:on\s+|this\s+|the\s+coming\s+|coming\s+|last\s+)?(%s)$" % "|".join(_WEEKDAYS)
+)
+
+
+def _resolve_relative_reference(reference: str, article: date) -> Optional[date]:
+    """The absolute date a relative expression denotes, or None when out of vocabulary.
+
+    Vocabulary is deliberately small: today/tonight/yesterday/tomorrow, and a weekday
+    with an optional on/this/coming/last modifier. A bare (or on/this/coming) weekday
+    means the next occurrence, same-day allowed; "last <weekday>" the previous one.
+    "next <weekday>" is deliberately NOT handled — speakers disagree on whether it means
+    this week's or the following week's occurrence, and a guard built on an ambiguous
+    reading would inject the very errors it exists to catch. English only: a quote in
+    another language falls out of vocabulary and fails open.
+    """
+    text = re.sub(r"[.,;:!?\"'«»]+", " ", reference.lower()).strip()
+    text = re.sub(r"\s+", " ", text)
+    if text in _DAY_WORDS:
+        return article + timedelta(days=_DAY_WORDS[text])
+    m = _WEEKDAY_REFERENCE.match(text)
+    if not m:
+        return None
+    target = _WEEKDAYS[m.group(1)]
+    if text.startswith("last "):
+        back = (article.weekday() - target) % 7 or 7
+        return article - timedelta(days=back)
+    return article + timedelta(days=(target - article.weekday()) % 7)
+
+
+def enforce_relative_date_resolution(
+    predictions: list[PredictionExtraction],
+    article_date: Optional[str],
+) -> list[PredictionExtraction]:
+    """Redo the model's relative-date arithmetic in code, and trust the code.
+
+    The prompt asks the extractor to resolve "on Friday" against the article's date AND
+    to copy the verbatim expression into ``event_date_reference``. The resolution step is
+    exactly what LLMs get wrong with confidence: the Knesset incident's extractor mapped
+    "Friday" (article dated Monday 2026-07-13) to the deadline itself on 5 of 5 runs, and
+    post-fix still offered 2026-07-18 — a Saturday. When the copied expression is in our
+    small vocabulary, this walks the calendar itself and overrides a disagreeing
+    ``event_date``, which ``enforce_deadline_arithmetic`` and
+    ``enforce_settlement_event_date`` then consume.
+
+    Fail-open in every direction: no reference, no parseable article date, an
+    out-of-vocabulary expression, or a missing ``event_date`` leaves the prediction
+    untouched. A reference without a model-committed ``event_date`` never CREATES one —
+    settlement gating must stay anchored to a date the model itself asserted.
+    """
+    article = _parse_iso_date(article_date)
+    if article is None:
+        return predictions
+
+    for p in predictions:
+        if not p.event_date_reference or not p.event_date:
+            continue
+        resolved = _resolve_relative_reference(p.event_date_reference, article)
+        if resolved is None:
+            continue
+        model_date = _parse_iso_date(p.event_date)
+        if model_date == resolved:
+            continue
+        logger.warning(
+            "event=relative_date_override reference=%r article_date=%s "
+            "event_date=%s -> %s claim=%r",
+            p.event_date_reference, article.isoformat(),
+            p.event_date, resolved.isoformat(), p.claim[:120],
+        )
+        p.event_date = resolved.isoformat()
+
+    return predictions
 
 
 def enforce_deadline_arithmetic(

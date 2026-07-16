@@ -69,9 +69,10 @@ class TestAsMetadata:
         # issuer is OUR origin (what the client fetched the doc from), not Cognito.
         assert m["issuer"] == "https://oracle.daatan.com"
         assert m["registration_endpoint"] == "https://oracle.daatan.com/register"
-        # authorize/token stay on Cognito; jwks on the pool.
-        assert m["authorization_endpoint"] == f"{HOSTED_UI}/oauth2/authorize"
-        assert m["token_endpoint"] == f"{HOSTED_UI}/oauth2/token"
+        # authorize/token point at OUR proxy (which strips offline_access before
+        # forwarding to Cognito), not straight at Cognito.
+        assert m["authorization_endpoint"] == "https://oracle.daatan.com/oauth2/authorize"
+        assert m["token_endpoint"] == "https://oracle.daatan.com/oauth2/token"
         assert m["jwks_uri"] == settings.cognito_jwks_url
         # public PKCE client requirements Claude checks for.
         assert m["code_challenge_methods_supported"] == ["S256"]
@@ -130,3 +131,80 @@ class TestRegister:
         r = c.post("/register")
         assert r.status_code == 201
         assert r.json()["client_id"] == CLAUDE_CLIENT
+
+
+# ── /oauth2/authorize proxy (strips offline_access) ──────────────────────────
+
+class TestAuthorizeProxy:
+    def test_strips_offline_access_and_preserves_params(self, monkeypatch):
+        c = _client(monkeypatch)
+        r = c.get(
+            "/oauth2/authorize",
+            params={
+                "client_id": CLAUDE_CLIENT,
+                "response_type": "code",
+                "scope": "openid email offline_access oracle-mcp/read oracle-mcp/forecast",
+                "redirect_uri": "https://claude.ai/api/mcp/auth_callback",
+                "code_challenge": "abc123",
+                "code_challenge_method": "S256",
+                "state": "xyz",
+            },
+            follow_redirects=False,
+        )
+        assert r.status_code == 302
+        loc = r.headers["location"]
+        # redirected to the REAL Cognito authorize endpoint
+        assert loc.startswith(f"{HOSTED_UI}/oauth2/authorize?")
+        # the poison scope is gone, the rest survives
+        assert "offline_access" not in loc
+        assert "state=xyz" in loc
+        assert "code_challenge=abc123" in loc
+        assert "openid" in loc and "oracle-mcp" in loc
+
+
+# ── /oauth2/token proxy (forwards to Cognito, strips offline_access) ──────────
+
+class TestTokenProxy:
+    def test_forwards_and_strips_offline_access(self, monkeypatch):
+        _enable_dcr(monkeypatch)
+        import forecast_api.mcp_dcr as mod
+
+        captured = {}
+
+        class _Resp:
+            content = b'{"access_token":"AT","refresh_token":"RT","token_type":"Bearer"}'
+            status_code = 200
+            headers = {"content-type": "application/json"}
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def post(self, url, content=None, headers=None):
+                captured["url"] = url
+                captured["content"] = content
+                return _Resp()
+
+        monkeypatch.setattr(mod.httpx, "AsyncClient", _Client)
+        c = TestClient(Starlette(routes=create_dcr_routes(settings)))
+        r = c.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": "RT",
+                "client_id": CLAUDE_CLIENT,
+                "scope": "openid offline_access oracle-mcp/read",
+            },
+        )
+        assert r.status_code == 200
+        assert r.json()["access_token"] == "AT"
+        # forwarded to Cognito's real token endpoint, offline_access stripped
+        assert captured["url"] == f"{HOSTED_UI}/oauth2/token"
+        assert "offline_access" not in captured["content"]
+        assert "grant_type=refresh_token" in captured["content"]

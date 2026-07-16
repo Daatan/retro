@@ -68,20 +68,26 @@ authorization server (`api/src/forecast_api/mcp_dcr.py`):
 - the protected-resource metadata points `authorization_servers` at the Oracle
   origin instead of the Cognito issuer;
 - the origin serves `/.well-known/oauth-authorization-server` (and
-  `/.well-known/openid-configuration`) that mirror Cognito's real `/oauth2/authorize`
-  and `/oauth2/token`, carry the pool's `jwks_uri`, and inject **our**
-  `registration_endpoint`;
+  `/.well-known/openid-configuration`) that carry the pool's `jwks_uri`, inject
+  **our** `registration_endpoint`, and point `authorization_endpoint` /
+  `token_endpoint` at our own `/oauth2/authorize` + `/oauth2/token` proxies;
 - `POST /register` ignores the request and returns the one pre-provisioned public
   PKCE client (`COGNITO_CLAUDE_CLIENT_ID`) every time — **no** Cognito client is
   created (no `CreateUserPoolClient`, so no IAM grant, no reaping, no abuse vector);
   Claude accepts a fixed `client_id` and only loops if handed a new one each call.
+- `GET /oauth2/authorize` and `POST /oauth2/token` proxy Cognito's real endpoints
+  but **strip the `offline_access` scope**. Claude always requests `offline_access`
+  (to get a refresh token); Cognito doesn't recognise that scope name and rejects
+  the whole authorize with `invalid_scope`, which bounced the login before the user
+  could sign in. Cognito issues refresh tokens from the client's own config anyway,
+  so stripping the scope costs nothing — Claude still gets its refresh token.
 
-The browser login and token exchange still run against Cognito, so the access
-token is Cognito-issued (`iss` = the pool) and the Resource-Server verifier is
+The login and token exchange run through those proxies to Cognito, so the access
+token is still Cognito-issued (`iss` = the pool) and the Resource-Server verifier is
 unchanged — it just needs `COGNITO_CLAUDE_CLIENT_ID` in `COGNITO_ALLOWED_CLIENT_IDS`.
-`offline_access` is deliberately **not** advertised (Cognito rejects that scope
-name). With the two vars unset, none of this is served and the metadata points
-straight at the Cognito issuer (the M2M-only path, unchanged).
+`offline_access` is also not advertised in `scopes_supported`. With the two vars
+unset, none of this is served and the metadata points straight at the Cognito
+issuer (the M2M-only path, unchanged).
 
 **Target claude.ai / Claude Desktop** — both use the single fixed callback
 `https://claude.ai/api/mcp/auth_callback`. Claude Code's CLI uses an ephemeral

@@ -45,15 +45,29 @@ def test_the_deadline_day_itself_counts_as_within():
 
 def test_a_confident_no_on_a_date_within_the_deadline_is_also_corrected():
     """The override is symmetric — it is arithmetic, not a thumb on the scale toward NO."""
-    [out] = enforce_deadline_arithmetic([pred(-1.0, "2026-07-14", settled=True)], DEADLINE, "arrival")
+    [out] = enforce_deadline_arithmetic([pred(-1.0, "2026-07-14")], DEADLINE, "arrival")
     assert out.stance == 1.0
+
+
+def test_a_settled_negative_on_an_arrival_claim_is_exempt():
+    """A settled negative's date is the FORECLOSING event's ("Spain beat France on
+    the 14th"), not this claim's own occurrence — arithmetic on it would flip a
+    correct impossibility verdict into a false YES (the France-elimination trap)."""
+    [out] = enforce_deadline_arithmetic([pred(-1.0, "2026-07-14", settled=True)], DEADLINE, "arrival")
+    assert out.stance == -1.0
+    assert out.settled is True
+    assert out.event_date == "2026-07-14"
 
 
 # ── survival claims mirror arrival ────────────────────────────────────────────
 
 
 def test_survival_claim_event_after_deadline_supports_the_claim():
-    """"X will NOT happen by D" + the event lands after D → the claim holds (+)."""
+    """"X will NOT happen by D" + the event lands after D → the claim holds (+).
+
+    Unlike the arrival carve-out above, a settled negative on a SURVIVAL claim
+    means the underlying event occurred — its date IS the occurrence, so the
+    arithmetic stays valid on it."""
     [out] = enforce_deadline_arithmetic([pred(-1.0, "2026-07-17", settled=True)], DEADLINE, "survival")
     assert out.stance == 1.0
 

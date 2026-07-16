@@ -106,6 +106,14 @@ class ForecastRequest(BaseModel):
         default=None,
         description="Claim deadline (ISO date, e.g. 2026-12-31). Before it, only occurrence-direction settlements may pin the estimate.",
     )
+    claim_created_at: Optional[str] = Field(
+        default=None,
+        description="When the caller's prediction was created (ISO date or timestamp). With claim_archetype='scheduled', a settlement event dated before it cannot settle the claim — it belongs to an earlier instance of the recurring event, not this one. Accepted now, enforced by settlement revalidation.",
+    )
+    claim_archetype: Optional[Literal["scheduled", "diffuse", "threshold", "none"]] = Field(
+        default=None,
+        description="Temporal archetype from the caller's claim classifier. 'scheduled' claims (an election, a match) bound settlement event dates to [claim_created_at, claim_deadline]; other archetypes bound only the deadline side (a threshold may legitimately have been crossed before the claim was created). Accepted now, enforced by settlement revalidation.",
+    )
     prediction_id: Optional[str] = Field(
         default=None,
         description="Caller's identifier for the prediction this forecast relates to (e.g. daatan's context_snapshots key). Log correlation only — never used in scoring.",
@@ -127,6 +135,7 @@ class SourceSignal(BaseModel):
     quantitative_estimate: Optional[float] = Field(default=None, description="Explicit modeled/poll/market probability [0,1] this source cited for the event itself, if any; carries a weight premium via evidence_class=cited_probability (see evidence_class_weight)")
     evidence_weight: Optional[float] = Field(default=None, description="This source's evidence_class-derived weight component (S2 cutover) — the linear factor `credibility * evidence_weight * recency * relevance^2` reduces to when recomputing a pool of already-extracted sources without redoing extraction. NOT credibility/recency/relevance combined, just the evidence_class-weighting term; see evidence_class_weight() in aggregation.py.")
     evidence_class: Optional[Literal["reported_fact", "cited_probability", "cited_share", "reporting", "opinion"]] = Field(default=None, description="This article's most common evidence_class among its extracted claims (an article can carry several claims with different classes; None if every claim was unclassified). Needed by the credibility feedback loop (docs/ORACLE_VARIABLES.md §9) to exclude opinion-class articles from the resolution-outcome signal — evidence_weight alone can't distinguish an opinion-class article from a low-certainty unclassified one, since both can land at a similar numeric weight.")
+    settlement_event_date: Optional[str] = Field(default=None, description="When settled: the ISO date anchoring this source's settlement — the outcome's occurrence date for a positive settlement, the foreclosing event's date for a negative one; None when the settlement is legitimately undated (e.g. post-deadline expiry). Taken from the highest-certainty settlement-grade claim whose sign matches this source's collapsed stance. Persist alongside `settled` — aggregation-time revalidation re-checks it on every pool recompute.")
 
 
 class ArticleDebug(BaseModel):
@@ -229,15 +238,18 @@ class PoolSourceInput(BaseModel):
     evidence_weight: Optional[float] = Field(default=None, ge=0.0, description="This source's evidence_class-derived weight (see SourceSignal.evidence_weight); falls back to certainty when unset")
     published_date: Optional[str] = Field(default=None, description="Article publish date (YYYY-MM-DD); recency is recomputed against now, not a stored value")
     settled: bool = Field(default=False, description="True when this source cleared the settlement grade (SourceSignal.settled)")
+    settlement_event_date: Optional[str] = Field(default=None, description="The settlement anchor date this source carried when extracted (SourceSignal.settlement_event_date); consumed by aggregation-time settlement revalidation")
 
 
 class PoolAggregateRequest(BaseModel):
     """Recompute a pooled estimate over an already-extracted evidence pool —
-    no search, no LLM calls. Same claim_direction/claim_deadline semantics as
-    ForecastRequest (gates early settlement direction)."""
+    no search, no LLM calls. Same claim_direction/claim_deadline/claim_created_at/
+    claim_archetype semantics as ForecastRequest (gates settlement votes)."""
     sources: list[PoolSourceInput] = Field(default_factory=list)
     claim_direction: Optional[Literal["arrival", "survival"]] = Field(default=None)
     claim_deadline: Optional[str] = Field(default=None)
+    claim_created_at: Optional[str] = Field(default=None, description="See ForecastRequest.claim_created_at")
+    claim_archetype: Optional[Literal["scheduled", "diffuse", "threshold", "none"]] = Field(default=None, description="See ForecastRequest.claim_archetype")
 
 
 class PoolAggregateResponse(BaseModel):

@@ -28,7 +28,7 @@ from tm.extractor import (
     enforce_settlement_event_date,
     PROMPT as EXTRACTOR_PROMPT,
 )
-from tm.models import GatekeeperOutput
+from tm.models import GatekeeperOutput, PredictionExtraction
 from tm.web_search import search_articles, SearchResult, get_last_search_provider, get_last_search_provider_chain
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
@@ -128,6 +128,31 @@ def _source_id_from_url(url: str) -> str:
         if domain == key or domain.endswith("." + key):
             return sid
     return domain  # fallback: raw domain as id
+
+
+def derive_settlement_event_date(
+    settled_preds: list[PredictionExtraction],
+    avg_stance: float,
+) -> Optional[str]:
+    """The article-level settlement anchor date, for SourceSignal.
+
+    Among the article's settlement-grade claims, pick the ``event_date`` of the
+    one that actually drives the article's settlement vote: same stance sign as
+    the collapsed article stance (aggregate_pool reads the vote's direction from
+    that sign), highest certainty first, earliest date on ties. None when no
+    driving claim is dated — a positive settlement in that state has already
+    been demoted by enforce_settlement_event_date, and a negative one may be
+    legitimately undated (foreclosure by time expiring).
+    """
+    direction_positive = avg_stance >= 0
+    dated = [
+        p for p in settled_preds
+        if p.event_date and (p.stance >= 0) == direction_positive
+    ]
+    if not dated:
+        return None
+    best = min(dated, key=lambda p: (-p.certainty, p.event_date))
+    return best.event_date
 
 
 # Minimum extracted length before we trust the body over title+snippet.
@@ -928,6 +953,7 @@ async def _run_forecast_inner(
             quantitative_estimate=next((q for q in quantitative_estimates if q is not None), None),
             evidence_weight=round(avg_evidence_weight, 3),
             evidence_class=representative_evidence_class,
+            settlement_event_date=derive_settlement_event_date(settled_preds, avg_stance),
         ))
 
     if evidence_class_counts:

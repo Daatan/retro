@@ -25,7 +25,7 @@ consequences of that redundancy, not of any single bug.
 | `certainty` | 0..1 | linguistic confidence (0 = hedged, 1 = absolute) | weight factor AND within-article claim weight |
 | `quantitative_estimate` | 0..1, optional | cited model/poll/market probability | overrides stance+certainty via `resolve_stance_certainty`; triggers the 4× premium |
 | `settled` | bool | outcome reported as accomplished fact | feeds the ±0.94 settlement pin; a POSITIVE settlement is demoted unless dated — see `enforce_settlement_event_date` below |
-| `event_date` | ISO date, optional | when the article says the event itself occurs/occurred | compared against `claim_deadline` by `enforce_deadline_arithmetic`; REQUIRED for a positive `settled` (negative settlements carry none — the event never occurred) — see below |
+| `event_date` | ISO date, optional | when the article says the event itself occurs/occurred | compared against `claim_deadline` by `enforce_deadline_arithmetic`; REQUIRED for a positive `settled`; for a NEGATIVE `settled` it carries the FORECLOSING event's date when the article dates it (the rival's win, the elimination — optional: time-expiry impossibilities stay undated) — see below |
 | `event_date_reference` | text, optional | the article's verbatim relative expression behind `event_date` ("on Friday", "yesterday") | code redoes the calendar walk from it and overrides a disagreeing `event_date` (`enforce_relative_date_resolution`) — see below |
 | `specificity` | 0..1, optional | **dead** — live extractor never emits it; defaults 1.0 | remove |
 | `claim`, `quote` | text | provenance | — |
@@ -94,15 +94,38 @@ logs `event=settlement_demoted`) when:
 - its `event_date` falls **after the article's own date** — the article "reports" an outcome
   that hadn't happened when it was written (a scheduled event, not an accomplished fact).
 
-**Negative** settlements ("became permanently impossible") are exempt: the related event never
-occurred, so they carry no `event_date` by definition (dating them would also misfire
-`enforce_deadline_arithmetic`, which reads `event_date` as the occurrence date). Premature
-negative pins are already guarded by `settlement_direction_allowed` (§ settlement override).
+**Negative** settlements ("became permanently impossible") date the **foreclosing** event
+instead — the rival's win, the elimination, the death that made the outcome impossible — when
+the article dates it; an impossibility that comes only from time expiring stays undated, so
+the missing-date demotion applies to positive settlements only (a **future-dated** foreclosure
+is demoted like any future-dated settlement: it's a schedule, not a fact). Because a
+foreclosure date is *not* the claim-event's occurrence date, `enforce_deadline_arithmetic`
+exempts settled negatives **on arrival claims** — running its comparison there would flip a
+correct impossibility verdict dated within the deadline into a false YES (the 2026-07-16
+France-elimination trap). On survival claims a settled negative means the underlying event
+*occurred*, its date is the occurrence itself, and the arithmetic stays valid. Premature
+negative pins are guarded by `settlement_direction_allowed` (§ settlement override).
 
-Deliberately fails **closed** on a missing date — the asymmetry is the point: a wrong demotion
-costs a slower pin (the stance still votes), a wrong settlement sticks a market at 97% on
-history. The prompt (SETTLED section) states the same contract, so a compliant extraction is
-never demoted; the guard exists for the non-compliant ones.
+The extractor prompt also carries a **single-winner contests** section (2026-07-16
+stance-inversion incident: "Spain beat France" / "Argentina stun England" were extracted as
+**+1 settled** for "France/England will win"): in a one-winner contest, a rival achieving the
+outcome settles the subject's claim **negatively** — stance −1.0, settled, dated by the
+foreclosing result — never +1, however triumphant the article.
+
+Deliberately fails **closed** on a positive settlement's missing date — the asymmetry is the
+point: a wrong demotion costs a slower pin (the stance still votes), a wrong settlement sticks
+a market at 97% on history. The prompt (SETTLED section) states the same contract, so a
+compliant extraction is never demoted; the guard exists for the non-compliant ones.
+
+The anchor date survives extraction: each source's `SourceSignal.settlement_event_date`
+carries the `event_date` of the highest-certainty settlement-grade claim whose sign matches
+the article's collapsed stance (`derive_settlement_event_date`, forecaster.py). Callers
+persist it next to `settled` and send it back on `/pool/aggregate`
+(`PoolSourceInput.settlement_event_date`), where aggregation-time settlement revalidation
+re-checks every settlement vote on every recompute. The request models also accept
+`claim_created_at` + `claim_archetype` (with `claim_archetype='scheduled'`, a settlement
+event dated before the claim's creation belongs to an earlier instance of the recurring
+event and cannot settle it) — accepted today, enforced by the revalidation step.
 
 ### 2.2 Per-article (gatekeeper LLM — `pipeline/src/tm/gatekeeper.py`)
 

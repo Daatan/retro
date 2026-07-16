@@ -340,6 +340,16 @@ weighted_brier  = brier × weight
 > OOM kills recur, the next step is resizing to `t4g.medium` — that requires a stop/start,
 > and this box also serves `oracle-api.service`, so it's a real (if brief) outage window,
 > not a quiet SSM tweak.
+>
+> **Verified (2026-07-16, ~18h after the swapfile was added):** zero `oom-kill` events
+> since — the same `truthmachine.service` activation has run continuously across that
+> whole window (previously it never survived more than ~7h). System swap usage was 421 Mi
+> of the 2 GiB, and the service's own cgroup showed a swap peak of ~58 Mi — i.e. it is
+> actually dipping into swap instead of getting killed, not just carrying an idle safety
+> net. Memory is still tight (~414 Mi "available"), so this isn't headroom in any
+> comfortable sense — but the mitigation is holding. Re-check after a longer window (a
+> slower leak could still exhaust 2 GiB eventually, just much later than it exhausted 0);
+> escalate to the `t4g.medium` resize above only if `oom-kill` reappears in the journal.
 
 ### Two checkouts on one box
 

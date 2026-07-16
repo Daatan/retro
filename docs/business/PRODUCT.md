@@ -244,6 +244,6 @@ The influence/strength of a specific prediction in scoring/visibility calculatio
 
 - [DAATAN_CORE.md](./DAATAN_CORE.md) — Source of Truth (vision and principles)
 - [GLOSSARY.md](../GLOSSARY.md) — Terminology definitions
-- [TODO.md](../TODO.md) — Development tasks and priorities
+- [GitHub Issues](https://github.com/Daatan/retro/issues) — Development tasks and priorities (`P1`/`P2`/`P3`/`icebox` labels)
 - [ARCHITECTURE.md](../ARCHITECTURE.md) — Retro pipeline and Oracle API architecture
 - [docs/ORACLE_API.md](../ORACLE_API.md) — Oracle forecast service documentation

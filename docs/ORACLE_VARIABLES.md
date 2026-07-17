@@ -121,11 +121,38 @@ The anchor date survives extraction: each source's `SourceSignal.settlement_even
 carries the `event_date` of the highest-certainty settlement-grade claim whose sign matches
 the article's collapsed stance (`derive_settlement_event_date`, forecaster.py). Callers
 persist it next to `settled` and send it back on `/pool/aggregate`
-(`PoolSourceInput.settlement_event_date`), where aggregation-time settlement revalidation
-re-checks every settlement vote on every recompute. The request models also accept
-`claim_created_at` + `claim_archetype` (with `claim_archetype='scheduled'`, a settlement
-event dated before the claim's creation belongs to an earlier instance of the recurring
-event and cannot settle it) — accepted today, enforced by the revalidation step.
+(`PoolSourceInput.settlement_event_date`).
+
+#### Aggregation-time revalidation — `settlement_vote_validity`
+
+Extraction-time guards only protect fresh extractions; a recompute replays stored `settled`
+bits written before the guards existed or re-poisoned since (the 2026-07-16 audit: 11 of 19
+pins wrong; re-pushes re-flipped cleaned flags within hours). With `settlement_revalidate`
+(default **on**; env kill switch `SETTLEMENT_REVALIDATE=false` + service restart), every
+settlement vote re-proves its anchor inside `aggregate_pool()` on every call — live
+`/forecast` and `/pool/aggregate` alike:
+
+- **Occurrence-direction vote** (arrival:+, survival:−, unclassified:+): must carry a
+  parseable `settlement_event_date`; not after `claim_deadline`; not before
+  `claim_created_at` when `claim_archetype='scheduled'` (a dated fact about an *earlier
+  instance* of the recurring event — the 2021/2022-article class, both signs); not after its
+  own article's date.
+- **Non-occurrence-direction vote** (arrival:−, survival:+): valid once the deadline passed
+  (undated is fine — the absence is the evidence), or with a dated in-window **foreclosing**
+  event (France's elimination legitimately pins NO before the final — the case the old
+  pin-level `settlement_direction_allowed` wrongly suppressed; the per-vote rules replace
+  that guard on this path). An undated non-occurrence vote before/without a known deadline
+  is demoted (`undated_foreclosure`) — deliberately fail-closed on the anchor, unlike the
+  old fail-open pin guard (the F-35/Netanyahu background-history class).
+
+Demoted votes keep their stance (ordinary evidence; `event=settlement_vote_demoted` with a
+reason per row). Valid votes in **both** directions suppress the pin entirely
+(`settlement_suppressed`, `settlement_conflict` — one extraction is provably wrong, and
+facts are not decided by outvoting; the England 4-vs-1 stance-inversion pool is the
+canonical case). The pin then requires `settlement_min_sources` **unanimous** valid votes.
+`PoolAggregateResponse` exposes `settlement_suppressed`/`settlement_suppression_reason`/
+`settlement_votes_demoted` for callers. Regression fixtures from the audit:
+`api/tests/test_settlement_revalidation.py`.
 
 ### 2.2 Per-article (gatekeeper LLM — `pipeline/src/tm/gatekeeper.py`)
 
@@ -153,7 +180,7 @@ event and cannot settle it) — accepted today, enforced by the revalidation ste
 | `mean, std, ci_low, ci_high` | weighted-mean logit pool + dispersion, stance scale |
 | `evidence_mass = Σ weight` | thin-evidence CI widening (floor 0.5, inflation 0.45) |
 | `relevance_mass = Σ relevance²` | off-topic abstention (floor 0.05) |
-| `settled_directions → settled` | settlement pin ±0.94 when ≥2 sources agree |
+| `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — **revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at (scheduled), claim_deadline]` and ≤ its article's date; a non-occurrence vote needs a closed window or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
 | `insufficient_data, reason, placeholder, articles_used/found` | abstention encoding |
 
 Config constants (12): `recency_half_life_days=7`, `recency_floor=0.02`,

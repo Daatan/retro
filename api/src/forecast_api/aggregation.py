@@ -186,6 +186,83 @@ def settlement_direction_allowed(
     return direction > 0 if claim_direction == "arrival" else direction < 0
 
 
+def settlement_vote_validity(
+    stance: float,
+    settlement_event_date: Optional[str],
+    published_date: Optional[str],
+    claim_direction: Optional[str],
+    claim_deadline: Optional[str],
+    claim_created_at: Optional[str],
+    claim_archetype: Optional[str],
+    today: Optional[str] = None,
+) -> Optional[str]:
+    """Why this single settlement vote must NOT count — or ``None`` if it stands.
+
+    Extraction-time guards (``enforce_settlement_event_date``, retro #276/#291)
+    only protect fresh extractions; a pool recompute replays stored ``settled``
+    bits written before those guards existed, or poisoned since (the 2026-07-16
+    audit: stale rows re-pinned wrong estimates on every recompute, and
+    re-pushes re-flipped cleaned flags within hours). This makes the anchor
+    requirement an invariant re-checked on every aggregation.
+
+    A vote's obligations depend on which way it points relative to the claim's
+    temporal direction (raw sign is not enough — a survival claim settles
+    POSITIVE precisely when nothing happened, which is inherently undatable):
+
+    - **Occurrence-direction** (arrival:+, survival:−, unclassified:+ — the
+      vote asserts the underlying event HAPPENED): must carry a parseable
+      ``settlement_event_date``; the date must not fall after ``claim_deadline``
+      (an occurrence after the window contradicts an arrival claim rather than
+      settling it), must not precede ``claim_created_at`` on a ``scheduled``
+      claim (a dated fact about an EARLIER instance of the recurring event —
+      the 2021/2022-article class), and must not post-date the article that
+      "reported" it (a schedule, not a fact — re-asserting the extraction
+      guard on stored rows).
+    - **Non-occurrence-direction** (arrival:−, survival:+ — the vote asserts
+      the event didn't/can't happen): valid once the deadline has passed (the
+      absence itself is then the evidence, no date needed), or when it carries
+      a dated FORECLOSING event within the window (France eliminated by Spain
+      settles "France wins" NO five days before the final). An undated
+      non-occurrence vote before (or without) a known deadline has no anchor —
+      that is the F-35/Netanyahu background-history class — and is demoted.
+
+    Every individual check is fail-open on absent metadata (no deadline → no
+    deadline comparison), but the date requirement itself is fail-closed: an
+    occurrence vote with no date never counts. Demoted votes keep their stance
+    (the row still moves the pooled mean as ordinary evidence).
+    """
+    event = _parse_date(settlement_event_date)
+    deadline = _parse_date(claim_deadline)
+    ref = _parse_date(today) or datetime.now().date()
+
+    occurrence_sign_positive = claim_direction != "survival"
+    is_occurrence_vote = (stance >= 0) == occurrence_sign_positive
+
+    if is_occurrence_vote:
+        if event is None:
+            return "missing_event_date"
+    else:
+        if deadline is not None and deadline <= ref:
+            return None  # window closed — absence of the event is the anchor
+        if event is None:
+            return "undated_foreclosure"
+
+    if deadline is not None and event > deadline:
+        return "event_after_deadline"
+    if claim_archetype == "scheduled":
+        # Both directions: a dated fact from before this claim existed belongs
+        # to an EARLIER instance of the scheduled event — it can neither settle
+        # nor foreclose this one (2021 "Bennett formed the government" rows
+        # were negative votes on 2026 claims).
+        created = _parse_date(claim_created_at)
+        if created is not None and event < created:
+            return "event_before_claim_window"
+    published = _parse_date(published_date)
+    if published is not None and event > published:
+        return "event_after_article"
+    return None
+
+
 def evidence_class_weight(
     evidence_class: Optional[str],
     certainty: float,
@@ -318,10 +395,17 @@ class PoolAggregateResult(NamedTuple):
     insufficient_reason: Optional[str]
     # Settlement diagnostics for callers that want to log the outcome without
     # re-deriving settled_directions themselves. settlement_suppressed is True
-    # only when a would-be pin was blocked by the temporal direction guard
-    # (settled/settled_sources still reflect the *applied* outcome, i.e. no pin).
+    # when a would-be pin was blocked — by the temporal direction guard on the
+    # legacy path (suppression_reason="settlement_direction") or by conflicting
+    # valid votes on the revalidation path ("settlement_conflict");
+    # settled/settled_sources still reflect the *applied* outcome, i.e. no pin.
     settled_sources: int
     settlement_suppressed: bool
+    suppression_reason: Optional[str] = None
+    # Revalidation path only: (source index, reason) per settlement vote that
+    # was NOT counted (settlement_vote_validity) — the row still voted as
+    # ordinary evidence. Callers log these; aggregation stays log-free.
+    settlement_demotions: tuple = ()
 
 
 def aggregate_pool(
@@ -339,6 +423,11 @@ def aggregate_pool(
     logit_clamp: float,
     claim_direction: Optional[str] = None,
     claim_deadline: Optional[str] = None,
+    settlement_event_dates: Optional[Sequence[Optional[str]]] = None,
+    published_dates: Optional[Sequence[Optional[str]]] = None,
+    claim_created_at: Optional[str] = None,
+    claim_archetype: Optional[str] = None,
+    settlement_revalidate: bool = False,
 ) -> Optional[PoolAggregateResult]:
     """Pool a set of already-extracted, already-weighted per-source signals
     into a final estimate: the relevance off-topic safety net, logit
@@ -403,43 +492,93 @@ def aggregate_pool(
     # loop) — its direction is simply the sign of that same source's stance,
     # which the live loop also already computed preferentially from
     # settled_preds when present.
-    settled_directions = [
-        1.0 if s >= 0 else -1.0
-        for s, is_settled in zip(stances, settled_flags)
-        if is_settled
-    ]
     settled = False
     settled_sources = 0
     settlement_suppressed = False
-    if settlement_min_sources > 0 and settled_directions:
-        pos = sum(1 for d in settled_directions if d > 0)
-        neg = len(settled_directions) - pos
-        direction = 1.0 if pos > neg else -1.0 if neg > pos else 0.0
-        if (
-            direction != 0.0
-            and max(pos, neg) >= settlement_min_sources
-            and not settlement_direction_allowed(direction, claim_direction, claim_deadline)
-        ):
-            # Temporally incoherent early settlement (e.g. "won't happen"
-            # pinned months before an arrival claim's deadline — the F-35
-            # false pin): suppress the pin, keep the pooled estimate.
+    suppression_reason: Optional[str] = None
+    settlement_demotions: tuple = ()
+
+    def _apply_pin(direction: float) -> tuple[float, float, float, float]:
+        pinned_mean = settlement_stance * direction
+        pinned_p = stance_to_prob(pinned_mean)
+        if direction > 0:
+            lo_p, hi_p = pinned_p - 0.06, min(0.995, pinned_p + 0.025)
+        else:
+            lo_p, hi_p = max(0.005, pinned_p - 0.025), pinned_p + 0.06
+        return pinned_mean, prob_to_stance(lo_p), prob_to_stance(hi_p), 0.06
+
+    if settlement_revalidate and settlement_min_sources > 0:
+        # Revalidation path (SETTLEMENT_REVALIDATE, default on): every settled
+        # flag must re-prove its anchor on every aggregation — see
+        # settlement_vote_validity. Replaces settlement_direction_allowed
+        # (the per-vote rules strictly subsume the pin-level guard: an
+        # early non-occurrence pin is exactly an undated_foreclosure unless
+        # it carries a dated in-window foreclosing event, which is the case
+        # the old guard wrongly suppressed). Majority vote is replaced by
+        # unanimity: valid votes in BOTH directions mean one extraction is
+        # provably wrong, and facts are not decided by outvoting — suppress
+        # the pin, keep the pooled mean, and let the conflict log line drive
+        # a human (or the admin `excluded` flag) to resolve it.
+        demotions: list[tuple[int, str]] = []
+        pos = 0
+        neg = 0
+        for i, (s, is_settled) in enumerate(zip(stances, settled_flags)):
+            if not is_settled:
+                continue
+            reason = settlement_vote_validity(
+                s,
+                settlement_event_dates[i] if settlement_event_dates else None,
+                published_dates[i] if published_dates else None,
+                claim_direction, claim_deadline, claim_created_at, claim_archetype,
+            )
+            if reason is not None:
+                demotions.append((i, reason))
+            elif s >= 0:
+                pos += 1
+            else:
+                neg += 1
+        settlement_demotions = tuple(demotions)
+        if pos > 0 and neg > 0:
             settlement_suppressed = True
-            direction = 0.0
-        if direction != 0.0 and max(pos, neg) >= settlement_min_sources:
+            suppression_reason = "settlement_conflict"
+        elif max(pos, neg) >= settlement_min_sources:
             settled = True
             settled_sources = max(pos, neg)
-            mean = settlement_stance * direction
-            pinned_p = stance_to_prob(mean)
-            if direction > 0:
-                lo_p, hi_p = pinned_p - 0.06, min(0.995, pinned_p + 0.025)
-            else:
-                lo_p, hi_p = max(0.005, pinned_p - 0.025), pinned_p + 0.06
-            ci_low, ci_high = prob_to_stance(lo_p), prob_to_stance(hi_p)
-            std = 0.06
+            mean, ci_low, ci_high, std = _apply_pin(1.0 if pos > 0 else -1.0)
+    elif settlement_min_sources > 0:
+        # Legacy path (kill switch off): trust the flags, majority vote,
+        # pin-level direction guard — byte-for-byte the pre-revalidation
+        # behavior.
+        settled_directions = [
+            1.0 if s >= 0 else -1.0
+            for s, is_settled in zip(stances, settled_flags)
+            if is_settled
+        ]
+        if settled_directions:
+            pos = sum(1 for d in settled_directions if d > 0)
+            neg = len(settled_directions) - pos
+            direction = 1.0 if pos > neg else -1.0 if neg > pos else 0.0
+            if (
+                direction != 0.0
+                and max(pos, neg) >= settlement_min_sources
+                and not settlement_direction_allowed(direction, claim_direction, claim_deadline)
+            ):
+                # Temporally incoherent early settlement (e.g. "won't happen"
+                # pinned months before an arrival claim's deadline — the F-35
+                # false pin): suppress the pin, keep the pooled estimate.
+                settlement_suppressed = True
+                suppression_reason = "settlement_direction"
+                direction = 0.0
+            if direction != 0.0 and max(pos, neg) >= settlement_min_sources:
+                settled = True
+                settled_sources = max(pos, neg)
+                mean, ci_low, ci_high, std = _apply_pin(direction)
 
     return PoolAggregateResult(
         mean=mean, std=std, ci_low=ci_low, ci_high=ci_high, settled=settled,
         n=n, evidence_mass=evidence_mass, thin_evidence=thin_evidence,
         insufficient_reason=None, settled_sources=settled_sources,
         settlement_suppressed=settlement_suppressed,
+        suppression_reason=suppression_reason,
+        settlement_demotions=settlement_demotions,
     )

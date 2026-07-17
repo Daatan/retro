@@ -261,6 +261,9 @@ class PoolAggregateResponse(BaseModel):
     settled: bool = Field(default=False, description="Same settlement-override semantics as ForecastResponse.settled")
     insufficient_data: bool = Field(default=False, description="True when no usable estimate could be pooled. mean/ci are NOT a real estimate.")
     reason: Optional[str] = Field(default=None, description="When insufficient_data: no_sources | all_articles_off_topic | no_decisive_signal")
+    settlement_suppressed: bool = Field(default=False, description="True when a would-be settlement pin was suppressed — 'settlement_conflict' (valid settled votes in both directions, revalidation path) or 'settlement_direction' (temporal guard, legacy path). Diagnostics only; the pooled mean stands.")
+    settlement_suppression_reason: Optional[str] = Field(default=None, description="Why the pin was suppressed, when settlement_suppressed")
+    settlement_votes_demoted: int = Field(default=0, description="How many of the request's settled votes failed aggregation-time revalidation (settlement_vote_validity) and were counted as ordinary evidence instead. Per-vote reasons are logged server-side (event=settlement_vote_demoted).")
 
 
 # ── Resolution feedback ingest (credibility feedback loop, step 1) ─────────

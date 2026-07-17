@@ -107,9 +107,17 @@ class TestSettlementOverride:
         assert resp.mean != pytest.approx(api_settings.settlement_stance)
 
     async def test_negative_settlement_pins_to_negative_boundary(self, monkeypatch):
+        # Dated with the FORECLOSING event (the PR-#291 extractor contract) —
+        # under aggregation-time revalidation an undated negative without a
+        # closed claim window no longer pins (see test_settlement_revalidation).
+        def neg(stance: float, certainty: float) -> PredictionExtraction:
+            return PredictionExtraction(
+                quote="quote", claim="claim", stance=stance, certainty=certainty,
+                settled=True, event_date="2026-06-15",
+            )
         _patch_pipeline(monkeypatch, {
-            "source-1": [_prediction(-1.0, 0.95, settled=True)],
-            "source-2": [_prediction(-0.9, 0.9, settled=True)],
+            "source-1": [neg(-1.0, 0.95)],
+            "source-2": [neg(-0.9, 0.9)],
         })
         resp = await forecaster.run_forecast(ForecastRequest(
             question="settlement pin — unique question C",

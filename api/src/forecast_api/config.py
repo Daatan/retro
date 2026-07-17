@@ -158,6 +158,17 @@ class ApiSettings(BaseSettings):
     # failing the gates are demoted to ordinary (non-settled) evidence.
     settlement_min_claim_stance: float = 0.9
     settlement_min_claim_certainty: float = 0.9
+    # Re-validate every settlement vote at aggregation time against its stored
+    # anchor date and the claim's window (settlement_vote_validity,
+    # aggregation.py), instead of trusting the caller's settled bits — a stale
+    # or poisoned pool row otherwise re-pins the estimate on every recompute
+    # forever (the 2026-07-16 false-pin audit: 11 of 19 pins wrong). Also
+    # replaces the majority vote with unanimity: valid settled votes in BOTH
+    # directions suppress the pin (settlement_conflict) rather than letting
+    # the larger side win. Kill switch: SETTLEMENT_REVALIDATE=false in the env
+    # restores the legacy trust-the-flags behavior without a deploy (restart
+    # oracle-api.service after changing it).
+    settlement_revalidate: bool = True
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.

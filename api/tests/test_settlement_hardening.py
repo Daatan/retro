@@ -161,13 +161,39 @@ class TestDirectionGuard:
         assert resp.settled is True
         assert resp.mean == pytest.approx(-api_settings.settlement_stance)
 
-    async def test_no_metadata_keeps_current_behavior(self, monkeypatch):
+    async def test_no_metadata_an_undated_negative_no_longer_pins(self, monkeypatch):
+        # Pre-revalidation this was the fail-open case: two undated negatives
+        # pinned 3% with no claim metadata at all — exactly the F-35/Netanyahu
+        # background-history class from the 2026-07-16 audit. The per-vote rule
+        # is deliberately fail-closed on the ANCHOR: an undated non-occurrence
+        # vote has nothing tying it to this claim's window.
         _patch_pipeline(monkeypatch, {
             "source-1": [_prediction(-1.0, 0.95, settled=True)],
             "source-2": [_prediction(-0.95, 0.9, settled=True)],
         })
         resp = await forecaster.run_forecast(ForecastRequest(
             question="settlement hardening — direction guard F",
+            articles=[_article(1), _article(2)],
+        ))
+
+        assert resp.settled is False
+        assert resp.mean < 0  # the stances still vote as ordinary evidence
+
+    async def test_no_metadata_a_dated_foreclosure_still_pins(self, monkeypatch):
+        # Fail-open on the CHECKS, closed only on the anchor: callers that
+        # don't classify claims (MCP, test console) still get negative pins
+        # when the foreclosing event is dated.
+        def neg(stance: float, certainty: float) -> PredictionExtraction:
+            return PredictionExtraction(
+                quote="q", claim="c", stance=stance, certainty=certainty,
+                settled=True, event_date="2026-06-15",
+            )
+        _patch_pipeline(monkeypatch, {
+            "source-1": [neg(-1.0, 0.95)],
+            "source-2": [neg(-0.95, 0.9)],
+        })
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="settlement hardening — direction guard G",
             articles=[_article(1), _article(2)],
         ))
 

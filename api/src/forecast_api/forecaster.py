@@ -816,6 +816,8 @@ async def _run_forecast_inner(
     all_weights: list[float] = []
     relevances: list[float] = []
     all_settled: list[bool] = []
+    all_settlement_dates: list[Optional[str]] = []
+    all_published_dates: list[Optional[str]] = []
     ref_date = datetime.now().strftime("%Y-%m-%d")
     # S2 cutover (retro docs/ORACLE_VARIABLES.md §5) — evidence_class now drives
     # `weight` below via evidence_class_weight(); this dict remains for
@@ -891,6 +893,8 @@ async def _run_forecast_inner(
             [p.specificity for p in scored_preds],
         )
         all_settled.append(bool(settled_preds))
+        settlement_event_date = derive_settlement_event_date(settled_preds, avg_stance)
+        all_settlement_dates.append(settlement_event_date)
         avg_certainty = sum(p.certainty for p in predictions) / len(predictions)
         # Layer A.5 (S2 cutover): evidence-class-weight the article's claims for
         # the cross-article `weight` below, replacing avg_certainty as that
@@ -937,6 +941,7 @@ async def _run_forecast_inner(
         all_stances.append(avg_stance)
         all_weights.append(weight)
         relevances.append(relevance)
+        all_published_dates.append(article_date)
 
         source_signals.append(SourceSignal(
             source_id=source_id,
@@ -953,7 +958,7 @@ async def _run_forecast_inner(
             quantitative_estimate=next((q for q in quantitative_estimates if q is not None), None),
             evidence_weight=round(avg_evidence_weight, 3),
             evidence_class=representative_evidence_class,
-            settlement_event_date=derive_settlement_event_date(settled_preds, avg_stance),
+            settlement_event_date=settlement_event_date,
         ))
 
     if evidence_class_counts:
@@ -975,7 +980,24 @@ async def _run_forecast_inner(
         logit_clamp=settings.logit_clamp,
         claim_direction=req.claim_direction,
         claim_deadline=req.claim_deadline,
+        settlement_event_dates=all_settlement_dates,
+        published_dates=all_published_dates,
+        claim_created_at=req.claim_created_at,
+        claim_archetype=req.claim_archetype,
+        settlement_revalidate=settings.settlement_revalidate,
     )
+    if agg is not None:
+        for idx, demotion_reason in agg.settlement_demotions:
+            logger.warning(
+                "event=settlement_vote_demoted reason=%s url=%s stance=%+.2f event_date=%s",
+                demotion_reason, source_signals[idx].url, all_stances[idx],
+                all_settlement_dates[idx],
+            )
+        if agg.settlement_suppressed:
+            logger.warning(
+                "event=settlement_suppressed reason=%s question=%s",
+                agg.suppression_reason, _question_hash(req.question),
+            )
 
     if agg is None or agg.insufficient_reason is not None:
         # Outcome histogram tells us *why* we got nothing — were articles
@@ -1143,6 +1165,8 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
     weights: list[float] = []
     relevances: list[float] = []
     settled_flags: list[bool] = []
+    settlement_dates: list[Optional[str]] = []
+    published_dates: list[Optional[str]] = []
     for s in req.sources:
         rweight = recency_weight(
             s.published_date, ref_date,
@@ -1154,6 +1178,8 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         weights.append(weight)
         relevances.append(s.relevance_score)
         settled_flags.append(s.settled)
+        settlement_dates.append(s.settlement_event_date)
+        published_dates.append(s.published_date)
 
     agg = aggregate_pool(
         stances, weights, relevances, settled_flags,
@@ -1166,7 +1192,20 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         logit_clamp=settings.logit_clamp,
         claim_direction=req.claim_direction,
         claim_deadline=req.claim_deadline,
+        settlement_event_dates=settlement_dates,
+        published_dates=published_dates,
+        claim_created_at=req.claim_created_at,
+        claim_archetype=req.claim_archetype,
+        settlement_revalidate=settings.settlement_revalidate,
     )
+    if agg is not None:
+        for idx, demotion_reason in agg.settlement_demotions:
+            logger.warning(
+                "event=settlement_vote_demoted reason=%s source_index=%d stance=%+.2f event_date=%s",
+                demotion_reason, idx, stances[idx], settlement_dates[idx],
+            )
+        if agg.settlement_suppressed:
+            logger.warning("event=settlement_suppressed reason=%s sources=%d", agg.suppression_reason, agg.n)
 
     if agg is None:
         return PoolAggregateResponse(
@@ -1187,6 +1226,9 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         mean=round(agg.mean, 4), std=round(agg.std, 4),
         ci_low=round(agg.ci_low, 4), ci_high=round(agg.ci_high, 4),
         articles_used=agg.n, settled=agg.settled,
+        settlement_suppressed=agg.settlement_suppressed,
+        settlement_suppression_reason=agg.suppression_reason,
+        settlement_votes_demoted=len(agg.settlement_demotions),
     )
 
 

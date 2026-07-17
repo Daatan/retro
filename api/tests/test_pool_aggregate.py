@@ -96,16 +96,32 @@ class TestRecency:
 
 class TestSettlement:
     async def test_settlement_override_pins_through_the_endpoint(self):
+        # Dated anchors: the endpoint runs with settlement_revalidate on (the
+        # prod default), so an undated positive vote no longer counts — see
+        # test_settlement_revalidation.py for the demotion cases.
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[
+                _source(stance=0.95, settled=True, settlement_event_date="2026-07-09"),
+                _source(stance=0.9, settled=True, settlement_event_date="2026-07-09"),
+            ],
+        ))
+        assert resp.settled is True
+        assert resp.mean == pytest.approx(api_settings.settlement_stance)
+
+    async def test_undated_positive_votes_are_demoted_through_the_endpoint(self):
         resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
             sources=[
                 _source(stance=0.95, settled=True, published_date=None),
                 _source(stance=0.9, settled=True, published_date=None),
             ],
         ))
-        assert resp.settled is True
-        assert resp.mean == pytest.approx(api_settings.settlement_stance)
+        assert resp.settled is False
+        assert resp.settlement_votes_demoted == 2
 
-    async def test_direction_guard_suppresses_early_settlement(self):
+    async def test_early_undated_negative_settlement_is_still_suppressed(self):
+        # Same observable as the old pin-level direction guard, new mechanism:
+        # each undated pre-deadline negative is demoted per-vote
+        # (undated_foreclosure) instead of the pin being blocked wholesale.
         resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
             sources=[
                 _source(stance=-0.95, settled=True, published_date=None),
@@ -115,3 +131,4 @@ class TestSettlement:
             claim_deadline="2099-01-01",
         ))
         assert resp.settled is False
+        assert resp.settlement_votes_demoted == 2

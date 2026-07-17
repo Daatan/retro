@@ -58,15 +58,31 @@ def test_an_event_dated_after_the_article_is_demoted():
     assert out.stance == 1.0
 
 
-def test_negative_settlements_are_exempt():
-    """"Became permanently impossible" has no occurrence date by definition —
-    event_date belongs to the related event itself, which never happened. Dating
-    it would misfire enforce_deadline_arithmetic (which flips confident negatives
-    dated within the deadline); premature negative pins are guarded separately by
-    settlement_direction_allowed."""
+def test_an_undated_negative_settlement_survives():
+    """An impossibility that comes only from time expiring has nothing to date —
+    the missing-date demotion applies to positive settlements only. Premature
+    negative pins are guarded by settlement_direction_allowed and per-vote
+    revalidation at aggregation time."""
     [out] = enforce_settlement_event_date([pred(-1.0, None, settled=True)], ARTICLE_DATE)
     assert out.settled is True
     assert out.stance == -1.0
+
+
+def test_a_dated_foreclosing_negative_survives_with_its_date():
+    """"Spain beat France in Tuesday's semi-final" — the foreclosing event's
+    date anchors the negative settlement and must be preserved for
+    aggregation-time revalidation."""
+    [out] = enforce_settlement_event_date([pred(-1.0, "2026-07-09", settled=True)], ARTICLE_DATE)
+    assert out.settled is True
+    assert out.event_date == "2026-07-09"
+
+
+def test_a_future_dated_negative_settlement_is_demoted():
+    """A "foreclosure" dated after the article is a schedule, not a fact —
+    same reasoning as the positive future-dated check."""
+    [out] = enforce_settlement_event_date([pred(-1.0, "2026-07-15", settled=True)], ARTICLE_DATE)
+    assert out.settled is False
+    assert out.stance == -1.0  # still votes as ordinary evidence
 
 
 # ── only settlement claims are touched ────────────────────────────────────────

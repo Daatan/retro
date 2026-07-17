@@ -79,7 +79,7 @@ Examples — related event: "Assad regime falls in Syria":
   "Rebels have taken Damascus; Assad has fled the country" \
                                                → stance +1.0, certainty 0.95, settled true (+ event_date — see SETTLED)
   "Assad crushed the uprising; the rebellion is over" \
-                                               → stance −1.0, certainty 0.95, settled true (no event_date — see SETTLED)
+                                               → stance −1.0, certainty 0.95, settled true (+ event_date of the crushing if the article dates it — see SETTLED)
 
 Note: even factual/contextual sentences have a stance if they imply a direction.
 Do NOT use stance to indicate good/bad — only more/less likely to happen.
@@ -122,6 +122,29 @@ Examples — related event: "Judge Alvarez is confirmed to the Supreme Court" (c
 Examples — related event: "Diaz wins the presidential runoff" (first round, then runoff):
   "Diaz leads first-round polling by 8 points"        → stance +0.2, certainty 0.3  (first round ≠ runoff win)
   "Diaz advances to the runoff after finishing first" → stance +0.4, certainty 0.5  (one stage cleared, runoff remains)
+
+## Single-winner contests — a rival's win settles the claim NO
+When the related event names ONE subject winning a contest that can have only one \
+winner (a tournament, a race, an election to a single office), a report that a \
+DIFFERENT contestant achieved that outcome — or eliminated the subject from \
+contention — is not merely bad news for the subject: it settles the related event \
+NEGATIVELY. The subject's outcome is now permanently impossible: stance −1.0, \
+certainty ≥ 0.9, settled true, event_date = the date of the foreclosing result (see \
+SETTLED). The stance belongs to the SUBJECT of the related event, not to whoever the \
+article celebrates — never read the excitement of a decisive result as support for \
+the contestant it eliminated. A defeat that does NOT eliminate the subject (a \
+group-stage loss, a setback with a path remaining) is ordinary negative-lean \
+evidence, never settled.
+
+Examples — related event: "France wins the 2026 World Cup" (article dated Wednesday 2026-07-15):
+  "Spain beat France 2-0 in Tuesday's semi-final to reach the final" \
+                                               → stance −1.0, certainty 0.95, settled true, event_date "2026-07-14", event_date_reference "Tuesday's" (France eliminated — the outcome is permanently impossible; the article's subject is Spain's win, but the stance is about FRANCE)
+  "France lost their opening group match 0-1" \
+                                               → stance −0.4, certainty 0.4, settled false (a non-terminal loss — France can still advance)
+
+Examples — related event: "England will win their World Cup semi-final on 2026-07-15":
+  "Argentina stun England with a late rally to reach the final" \
+                                               → stance −1.0, certainty 0.95, settled true, event_date "2026-07-15" (England's semi-final is decided — and lost; the triumphant tone is Argentina's, NOT support for England)
 
 ## Cited quantitative estimates — extract them as a distinct anchor
 When the article itself cites an explicit modeled probability, poll number, seat \
@@ -224,9 +247,13 @@ background about an earlier episode (a standing government, a title won in a pas
 season, a long-ago deal), not news of this question's outcome. Report your honest \
 stance, but do not settle. Never substitute the article's own publication date for \
 an event the article does not actually date. \
-A negative settlement (stance −1.0: the event became permanently impossible) is the \
-opposite case: the related event never occurred, so event_date stays EMPTY — never \
-date an impossibility with the date of whatever foreclosed it.
+A negative settlement (stance −1.0: the event became permanently impossible) is dated \
+by the FORECLOSING event instead: when the article dates the result that made the \
+outcome impossible — the rival's win, the elimination, the subject's death, the \
+withdrawal — put THAT date in event_date (and its verbatim relative expression, if \
+any, in event_date_reference). When the impossibility comes only from time expiring, \
+or the article gives no date for the foreclosing event, leave event_date empty — \
+never invent one.
 
 ### Numeric-threshold events — a mid-event tally is NOT settled
 When the related event is a threshold claim ("scores at least 8 goals", "wins more \
@@ -246,7 +273,7 @@ Examples — related event: "Messi scores at least 8 goals in the tournament" \
   "Messi and Mbappe are tied for the tournament lead with 6 goals each, group stage ongoing" \
                                                → stance −0.3, certainty 0.4, settled false (6 < 8, contest still open — a tally, not a verdict)
   "The tournament concluded on Sunday; Messi finished with 7 goals" \
-                                               → stance −1.0, certainty 0.95, settled true, no event_date (contest over, 7 < 8 is now permanent — the 8th goal never occurred, so there is no date for it)
+                                               → stance −1.0, certainty 0.95, settled true, event_date "2026-06-21", event_date_reference "on Sunday" (contest over, 7 < 8 is now permanent — dated by the tournament's conclusion, the event that foreclosed the 8th goal)
 
 ### Buried facts — extract settlement even when it's incidental to the article's main topic
 A clear past-tense statement of the RELATED EVENT can appear as a single supporting \
@@ -572,6 +599,14 @@ def enforce_deadline_arithmetic(
     that pin an estimate, and a hedged "might slip past the deadline" is a genuine judgement
     we have no business overriding. Magnitude and certainty are preserved; only the sign moves.
 
+    One carve-out: a SETTLED NEGATIVE on an ARRIVAL claim is exempt. Its ``event_date`` is
+    the FORECLOSING event's (the rival's win, the elimination — see the SETTLED prompt
+    section), not this claim's own occurrence, so the comparison above would read a correct
+    impossibility verdict dated within the deadline as "the event occurred in time" and flip
+    it to a false YES (the France-elimination trap). On a SURVIVAL claim a settled negative
+    means the underlying event *did* occur — its date is the occurrence itself, and the
+    arithmetic stays valid.
+
     Fail-open in every direction: no deadline, no ``event_date``, an unparseable date, or an
     unclassified claim leaves the prediction exactly as the model returned it.
     """
@@ -584,6 +619,9 @@ def enforce_deadline_arithmetic(
         if event_date is None:
             continue
         if abs(p.stance) < 0.9 and not p.settled:
+            continue
+        if p.settled and p.stance < 0 and claim_direction == "arrival":
+            # Dated foreclosure, not a dated occurrence — see docstring.
             continue
 
         within = event_date <= deadline
@@ -618,36 +656,39 @@ def enforce_settlement_event_date(
     signature of historical background, which the prompt already forbids — but
     prompts are advisory, so this is the enforcement.
 
-    Applies to POSITIVE settlements only (stance > 0: the event occurred).
-    A negative settlement asserts the event became permanently impossible — the
-    related event never happened, so it has no ``event_date`` by definition
-    (and giving it one would misfire :func:`enforce_deadline_arithmetic`, which
-    reads ``event_date`` as the occurrence date and flips confident negatives
-    dated within the deadline). Premature negative pins have their own guard:
-    ``settlement_direction_allowed`` (aggregation.py).
+    A POSITIVE settlement (stance > 0: the event occurred) must date the
+    occurrence itself. A NEGATIVE settlement dates the FORECLOSING event when
+    the article dates it (the rival's win, the elimination — see the SETTLED
+    prompt section), but the date stays optional: an impossibility that comes
+    only from time expiring has nothing to date, and premature negative pins
+    have their own guard (``settlement_direction_allowed``, aggregation.py —
+    and, at aggregation time, per-vote revalidation). Note
+    :func:`enforce_deadline_arithmetic` exempts settled arrival-claim negatives
+    for exactly this reason: their date is a foreclosure, not an occurrence.
 
-    Two deterministic checks; a claim failing either keeps its stance and
-    certainty (it still votes as ordinary evidence) but loses ``settled``:
+    Deterministic checks; a claim failing one keeps its stance and certainty
+    (it still votes as ordinary evidence) but loses ``settled``:
 
-      - no parseable ``event_date``: the settlement is unanchored — demote.
-      - ``event_date`` after the article's own date: the article "reports" an
-        outcome that hadn't happened yet when it was written — a scheduled
-        event, not an accomplished fact — demote.
+      - POSITIVE with no parseable ``event_date``: unanchored — demote.
+      - ``event_date`` (either sign) after the article's own date: the article
+        "reports" an outcome that hadn't happened yet when it was written — a
+        scheduled event, not an accomplished fact — demote.
 
     Unlike :func:`enforce_deadline_arithmetic` this deliberately fails CLOSED on
-    a missing date. The cost of a wrong demotion is a slower settlement pin (the
-    estimate still moves on the stance); the cost of a wrong settlement is a
-    market stuck at 97% on history — asymmetric, so the date is mandatory.
+    a positive settlement's missing date. The cost of a wrong demotion is a
+    slower settlement pin (the estimate still moves on the stance); the cost of
+    a wrong settlement is a market stuck at 97% on history — asymmetric, so the
+    date is mandatory there.
     Missing/unparseable ``article_date`` skips only the future-dated check.
     """
     article = _parse_iso_date(article_date)
     for p in predictions:
-        if not p.settled or p.stance <= 0:
+        if not p.settled:
             continue
         event_date = _parse_iso_date(p.event_date)
-        if event_date is None:
+        if p.stance > 0 and event_date is None:
             reason = "missing_event_date"
-        elif article is not None and event_date > article:
+        elif event_date is not None and article is not None and event_date > article:
             reason = "event_date_after_article"
         else:
             continue

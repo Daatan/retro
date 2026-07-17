@@ -30,7 +30,7 @@ class PredictionExtraction(BaseModel):
     claim: str = Field(description="One-sentence neutral summary in English")
     stance: float = Field(ge=-1.0, le=1.0, description="Directional outlook: -1=event won't happen, +1=event will happen")
     certainty: float = Field(ge=0.0, le=1.0, description="Linguistic confidence: 0=very hedged, 1=absolute")
-    settled: Optional[bool] = Field(default=None, description="True when the source reports the outcome as an accomplished fact (event occurred, or became permanently impossible) — not a prediction, however confident. A POSITIVE settlement (event occurred) must be accompanied by event_date; one without a parseable event_date, or dated after the article itself, is demoted to ordinary evidence in code (enforce_settlement_event_date). A negative settlement (became impossible) carries no event_date — the event never occurred")
+    settled: Optional[bool] = Field(default=None, description="True when the source reports the outcome as an accomplished fact (event occurred, or became permanently impossible) — not a prediction, however confident. A POSITIVE settlement (event occurred) must be accompanied by event_date; one without a parseable event_date, or dated after the article itself, is demoted to ordinary evidence in code (enforce_settlement_event_date). A NEGATIVE settlement (became impossible) carries the FORECLOSING event's date in event_date when the article dates it — the rival's win, the elimination, the death that made the outcome impossible; leave it empty when the impossibility comes only from time expiring or the foreclosure is undated")
     quantitative_estimate: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
         description="An explicit modeled probability, poll number, or market price the "
@@ -54,7 +54,9 @@ class PredictionExtraction(BaseModel):
                     "itself occurs or occurred. Resolve relative references ('on Friday', "
                     "'tomorrow', 'next week') against the article's date to an absolute "
                     "calendar date. The date of the event in the claim — NOT of any adjacent "
-                    "or downstream event. Omit entirely when the article states no date for it.",
+                    "or downstream event. For a NEGATIVE settlement, the date of the "
+                    "FORECLOSING event that made the outcome impossible (see settled). "
+                    "Omit entirely when the article states no date for it.",
     )
     event_date_reference: Optional[str] = Field(
         default=None,

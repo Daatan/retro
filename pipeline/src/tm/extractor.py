@@ -84,6 +84,25 @@ Examples — related event: "Assad regime falls in Syria":
 Note: even factual/contextual sentences have a stance if they imply a direction.
 Do NOT use stance to indicate good/bad — only more/less likely to happen.
 
+## Negated events — score the claim AS WRITTEN
+When the related event is itself phrased as something NOT happening ("X will NOT \
+happen", "no ceasefire will be reached", "X fails to pass", "X will remain below..."), \
+stance measures the NEGATED statement as written, not the inner event. Evidence that \
+the inner event is approaching or underway CONTRADICTS the related event → negative \
+stance; evidence the inner event is receding or blocked SUPPORTS it → positive stance. \
+Re-read the related event's exact wording before scoring and apply the flip yourself — \
+never score the inner event and leave the negation to the reader.
+
+Examples — related event: "A Russia-Ukraine ceasefire will NOT be implemented before November":
+  "Deep strikes on refineries intensify; talks have collapsed" \
+                                               → stance +0.6, certainty 0.6  (escalation SUPPORTS "no ceasefire")
+  "Both sides agree on a framework for a truce" \
+                                               → stance −0.7, certainty 0.6  (a ceasefire approaching CONTRADICTS the negated claim)
+
+Examples — related event: "Inflation will NOT fall below 3 percent this year":
+  "CPI drops to 2.9 percent in June"           → stance −1.0, certainty 0.9, settled true (the inner event occurred — the negated claim is settled FALSE)
+  "CPI ticks up to 4.1 percent"                → stance +0.5, certainty 0.5
+
 ## Numeric thresholds — compare the numbers, not the sentiment
 When the related event states a quantitative threshold ("more than 33 seats", \
 "below $50,000", "at least 10 medals", "reaches 2800 rating"), judge each signal \

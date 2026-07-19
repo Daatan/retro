@@ -169,6 +169,16 @@ class ApiSettings(BaseSettings):
     # restores the legacy trust-the-flags behavior without a deploy (restart
     # oracle-api.service after changing it).
     settlement_revalidate: bool = True
+    # A dated NON-occurrence settlement vote is honored at most this many days
+    # past a closed claim window (settlement_vote_validity). Within the grace it
+    # is the flipped late-arrival class (the Knesset dissolving July 17 against
+    # a July 15 deadline settles NO — the occurrence itself proves the miss);
+    # beyond it, it is the repeatable-event non-sequitur the 2026-07-19 pool
+    # audit caught (July-2026 US-strikes articles settling "US bombs Iran in
+    # 2025" NO at 0.93+ certainty — an out-of-window occurrence says nothing
+    # about the window, and ground truth there was YES). Undated expiry votes
+    # are unaffected.
+    settlement_post_deadline_grace_days: int = 14
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.

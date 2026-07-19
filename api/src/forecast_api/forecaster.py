@@ -985,6 +985,7 @@ async def _run_forecast_inner(
         claim_created_at=req.claim_created_at,
         claim_archetype=req.claim_archetype,
         settlement_revalidate=settings.settlement_revalidate,
+        settlement_post_deadline_grace_days=settings.settlement_post_deadline_grace_days,
     )
     if agg is not None:
         for idx, demotion_reason in agg.settlement_demotions:
@@ -1197,6 +1198,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         claim_created_at=req.claim_created_at,
         claim_archetype=req.claim_archetype,
         settlement_revalidate=settings.settlement_revalidate,
+        settlement_post_deadline_grace_days=settings.settlement_post_deadline_grace_days,
     )
     if agg is not None:
         for idx, demotion_reason in agg.settlement_demotions:

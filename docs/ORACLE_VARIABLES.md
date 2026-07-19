@@ -143,7 +143,13 @@ settlement vote re-proves its anchor inside `aggregate_pool()` on every call —
   pin-level `settlement_direction_allowed` wrongly suppressed; the per-vote rules replace
   that guard on this path). An undated non-occurrence vote before/without a known deadline
   is demoted (`undated_foreclosure`) — deliberately fail-closed on the anchor, unlike the
-  old fail-open pin guard (the F-35/Netanyahu background-history class).
+  old fail-open pin guard (the F-35/Netanyahu background-history class). A **dated** anchor
+  more than `settlement_post_deadline_grace_days` (default 14) past a closed window is
+  demoted too (`post_window_occurrence`): an out-of-window occurrence of a repeatable event
+  says nothing about the window — the 2026-07-19 pool audit's "US bombs Iran in 2025" rows
+  were settled NO at 0.93+ by July-2026 strike articles while ground truth was YES. Within
+  the grace it is the flipped late-arrival class (Knesset dissolving July 17 vs a July 15
+  deadline) and stands.
 
 Demoted votes keep their stance (ordinary evidence; `event=settlement_vote_demoted` with a
 reason per row). Valid votes in **both** directions suppress the pin entirely
@@ -180,7 +186,7 @@ canonical case). The pin then requires `settlement_min_sources` **unanimous** va
 | `mean, std, ci_low, ci_high` | weighted-mean logit pool + dispersion, stance scale |
 | `evidence_mass = Σ weight` | thin-evidence CI widening (floor 0.5, inflation 0.45) |
 | `relevance_mass = Σ relevance²` | off-topic abstention (floor 0.05) |
-| `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — **revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at (scheduled), claim_deadline]` and ≤ its article's date; a non-occurrence vote needs a closed window or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
+| `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — **revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at (scheduled), claim_deadline]` and ≤ its article's date; a non-occurrence vote needs a closed window (dated anchors at most `settlement_post_deadline_grace_days` past it) or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
 | `insufficient_data, reason, placeholder, articles_used/found` | abstention encoding |
 
 Config constants (12): `recency_half_life_days=7`, `recency_floor=0.02`,

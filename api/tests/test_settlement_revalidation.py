@@ -252,6 +252,60 @@ class TestKnessetFlipResidue:
         assert agg.mean < 0
 
 
+class TestPostWindowOccurrence:
+    """USA-bomb-Iran-2025 (2026-07-19 pool audit): three prod rows settled NO at
+    0.925–0.938 certainty by articles reporting the US actively bombing Iran in
+    July 2026 — anchors dated ~7 months past the closed 2025 window, on a
+    REPEATABLE event (and ground truth for 2025 was YES). An out-of-window
+    occurrence must not settle a closed window; only the small late-arrival
+    grace (the Knesset class) is honored."""
+
+    def test_dated_anchor_far_past_the_closed_window_is_demoted(self):
+        assert settlement_vote_validity(
+            -1.0, "2026-07-18", "2026-07-18", "arrival", "2025-12-31", None, None,
+            today="2026-07-19",
+        ) == "post_window_occurrence"
+
+    def test_dated_anchor_within_the_grace_still_counts(self):
+        # The Knesset flip residue: dissolution July 17 vs a July 15 deadline.
+        assert settlement_vote_validity(
+            -1.0, "2020-07-17", "2020-07-17", "arrival", "2020-07-15", None, None,
+            today="2026-07-19",
+        ) is None
+
+    def test_grace_boundary_is_inclusive(self):
+        assert settlement_vote_validity(
+            -1.0, "2025-01-14", "2025-01-14", "arrival", "2024-12-31", None, None,
+            today="2026-07-19",
+        ) is None  # exactly deadline + 14 days
+        assert settlement_vote_validity(
+            -1.0, "2025-01-15", "2025-01-15", "arrival", "2024-12-31", None, None,
+            today="2026-07-19",
+        ) == "post_window_occurrence"
+
+    def test_iran_pool_shape_no_longer_pins(self):
+        # The three audited rows, as a recompute would replay them.
+        agg = _pool(
+            [-1.0, -1.0, -1.0],
+            [True] * 3,
+            ["2026-07-08", "2026-07-18", "2026-07-18"],
+            published=["2026-07-08", "2026-07-18", "2026-07-18"],
+            claim_direction="arrival", claim_deadline="2025-12-31",
+        )
+        assert agg.settled is False
+        assert {r for _, r in agg.settlement_demotions} == {"post_window_occurrence"}
+        assert len(agg.settlement_demotions) == 3
+
+    def test_undated_expiry_votes_still_pin_the_same_closed_window(self):
+        # The honest way to settle NO on a closed window is unaffected.
+        agg = _pool(
+            [-1.0, -1.0], [True, True], [None, None],
+            claim_direction="arrival", claim_deadline="2025-12-31",
+        )
+        assert agg.settled is True
+        assert agg.mean < 0
+
+
 class TestLegitimatePinsStillPin:
     """The 8 sound pins from the audit must survive (over-tightening risk)."""
 

@@ -20,7 +20,7 @@ Stance is on [-1, 1] (−1 = event won't happen, +1 = will happen); probability 
 from __future__ import annotations
 
 import math
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import NamedTuple, Optional, Sequence
 
 
@@ -195,6 +195,7 @@ def settlement_vote_validity(
     claim_created_at: Optional[str],
     claim_archetype: Optional[str],
     today: Optional[str] = None,
+    post_deadline_grace_days: int = 14,
 ) -> Optional[str]:
     """Why this single settlement vote must NOT count — or ``None`` if it stands.
 
@@ -225,6 +226,16 @@ def settlement_vote_validity(
       settles "France wins" NO five days before the final). An undated
       non-occurrence vote before (or without) a known deadline has no anchor —
       that is the F-35/Netanyahu background-history class — and is demoted.
+      A non-occurrence vote ANCHORED on an occurrence dated far past the
+      closed window is a non-sequitur, not an expiry observation: the
+      2026-07-19 pool audit's "US bombs Iran in 2025" rows were settled NO at
+      0.93+ by articles reporting the US actively bombing Iran in July 2026 —
+      an out-of-window occurrence of a REPEATABLE event says nothing about the
+      window (and ground truth there was YES). Only a small grace past the
+      deadline (``post_deadline_grace_days``) is honored, for the flipped
+      late-arrival class where the occurrence itself proves the miss: the
+      Knesset dissolving July 17 against a July 15 deadline settles NO, the
+      same claim "settled" by a strike seven months later does not.
 
     Every individual check is fail-open on absent metadata (no deadline → no
     deadline comparison), but the date requirement itself is fail-closed: an
@@ -241,14 +252,27 @@ def settlement_vote_validity(
     if is_occurrence_vote:
         if event is None:
             return "missing_event_date"
+        if deadline is not None and event > deadline:
+            return "event_after_deadline"
     else:
-        if deadline is not None and deadline <= ref:
-            return None  # window closed — absence of the event is the anchor
+        window_closed = deadline is not None and deadline <= ref
         if event is None:
+            if window_closed:
+                return None  # window closed — absence of the event is the anchor
             return "undated_foreclosure"
-
-    if deadline is not None and event > deadline:
-        return "event_after_deadline"
+        if deadline is not None and event > deadline:
+            if not window_closed:
+                # A foreclosure dated after a still-open window forecloses
+                # nothing in it.
+                return "event_after_deadline"
+            if event > deadline + timedelta(days=post_deadline_grace_days):
+                # Dated anchor far past the closed window — the repeatable-event
+                # non-sequitur ("it is happening NOW"), not evidence of
+                # in-window absence. Undated expiry votes (event None above)
+                # remain the honest way to settle NO on a closed window.
+                return "post_window_occurrence"
+            # Within grace: the flipped late arrival — the occurrence itself
+            # proves the event missed the window.
     if claim_archetype == "scheduled":
         # Both directions: a dated fact from before this claim existed belongs
         # to an EARLIER instance of the scheduled event — it can neither settle
@@ -428,6 +452,7 @@ def aggregate_pool(
     claim_created_at: Optional[str] = None,
     claim_archetype: Optional[str] = None,
     settlement_revalidate: bool = False,
+    settlement_post_deadline_grace_days: int = 14,
 ) -> Optional[PoolAggregateResult]:
     """Pool a set of already-extracted, already-weighted per-source signals
     into a final estimate: the relevance off-topic safety net, logit
@@ -530,6 +555,7 @@ def aggregate_pool(
                 settlement_event_dates[i] if settlement_event_dates else None,
                 published_dates[i] if published_dates else None,
                 claim_direction, claim_deadline, claim_created_at, claim_archetype,
+                post_deadline_grace_days=settlement_post_deadline_grace_days,
             )
             if reason is not None:
                 demotions.append((i, reason))

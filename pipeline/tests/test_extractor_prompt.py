@@ -40,6 +40,22 @@ def test_single_winner_contest_examples_present():
     assert "a non-terminal loss" in PROMPT
 
 
+def test_negated_events_section_present():
+    """The negated-claim sign-inversion class (2026-07-19 pool audit): a Kyiv
+    Post escalation op-ed scored stance −0.529 on "a ceasefire will NOT be
+    implemented" — the extractor scored the inner event (ceasefire happens)
+    and left the negation to the reader; its own extracted claims supported
+    the claim as written."""
+    assert "## Negated events — score the claim AS WRITTEN" in PROMPT
+    assert "never score the inner event and leave the negation to the reader" in PROMPT
+
+
+def test_negated_events_examples_present():
+    assert "ceasefire will NOT be implemented" in PROMPT
+    assert 'escalation SUPPORTS "no ceasefire"' in PROMPT
+    assert "the negated claim is settled FALSE" in PROMPT
+
+
 def test_foreclosing_negative_date_rule_present():
     """Negative settlements are now dated by the foreclosing event (needed by
     aggregation-time revalidation); the old rule said to leave them undated."""

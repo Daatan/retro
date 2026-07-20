@@ -31,11 +31,12 @@ from tm.config import settings
 from tm.llm import complete_structured
 from tm.models import GatekeeperOutput
 
-MODELS = [
+MODELS = list(dict.fromkeys([
     "bedrock/amazon.nova-micro-v1:0",
     "bedrock/amazon.nova-lite-v1:0",
+    "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0",
     settings.extractor_model,  # whatever's live — the Haiku override on oracle-api, or the default
-]
+]))  # deduped: settings.extractor_model resolves to one of the others in most environments
 
 # ~1,200 words of filler, comfortably over every publicly documented Bedrock/Anthropic
 # minimum cacheable-prefix size — this only needs to be long and IDENTICAL across both
@@ -53,9 +54,15 @@ async def _probe(model: str) -> None:
     try:
         for call_num in (1, 2):
             try:
+                # max_tokens must be comfortably above what GatekeeperOutput's schema
+                # needs in MD_JSON mode (reasoning text + JSON) — 50 was measured to
+                # cause a truncated/failed generation that instructor's retry wraps
+                # into a misleading "litellm.Timeout" with an implausible
+                # "time taken=0.001 seconds", which looks exactly like an unsupported
+                # cache breakpoint but isn't. Confirmed: 100+ succeeds reliably.
                 _, usage = await complete_structured(
                     model, GatekeeperOutput, "Article: a routine local council meeting.",
-                    max_tokens=50, timeout=30, cached_prefix=CACHED_PREFIX,
+                    max_tokens=200, timeout=30, cached_prefix=CACHED_PREFIX,
                 )
             except Exception as exc:  # noqa: BLE001 — report, don't let one model's failure stop the rest
                 print(f"  call {call_num}: EXCEPTION — {type(exc).__name__}: {exc}")

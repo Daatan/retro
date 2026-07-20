@@ -222,7 +222,8 @@ class TestCompleteStructuredPromptCaching:
         return captured
 
     async def test_cache_disabled_sends_one_flat_concatenated_string(self, monkeypatch):
-        """Default (enable_prompt_cache=False): must NOT silently drop cached_prefix —
+        """With the flag off (verified on by default, but this must still hold for any
+        environment/rollback that disables it): must NOT silently drop cached_prefix —
         content has to be the full prefix+prompt text, byte-identical to the single
         PROMPT string this used to be before the split. This is the exact bug caught
         while writing this test: an earlier draft sent `prompt` alone here, which

@@ -13,10 +13,14 @@ class Settings(BaseSettings):
     ground_truth_model: str = "bedrock/amazon.nova-lite-v1:0"
 
     # Kill-switch for Bedrock/Anthropic prompt caching (llm.py::complete_structured's
-    # cached_prefix). Off by default: per-model cache support on Bedrock isn't verified
-    # yet (see docs/PROMPT_CACHING.md) — flip on only after the smoke test passes
-    # against live traffic for the model(s) in question.
-    enable_prompt_cache: bool = False
+    # cached_prefix). Verified ON: smoke_test_prompt_cache.py confirmed reliable
+    # cache_read/cache_creation token accounting against live Bedrock for Nova Micro
+    # (gatekeeper) and the live Haiku extractor override, using the real prompts and
+    # schemas (not synthetic ones) — 4/4 clean runs each, ~90-93% of input tokens
+    # landing in the cached prefix. See docs/PROMPT_CACHING.md for the full results
+    # and the one unrelated finding (a pre-existing Nova Lite JSON-formatting quirk,
+    # independent of caching) surfaced while verifying this.
+    enable_prompt_cache: bool = True
 
     # Optional: override API base/key (for Ollama or other OpenAI-compatible backends)
     model_api_base: str = ""

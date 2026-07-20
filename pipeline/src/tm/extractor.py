@@ -20,7 +20,9 @@ Extract ALL of the following:
 - Implied directional views: "the economy is heading toward...", "pressure is mounting"
 - Factual reports whose content logically implies an outcome — e.g. reporting that \
   troops are advancing implies a battle outcome; reporting that negotiations collapsed \
-  implies a deal is less likely. INFER the implication.
+  implies a deal is less likely. INFER the implication — but infer only the implication \
+  the report's own subject and target carry; a capability or an intent is not an \
+  occurrence (see below).
 - Quotes from officials, analysts, or experts that imply a position
 - Vague sentiment that colors likelihood: "things are deteriorating", "a breakthrough \
   looks distant"
@@ -61,6 +63,35 @@ Examples — related event: "Candidate A wins contest C by date D":
   "Contest C is confirmed to take place on schedule" → no extraction (occurrence ≠ outcome)
   "A major rival of Candidate A withdrew from contest C" → stance +0.4, certainty 0.5
   "Candidate A cleared the previous stage of contest C"  → stance +0.2, certainty 0.3
+
+## Capability and intent are not occurrence — match the TARGET, not the skill
+Evidence that a subject CAN do something, has done it to a DIFFERENT target, is \
+building toward it, or says it INTENDS to do it, is not evidence that it has done or \
+will do it to THIS target within THIS deadline. A demonstrated capability, a new \
+weapon or product, a success against another target, a stated ambition, or a threat is \
+a PRECONDITION of the related event, never the event itself: it raises likelihood \
+weakly at most (|stance| <= 0.3, certainty <= 0.4) and is NEVER settled. The trap is an \
+article about target B that showcases exactly the skill the claim needs against target \
+A — the claim you write then has no target in it at all, which is the tell. Name the \
+specific target, action and deadline in the related event and check the article reports \
+THAT one; never let a capability, an intent, or a success against another target stand \
+in for the occurrence the claim asks about.
+
+Examples — related event: "Ukraine will successfully strike the Kerch Bridge by August 6, 2026":
+  "Ukraine has demonstrated the capability to destroy major bridges using upgraded drones" \
+                                               → stance +0.2, certainty 0.3, settled false (a capability, not a strike on the Kerch Bridge)
+  "Ukrainian drones struck a Russian oil refinery and a military airfield overnight" \
+                                               → no extraction (a different target — the skill is shared, the event is not)
+  "Ukrainian officials vowed the Kerch Bridge would be hit again" \
+                                               → stance +0.3, certainty 0.3, settled false (stated intent, not an occurrence)
+  "Explosions damaged the Kerch Bridge roadway on Tuesday, halting traffic" \
+                                               → stance +1.0, certainty 0.95, settled true, event_date resolved from "on Tuesday" (this target, this action)
+
+Examples — related event: "Company X will launch a commercial quantum computer by 2027":
+  "Company X demonstrated error correction on a 100-qubit test chip" \
+                                               → stance +0.2, certainty 0.3, settled false (a capability milestone, not a commercial launch)
+  "Company X opened orders for its first commercial quantum system" \
+                                               → stance +0.9, certainty 0.8, settled false (the launch itself, imminent — not yet an accomplished fact)
 
 ## STANCE — the most important field
 Stance measures how strongly this signal implies the RELATED EVENT will occur.
@@ -300,7 +331,9 @@ clause inside an article whose main subject is something else entirely (e.g. a p
 about downstream diplomatic fallout that mentions, in passing, that the event already \
 happened). Scan the WHOLE article, not just the headline or opening paragraph — extract \
 the fact and mark settled true regardless of how minor its role in the article is. \
-Do not require the fact to be the article's primary subject to count it as settled.
+Do not require the fact to be the article's primary subject to count it as settled. \
+A statement of capability, intent, or a similar event elsewhere is not a past-tense \
+report of THIS event — see the capability section above.
 
 Examples — related event: "Peter Magyar will officially assume the role of Prime Minister \
 of Hungary by December 31, 2026":

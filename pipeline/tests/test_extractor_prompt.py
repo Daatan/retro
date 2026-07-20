@@ -77,7 +77,15 @@ def test_capability_vs_occurrence_section_present():
 
 
 def test_capability_vs_occurrence_examples_present():
-    assert "Ukraine has demonstrated the capability to destroy major bridges" in PROMPT
+    """Examples are deliberately de-named (Force F / Bridge K / Company X), matching
+    the house convention used by "Candidate A wins contest C" and "Company X exits the
+    European market". Measured on Haiku 4.5, 10 cases x n=3: de-naming scored 20/30 vs
+    23/30 for the original named version — the entire gap being the intent/vow example
+    (stance +0.30 -> +0.60, 3/3 -> 0/3), which replicated across two variants. Shipped
+    anyway for maintainability; if intent cases regress in a pool audit, restoring a
+    written-out named vow example is the first thing to try. See PR #302."""
+    assert "Force F has demonstrated the capability to destroy major bridges" in PROMPT
+    assert "Kerch" not in PROMPT
     assert "a different target — the skill is shared, the event is not" in PROMPT
     assert "stated intent, not an occurrence" in PROMPT
     assert "a capability milestone, not a commercial launch" in PROMPT

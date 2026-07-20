@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     extractor_model: str = "bedrock/amazon.nova-lite-v1:0"
     ground_truth_model: str = "bedrock/amazon.nova-lite-v1:0"
 
+    # Kill-switch for Bedrock/Anthropic prompt caching (llm.py::complete_structured's
+    # cached_prefix). Off by default: per-model cache support on Bedrock isn't verified
+    # yet (see docs/PROMPT_CACHING.md) — flip on only after the smoke test passes
+    # against live traffic for the model(s) in question.
+    enable_prompt_cache: bool = False
+
     # Optional: override API base/key (for Ollama or other OpenAI-compatible backends)
     model_api_base: str = ""
     model_api_key: str = ""

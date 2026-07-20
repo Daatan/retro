@@ -10,18 +10,24 @@ sensitive even to whitespace changes in this section, so keep its text stable
 and re-run the A/B before rewording.
 """
 
-from tm.extractor import PROMPT
+from tm.extractor import PROMPT_PREFIX, PROMPT_SUFFIX
+
+# PROMPT was split into PROMPT_PREFIX (fixed instructions, cacheable, no .format()
+# placeholders) + PROMPT_SUFFIX (article/variable fields + output-format spec) so
+# llm.py::complete_structured can mark PROMPT_PREFIX as a Bedrock/Anthropic cache
+# breakpoint. All the content this file asserts on lives in PROMPT_PREFIX_PREFIX; the
+# placeholder-formatting test below now exercises PROMPT_SUFFIX instead.
 
 
 def test_adjacent_events_section_present():
-    assert "## THE EVENT ITSELF vs. ADJACENT EVENTS" in PROMPT
-    assert "it is NEVER settled and never carries the full +-1.0" in PROMPT
-    assert "could a fact-checker cite this article alone" in PROMPT
+    assert "## THE EVENT ITSELF vs. ADJACENT EVENTS" in PROMPT_PREFIX
+    assert "it is NEVER settled and never carries the full +-1.0" in PROMPT_PREFIX
+    assert "could a fact-checker cite this article alone" in PROMPT_PREFIX
 
 
 def test_adjacent_events_examples_present():
-    assert "a member leaving a party is not a party leaving the race" in PROMPT
-    assert "leadership change is not a market exit" in PROMPT
+    assert "a member leaving a party is not a party leaving the race" in PROMPT_PREFIX
+    assert "leadership change is not a market exit" in PROMPT_PREFIX
 
 
 def test_single_winner_contest_section_present():
@@ -29,15 +35,15 @@ def test_single_winner_contest_section_present():
     extracted as +1 settled FOR "France/England will win" (6 prod rows,
     2026-07-16 audit). The prompt previously had no rule mapping a rival's win
     to a negative settlement for the subject."""
-    assert "## Single-winner contests" in PROMPT
-    assert "it settles the related event NEGATIVELY" in PROMPT
-    assert "never read the excitement of a decisive result as support for" in PROMPT
+    assert "## Single-winner contests" in PROMPT_PREFIX
+    assert "it settles the related event NEGATIVELY" in PROMPT_PREFIX
+    assert "never read the excitement of a decisive result as support for" in PROMPT_PREFIX
 
 
 def test_single_winner_contest_examples_present():
-    assert "Spain beat France 2-0 in Tuesday's semi-final" in PROMPT
-    assert "Argentina stun England with a late rally" in PROMPT
-    assert "a non-terminal loss" in PROMPT
+    assert "Spain beat France 2-0 in Tuesday's semi-final" in PROMPT_PREFIX
+    assert "Argentina stun England with a late rally" in PROMPT_PREFIX
+    assert "a non-terminal loss" in PROMPT_PREFIX
 
 
 def test_negated_events_section_present():
@@ -46,14 +52,14 @@ def test_negated_events_section_present():
     implemented" — the extractor scored the inner event (ceasefire happens)
     and left the negation to the reader; its own extracted claims supported
     the claim as written."""
-    assert "## Negated events — score the claim AS WRITTEN" in PROMPT
-    assert "never score the inner event and leave the negation to the reader" in PROMPT
+    assert "## Negated events — score the claim AS WRITTEN" in PROMPT_PREFIX
+    assert "never score the inner event and leave the negation to the reader" in PROMPT_PREFIX
 
 
 def test_negated_events_examples_present():
-    assert "ceasefire will NOT be implemented" in PROMPT
-    assert 'escalation SUPPORTS "no ceasefire"' in PROMPT
-    assert "the negated claim is settled FALSE" in PROMPT
+    assert "ceasefire will NOT be implemented" in PROMPT_PREFIX
+    assert 'escalation SUPPORTS "no ceasefire"' in PROMPT_PREFIX
+    assert "the negated claim is settled FALSE" in PROMPT_PREFIX
 
 
 def test_capability_vs_occurrence_section_present():
@@ -70,10 +76,10 @@ def test_capability_vs_occurrence_section_present():
 
     The |stance| <= 0.3 cap here is deliberately TIGHTER than the adjacent-events
     section's <= 0.5. Do not harmonize them."""
-    assert "## Capability and intent are not occurrence" in PROMPT
-    assert "a PRECONDITION of the related event, never the event itself" in PROMPT
-    assert "|stance| <= 0.3, certainty <= 0.4) and is NEVER settled" in PROMPT
-    assert "never let a capability, an intent, or a success against another target stand" in PROMPT
+    assert "## Capability and intent are not occurrence" in PROMPT_PREFIX
+    assert "a PRECONDITION of the related event, never the event itself" in PROMPT_PREFIX
+    assert "|stance| <= 0.3, certainty <= 0.4) and is NEVER settled" in PROMPT_PREFIX
+    assert "never let a capability, an intent, or a success against another target stand" in PROMPT_PREFIX
 
 
 def test_capability_vs_occurrence_examples_present():
@@ -84,11 +90,11 @@ def test_capability_vs_occurrence_examples_present():
     (stance +0.30 -> +0.60, 3/3 -> 0/3), which replicated across two variants. Shipped
     anyway for maintainability; if intent cases regress in a pool audit, restoring a
     written-out named vow example is the first thing to try. See PR #302."""
-    assert "Force F has demonstrated the capability to destroy major bridges" in PROMPT
-    assert "Kerch" not in PROMPT
-    assert "a different target — the skill is shared, the event is not" in PROMPT
-    assert "stated intent, not an occurrence" in PROMPT
-    assert "a capability milestone, not a commercial launch" in PROMPT
+    assert "Force F has demonstrated the capability to destroy major bridges" in PROMPT_PREFIX
+    assert "Kerch" not in PROMPT_PREFIX
+    assert "a different target — the skill is shared, the event is not" in PROMPT_PREFIX
+    assert "stated intent, not an occurrence" in PROMPT_PREFIX
+    assert "a capability milestone, not a commercial launch" in PROMPT_PREFIX
 
 
 def test_capability_companion_clauses_present():
@@ -98,21 +104,21 @@ def test_capability_companion_clauses_present():
     past-tense clause and mark it settled — which is the shape of "Ukraine HAS
     DEMONSTRATED the capability...". Buried facts sits later in the prompt, so
     without its clause recency may favour it."""
-    assert "INFER the implication — but infer only the implication" in PROMPT
-    assert "the report's own subject and target carry" in PROMPT
-    assert "report of THIS event — see the capability section above" in PROMPT
+    assert "INFER the implication — but infer only the implication" in PROMPT_PREFIX
+    assert "the report's own subject and target carry" in PROMPT_PREFIX
+    assert "report of THIS event — see the capability section above" in PROMPT_PREFIX
 
 
 def test_foreclosing_negative_date_rule_present():
     """Negative settlements are now dated by the foreclosing event (needed by
     aggregation-time revalidation); the old rule said to leave them undated."""
-    assert "is dated by the FORECLOSING event" in PROMPT
-    assert "leave event_date empty" in PROMPT
+    assert "is dated by the FORECLOSING event" in PROMPT_PREFIX
+    assert "leave event_date empty" in PROMPT_PREFIX
 
 
 def test_prompt_placeholders_still_format():
     # Guards against unescaped braces sneaking into future prompt edits.
-    PROMPT.format(
+    PROMPT_SUFFIX.format(
         article_text="a",
         source_name="s",
         journalist="j",

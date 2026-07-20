@@ -9,7 +9,13 @@ from .llm import complete_structured
 
 logger = logging.getLogger(__name__)
 
-PROMPT = """\
+# Split into a fixed, cacheable PROMPT_PREFIX (identical on every single call, system-wide —
+# no article, no prediction, no .format() placeholders in it) and a PROMPT_SUFFIX that
+# carries the article body and the per-(article, prediction) variable fields, plus the
+# output-format spec. Together they are byte-identical to the single PROMPT string this
+# used to be — the split only changes how the two pieces are wired into the LLM call
+# (llm.py::complete_structured's cached_prefix), not the prompt content itself.
+PROMPT_PREFIX = """\
 You are a forensic prediction analyst. Your job is to extract EVERY signal — \
 explicit or implicit — that bears on whether the RELATED EVENT will occur.
 
@@ -436,7 +442,9 @@ Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certai
 signals if they are the only content available.
 The quote field must contain the sentence that implies the direction of the stance. \
 If no such sentence exists in the article, the stance must be 0.0.
+"""
 
+PROMPT_SUFFIX = """\
 Article:
 <article>
 {article_text}
@@ -522,7 +530,7 @@ async def extract_predictions(
     prose. Callers that don't classify claims may omit it — the prompt then says "not given"
     and behaviour is unchanged.
     """
-    prompt = PROMPT.format(
+    prompt = PROMPT_SUFFIX.format(
         article_text=article_text,
         source_name=source_name,
         journalist=journalist,
@@ -533,6 +541,7 @@ async def extract_predictions(
     )
     return await complete_structured(
         settings.extractor_model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
+        cached_prefix=PROMPT_PREFIX,
     )
 
 

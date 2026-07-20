@@ -2,7 +2,10 @@ from .models import GatekeeperOutput
 from .config import settings
 from .llm import complete_structured
 
-PROMPT = """\
+# Split into a fixed, cacheable PROMPT_PREFIX (identical on every call, no .format()
+# placeholders) and a PROMPT_SUFFIX carrying the article + per-call variable fields —
+# same rationale as extractor.py's split. Byte-identical prompt content overall.
+PROMPT_PREFIX = """\
 You are a relevance screener for a forecasting system. Below is a CLAIM (a specific
 predicted outcome) and an article. Judge the article by one question only:
 
@@ -58,7 +61,9 @@ hold equally under every possible outcome — it is on-topic background, not evi
 WHICH outcome will occur. Such articles still PASS the gate (is_prediction=true), but
 their relevance_score is capped: score them 0.3–0.5, never 0.7 or higher. Reserve
 0.7–1.0 for reporting that favors or disfavors a specific outcome.
+"""
 
+PROMPT_SUFFIX = """\
 Article:
 <article>
 {article_text}
@@ -115,7 +120,7 @@ async def check_is_prediction(
     defaults to False and only ever APPENDS to the prompt, so the text every existing caller sends —
     the entire /forecast path — is byte-for-byte unchanged.
     """
-    prompt = PROMPT.format(
+    prompt = PROMPT_SUFFIX.format(
         article_text=article_text,
         source_name=source_name,
         article_date=article_date,
@@ -125,4 +130,5 @@ async def check_is_prediction(
         prompt += _SHORT_FORM_OVERRIDE
     return await complete_structured(
         settings.gatekeeper_model, GatekeeperOutput, prompt, max_tokens=200, timeout=90,
+        cached_prefix=PROMPT_PREFIX,
     )

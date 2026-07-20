@@ -23,3 +23,13 @@ provider "aws" {
   # out-of-band box and the first PR must be a literal no-op plan. Tag
   # standardisation (e.g. ManagedBy) is a deliberate later change.
 }
+
+# AWS/Bedrock metrics for the models this pipeline calls (Nova Micro/Lite, the Haiku
+# extractor override) all publish in us-east-1 — confirmed via live get-metric-data,
+# not assumed — regardless of the eu-central-1 host running the calls (tm/config.py's
+# aws_region default is itself "us-east-1"). Same pattern as daatan's and
+# news-indexer's main.tf, which both already needed this alias for their billing alarms.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+}

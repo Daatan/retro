@@ -59,7 +59,10 @@ def is_rate_limit_error(exc: Exception) -> bool:
 def extract_usage(completion) -> dict:
     """Pull prompt/completion/total token counts off a litellm completion.
 
-    Returns ``{}`` when the completion carries no usage data.
+    Also pulls ``cache_read_input_tokens``/``cache_creation_input_tokens`` when the
+    backend reports them (Bedrock prompt caching) — 0 on any call that didn't use a
+    cached prefix, or on a model/backend that doesn't support it. Returns ``{}`` when
+    the completion carries no usage data at all.
     """
     if completion and hasattr(completion, "usage") and completion.usage:
         u = completion.usage
@@ -67,6 +70,8 @@ def extract_usage(completion) -> dict:
             "prompt_tokens": getattr(u, "prompt_tokens", 0),
             "completion_tokens": getattr(u, "completion_tokens", 0),
             "total_tokens": getattr(u, "total_tokens", 0),
+            "cache_read_input_tokens": getattr(u, "cache_read_input_tokens", 0) or 0,
+            "cache_creation_input_tokens": getattr(u, "cache_creation_input_tokens", 0) or 0,
         }
     return {}
 
@@ -103,6 +108,7 @@ async def complete_structured(
     *,
     max_tokens: int,
     timeout: int,
+    cached_prefix: str | None = None,
 ):
     """Make one structured-output LLM call and return ``(output, usage)``.
 
@@ -110,11 +116,30 @@ async def complete_structured(
     token-usage extraction shared by the gatekeeper, extractor and aggregator.
     Wrapped in :func:`retry_on_rate_limit`, so callers get the shared backoff for
     free. ``usage`` is ``{}`` when the backend reports none.
+
+    ``cached_prefix``, when given and ``settings.enable_prompt_cache`` is on, is sent
+    as its own Bedrock/Anthropic cache-marked content block ahead of ``prompt`` — for
+    text that's identical on every call (e.g. the extractor's fixed instructions),
+    so Bedrock bills a cache-read rate instead of full price on every repeat. When
+    the flag is off, or no prefix is given, ``content`` is the same flat string as
+    before caching existed — behaviour is unchanged.
     """
+    if cached_prefix and settings.enable_prompt_cache:
+        content = [
+            {"type": "text", "text": cached_prefix, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": prompt},
+        ]
+    else:
+        # Caching off (default) or no prefix given: fall back to one flat string —
+        # byte-identical to the single PROMPT this used to be before the
+        # PROMPT_PREFIX/PROMPT_SUFFIX split. Dropping cached_prefix here instead of
+        # concatenating it would silently ship every gatekeeper/extractor call
+        # without its fixed instructions — this branch must never do that.
+        content = (cached_prefix or "") + prompt
     kwargs = apply_routing(dict(
         model=model,
         response_model=response_model,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[{"role": "user", "content": content}],
         max_tokens=max_tokens,
         timeout=timeout,
         max_retries=1,

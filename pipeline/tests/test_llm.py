@@ -126,7 +126,16 @@ class TestExtractUsage:
         completion = SimpleNamespace(usage=SimpleNamespace(
             prompt_tokens=10, completion_tokens=5, total_tokens=15))
         assert llm.extract_usage(completion) == {
-            "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+            "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15,
+            "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
+
+    def test_parses_cache_token_counts_when_present(self):
+        completion = SimpleNamespace(usage=SimpleNamespace(
+            prompt_tokens=10, completion_tokens=5, total_tokens=15,
+            cache_read_input_tokens=7, cache_creation_input_tokens=3))
+        assert llm.extract_usage(completion) == {
+            "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15,
+            "cache_read_input_tokens": 7, "cache_creation_input_tokens": 3}
 
     def test_none_completion_returns_empty(self):
         assert llm.extract_usage(None) == {}
@@ -198,15 +207,66 @@ class TestCompleteText:
         assert calls["n"] == 2  # retried once
 
 
+class TestCompleteStructuredPromptCaching:
+    """cached_prefix wiring in complete_structured itself — the content shape sent
+    to the underlying instructor/litellm client, not just that callers pass the
+    right args (that's TestCallerDelegation below)."""
+
+    @staticmethod
+    def _patch_client(monkeypatch):
+        captured = {}
+        async def fake_create(**kwargs):
+            captured.update(kwargs)
+            return ("OUT", SimpleNamespace(usage=None))
+        monkeypatch.setattr(llm.client.chat.completions, "create_with_completion", fake_create)
+        return captured
+
+    async def test_cache_disabled_sends_one_flat_concatenated_string(self, monkeypatch):
+        """Default (enable_prompt_cache=False): must NOT silently drop cached_prefix —
+        content has to be the full prefix+prompt text, byte-identical to the single
+        PROMPT string this used to be before the split. This is the exact bug caught
+        while writing this test: an earlier draft sent `prompt` alone here, which
+        would have shipped gatekeeper/extractor calls missing all their instructions."""
+        monkeypatch.setattr(llm.settings, "enable_prompt_cache", False)
+        captured = self._patch_client(monkeypatch)
+
+        await llm.complete_structured(
+            "bedrock/x", dict, "SUFFIX", max_tokens=10, timeout=5, cached_prefix="PREFIX ",
+        )
+        assert captured["messages"] == [{"role": "user", "content": "PREFIX SUFFIX"}]
+
+    async def test_cache_enabled_splits_into_cache_marked_content_blocks(self, monkeypatch):
+        monkeypatch.setattr(llm.settings, "enable_prompt_cache", True)
+        captured = self._patch_client(monkeypatch)
+
+        await llm.complete_structured(
+            "bedrock/x", dict, "SUFFIX", max_tokens=10, timeout=5, cached_prefix="PREFIX ",
+        )
+        assert captured["messages"] == [{"role": "user", "content": [
+            {"type": "text", "text": "PREFIX ", "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": "SUFFIX"},
+        ]}]
+
+    async def test_cache_enabled_but_no_prefix_given_sends_flat_string(self, monkeypatch):
+        """Callers that never pass cached_prefix (aggregator today) are unaffected by
+        the flag either way."""
+        monkeypatch.setattr(llm.settings, "enable_prompt_cache", True)
+        captured = self._patch_client(monkeypatch)
+
+        await llm.complete_structured("bedrock/x", dict, "SUFFIX", max_tokens=10, timeout=5)
+        assert captured["messages"] == [{"role": "user", "content": "SUFFIX"}]
+
+
 class TestCallerDelegation:
     async def test_gatekeeper_delegates_with_exact_params(self, monkeypatch):
         from tm import gatekeeper
         from tm.models import GatekeeperOutput
 
         captured = {}
-        async def fake(model, response_model, prompt, *, max_tokens, timeout):
+        async def fake(model, response_model, prompt, *, max_tokens, timeout, cached_prefix=None):
             captured.update(model=model, response_model=response_model,
-                            prompt=prompt, max_tokens=max_tokens, timeout=timeout)
+                            prompt=prompt, max_tokens=max_tokens, timeout=timeout,
+                            cached_prefix=cached_prefix)
             return ("OUT", {"total_tokens": 1})
         monkeypatch.setattr(gatekeeper, "complete_structured", fake)
 
@@ -220,15 +280,18 @@ class TestCallerDelegation:
         # Full article text reaches the gate (no front-trim): the old
         # article_text[200:2700] slice emptied short inputs like this one.
         assert "article" in captured["prompt"]
+        # The fixed instructions go through as their own cacheable prefix, not
+        # concatenated into `prompt` — that's the whole point of the split.
+        assert captured["cached_prefix"] == gatekeeper.PROMPT_PREFIX
 
     async def test_extractor_delegates_with_exact_params(self, monkeypatch):
         from tm import extractor
         from tm.models import ExtractionOutput
 
         captured = {}
-        async def fake(model, response_model, prompt, *, max_tokens, timeout):
+        async def fake(model, response_model, prompt, *, max_tokens, timeout, cached_prefix=None):
             captured.update(model=model, response_model=response_model,
-                            max_tokens=max_tokens, timeout=timeout)
+                            max_tokens=max_tokens, timeout=timeout, cached_prefix=cached_prefix)
             return ("OUT", {})
         monkeypatch.setattr(extractor, "complete_structured", fake)
 
@@ -237,6 +300,7 @@ class TestCallerDelegation:
         assert captured["response_model"] is ExtractionOutput
         assert captured["max_tokens"] == 1200
         assert captured["timeout"] == 180
+        assert captured["cached_prefix"] == extractor.PROMPT_PREFIX
 
     async def test_aggregator_delegates_and_returns_output_only(self, monkeypatch):
         from tm import aggregator

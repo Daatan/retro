@@ -78,12 +78,15 @@ aws iam put-role-policy \
   --policy-document file:///tmp/pipeline-policy.json
 ```
 
-**Related host config (not IAM):** the extractor model override lives in a systemd
-drop-in on the Oracle host — `/etc/systemd/system/oracle-api.service.d/extractor-model.conf`
-sets `Environment=EXTRACTOR_MODEL=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0`,
+**Related host config (not IAM):** the extractor model override is now committed at
+[`infra/oracle-api.service.d/extractor-model.conf`](../oracle-api.service.d/extractor-model.conf)
+— sets `Environment=EXTRACTOR_MODEL=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0`,
 scoped to `oracle-api.service` only (the batch `truthmachine.service` stays on the
-`tm/config.py` default, nova-lite). Rollback = delete the drop-in, `daemon-reload`,
-restart `oracle-api`.
+`tm/config.py` default, nova-lite). Previously this existed ONLY as an uncommitted
+systemd drop-in discoverable solely via SSM — committing it here is a visibility fix,
+not a behavior change; `infra/deploy_oracle.sh` does not sync it automatically (see
+that file's header for the manual apply command). Rollback = delete the drop-in on
+the host, `daemon-reload`, restart `oracle-api`.
 
 ## Placeholders to replace
 

@@ -14,7 +14,7 @@ off-topic noise (precision drop).
 """
 import asyncio
 
-from tm.gatekeeper import PROMPT
+from tm.gatekeeper import PROMPT_PREFIX, PROMPT_SUFFIX
 from tm.models import GatekeeperOutput
 from tm import llm
 
@@ -56,8 +56,10 @@ CASES = [
 
 
 async def _gate(claim: str, text: str) -> GatekeeperOutput:
-    prompt = PROMPT.format(article_text=text, source_name="Test", article_date="2026-06-30", event_name=claim)
-    out, _ = await llm.complete_structured(GATE_MODEL, GatekeeperOutput, prompt, max_tokens=240, timeout=60)
+    prompt = PROMPT_SUFFIX.format(article_text=text, source_name="Test", article_date="2026-06-30", event_name=claim)
+    out, _ = await llm.complete_structured(
+        GATE_MODEL, GatekeeperOutput, prompt, max_tokens=240, timeout=60, cached_prefix=PROMPT_PREFIX,
+    )
     return out
 
 

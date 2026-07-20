@@ -56,6 +56,45 @@ def test_negated_events_examples_present():
     assert "the negated claim is settled FALSE" in PROMPT
 
 
+def test_capability_vs_occurrence_section_present():
+    """The capability-as-occurrence class (2026-07-19 audit of 44 prod evidence
+    rows): one identical claim — "Ukraine has demonstrated the capability to
+    destroy major bridges using upgraded drones..." — appeared on 30 forecast_match
+    rows from 9 DIFFERENT articles (airfields, refineries, the Crimea power grid,
+    troop supply routes; none about the Kerch Bridge) at avg stance +0.50,
+    relevance 0.74, against "Ukraine will successfully strike the Kerch Bridge by
+    August 6, 2026", which sat at 97%. The prompt had no rule separating "can do it
+    / did it elsewhere" from "will do it to THIS target by THIS date" — the strings
+    "capab" and "intent" appeared nowhere in it — and "INFER the implication"
+    actively invited it.
+
+    The |stance| <= 0.3 cap here is deliberately TIGHTER than the adjacent-events
+    section's <= 0.5. Do not harmonize them."""
+    assert "## Capability and intent are not occurrence" in PROMPT
+    assert "a PRECONDITION of the related event, never the event itself" in PROMPT
+    assert "|stance| <= 0.3, certainty <= 0.4) and is NEVER settled" in PROMPT
+    assert "never let a capability, an intent, or a success against another target stand" in PROMPT
+
+
+def test_capability_vs_occurrence_examples_present():
+    assert "Ukraine has demonstrated the capability to destroy major bridges" in PROMPT
+    assert "a different target — the skill is shared, the event is not" in PROMPT
+    assert "stated intent, not an occurrence" in PROMPT
+    assert "a capability milestone, not a commercial launch" in PROMPT
+
+
+def test_capability_companion_clauses_present():
+    """Two clauses that bound the sections which otherwise argue the other way:
+    "INFER the implication" (What counts as a signal) told the model to do exactly
+    what the capability section forbids, and "Buried facts" tells it to hoist any
+    past-tense clause and mark it settled — which is the shape of "Ukraine HAS
+    DEMONSTRATED the capability...". Buried facts sits later in the prompt, so
+    without its clause recency may favour it."""
+    assert "INFER the implication — but infer only the implication" in PROMPT
+    assert "the report's own subject and target carry" in PROMPT
+    assert "report of THIS event — see the capability section above" in PROMPT
+
+
 def test_foreclosing_negative_date_rule_present():
     """Negative settlements are now dated by the foreclosing event (needed by
     aggregation-time revalidation); the old rule said to leave them undated."""

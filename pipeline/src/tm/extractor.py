@@ -77,14 +77,14 @@ specific target, action and deadline in the related event and check the article 
 THAT one; never let a capability, an intent, or a success against another target stand \
 in for the occurrence the claim asks about.
 
-Examples — related event: "Ukraine will successfully strike the Kerch Bridge by August 6, 2026":
-  "Ukraine has demonstrated the capability to destroy major bridges using upgraded drones" \
-                                               → stance +0.2, certainty 0.3, settled false (a capability, not a strike on the Kerch Bridge)
-  "Ukrainian drones struck a Russian oil refinery and a military airfield overnight" \
+Examples — related event: "Force F will successfully strike Bridge K by date D":
+  "Force F has demonstrated the capability to destroy major bridges using upgraded munitions" \
+                                               → stance +0.2, certainty 0.3, settled false (a capability, not a strike on Bridge K)
+  "Force F struck a fuel depot and a military airfield overnight" \
                                                → no extraction (a different target — the skill is shared, the event is not)
-  "Ukrainian officials vowed the Kerch Bridge would be hit again" \
+  "Officials of Force F vowed Bridge K would be hit again" \
                                                → stance +0.3, certainty 0.3, settled false (stated intent, not an occurrence)
-  "Explosions damaged the Kerch Bridge roadway on Tuesday, halting traffic" \
+  "Explosions damaged Bridge K's roadway on Tuesday, halting traffic" \
                                                → stance +1.0, certainty 0.95, settled true, event_date resolved from "on Tuesday" (this target, this action)
 
 Examples — related event: "Company X will launch a commercial quantum computer by 2027":

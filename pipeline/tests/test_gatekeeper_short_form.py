@@ -16,6 +16,11 @@ from tm import gatekeeper
 
 
 async def _capture_prompt(**kwargs) -> str:
+    """Reconstructs the full text the model actually sees: the cached PROMPT_PREFIX
+    (now passed as its own kwarg for Bedrock/Anthropic prompt caching, not concatenated
+    into ``prompt`` anymore) plus the per-call ``prompt`` (PROMPT_SUFFIX, formatted).
+    Keeping this reconstruction is what lets the byte-for-byte invariant below still
+    mean what it always meant, across the PROMPT_PREFIX/PROMPT_SUFFIX split."""
     with patch("tm.gatekeeper.complete_structured", new=AsyncMock(return_value=(None, {}))) as cs:
         await gatekeeper.check_is_prediction(
             article_text="Elections are now final for Oct 27.",
@@ -24,7 +29,9 @@ async def _capture_prompt(**kwargs) -> str:
             event_name="Netanyahu will form the next government",
             **kwargs,
         )
-    return cs.await_args.args[2]
+    prompt = cs.await_args.args[2]
+    cached_prefix = cs.await_args.kwargs.get("cached_prefix", "")
+    return cached_prefix + prompt
 
 
 @pytest.mark.asyncio
@@ -32,7 +39,7 @@ async def test_default_prompt_is_unchanged_byte_for_byte():
     """THE safety property. /forecast calls this with no short_form, and its prompt must be exactly
     what it was — the override may only ever append, never edit the base text."""
     default = await _capture_prompt()
-    expected = gatekeeper.PROMPT.format(
+    expected = (gatekeeper.PROMPT_PREFIX + gatekeeper.PROMPT_SUFFIX).format(
         article_text="Elections are now final for Oct 27.",
         source_name="Ben Caspit",
         article_date="2026-07-12",

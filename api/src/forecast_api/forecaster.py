@@ -20,19 +20,33 @@ from urllib.parse import urlparse
 import httpx
 import trafilatura
 
-from tm.gatekeeper import check_is_prediction, PROMPT as GATEKEEPER_PROMPT
+from tm.gatekeeper import (
+    check_is_prediction,
+    PROMPT_PREFIX as _GATEKEEPER_PROMPT_PREFIX,
+    PROMPT_SUFFIX as _GATEKEEPER_PROMPT_SUFFIX,
+)
 from tm.extractor import (
     extract_predictions,
     enforce_deadline_arithmetic,
     enforce_relative_date_resolution,
     enforce_settlement_event_date,
-    PROMPT as EXTRACTOR_PROMPT,
+    PROMPT_PREFIX as _EXTRACTOR_PROMPT_PREFIX,
+    PROMPT_SUFFIX as _EXTRACTOR_PROMPT_SUFFIX,
 )
 from tm.models import GatekeeperOutput, PredictionExtraction
 from tm.web_search import search_articles, SearchResult, get_last_search_provider, get_last_search_provider_chain
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once
 from tm.net_guard import UnsafeURLError, safe_get
+
+# gatekeeper.py/extractor.py each split their PROMPT into a cacheable PROMPT_PREFIX
+# (fixed instructions) + PROMPT_SUFFIX (article/variable fields) so llm.py can mark
+# the prefix as a Bedrock/Anthropic cache breakpoint. These two reconstruct the full,
+# unformatted prompt text — byte-identical to the pre-split PROMPT — purely for the
+# debug/introspection fields below (ForecastDebug.gatekeeper_prompt/extractor_prompt);
+# nothing here re-enters an actual LLM call.
+GATEKEEPER_PROMPT = _GATEKEEPER_PROMPT_PREFIX + _GATEKEEPER_PROMPT_SUFFIX
+EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 
 from .aggregation import (
     aggregate_pool,

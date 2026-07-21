@@ -961,6 +961,29 @@ async def _run_forecast_inner(
             Counter(article_evidence_classes).most_common(1)[0][0] if article_evidence_classes else None
         )
 
+        # fact_signal lane (Phase 2, author-scoring redesign) — SHADOW, parallel to avg_stance,
+        # read by nothing in aggregation. Option-1 reduction: fact_signal is the claim-weighted
+        # MEAN over the SAME scored_preds that drive avg_stance (so the offline fact-lane backtest
+        # compares mean-to-mean), while the qualifying facets come from the single DOMINANT
+        # (max |fact_signal|) claim so they stay internally coherent. None when no scored claim
+        # carried a fact_signal (e.g. a pure-opinion article).
+        fact_preds = [p for p in scored_preds if p.fact_signal is not None]
+        if fact_preds:
+            article_fact_signal = claim_weighted_stance(
+                [p.fact_signal for p in fact_preds],
+                [p.certainty for p in fact_preds],
+                [p.specificity for p in fact_preds],
+            )
+            dominant_fact = max(fact_preds, key=lambda p: abs(p.fact_signal))
+            fact_event_actors = dominant_fact.event_actors
+            fact_event_target = dominant_fact.event_target
+            fact_is_occurrence = dominant_fact.is_occurrence
+            fact_verified = dominant_fact.verified
+        else:
+            article_fact_signal = None
+            fact_event_actors = fact_event_target = None
+            fact_is_occurrence = fact_verified = None
+
         all_stances.append(avg_stance)
         all_weights.append(weight)
         relevances.append(relevance)
@@ -984,6 +1007,11 @@ async def _run_forecast_inner(
             settlement_event_date=settlement_event_date,
             author_lean=author_lean,
             author_lean_certainty=author_lean_certainty,
+            fact_signal=round(article_fact_signal, 3) if article_fact_signal is not None else None,
+            event_actors=fact_event_actors,
+            event_target=fact_event_target,
+            is_occurrence=fact_is_occurrence,
+            verified=fact_verified,
         ))
 
     if evidence_class_counts:

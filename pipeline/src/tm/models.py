@@ -80,6 +80,21 @@ class PredictionExtraction(BaseModel):
 
 class ExtractionOutput(BaseModel):
     predictions: list[PredictionExtraction]
+    author_lean: Optional[float] = Field(
+        default=None, ge=-1.0, le=1.0,
+        description="The BYLINE author's / outlet's OWN forecast of the related event, for "
+                    "scoring the author's accuracy later — SEPARATE from the evidence "
+                    "`predictions` and NOT used in the event estimate. +1 = the author "
+                    "themselves expects the event to happen, -1 = the author expects it will "
+                    "NOT happen, 0 = the author explicitly weighs both sides and commits to "
+                    "neither. Null (omit) when the byline author only reports facts or relays "
+                    "other people's views without endorsing a direction. A view held by a "
+                    "QUOTED third party is that source's, not the byline's — never record it "
+                    "here.")
+    author_lean_certainty: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="How firmly the byline author commits to author_lean (0 = heavily hedged, "
+                    "1 = emphatic). Null when author_lean is null.")
 
     @model_validator(mode="before")
     @classmethod

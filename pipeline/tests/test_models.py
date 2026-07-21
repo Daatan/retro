@@ -56,6 +56,25 @@ def test_prediction_extraction_quantitative_estimate_rejects_out_of_range():
         PredictionExtraction(quote="q", claim="c", stance=0.0, certainty=0.5, quantitative_estimate=1.5)
 
 
+def test_extraction_output_author_lean_defaults_to_none():
+    out = ExtractionOutput(predictions=[])
+    assert out.author_lean is None
+    assert out.author_lean_certainty is None
+
+
+def test_extraction_output_author_lean_accepts_valid_values():
+    out = ExtractionOutput(predictions=[], author_lean=-0.6, author_lean_certainty=0.5)
+    assert out.author_lean == -0.6
+    assert out.author_lean_certainty == 0.5
+
+
+def test_extraction_output_author_lean_rejects_out_of_range():
+    with pytest.raises(ValidationError):
+        ExtractionOutput(predictions=[], author_lean=1.5)
+    with pytest.raises(ValidationError):
+        ExtractionOutput(predictions=[], author_lean_certainty=-0.1)
+
+
 def test_matrix_state_tracking():
     state = MatrixState()
 

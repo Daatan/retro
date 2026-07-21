@@ -116,6 +116,22 @@ def test_foreclosing_negative_date_rule_present():
     assert "leave event_date empty" in PROMPT_PREFIX
 
 
+def test_author_lean_section_present():
+    """author_lean captures the BYLINE author's own forecast for later author-accuracy
+    scoring — a separate concern from the event estimate (evidence pool quality work,
+    2026-07-21). It is deliberately kept out of the estimate; the section stresses that
+    a quoted third party's view is not the byline's."""
+    assert "## AUTHOR_LEAN" in PROMPT_PREFIX
+    assert "does NOT feed the event estimate" in PROMPT_PREFIX
+    assert "is that person's position, not the byline's" in PROMPT_PREFIX
+    assert "treat it as the source's and return null" in PROMPT_PREFIX
+
+
+def test_author_lean_in_output_contract():
+    assert '"author_lean"' in PROMPT_SUFFIX
+    assert '"author_lean_certainty"' in PROMPT_SUFFIX
+
+
 def test_prompt_placeholders_still_format():
     # Guards against unescaped braces sneaking into future prompt edits.
     PROMPT_SUFFIX.format(

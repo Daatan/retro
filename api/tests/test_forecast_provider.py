@@ -97,3 +97,49 @@ class TestForecastResponseProvider:
         # author_lean surfaces on the per-source signal (shadow — the estimate is unchanged).
         assert resp.sources[0].author_lean == -0.4
         assert resp.sources[0].author_lean_certainty == 0.7
+        # No claim carried a fact_signal → the fact-lane fields collapse to None.
+        assert resp.sources[0].fact_signal is None
+        assert resp.sources[0].event_actors is None
+        assert resp.sources[0].is_occurrence is None
+
+    def test_caller_supplied_articles_fact_signal_reduction(self, monkeypatch):
+        # fact_signal + facets are per-claim (Phase 2, author-scoring redesign). The per-source
+        # signal reduces them Option-1 style: fact_signal = claim-weighted MEAN over the article's
+        # fact-bearing claims (same reduction as stance), facets from the DOMINANT (max |fact_signal|)
+        # claim. Shadow — nothing in aggregation reads them, the estimate is unchanged.
+        from tm.models import GatekeeperOutput, ExtractionOutput, PredictionExtraction
+
+        async def _gate(**kw):
+            return GatekeeperOutput(is_prediction=True, reason="on topic", prediction_count_estimate=2), {}
+
+        async def _extract(**kw):
+            return ExtractionOutput(predictions=[
+                # dominant fact (|1.0| > |0.2|): a confirmed occurrence, right dyad
+                PredictionExtraction(quote="q1", claim="c1", stance=0.9, certainty=0.9,
+                                     fact_signal=1.0, event_actors="Israel", event_target="Iran",
+                                     is_occurrence=True, verified=True),
+                # a precursor claim that pulls the MEAN down but not the facets
+                PredictionExtraction(quote="q2", claim="c2", stance=0.3, certainty=0.5,
+                                     fact_signal=0.2, event_actors="Israel", event_target="Lebanon",
+                                     is_occurrence=False, verified=True),
+            ]), {}
+
+        monkeypatch.setattr(forecaster, "check_is_prediction", _gate)
+        monkeypatch.setattr(forecaster, "extract_predictions", _extract)
+
+        req = ForecastRequest(
+            question="Fact-lane probe — direct conflict soon?",
+            articles=[ArticleInput(
+                url="https://example.com/fs",
+                title="Detailed report on whether the two states are in direct conflict",
+                snippet="Strikes and troop movements reported.",
+                text="Overnight strikes and border mobilisation were reported by multiple outlets. " * 4,
+            )],
+        )
+        resp = asyncio.run(run_forecast(req))
+        assert resp.sources[0].fact_signal == round((1.0 * 0.9 + 0.2 * 0.5) / (0.9 + 0.5), 3)  # 0.714
+        # facets come from the dominant (fact_signal=1.0) claim, not the precursor
+        assert resp.sources[0].event_actors == "Israel"
+        assert resp.sources[0].event_target == "Iran"
+        assert resp.sources[0].is_occurrence is True
+        assert resp.sources[0].verified is True

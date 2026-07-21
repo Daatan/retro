@@ -178,6 +178,8 @@ canonical case). The pin then requires `settlement_min_sources` **unanimous** va
 | `credibility` | leaderboard lookup | **1.0 for every source observed in prod** — layer currently inert |
 | `quantitative_multiplier` | 4.0 if any claim carries an estimate, else 1.0 | stacks with the certainty-0.9 floor |
 | **`weight`** | `credibility × avg_certainty × rweight × relevance² × quant_mult` | pool weight |
+| `fact_signal` (shadow) | claim-weighted **mean** of per-claim `fact_signal` over the **same** scored claims as `avg_stance`; `None` if none carried one | Phase 2 fact-lane counterpart of `avg_stance`, un-fused from author assertion; **read by nothing in aggregation** — surfaced on `SourceSignal`/`sources[]` only for daatan persistence + the offline fact-lane backtest. Its facets `event_actors`/`event_target`/`is_occurrence`/`verified` ride from the **dominant** (max \|fact_signal\|) claim so they stay internally coherent. |
+| `author_lean`, `author_lean_certainty` (shadow) | passed through from `ExtractionOutput` (retro #308/#309) — the byline author's OWN forecast | author-accuracy scoring lane; **not read by aggregation** |
 
 ### 2.4 Pool level (`aggregation.py`, `forecaster.py:799-932`)
 

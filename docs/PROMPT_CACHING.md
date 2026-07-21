@@ -29,7 +29,8 @@ NOT change what gets asked or answered.
   the per-call prompt. When the flag is off (the default) or no prefix is given,
   content is the same flat concatenated string as before caching existed at all —
   this fallback matters: it's what keeps every call correct even with the flag off.
-- `pipeline/src/tm/config.py`: new `enable_prompt_cache: bool = False` kill-switch.
+- `pipeline/src/tm/config.py`: new `enable_prompt_cache` kill-switch, shipped `False`
+  then flipped to `True` once the smoke test (below) confirmed it live.
 
 ## What did NOT change
 
@@ -46,29 +47,52 @@ NOT change what gets asked or answered.
   call path, so it gets caching for free once the flag is on — no separate change
   needed there.
 
-## Rollout
+## Rollout — DONE, verified against live Bedrock
 
-1. `enable_prompt_cache` ships `False`. No behavior change on merge.
-2. Run `pipeline/smoke_test_prompt_cache.py` manually (not CI — it calls Bedrock) against
-   Nova Micro, Nova Lite, and whichever model `settings.extractor_model` resolves to
-   live (the Haiku override on `oracle-api`, or the Nova Lite default on
-   `truthmachine.service`). **Do not assume Nova caching works by analogy to Haiku** —
-   litellm's own pricing table (`model_prices_and_context_window_backup.json`) has
-   empty `cache_read_input_tokens`/`cache_creation_input_tokens` cost entries for the
-   Nova models but populated ones for Haiku 4.5 on Bedrock, which is a concrete signal
-   (not proof) that Nova caching may be unverified in this litellm version. Watch for
-   a Bedrock `ValidationException` specifically — that's a hard "unsupported", not
-   the same thing as "ran fine but showed zero savings."
-3. Flip `enable_prompt_cache = True` only for models the smoke test confirms actually
-   cache (call 1: `cache_creation_input_tokens > 0`; call 2, within ~5 min:
-   `cache_read_input_tokens > 0`).
-4. Measure via the now-logged `cache_read_input_tokens`/`cache_creation_input_tokens`
-   fields on every call (immediate, unambiguous — don't wait on AWS billing lag), plus
-   a controlled multi-day before/after Cost Explorer comparison on the
-   `Claude Haiku 4.5 (Amazon Bedrock Edition)` service line, holding `Invocations`
-   volume roughly constant.
+`enable_prompt_cache` shipped `False`, then was flipped to `True` after
+`pipeline/smoke_test_prompt_cache.py` and additional targeted runs against live
+Bedrock (not mocked) confirmed real cache accounting using each caller's ACTUAL
+production prompt/schema, not a synthetic stand-in:
 
-Expected impact (directional — confirm against real data, don't treat as a promise):
-with the ~6,700-token prefix at ~87% of the extractor's input tokens, and a cache-read
-price around 10% of normal input price, this is roughly a 60% reduction in extractor
-cost per call.
+| Model | Role | Result |
+|---|---|---|
+| `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0` | live `oracle-api` extractor | 4/4 clean runs. Call 1: `cache_creation_input_tokens=9394`. Calls 2-4: `cache_read_input_tokens=9394`, `write=0`. **9,394 of 10,135 total input tokens (~93%) landed in the cached prefix.** |
+| `bedrock/amazon.nova-micro-v1:0` | gatekeeper (both `oracle-api` and `truthmachine.service`) | 4/4 clean runs with the real gatekeeper prompt. Call 1 write=1182, calls 2-4 read=1182 (~90% of that call's tokens). |
+| `bedrock/amazon.nova-lite-v1:0` | batch `truthmachine.service` extractor default | Caching itself works when a call succeeds (`cache_read_input_tokens` populated correctly) — but see the finding below, which is unrelated to caching. |
+
+**A real, pre-existing bug surfaced while verifying this, filed separately —
+[retro#306](https://github.com/Daatan/retro/issues/306):** Nova Lite, under
+`instructor.Mode.MD_JSON`, intermittently (~60% of attempts in a 5-run local sample)
+wraps its JSON response in a spurious `{"properties": {...}}` envelope instead of the
+flat schema shape, failing pydantic validation. **Confirmed this reproduces with
+`enable_prompt_cache=False` too** — it is not caused by, or related to, this change.
+Left out of scope here; filed for separate investigation since it's a real
+production-reliability question for the batch pipeline's extractor calls.
+
+litellm's own pricing table (`model_prices_and_context_window_backup.json`) has empty
+`cache_read_input_tokens`/`cache_creation_input_tokens` cost entries for the Nova
+models but populated ones for Haiku — this turned out to just mean litellm can't
+*price* Nova's cache tokens, not that Nova doesn't support caching mechanically; the
+raw usage accounting works fine for it regardless.
+
+**Debugging note for future smoke-test runs:** an early version of
+`smoke_test_prompt_cache.py` used `max_tokens=50`, which is too small for
+`GatekeeperOutput`'s schema in MD_JSON mode (reasoning text + JSON needs more room) —
+the resulting truncated generation surfaced as an `instructor.InstructorRetryException`
+wrapping a `litellm.Timeout` with an implausible `time taken=0.001 seconds`, which
+looks exactly like "this model/region doesn't support the cache breakpoint" but isn't.
+Fixed to `max_tokens=200` in the committed script. If a future run of this script
+shows that same instant-timeout shape, suspect `max_tokens` before suspecting caching
+support.
+
+## Measuring ongoing savings
+
+Via the now-logged `cache_read_input_tokens`/`cache_creation_input_tokens` fields on
+every call (immediate, unambiguous — don't wait on AWS billing lag), plus a controlled
+multi-day before/after Cost Explorer comparison on the
+`Claude Haiku 4.5 (Amazon Bedrock Edition)` service line, holding `Invocations` volume
+roughly constant.
+
+Expected impact (directional estimate ahead of a real multi-day comparison): with
+~93% of the extractor's input tokens now cached at a read price roughly 10% of normal
+input price, this should land close to a 60%+ reduction in extractor cost per call.

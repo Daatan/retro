@@ -457,6 +457,31 @@ null unless the byline author asserts or endorses a direction in their own voice
 unsure whether a view is the author's own or a source's, treat it as the source's \
 and return null.
 
+## FACT_SIGNAL — what the reported FACTS alone imply (EXPERIMENTAL, shadow — separate from stance)
+Separately from stance, and used by no estimate yet, record what the article's REPORTED \
+FACTS on their own establish about the related event — stripped of the author's assertion, \
+of quoted opinion, and of interpretive framing. Where stance may blend "what is asserted" \
+with "what the facts show", fact_signal is ONLY the second: +1 the facts establish the event \
+happened or is happening, -1 the facts establish it will not or cannot, 0 the facts bear on \
+it but point neither way. Return null (omit fact_signal and its facets) when the prediction \
+rests on opinion, advocacy, or expectation with no reported fact that bears on the event.
+Discipline fact_signal by three tests, and record the facets that justify each:
+  - DYAD. Name WHO acts (event_actors) and the TARGET of the action (event_target) in the \
+fact. A fact whose actor-target pair is NOT the claim's pair — a strike by a different \
+country, on a different country — is context only: keep |fact_signal| small and never treat \
+it as the event occurring, however forceful the fact.
+  - OCCURRENCE vs PRECURSOR. Set is_occurrence true only when the fact IS the event itself \
+(or its definitive outcome); set it false when the fact is a precondition, mobilisation, \
+capability, or escalation that merely precedes the event. A precursor is capped at |0.3| no \
+matter how sustained, repeated, or intensifying it is — a conflict escalating over many days, \
+or a preparation repeated night after night, is still not the discrete event happening.
+  - VERIFIED vs CLAIMED. Set verified true when the fact is independently reported as having \
+happened; set it false when only an interested or belligerent party CLAIMS it and no \
+independent source confirms. A claimed-but-unverified event is down-weighted, not scored at \
+full strength.
+These facets are shadow fields for a future estimator; keep them honest and independent of \
+stance — never let fact_signal pull stance, or stance pull fact_signal.
+
 ## Output
 Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certainty \
 signals if they are the only content available.
@@ -482,7 +507,7 @@ to 1) fields — the byline author's OWN forecast, per the AUTHOR_LEAN section. 
 the author takes no position of their own.
 Example: {{"predictions": [ {{...}}, {{...}} ], "author_lean": 0.6, "author_lean_certainty": 0.5}}
 
-Each prediction has five core fields, plus four used only when applicable:
+Each prediction has five core fields, plus several used only when applicable:
   quote (string — original language), claim (string — English), \
 stance (float −1 to 1), certainty (float 0 to 1), settled (boolean — true only when \
 the source reports the outcome as an accomplished fact), quantitative_estimate \
@@ -497,6 +522,15 @@ see the DATES section above), \
 event_date_reference (string — the article's VERBATIM relative expression behind \
 event_date, e.g. "on Friday" or "yesterday"; OMIT it when the article names the \
 absolute date outright — see the DATES section above)
+
+The following are EXPERIMENTAL shadow fields — include them together per the FACT_SIGNAL \
+section, and OMIT all of them when the prediction rests on opinion/expectation with no \
+reported fact bearing on the event: \
+fact_signal (float −1 to 1 — what the reported facts alone imply about the event), \
+event_actors (string — who acts in that fact), event_target (string — the target of the \
+action), is_occurrence (boolean — true only when the fact IS the event itself, false for a \
+precursor/precondition/escalation), verified (boolean — true when independently reported, \
+false when only claimed by an interested party).
 
 Example — related event: "Assad regime falls in Syria":
 {{

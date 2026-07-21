@@ -48,6 +48,50 @@ class PredictionExtraction(BaseModel):
                     "The kind of evidence this claim is, independent of stance/certainty. "
                     "Omit entirely rather than guessing when none fits cleanly.",
     )
+    # --- fact_signal lane (EXPERIMENTAL, shadow — Phase 2 of the author-scoring redesign) ---
+    # The fact-lane counterpart to `stance`: what the REPORTED FACTS alone imply about the
+    # event, un-fused from the author's assertion/framing. Populated in shadow alongside
+    # stance; not yet consumed by any estimator. See the FACT_SIGNAL prompt section.
+    fact_signal: Optional[float] = Field(
+        default=None, ge=-1.0, le=1.0,
+        description="EXPERIMENTAL, shadow — what the REPORTED FACTS alone imply about the "
+                    "related event, separate from any assertion, quoted opinion, or framing: "
+                    "+1 the facts establish it happened / is happening, -1 the facts establish "
+                    "it will not or cannot, 0 the facts bear on it but point neither way. A "
+                    "precursor/precondition/escalation is capped at |0.3|; a fact about a "
+                    "DIFFERENT actor-target pair than the claim is context only (near 0), never "
+                    "settlement; a merely CLAIMED (unverified) event is down-weighted. Null when "
+                    "the prediction rests on opinion/advocacy with no reported fact bearing on "
+                    "the event.",
+    )
+    event_actors: Optional[str] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow — WHO acts in the reported fact behind fact_signal "
+                    "(the acting subject(s), e.g. 'United States', 'Likud'). Recorded so the "
+                    "estimator can check the fact's actor-target pair against the claim's and "
+                    "demote a wrong-dyad fact. Omit when fact_signal is null or no actor applies.",
+    )
+    event_target: Optional[str] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow — the TARGET/object of the action in the reported "
+                    "fact behind fact_signal (e.g. 'Iran', 'the Knesset'). With event_actors "
+                    "this is the fact's dyad, for the actor-pair check. Omit when fact_signal "
+                    "is null or no target applies.",
+    )
+    is_occurrence: Optional[bool] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow — True when the reported fact IS the related event "
+                    "itself occurring (or its definitive outcome); False when it is only a "
+                    "precursor/precondition/escalation/capability that precedes the event. "
+                    "Omit when fact_signal is null.",
+    )
+    verified: Optional[bool] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow — True when the reported fact is independently "
+                    "reported as having happened; False when it is only CLAIMED by an "
+                    "interested/belligerent party and not independently confirmed. Omit when "
+                    "fact_signal is null.",
+    )
     event_date: Optional[str] = Field(
         default=None,
         description="ISO date (YYYY-MM-DD) on which the article says the RELATED EVENT "

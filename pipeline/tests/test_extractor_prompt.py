@@ -135,6 +135,26 @@ def test_author_lean_in_output_contract():
     assert '"author_lean_certainty"' in PROMPT_SUFFIX
 
 
+def test_fact_signal_section_present():
+    """fact_signal isolates the fact-lane from the fused stance for a future estimator
+    (Phase 2 of the author-scoring redesign, 2026-07-21). The section must carry the three
+    disciplining tests — dyad, occurrence-vs-precursor, verified-vs-claimed — that the
+    evidence_class-only shortcut was shown NOT to cover."""
+    assert "## FACT_SIGNAL" in PROMPT_PREFIX
+    assert "REPORTED FACTS on their own establish about the related event" in PROMPT_PREFIX
+    assert "A precursor is capped at |0.3|" in PROMPT_PREFIX
+    assert "is context only" in PROMPT_PREFIX
+    assert "A claimed-but-unverified event is down-weighted" in PROMPT_PREFIX
+
+
+def test_fact_signal_in_output_contract():
+    assert "fact_signal" in PROMPT_SUFFIX
+    assert "event_actors" in PROMPT_SUFFIX
+    assert "event_target" in PROMPT_SUFFIX
+    assert "is_occurrence" in PROMPT_SUFFIX
+    assert "verified" in PROMPT_SUFFIX
+
+
 def test_prompt_placeholders_still_format():
     # Guards against unescaped braces sneaking into future prompt edits.
     PROMPT_SUFFIX.format(

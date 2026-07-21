@@ -56,6 +56,35 @@ def test_prediction_extraction_quantitative_estimate_rejects_out_of_range():
         PredictionExtraction(quote="q", claim="c", stance=0.0, certainty=0.5, quantitative_estimate=1.5)
 
 
+def test_prediction_extraction_fact_signal_facets_default_to_none():
+    pred = PredictionExtraction(quote="q", claim="c", stance=0.0, certainty=0.5)
+    assert pred.fact_signal is None
+    assert pred.event_actors is None
+    assert pred.event_target is None
+    assert pred.is_occurrence is None
+    assert pred.verified is None
+
+
+def test_prediction_extraction_fact_signal_facets_accept_valid_values():
+    pred = PredictionExtraction(
+        quote="q", claim="c", stance=0.8, certainty=0.9,
+        fact_signal=0.3, event_actors="United States", event_target="Iran",
+        is_occurrence=False, verified=True,
+    )
+    assert pred.fact_signal == 0.3
+    assert pred.event_actors == "United States"
+    assert pred.event_target == "Iran"
+    assert pred.is_occurrence is False
+    assert pred.verified is True
+
+
+def test_prediction_extraction_fact_signal_rejects_out_of_range():
+    with pytest.raises(ValidationError):
+        PredictionExtraction(quote="q", claim="c", stance=0.0, certainty=0.5, fact_signal=1.5)
+    with pytest.raises(ValidationError):
+        PredictionExtraction(quote="q", claim="c", stance=0.0, certainty=0.5, fact_signal=-1.5)
+
+
 def test_extraction_output_author_lean_defaults_to_none():
     out = ExtractionOutput(predictions=[])
     assert out.author_lean is None

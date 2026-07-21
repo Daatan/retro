@@ -599,6 +599,16 @@ Shipped, in the accepted sequencing order (§6):
   a future recompute would silently fall back to certainty for every article,
   since evidence_class was never persisted anywhere outside retro's own
   request lifetime.
+- **`author_lean`/`author_lean_certainty` exposed on `/forecast`'s
+  `SourceSignal`** — retro (author-scoring redesign, follows #308/#309): the
+  byline author's OWN directional forecast, which the extractor already emits
+  on `ExtractionOutput` (per article×question), is now carried through
+  `_process_article` → the per-source `SourceSignal` so daatan can persist it
+  per pooled article and score author accuracy later. **Deliberately NOT a
+  variable in this doc's sense** — it never enters `aggregate_pool()` or any
+  weight; it is the *author-scoring lane*, kept separate from the estimate on
+  purpose (the whole point of the un-fusing work). Shadow end-to-end: null on
+  cached/old responses, populated only on fresh extractions.
 - **`evidenceWeight`/`relevanceScore` persisted into daatan's pool** — daatan
   #1071 + #1073: `EvidencePoolArticle` gained both columns, threaded through
   the full `OracleSource` → `enrichOracleSources` → `addArticlesToPool`

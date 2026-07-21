@@ -69,9 +69,12 @@ class TestForecastResponseProvider:
             return GatekeeperOutput(is_prediction=True, reason="on topic", prediction_count_estimate=1), {}
 
         async def _extract(**kw):
+            # author_lean is the byline author's own forecast (retro #308/#309) — it must
+            # ride through to the per-source signal for daatan's author-scoring lane while
+            # staying entirely out of the estimate.
             return ExtractionOutput(predictions=[
                 PredictionExtraction(quote="q", claim="c", stance=0.6, certainty=0.8)
-            ]), {}
+            ], author_lean=-0.4, author_lean_certainty=0.7), {}
 
         monkeypatch.setattr(forecaster, "check_is_prediction", _gate)
         monkeypatch.setattr(forecaster, "extract_predictions", _extract)
@@ -91,3 +94,6 @@ class TestForecastResponseProvider:
         assert resp.provider == "caller"
         assert resp.provider_chain == ["caller"]
         assert resp.distilled_query is None
+        # author_lean surfaces on the per-source signal (shadow — the estimate is unchanged).
+        assert resp.sources[0].author_lean == -0.4
+        assert resp.sources[0].author_lean_certainty == 0.7

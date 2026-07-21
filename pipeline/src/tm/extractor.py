@@ -451,7 +451,10 @@ Return null for both (omit them) when the byline author only reports what happen
 other people's views without endorsing a direction — a straight news report has no \
 author_lean. A prediction made by a QUOTED third party — an official, an analyst, a pundit \
 the article cites — is that person's position, not the byline's, and must NOT be recorded \
-here. When unsure whether a view is the author's own or a source's, treat it as the source's \
+here. Multiple sources agreeing on the same direction is still THEIR consensus, not the \
+byline author's — an article that merely stacks concordant quoted forecasts has author_lean \
+null unless the byline author asserts or endorses a direction in their own voice. When \
+unsure whether a view is the author's own or a source's, treat it as the source's \
 and return null.
 
 ## Output

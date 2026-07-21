@@ -437,6 +437,23 @@ Examples — related event: "The Israeli parliament will be dissolved by July 15
 The article may be in Hebrew, Arabic, or English. Always write the claim in English.
 Quote the original language verbatim in the quote field.
 
+## AUTHOR_LEAN — the byline author's own forecast (for scoring the author, NOT the estimate)
+Separately from everything above, judge whether the BYLINE author or outlet named below \
+(Source / Journalist) is THEMSELVES forecasting the related event — stating a position of \
+their own — as opposed to neutrally reporting facts or relaying other people's views. This \
+field exists to hold that author accountable later; it does NOT feed the event estimate, so \
+keep it independent of stance and never let one influence the other.
+  author_lean = the byline author's OWN directional forecast of the related event: +1 the \
+author expects it to happen, -1 the author expects it will NOT happen, 0 the author \
+explicitly weighs both sides and commits to neither.
+  author_lean_certainty = how firmly the author commits to that forecast (0 hedged, 1 emphatic).
+Return null for both (omit them) when the byline author only reports what happened or relays \
+other people's views without endorsing a direction — a straight news report has no \
+author_lean. A prediction made by a QUOTED third party — an official, an analyst, a pundit \
+the article cites — is that person's position, not the byline's, and must NOT be recorded \
+here. When unsure whether a view is the author's own or a source's, treat it as the source's \
+and return null.
+
 ## Output
 Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certainty \
 signals if they are the only content available.
@@ -456,8 +473,11 @@ Date: {article_date}
 Related event: {event_name} — {event_description}
 Claim deadline: {claim_deadline}
 
-IMPORTANT: Your response must be a JSON object with a "predictions" key containing a list.
-Example: {{"predictions": [ {{...}}, {{...}} ]}}
+IMPORTANT: Your response must be a JSON object with a "predictions" key containing a list, \
+plus OPTIONAL top-level "author_lean" (float -1 to 1) and "author_lean_certainty" (float 0 \
+to 1) fields — the byline author's OWN forecast, per the AUTHOR_LEAN section. OMIT both when \
+the author takes no position of their own.
+Example: {{"predictions": [ {{...}}, {{...}} ], "author_lean": 0.6, "author_lean_certainty": 0.5}}
 
 Each prediction has five core fields, plus four used only when applicable:
   quote (string — original language), claim (string — English), \

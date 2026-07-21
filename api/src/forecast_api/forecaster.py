@@ -330,7 +330,7 @@ async def _process_article_bounded(
     claim_deadline: str | None = None,
     claim_direction: str | None = None,
     prediction_id: str | None = None,
-) -> tuple[SearchResult, float, list] | None:
+) -> tuple[SearchResult, float, list, float | None, float | None] | None:
     """Run _process_article under a per-article wall-clock ceiling.
 
     Articles are processed in parallel, so one slow LLM call would otherwise
@@ -379,7 +379,7 @@ async def _process_article(
     claim_deadline: str | None = None,
     claim_direction: str | None = None,
     prediction_id: str | None = None,
-) -> tuple[SearchResult, float, list] | None:
+) -> tuple[SearchResult, float, list, float | None, float | None] | None:
     """
     Run gatekeeper + extractor for one article.
     Fetches full article text via trafilatura; falls back to title+snippet.
@@ -564,7 +564,16 @@ async def _process_article(
         total_tokens=(gate_tok + ext_tok) or None,
         fetch_ms=round(fetch_ms, 1), gate_ms=round(gate_ms, 1), extract_ms=round(extract_ms, 1),
     ))
-    return (result, gate.relevance_score, extraction.predictions)
+    # author_lean / author_lean_certainty are the byline author's OWN forecast
+    # (retro #308/#309) — surfaced per-source for daatan's author-accuracy scoring
+    # lane, kept entirely OUT of the estimate (never merged into stance/predictions).
+    return (
+        result,
+        gate.relevance_score,
+        extraction.predictions,
+        extraction.author_lean,
+        extraction.author_lean_certainty,
+    )
 
 
 async def run_forecast(req: ForecastRequest) -> ForecastResponse:
@@ -847,7 +856,7 @@ async def _run_forecast_inner(
             continue
         if outcome is None:
             continue
-        _, relevance, predictions = outcome
+        _, relevance, predictions, author_lean, author_lean_certainty = outcome
         for p in predictions:
             if p.evidence_class is not None:
                 evidence_class_counts[p.evidence_class] = evidence_class_counts.get(p.evidence_class, 0) + 1
@@ -973,6 +982,8 @@ async def _run_forecast_inner(
             evidence_weight=round(avg_evidence_weight, 3),
             evidence_class=representative_evidence_class,
             settlement_event_date=settlement_event_date,
+            author_lean=author_lean,
+            author_lean_certainty=author_lean_certainty,
         ))
 
     if evidence_class_counts:

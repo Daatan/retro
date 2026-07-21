@@ -3,7 +3,8 @@ that down-weights off-topic articles convexly (relevance²) in the pool, and an
 all-off-topic set short-circuits to ``insufficient_data`` instead of pooling junk.
 
 The LLM is never called here — ``_process_article_bounded`` is mocked to return
-controlled ``(result, relevance, predictions)`` tuples, so these assertions are
+controlled ``(result, relevance, predictions, author_lean, author_lean_certainty)``
+tuples, so these assertions are
 fully deterministic.
 """
 
@@ -65,7 +66,7 @@ def _wire(monkeypatch, articles, certainty: float = 0.8):
     ):
         rel, stance = by_url[result.url]
         timings.append({"url": result.url, "outcome": "ok"})
-        return (result, rel, _preds(stance, certainty))
+        return (result, rel, _preds(stance, certainty), None, None)
     monkeypatch.setattr(forecaster, "_process_article_bounded", _bounded)
 
 

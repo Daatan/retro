@@ -31,9 +31,11 @@ def _sr(url="http://x.com/1", *, relevance=None, is_prediction=None):
 
 def _extractor_stub():
     async def _extract(**kwargs):
+        # author_lean / author_lean_certainty mirror ExtractionOutput's shadow fields
+        # (retro #308/#309) so _process_article can surface them per-source.
         return SimpleNamespace(predictions=[PredictionExtraction(
             quote="q", claim="c", stance=0.6, certainty=0.8, specificity=1.0, settled=None,
-        )]), {}
+        )], author_lean=0.5, author_lean_certainty=0.4), {}
     return _extract
 
 
@@ -61,9 +63,11 @@ class TestReuseSuppliedVerdict:
         out = await _process(monkeypatch, _sr(relevance=0.83, is_prediction=True), flag=True, gk=gk)
         gk.assert_not_awaited()                 # the double-judge is gone
         assert out is not None
-        _, relevance, preds = out
+        _, relevance, preds, author_lean, author_lean_certainty = out
         assert relevance == 0.83                 # the supplied verdict, not a re-judge
         assert preds                             # extractor still ran
+        assert author_lean == 0.5                # the byline author's own forecast, surfaced per-source
+        assert author_lean_certainty == 0.4      # (shadow — never enters the estimate)
 
     async def test_supplied_reject_drops_without_judging(self, monkeypatch):
         gk = _gk_spy()
@@ -75,14 +79,14 @@ class TestReuseSuppliedVerdict:
         gk = _gk_spy(relevance=0.42)
         out = await _process(monkeypatch, _sr(relevance=0.83, is_prediction=True), flag=False, gk=gk)
         gk.assert_awaited_once()                 # re-judges exactly as before
-        _, relevance, _ = out
+        _, relevance, *_ = out
         assert relevance == 0.42                  # the judge's value, not the supplied 0.83
 
     async def test_article_without_a_verdict_is_judged(self, monkeypatch):
         gk = _gk_spy(relevance=0.42)
         out = await _process(monkeypatch, _sr(relevance=None, is_prediction=None), flag=True, gk=gk)
         gk.assert_awaited_once()                 # SERP/GDELT articles carry no verdict
-        _, relevance, _ = out
+        _, relevance, *_ = out
         assert relevance == 0.42
 
     async def test_partial_verdict_is_not_reused(self, monkeypatch):
@@ -90,7 +94,7 @@ class TestReuseSuppliedVerdict:
         gk = _gk_spy(relevance=0.42)
         out = await _process(monkeypatch, _sr(relevance=0.83, is_prediction=None), flag=True, gk=gk)
         gk.assert_awaited_once()
-        _, relevance, _ = out
+        _, relevance, *_ = out
         assert relevance == 0.42
 
     async def test_gate_reused_log_carries_the_caller_prediction_id(self, monkeypatch, caplog):

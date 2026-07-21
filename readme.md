@@ -72,7 +72,7 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 
 ## Appendix A: LLM & NLP Pipeline
 
-**Hybrid architecture:** High-volume filtering uses fast models (AWS Bedrock Nova Micro); nuanced forensic extraction uses mid-tier models (Bedrock Nova Lite). Heavy models are called only when necessary.
+**Hybrid architecture:** High-volume filtering uses fast models (AWS Bedrock Nova Micro); nuanced forensic extraction defaults to mid-tier models (Bedrock Nova Lite) for the batch pipeline, with the live Oracle API upgraded to Claude Haiku 4.5. Heavy models are called only when necessary.
 
 **Multilingual extraction:** The pipeline natively processes Hebrew and English, capturing signals in Israeli media before they surface in international coverage.
 
@@ -96,7 +96,7 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 
 **Orchestration:** `truthmachine.service` (batch pipeline loop) + `oracle-api.service` (FastAPI forecast API at `oracle.daatan.com`).
 
-**LLM:** AWS Bedrock — Nova Micro (gatekeeper) + Nova Lite (extractor, aggregator).
+**LLM:** AWS Bedrock — Nova Micro (gatekeeper) + Nova Lite (aggregator; batch-pipeline extractor default). The live Oracle API overrides the extractor to Claude Haiku 4.5 (see `docs/PROMPT_CACHING.md`).
 
 **Live pages:**
 - Factum Atlas: https://daatan.github.io/retro/

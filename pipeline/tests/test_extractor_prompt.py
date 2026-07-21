@@ -125,6 +125,9 @@ def test_author_lean_section_present():
     assert "does NOT feed the event estimate" in PROMPT_PREFIX
     assert "is that person's position, not the byline's" in PROMPT_PREFIX
     assert "treat it as the source's and return null" in PROMPT_PREFIX
+    # Concordant multiple quoted sources must not leak into author_lean — the n=10 A/B (2026-07-21)
+    # showed a stack of agreeing third-party forecasts wrongly scored the byline author +0.60.
+    assert "merely stacks concordant quoted forecasts has author_lean null" in PROMPT_PREFIX
 
 
 def test_author_lean_in_output_contract():

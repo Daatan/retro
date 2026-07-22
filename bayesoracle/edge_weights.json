@@ -10,10 +10,10 @@
     "drift": 0.018,
     "articles_used": 4,
     "reasoning": "Strong negative causal link: if Netanyahu is NOT PM before 2027 (A=YES), he is almost certainly out of office by election time and faces severe structural barriers (criminal trial, coalition collapse, Beyachad momentum) to returning as next PM. Conversely, if Netanyahu remains PM through 2026 (A=NO), he has substantial incumbent advantage, right-bloc coalition strength, and control of timing to secure next term. Consistency check: 0.08\u00d70.42 + 0.68\u00d70.58 = 0.034 + 0.394 = 0.428 \u2248 0.41 \u2713",
-    "pY_corr": 0.375,
-    "pN_corr": 0.533,
-    "r2_corr": 0.0203,
-    "n_corr": 219,
+    "pY_corr": 0.378,
+    "pN_corr": 0.53,
+    "r2_corr": 0.0189,
+    "n_corr": 220,
     "pY_bin": 0.432,
     "pN_bin": 0.469,
     "n_hi": 17,
@@ -46,9 +46,9 @@
     "articles_used": 4,
     "reasoning": "If Netanyahu remains PM (A does not happen), Eizenkot's path to PM is blocked by the incumbent's dominance and Likud's structural advantage; if Netanyahu is removed (A happens), Eizenkot becomes a credible centrist alternative to Bennett, particularly if he can position himself as a compromise candidate acceptable to both center and right-leaning voters. This represents a moderate-to-strong positive causal link (~0.16 difference), with the conditional probabilities reflecting Eizenkot's current 13.3% baseline and his demonstrated appeal in polling (44% suitability rating) as a secondary option.",
     "pY_corr": 0.01,
-    "pN_corr": 0.328,
-    "r2_corr": 0.0452,
-    "n_corr": 219,
+    "pN_corr": 0.339,
+    "r2_corr": 0.0484,
+    "n_corr": 220,
     "pY_bin": 0.152,
     "pN_bin": 0.236,
     "n_hi": 17,
@@ -82,8 +82,8 @@
     "reasoning": "If Netanyahu remains PM (A=NO), Lieberman has minimal path to premiership given right-bloc dominance and Netanyahu's control; if Netanyahu exits (A=YES), Lieberman becomes a viable kingmaker/compromise candidate in center-right coalition negotiations, especially if Beyachad and Likud deadlock. This represents a moderate-to-strong positive causal link (~12pp spread) consistent with Lieberman's historical role as coalition broker.",
     "pY_corr": 0.05,
     "pN_corr": 0.01,
-    "r2_corr": 0.067,
-    "n_corr": 219,
+    "r2_corr": 0.0674,
+    "n_corr": 220,
     "pY_bin": 0.032,
     "pN_bin": 0.017,
     "n_hi": 17,
@@ -117,8 +117,8 @@
     "reasoning": "If Netanyahu is removed before 2027 (A=YES), Lapid becomes far more likely as PM because he leads the unified Beyachad bloc (25 seats, center-left coalition ~60 seats) and has prior PM experience; conversely, if Netanyahu remains PM (A=NO), Lapid's path to PM is nearly blocked. This is a strong positive causal link: pY \u2212 pN = 0.17, and the weighted average 0.18\u00d70.42 + 0.01\u00d70.58 = 0.0084 \u2248 0.009 satisfies consistency.",
     "pY_corr": 0.045,
     "pN_corr": 0.01,
-    "r2_corr": 0.0409,
-    "n_corr": 215,
+    "r2_corr": 0.0425,
+    "n_corr": 216,
     "pY_bin": 0.016,
     "pN_bin": 0.014,
     "n_hi": 17,
@@ -220,10 +220,10 @@
     "drift": 0.05,
     "articles_used": 4,
     "reasoning": "If Netanyahu is not PM before 2027 (A=YES), Bennett as Beyachad co-leader becomes the strongest alternative to form government, given the center-left bloc's 60-seat majority and Bennett's proven coalition-building experience; conversely, if Netanyahu remains PM (A=NO), Bennett's path to premiership is blocked unless coalition collapse occurs mid-term. This represents a strong positive causal link (~50pp difference) reflecting Bennett's structural position as the most viable PM candidate in the anti-Netanyahu scenario.",
-    "pY_corr": 0.537,
-    "pN_corr": 0.051,
-    "r2_corr": 0.1732,
-    "n_corr": 211,
+    "pY_corr": 0.542,
+    "pN_corr": 0.045,
+    "r2_corr": 0.177,
+    "n_corr": 212,
     "pY_bin": 0.302,
     "pN_bin": 0.191,
     "n_hi": 17,
@@ -255,29 +255,29 @@
     "drift": 0.028,
     "articles_used": 4,
     "reasoning": "Netanyahu's return to power would strengthen the far-right coalition (Ben-Gvir, Smotrich) who are actively pursuing de facto West Bank sovereignty through settlement expansion and legal measures; his absence would likely result in a centrist Beyachad government opposed to formal annexation. This represents a strong positive causal link (~24pp difference), with the consistency check yielding 0.28\u00d70.41 + 0.04\u00d70.59 = 0.138, reasonably close to the 11% anchor given market uncertainty about what constitutes 'annexation' vs. de facto control.",
-    "pY_corr": 0.393,
+    "pY_corr": 0.394,
     "pN_corr": 0.01,
-    "r2_corr": 0.4341,
-    "n_corr": 225,
+    "r2_corr": 0.437,
+    "n_corr": 226,
     "pY_bin": null,
     "pN_bin": 0.102,
     "n_hi": 7,
-    "n_lo": 71,
+    "n_lo": 72,
     "std_hi": null,
     "std_lo": 0.018,
-    "pY_blend": 0.344,
+    "pY_blend": 0.345,
     "pN_blend": 0.094,
     "pY_ci": [
-      0.194,
-      0.494
+      0.195,
+      0.495
     ],
     "pN_ci": [
       0.089,
       0.1
     ],
     "w_llm": 1.0,
-    "w_emp_Y": 1.302,
-    "w_emp_N": 7.1
+    "w_emp_Y": 1.311,
+    "w_emp_N": 7.2
   },
   {
     "source": "BIBI_PM",
@@ -325,29 +325,29 @@
     "drift": 0.011,
     "articles_used": 4,
     "reasoning": "Netanyahu's return as PM would likely reduce US troop deployment to Gaza because he opposes international forces that constrain Israeli operations and prefers unilateral control; his government would resist the ISF framework that Trump's plan requires. Conversely, a center-left government (Beyachad) would be more receptive to international stabilization forces, making US deployment more probable. This represents a moderate negative causal link.",
-    "pY_corr": 0.84,
+    "pY_corr": 0.841,
     "pN_corr": 0.01,
-    "r2_corr": 0.6397,
-    "n_corr": 216,
+    "r2_corr": 0.6416,
+    "n_corr": 217,
     "pY_bin": null,
-    "pN_bin": 0.126,
+    "pN_bin": 0.125,
     "n_hi": 6,
-    "n_lo": 70,
+    "n_lo": 71,
     "std_hi": null,
-    "std_lo": 0.045,
-    "pY_blend": 0.58,
-    "pN_blend": 0.133,
+    "std_lo": 0.044,
+    "pY_blend": 0.581,
+    "pN_blend": 0.132,
     "pY_ci": [
-      0.43,
-      0.73
+      0.431,
+      0.731
     ],
     "pN_ci": [
       0.119,
-      0.146
+      0.145
     ],
     "w_llm": 1.0,
-    "w_emp_Y": 1.919,
-    "w_emp_N": 7.0
+    "w_emp_Y": 1.925,
+    "w_emp_N": 7.1
   },
   {
     "source": "BIBI_PM",
@@ -360,29 +360,29 @@
     "drift": 0.006,
     "articles_used": 4,
     "reasoning": "Netanyahu's continuation as PM strengthens his regional assertiveness and Cyprus-Greece-Israel alliance-building, which Erdogan perceives as anti-Turkish bloc formation, increasing confrontation risk. Conversely, a center-left government (Beyachad) would likely de-escalate rhetoric and pursue diplomatic channels with Turkey, reducing military clash probability. This represents a moderate positive causal link (~0.16 difference) consistent with Netanyahu's hawkish posture versus opposition moderation.",
-    "pY_corr": 0.229,
-    "pN_corr": 0.102,
-    "r2_corr": 0.1055,
-    "n_corr": 215,
+    "pY_corr": 0.23,
+    "pN_corr": 0.101,
+    "r2_corr": 0.1084,
+    "n_corr": 216,
     "pY_bin": null,
-    "pN_bin": 0.137,
+    "pN_bin": 0.136,
     "n_hi": 6,
-    "n_lo": 70,
+    "n_lo": 71,
     "std_hi": null,
     "std_lo": 0.031,
     "pY_blend": 0.268,
-    "pN_blend": 0.135,
+    "pN_blend": 0.134,
     "pY_ci": [
       0.118,
       0.418
     ],
     "pN_ci": [
-      0.126,
-      0.144
+      0.125,
+      0.143
     ],
     "w_llm": 1.0,
-    "w_emp_Y": 0.316,
-    "w_emp_N": 7.0
+    "w_emp_Y": 0.325,
+    "w_emp_N": 7.1
   },
   {
     "source": "BIBI_PM",
@@ -395,29 +395,29 @@
     "drift": 0.016,
     "articles_used": 4,
     "reasoning": "Netanyahu's continued premiership strengthens Israel's negotiating position and diplomatic momentum with Gulf states (evidenced by UAE deepening ties during Iran war and Syria normalization discussions), making Saudi normalization more achievable through Abraham Accords expansion. A non-Netanyahu government would likely reset regional strategy and lose momentum, reducing near-term normalization probability; this represents a moderate positive causal link.",
-    "pY_corr": 0.526,
+    "pY_corr": 0.528,
     "pN_corr": 0.01,
-    "r2_corr": 0.3415,
-    "n_corr": 223,
+    "r2_corr": 0.3448,
+    "n_corr": 224,
     "pY_bin": null,
-    "pN_bin": 0.126,
+    "pN_bin": 0.125,
     "n_hi": 7,
-    "n_lo": 71,
+    "n_lo": 72,
     "std_hi": null,
     "std_lo": 0.042,
-    "pY_blend": 0.404,
-    "pN_blend": 0.125,
+    "pY_blend": 0.406,
+    "pN_blend": 0.124,
     "pY_ci": [
-      0.254,
-      0.554
+      0.256,
+      0.556
     ],
     "pN_ci": [
-      0.113,
-      0.138
+      0.112,
+      0.137
     ],
     "w_llm": 1.0,
-    "w_emp_Y": 1.025,
-    "w_emp_N": 7.1
+    "w_emp_Y": 1.034,
+    "w_emp_N": 7.2
   },
   {
     "source": "BIBI_PM",
@@ -430,29 +430,29 @@
     "drift": 0.017,
     "articles_used": 4,
     "reasoning": "Netanyahu's continuation as PM strengthens Abraham Accords momentum through Trump alignment, demonstrated Israeli military capability post-Iran war, and his personal investment in normalization; however, Saudi entry remains constrained by domestic politics and Gaza reconstruction stalled state, creating a moderate positive causal link where Netanyahu enables but does not guarantee Saudi accession.",
-    "pY_corr": 0.64,
+    "pY_corr": 0.642,
     "pN_corr": 0.01,
-    "r2_corr": 0.3825,
-    "n_corr": 226,
+    "r2_corr": 0.3855,
+    "n_corr": 227,
     "pY_bin": null,
-    "pN_bin": 0.105,
+    "pN_bin": 0.104,
     "n_hi": 7,
-    "n_lo": 71,
+    "n_lo": 72,
     "std_hi": null,
-    "std_lo": 0.038,
-    "pY_blend": 0.444,
-    "pN_blend": 0.102,
+    "std_lo": 0.039,
+    "pY_blend": 0.446,
+    "pN_blend": 0.101,
     "pY_ci": [
-      0.294,
-      0.594
+      0.296,
+      0.596
     ],
     "pN_ci": [
-      0.091,
-      0.113
+      0.09,
+      0.112
     ],
     "w_llm": 1.0,
-    "w_emp_Y": 1.148,
-    "w_emp_N": 7.1
+    "w_emp_Y": 1.156,
+    "w_emp_N": 7.2
   },
   {
     "source": "BIBI_PM",
@@ -465,14 +465,14 @@
     "drift": 0.007,
     "articles_used": 4,
     "reasoning": "Netanyahu's continuation as PM strengthens Israel-Lebanon normalization by maintaining negotiating continuity and hawkish credibility needed to enforce Hezbollah disarmament; his removal would likely install a center-left government (Beyachad) with less appetite for unilateral security arrangements and more focus on Palestinian issues, weakening Lebanon talks momentum. This represents a moderate-to-strong positive causal link (~26pp spread) grounded in Netanyahu's demonstrated willingness to pursue regional deals and his political capital with security hawks.",
-    "pY_corr": 0.203,
-    "pN_corr": 0.197,
-    "r2_corr": 0.0002,
-    "n_corr": 216,
+    "pY_corr": 0.205,
+    "pN_corr": 0.196,
+    "r2_corr": 0.0004,
+    "n_corr": 217,
     "pY_bin": null,
-    "pN_bin": 0.188,
+    "pN_bin": 0.187,
     "n_hi": 6,
-    "n_lo": 70,
+    "n_lo": 71,
     "std_hi": null,
     "std_lo": 0.032,
     "pY_blend": 0.38,
@@ -482,12 +482,12 @@
       0.53
     ],
     "pN_ci": [
-      0.17,
-      0.189
+      0.169,
+      0.188
     ],
     "w_llm": 1.0,
     "w_emp_Y": 0.001,
-    "w_emp_N": 7.0
+    "w_emp_N": 7.1
   },
   {
     "source": "BIBI_PM",
@@ -500,29 +500,29 @@
     "drift": 0.017,
     "articles_used": 4,
     "reasoning": "Netanyahu's return strengthens normalization prospects via Trump administration alignment (Barrack's pro-Syria stance) and Netanyahu's historical willingness to pursue strategic agreements, but Syria's recent collapse of talks and al-Sharaa's mixed signals create structural barriers independent of Israeli PM identity. The causal link is moderate-positive: Netanyahu enables but does not guarantee normalization.",
-    "pY_corr": 0.533,
+    "pY_corr": 0.535,
     "pN_corr": 0.01,
-    "r2_corr": 0.3072,
-    "n_corr": 226,
+    "r2_corr": 0.3102,
+    "n_corr": 227,
     "pY_bin": null,
-    "pN_bin": 0.106,
+    "pN_bin": 0.105,
     "n_hi": 7,
-    "n_lo": 71,
+    "n_lo": 72,
     "std_hi": null,
     "std_lo": 0.03,
-    "pY_blend": 0.37,
-    "pN_blend": 0.103,
+    "pY_blend": 0.372,
+    "pN_blend": 0.102,
     "pY_ci": [
-      0.22,
-      0.52
+      0.222,
+      0.522
     ],
     "pN_ci": [
-      0.094,
-      0.112
+      0.093,
+      0.111
     ],
     "w_llm": 1.0,
-    "w_emp_Y": 0.922,
-    "w_emp_N": 7.1
+    "w_emp_Y": 0.931,
+    "w_emp_N": 7.2
   },
   {
     "source": "IRAN_NUKE",
@@ -536,28 +536,28 @@
     "articles_used": 4,
     "reasoning": "Iranian nuclear test would signal regime reconstitution and defiance post-Khamenei, creating existential threat perception that strongly incentivizes Israeli preemptive strike. This represents a strong positive causal link (~44pp spread), with consistency check: 0.72\u00d70.09 + 0.28\u00d70.91 = 0.065 + 0.255 = 0.320, which is 5.5pp below anchor (acceptable given post-war uncertainty and Netanyahu's demonstrated willingness to act unilaterally).",
     "pY_corr": 0.01,
-    "pN_corr": 0.435,
-    "r2_corr": 0.5417,
-    "n_corr": 211,
+    "pN_corr": 0.438,
+    "r2_corr": 0.5449,
+    "n_corr": 212,
     "pY_bin": null,
-    "pN_bin": 0.205,
+    "pN_bin": 0.207,
     "n_hi": 0,
-    "n_lo": 211,
+    "n_lo": 212,
     "std_hi": null,
-    "std_lo": 0.113,
-    "pY_blend": 0.28,
-    "pN_blend": 0.208,
+    "std_lo": 0.115,
+    "pY_blend": 0.279,
+    "pN_blend": 0.21,
     "pY_ci": [
-      0.13,
-      0.43
+      0.129,
+      0.429
     ],
     "pN_ci": [
-      0.189,
-      0.228
+      0.191,
+      0.23
     ],
     "w_llm": 1.0,
-    "w_emp_Y": 1.625,
-    "w_emp_N": 21.1
+    "w_emp_Y": 1.635,
+    "w_emp_N": 21.2
   },
   {
     "source": "IRAN_REGIME",
@@ -570,29 +570,29 @@
     "drift": 0.022,
     "articles_used": 4,
     "reasoning": "Iranian regime collapse (A) creates a power vacuum and legitimacy crisis that makes US recognition of Pahlavi as transitional leader plausible\u2014he has explicitly pledged Israel recognition and democratic transition, aligning with Trump administration preferences. However, Trump's reported skepticism of Pahlavi and preference for alternative governance models, combined with institutional resistance from Iran's ideological apparatus (per evidence [4]), substantially constrains recognition probability even conditional on regime fall.",
-    "pY_corr": 0.561,
+    "pY_corr": 0.562,
     "pN_corr": 0.01,
-    "r2_corr": 0.9131,
-    "n_corr": 166,
+    "r2_corr": 0.9136,
+    "n_corr": 167,
     "pY_bin": null,
-    "pN_bin": 0.115,
+    "pN_bin": 0.114,
     "n_hi": 0,
-    "n_lo": 147,
+    "n_lo": 148,
     "std_hi": null,
     "std_lo": 0.07,
-    "pY_blend": 0.523,
-    "pN_blend": 0.109,
+    "pY_blend": 0.524,
+    "pN_blend": 0.108,
     "pY_ci": [
-      0.373,
-      0.673
+      0.374,
+      0.674
     ],
     "pN_ci": [
-      0.095,
-      0.123
+      0.094,
+      0.122
     ],
     "w_llm": 1.0,
-    "w_emp_Y": 2.739,
-    "w_emp_N": 14.7
+    "w_emp_Y": 2.741,
+    "w_emp_N": 14.8
   },
   {
     "source": "US_WAR_IRAN",
@@ -605,29 +605,29 @@
     "drift": 0.01,
     "articles_used": 4,
     "reasoning": "A US invasion of Iran (A) creates strong positive causal pressure toward an official war declaration (B), as military operations of that scale typically require or precede formal war authorization. However, the evidence shows Trump's stated intent to wind down operations and avoid formal declarations, creating a moderate rather than overwhelming link: invasion makes declaration more likely but not certain, while absence of invasion makes declaration highly unlikely.",
-    "pY_corr": 0.102,
+    "pY_corr": 0.101,
     "pN_corr": 0.067,
-    "r2_corr": 0.0354,
-    "n_corr": 157,
+    "r2_corr": 0.033,
+    "n_corr": 158,
     "pY_bin": null,
     "pN_bin": 0.074,
     "n_hi": 2,
-    "n_lo": 147,
+    "n_lo": 148,
     "std_hi": null,
     "std_lo": 0.021,
-    "pY_blend": 0.263,
+    "pY_blend": 0.264,
     "pN_blend": 0.071,
     "pY_ci": [
-      0.113,
-      0.413
+      0.114,
+      0.414
     ],
     "pN_ci": [
       0.066,
       0.075
     ],
     "w_llm": 1.0,
-    "w_emp_Y": 0.106,
-    "w_emp_N": 14.7
+    "w_emp_Y": 0.099,
+    "w_emp_N": 14.8
   },
   {
     "source": "IRAN_DEAL",
@@ -746,28 +746,28 @@
     "articles_used": 4,
     "reasoning": "A Trump visit to Israel in 2026 would likely strengthen Netanyahu's political position domestically and internationally, reducing pressure for his removal and potentially stabilizing his coalition through diplomatic momentum and U.S. backing\u2014a negative causal link to B (Netanyahu out). The moderate strength (0.16 gap) reflects that while Trump support matters significantly, Israel's internal political dynamics (coalition fragility, Beyachad's polling lead, early elections) remain the dominant drivers.",
     "pY_corr": 0.537,
-    "pN_corr": 0.445,
-    "r2_corr": 0.0471,
-    "n_corr": 230,
+    "pN_corr": 0.444,
+    "r2_corr": 0.0494,
+    "n_corr": 231,
     "pY_bin": 0.516,
-    "pN_bin": 0.487,
+    "pN_bin": 0.486,
     "n_hi": 113,
-    "n_lo": 57,
+    "n_lo": 58,
     "std_hi": 0.084,
     "std_lo": 0.092,
     "pY_blend": 0.516,
-    "pN_blend": 0.468,
+    "pN_blend": 0.467,
     "pY_ci": [
       0.497,
       0.536
     ],
     "pN_ci": [
       0.438,
-      0.498
+      0.497
     ],
     "w_llm": 1.0,
     "w_emp_Y": 11.3,
-    "w_emp_N": 5.7
+    "w_emp_N": 5.8
   },
   {
     "source": "TRUMP_IL",
@@ -780,14 +780,14 @@
     "drift": 0.015,
     "articles_used": 4,
     "reasoning": "A Trump visit to Israel in 2026 would likely boost Netanyahu's political standing through diplomatic prestige and potential security/aid commitments, especially valuable during an election campaign where he trails Beyachad in seat projections. The causal link is moderate-to-strong: Trump's visit signals international legitimacy and could energize Netanyahu's right-wing base, but does not overcome structural headwinds (trial, coalition fragility, Beyachad's polling lead), hence pY remains below 0.60.",
-    "pY_corr": 0.621,
+    "pY_corr": 0.62,
     "pN_corr": 0.27,
-    "r2_corr": 0.6259,
-    "n_corr": 224,
+    "r2_corr": 0.6277,
+    "n_corr": 225,
     "pY_bin": 0.519,
     "pN_bin": 0.349,
     "n_hi": 105,
-    "n_lo": 57,
+    "n_lo": 58,
     "std_hi": 0.046,
     "std_lo": 0.022,
     "pY_blend": 0.519,
@@ -797,12 +797,12 @@
       0.53
     ],
     "pN_ci": [
-      0.34,
+      0.341,
       0.355
     ],
     "w_llm": 1.0,
     "w_emp_Y": 10.5,
-    "w_emp_N": 5.7
+    "w_emp_N": 5.8
   },
   {
     "source": "TRUMP_IL",
@@ -816,28 +816,28 @@
     "articles_used": 4,
     "reasoning": "A Trump visit to Israel in 2026 would likely involve security commitments, regional diplomacy, and potential coordination on Iran policy, increasing pressure for a second operation if Iranian retaliation or nuclear escalation occurs; conversely, without Trump's visit, Israeli decision-making on Iran becomes more domestically constrained by coalition politics and international isolation, reducing likelihood of major unilateral action. This represents a moderate-to-strong positive causal link (pY - pN = 0.24), consistent with Trump's historical role as a hawkish Iran actor and the current regional volatility post-Khamenei.",
     "pY_corr": 0.01,
-    "pN_corr": 0.435,
-    "r2_corr": 0.5673,
-    "n_corr": 212,
+    "pN_corr": 0.438,
+    "r2_corr": 0.572,
+    "n_corr": 213,
     "pY_bin": 0.122,
-    "pN_bin": 0.328,
+    "pN_bin": 0.331,
     "n_hi": 100,
-    "n_lo": 57,
+    "n_lo": 58,
     "std_hi": 0.073,
-    "std_lo": 0.047,
+    "std_lo": 0.05,
     "pY_blend": 0.158,
-    "pN_blend": 0.321,
+    "pN_blend": 0.323,
     "pY_ci": [
       0.14,
       0.176
     ],
     "pN_ci": [
-      0.305,
-      0.336
+      0.307,
+      0.34
     ],
     "w_llm": 1.0,
     "w_emp_Y": 10.0,
-    "w_emp_N": 5.7
+    "w_emp_N": 5.8
   },
   {
     "source": "IRAN_DEAL",
@@ -886,28 +886,28 @@
     "articles_used": 4,
     "reasoning": "Netanyahu's return to power strengthens hawkish Iran policy and removes constraints from centrist coalition partners, increasing appetite for military action; conversely, a center-left government (Beyachad) would prioritize reconstruction and diplomatic consolidation after the Feb 2026 war, reducing second-operation likelihood. This represents a moderate-to-strong positive causal link (~0.24 spread) consistent with Netanyahu's historical Iran stance and current regional dynamics.",
     "pY_corr": 0.01,
-    "pN_corr": 0.654,
-    "r2_corr": 0.532,
-    "n_corr": 212,
+    "pN_corr": 0.659,
+    "r2_corr": 0.5326,
+    "n_corr": 213,
     "pY_bin": null,
-    "pN_bin": 0.313,
+    "pN_bin": 0.315,
     "n_hi": 4,
-    "n_lo": 70,
+    "n_lo": 71,
     "std_hi": null,
-    "std_lo": 0.068,
+    "std_lo": 0.07,
     "pY_blend": 0.206,
-    "pN_blend": 0.309,
+    "pN_blend": 0.311,
     "pY_ci": [
       0.056,
       0.356
     ],
     "pN_ci": [
-      0.289,
-      0.329
+      0.29,
+      0.331
     ],
     "w_llm": 1.0,
-    "w_emp_Y": 1.596,
-    "w_emp_N": 7.0
+    "w_emp_Y": 1.598,
+    "w_emp_N": 7.1
   },
   {
     "source": "US_WAR_IRAN",
@@ -920,14 +920,14 @@
     "drift": 0.058,
     "articles_used": 4,
     "reasoning": "US invasion of Iran (A) creates a military-political window where the US could directly impose or recognize a transitional leadership; Pahlavi has explicitly positioned himself as the democratic alternative and Trump has shown interest in post-Khamenei governance. Without invasion, recognition becomes diplomatically implausible absent a genuine Iranian-led transition, making the causal link strongly positive.",
-    "pY_corr": 0.191,
+    "pY_corr": 0.188,
     "pN_corr": 0.117,
-    "r2_corr": 0.0122,
-    "n_corr": 174,
+    "r2_corr": 0.0113,
+    "n_corr": 175,
     "pY_bin": null,
     "pN_bin": 0.128,
     "n_hi": 3,
-    "n_lo": 159,
+    "n_lo": 160,
     "std_hi": null,
     "std_lo": 0.082,
     "pY_blend": 0.412,
@@ -941,8 +941,8 @@
       0.138
     ],
     "w_llm": 1.0,
-    "w_emp_Y": 0.037,
-    "w_emp_N": 15.9
+    "w_emp_Y": 0.034,
+    "w_emp_N": 16.0
   },
   {
     "source": "TRUMP_IL",
@@ -956,13 +956,13 @@
     "articles_used": 4,
     "reasoning": "A Trump visit to Israel in 2026 would signal strong US-Israel coordination and provide a platform for escalatory rhetoric/commitments, moderately increasing war declaration likelihood. However, the evidence shows Trump is already winding down the campaign (Article 3), Iran's command structure is degraded (Article 4), and formal war declaration remains a high political bar even with Trump's hawkishness\u2014hence the conditional probabilities remain low in absolute terms but show a moderate positive causal link (pY \u2212 pN = 0.11, consistency check: 0.15\u00d70.47 + 0.04\u00d70.53 = 0.092 \u2248 0.080).",
     "pY_corr": 0.124,
-    "pN_corr": 0.032,
-    "r2_corr": 0.6529,
-    "n_corr": 158,
+    "pN_corr": 0.031,
+    "r2_corr": 0.6564,
+    "n_corr": 159,
     "pY_bin": 0.095,
     "pN_bin": 0.055,
     "n_hi": 44,
-    "n_lo": 57,
+    "n_lo": 58,
     "std_hi": 0.017,
     "std_lo": 0.006,
     "pY_blend": 0.105,
@@ -977,6 +977,6 @@
     ],
     "w_llm": 1.0,
     "w_emp_Y": 4.4,
-    "w_emp_N": 5.7
+    "w_emp_N": 5.8
   }
 ]

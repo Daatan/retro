@@ -445,7 +445,11 @@ field exists to hold that author accountable later; it does NOT feed the event e
 keep it independent of stance and never let one influence the other.
   author_lean = the byline author's OWN directional forecast of the related event: +1 the \
 author expects it to happen, -1 the author expects it will NOT happen, 0 the author \
-explicitly weighs both sides and commits to neither.
+explicitly weighs both sides and commits to neither. This is the direction the author \
+expects the event to RESOLVE, not whether they welcome it: an author who condemns, warns \
+against, or laments an event while treating it as happening or inevitable is still \
+forecasting that it WILL happen — lean +1 toward it, never negative. Approval or alarm about \
+an outcome is sentiment, not a directional forecast, and must not flip the sign.
   author_lean_certainty = how firmly the author commits to that forecast (0 hedged, 1 emphatic).
 Return null for both (omit them) when the byline author only reports what happened or relays \
 other people's views without endorsing a direction — a straight news report has no \

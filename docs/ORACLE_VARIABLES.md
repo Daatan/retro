@@ -610,7 +610,12 @@ Shipped, in the accepted sequencing order (§6):
   variable in this doc's sense** — it never enters `aggregate_pool()` or any
   weight; it is the *author-scoring lane*, kept separate from the estimate on
   purpose (the whole point of the un-fusing work). Shadow end-to-end: null on
-  cached/old responses, populated only on fresh extractions.
+  cached/old responses, populated only on fresh extractions. `author_lean` is
+  the direction the author expects the event to **resolve**, deliberately
+  independent of whether they *approve* of it — a 2026-07-24 prompt refinement
+  after a wild-data analysis found critical op-eds that concede an event is
+  happening (e.g. a column against an inevitable US–Saudi nuclear deal) leaking
+  a negative lean; disapproval/alarm is sentiment, not a directional forecast.
 - **`evidenceWeight`/`relevanceScore` persisted into daatan's pool** — daatan
   #1071 + #1073: `EvidencePoolArticle` gained both columns, threaded through
   the full `OracleSource` → `enrichOracleSources` → `addArticlesToPool`

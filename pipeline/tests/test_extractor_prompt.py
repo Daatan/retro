@@ -128,6 +128,11 @@ def test_author_lean_section_present():
     # Concordant multiple quoted sources must not leak into author_lean — the n=10 A/B (2026-07-21)
     # showed a stack of agreeing third-party forecasts wrongly scored the byline author +0.60.
     assert "merely stacks concordant quoted forecasts has author_lean null" in PROMPT_PREFIX
+    # Sentiment-vs-forecast separation — the 2026-07-24 wild analysis found evaluative op-eds
+    # (e.g. a critical piece on an inevitable US-Saudi nuclear deal) leaked a NEGATIVE author_lean
+    # while their own extracted claims affirmed the event; disapproval must not flip the sign.
+    assert "not whether they welcome it" in PROMPT_PREFIX
+    assert "Approval or alarm about an outcome is sentiment" in PROMPT_PREFIX
 
 
 def test_author_lean_in_output_contract():

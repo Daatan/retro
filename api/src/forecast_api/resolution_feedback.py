@@ -74,11 +74,16 @@ async def ingest_resolution(path: Path, req: IngestResolutionRequest) -> IngestR
             "outcome": req.outcome,
             "resolved_at": req.resolved_at,
             "sources": [s.model_dump() for s in req.sources],
+            "author_signals": [s.model_dump() for s in req.author_signals],
         }
         await asyncio.to_thread(_append_line_to_disk, path, json.dumps(record))
         _ingested_ids.add(req.prediction_id)
 
-    return IngestResolutionResponse(already_ingested=False, sources_recorded=len(req.sources))
+    return IngestResolutionResponse(
+        already_ingested=False,
+        sources_recorded=len(req.sources),
+        author_signals_recorded=len(req.author_signals),
+    )
 
 
 def ingested_count() -> int:

@@ -13,6 +13,11 @@ only to new data.
 Shadow only: writes to resolution_leaderboard.json, a file separate from the
 vault-curated leaderboard.json get_credibility_weight() reads. Nothing here
 touches get_credibility_weight() or leaderboard.json.
+
+rescore_authors_from_disk() is the author-scoring lane (author-scoring
+redesign, Phase 1 step 3): the same replay over each record's author_signals,
+keyed per (byline author, outlet) instead of per source, written to its own
+resolution_author_leaderboard.json.
 """
 import json
 import logging
@@ -136,6 +141,104 @@ def rescore_from_disk(ingest_path: Path, output_path: Path) -> dict:
         "sources_scored": len(shadow_leaderboard),
     }
     logger.info("event=credibility_feedback_scored %s", summary)
+    return summary
+
+
+NO_BYLINE = "(no byline)"
+
+
+def _normalize_identity(value) -> str:
+    return " ".join(value.split()) if value else ""
+
+
+def rescore_authors_from_disk(ingest_path: Path, output_path: Path) -> dict:
+    """
+    Author-scoring lane: replay every ingested resolution's author_signals
+    through a fresh PlackettLuce model and write per-(byline author, outlet)
+    shadow scores to output_path. Same replay-from-scratch pattern as
+    rescore_from_disk — which also means a future byline-identity merge (the
+    known HE/EN duplicates and byline-parse artifacts) applies to all history
+    on the next call, no re-ingest needed; until then keys are the raw
+    whitespace-normalized byline strings.
+
+    Two deliberate departures from the stance lane: opinion-class rows are
+    INCLUDED (author_lean is the author's own lean — opinion is the signal,
+    not noise), and within one resolution an author's rows are averaged first
+    so a prolific author is scored once per outcome, not once per article.
+    """
+    records = _load_records(ingest_path)
+
+    skill_model = PlackettLuce()
+    ratings: dict[tuple[str, str], object] = {}
+    stats: dict[tuple[str, str], dict] = {}
+    resolutions_scored = 0
+    resolutions_without_signals = 0
+
+    for record in records:
+        outcome = record.get("outcome")
+        signals = record.get("author_signals") or []
+        usable = [s for s in signals if s.get("author_lean") is not None]
+        if outcome is None or not usable:
+            resolutions_without_signals += 1
+            continue
+
+        leans_by_key: dict[tuple[str, str], list[float]] = {}
+        for s in usable:
+            key = (_normalize_identity(s.get("author")) or NO_BYLINE, _normalize_identity(s.get("outlet_name")))
+            leans_by_key.setdefault(key, []).append(s["author_lean"])
+
+        resolutions_scored += 1
+        event_predictions: list[tuple[tuple[str, str], float]] = []
+        for key, leans in leans_by_key.items():
+            mean_lean = sum(leans) / len(leans)
+            if key not in ratings:
+                ratings[key] = skill_model.rating()
+                stats[key] = {"predictions": 0, "articles": 0, "brier_total": 0.0}
+            stats[key]["predictions"] += 1
+            stats[key]["articles"] += len(leans)
+            stats[key]["brier_total"] += brier_score(stance_to_prob(mean_lean), outcome)
+            event_predictions.append((key, mean_lean))
+
+        winners = [k for k, lean in event_predictions if (lean > 0) == outcome]
+        losers = [k for k, lean in event_predictions if (lean > 0) != outcome]
+        if winners and losers:
+            winner_teams = [[ratings[k]] for k in winners]
+            loser_teams = [[ratings[k]] for k in losers]
+            ranks = [0] * len(winner_teams) + [1] * len(loser_teams)
+            new_ratings = skill_model.rate(winner_teams + loser_teams, ranks=ranks)
+            for i, k in enumerate(winners):
+                ratings[k] = new_ratings[i][0]
+            for i, k in enumerate(losers):
+                ratings[k] = new_ratings[len(winners) + i][0]
+
+    author_board = []
+    for (author, outlet), s in stats.items():
+        r = ratings[(author, outlet)]
+        author_board.append({
+            "id": f"{author} — {outlet}" if outlet else author,
+            "author": author,
+            "outlet_name": outlet or None,
+            "brier_score": round(s["brier_total"] / s["predictions"], 4),
+            "skill_mu": round(r.mu, 2),
+            "skill_sigma": round(r.sigma, 2),
+            "skill_conservative": round(r.mu - 3 * r.sigma, 2),
+            "predictions": s["predictions"],
+            "articles": s["articles"],
+        })
+    author_board.sort(key=lambda x: x["skill_conservative"], reverse=True)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    # ensure_ascii=False: byline keys are routinely Hebrew/Arabic — keep the
+    # shadow file human-inspectable on the box.
+    output_path.write_text(json.dumps(author_board, indent=2, ensure_ascii=False))
+
+    summary = {
+        "resolutions_total": len(records),
+        "resolutions_scored": resolutions_scored,
+        "resolutions_without_signals": resolutions_without_signals,
+        "authors_scored": len(author_board),
+    }
+    logger.info("event=author_shadow_scored %s", summary)
     return summary
 
 

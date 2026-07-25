@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 
 from forecast_api import resolution_feedback
-from forecast_api.models import IngestResolutionRequest, ResolutionSourceInput
+from forecast_api.models import AuthorSignalInput, IngestResolutionRequest, ResolutionSourceInput
 
 
 def _req(**over) -> IngestResolutionRequest:
@@ -111,6 +111,32 @@ class TestIngestResolution:
         resp = await resolution_feedback.ingest_resolution(path, _req(prediction_id="pred-existing"))
 
         assert resp.already_ingested is True  # loaded from the well-formed line despite the garbage one above it
+
+    async def test_author_signals_persist_and_are_counted(self, tmp_path):
+        _reset_module_state()
+        path = tmp_path / "resolution_feedback.jsonl"
+        req = _req(author_signals=[
+            AuthorSignalInput(author="Ben Caspit", outlet_name="maariv", author_lean=0.9, author_lean_certainty=0.8, evidence_class="opinion"),
+        ])
+
+        resp = await resolution_feedback.ingest_resolution(path, req)
+
+        assert resp.author_signals_recorded == 1
+        record = json.loads(path.read_text().splitlines()[0])
+        assert record["author_signals"][0]["author"] == "Ben Caspit"
+        assert record["author_signals"][0]["author_lean"] == 0.9
+
+    async def test_omitted_author_signals_default_to_empty(self, tmp_path):
+        """An old-daatan payload with no author_signals key must keep
+        working — the field is optional end to end."""
+        _reset_module_state()
+        path = tmp_path / "resolution_feedback.jsonl"
+
+        resp = await resolution_feedback.ingest_resolution(path, _req())
+
+        assert resp.author_signals_recorded == 0
+        record = json.loads(path.read_text().splitlines()[0])
+        assert record["author_signals"] == []
 
     async def test_opinion_class_is_recorded_not_filtered_at_ingest(self, tmp_path):
         """Exclusion of opinion-class articles is a scoring-time decision

@@ -746,6 +746,22 @@ Small-tasks breakdown, in order:
   separately gated on ≥2 competing sources), a gap caught in review before
   merging. New `GET /leaderboard/resolution-shadow` exposes the shadow board
   for the observe step below. 9 new tests.
+- **Author-scoring lane (author-scoring redesign, Phase 1 step 3;
+  2026-07-25)** — the same ingest now also carries an optional
+  `author_signals` array (byline `author`, `outlet_name`, `author_lean`
+  [−1..1], `author_lean_certainty`, `evidence_class`), pushed by daatan from
+  the pool's `author_lean` shadow columns. `rescore_authors_from_disk()`
+  replays it per **(byline author, outlet)** into
+  `data/resolution_author_leaderboard.json`, exposed at
+  `GET /leaderboard/author-shadow`. Two deliberate departures from the
+  stance lane: **opinion-class rows are included** (author_lean is the
+  author's own lean — opinion is the signal), and within one resolution an
+  author's rows are **averaged first** (one Brier per author per outcome —
+  the shape validated on gate datapoint #1). Keys are raw
+  whitespace-normalized byline strings; the known byline-identity gaps
+  (HE/EN splits, parse artifacts — news-indexer #161/#162) merge cleanly
+  later because replay-from-scratch reapplies any future identity map to
+  all history. Shadow only: nothing reads it into `/forecast` weighting.
 - **Observe** — watch `GET /leaderboard/resolution-shadow` against the live
   `GET /leaderboard` on real resolutions for a while.
 - **Cutover decision** — wire the resolution-informed score into

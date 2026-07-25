@@ -288,6 +288,19 @@ class ResolutionSourceInput(BaseModel):
     evidence_weight: Optional[float] = Field(default=None, ge=0.0)
 
 
+class AuthorSignalInput(BaseModel):
+    """One byline author's directional lean on a forecast that has since
+    resolved — the author-scoring lane counterpart of ResolutionSourceInput
+    (author-scoring redesign, Phase 1 step 3). Unlike the stance lane,
+    opinion-class rows belong here: author_lean is the author's own lean and
+    opinion is precisely where it lives."""
+    author: Optional[str] = Field(default=None, description="Byline author string as extracted; None/empty is scored per-outlet as '(no byline)'")
+    outlet_name: Optional[str] = Field(default=None)
+    author_lean: float = Field(ge=-1.0, le=1.0, description="The author's lean toward the claim resolving YES, at extraction time")
+    author_lean_certainty: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    evidence_class: Optional[Literal["reported_fact", "cited_probability", "cited_share", "reporting", "opinion"]] = Field(default=None, description="Recorded for later analysis, never filtered on in this lane")
+
+
 class IngestResolutionRequest(BaseModel):
     """One resolved forecast's per-source stances, pushed by daatan once a
     Prediction resolves. Idempotent on prediction_id — re-ingesting the same
@@ -297,12 +310,14 @@ class IngestResolutionRequest(BaseModel):
     outcome: bool = Field(description="True if the claim resolved YES/TRUE (Prediction.status == RESOLVED_CORRECT for a claim asserting YES)")
     resolved_at: Optional[str] = Field(default=None)
     sources: list[ResolutionSourceInput] = Field(default_factory=list)
+    author_signals: list[AuthorSignalInput] = Field(default_factory=list)
 
 
 class IngestResolutionResponse(BaseModel):
     accepted: bool = Field(default=True)
     already_ingested: bool = Field(description="True when prediction_id was already on record — sources_recorded is 0 in that case, nothing was written")
     sources_recorded: int
+    author_signals_recorded: int = Field(default=0)
 
 
 # ── Relevance ─────────────────────────────────────────────────────────────────

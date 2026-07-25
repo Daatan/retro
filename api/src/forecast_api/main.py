@@ -18,7 +18,7 @@ from .config import settings
 from .forecaster import run_forecast, run_pool_aggregate
 from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache
 from .resolution_feedback import ingest_resolution
-from .resolution_scorer import load_shadow_leaderboard, rescore_from_disk
+from .resolution_scorer import load_shadow_leaderboard, rescore_authors_from_disk, rescore_from_disk
 from tm.config import settings as _pipeline_settings
 from tm.gatekeeper import check_is_prediction
 from tm.llm import complete_text_once
@@ -181,6 +181,11 @@ async def leaderboard_ingest(
             settings.resolved_resolution_feedback_path,
             settings.resolved_resolution_leaderboard_path,
         )
+        await asyncio.to_thread(
+            rescore_authors_from_disk,
+            settings.resolved_resolution_feedback_path,
+            settings.resolved_resolution_author_leaderboard_path,
+        )
     return result
 
 
@@ -195,6 +200,19 @@ async def leaderboard_resolution_shadow(_: None = Depends(verify_api_key)):
     """
     data = await asyncio.to_thread(load_shadow_leaderboard, settings.resolved_resolution_leaderboard_path)
     return {"sources": data, "count": len(data)}
+
+
+@app.get("/leaderboard/author-shadow", tags=["Meta"])
+async def leaderboard_author_shadow(_: None = Depends(verify_api_key)):
+    """
+    Author-scoring lane shadow board (author-scoring redesign, Phase 1 step
+    3): per-(byline author, outlet) resolution-time Brier + OpenSkill over
+    the ingested author_signals, recomputed from scratch on every
+    /leaderboard/ingest call. Shadow only — nothing reads this into
+    /forecast weighting or get_credibility_weight().
+    """
+    data = await asyncio.to_thread(load_shadow_leaderboard, settings.resolved_resolution_author_leaderboard_path)
+    return {"authors": data, "count": len(data)}
 
 
 @app.get("/health", tags=["Meta"])

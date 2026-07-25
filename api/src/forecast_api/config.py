@@ -21,6 +21,10 @@ class ApiSettings(BaseSettings):
     # through OpenSkill on every ingest (resolution_scorer.py). Separate from
     # leaderboard_path — get_credibility_weight() never reads this file.
     resolution_leaderboard_path: Path = Path("")  # empty = data_dir/resolution_leaderboard.json
+    # Author-scoring lane (author-scoring redesign, Phase 1 step 3): shadow
+    # per-(author, outlet) board replayed from the same feedback file's
+    # author_signals (resolution_scorer.rescore_authors_from_disk).
+    resolution_author_leaderboard_path: Path = Path("")  # empty = data_dir/resolution_author_leaderboard.json
 
     max_articles: int = 10
     host: str = "127.0.0.1"
@@ -331,6 +335,12 @@ class ApiSettings(BaseSettings):
         if self.resolution_leaderboard_path != Path(""):
             return self.resolution_leaderboard_path
         return self.data_dir / "resolution_leaderboard.json"
+
+    @property
+    def resolved_resolution_author_leaderboard_path(self) -> Path:
+        if self.resolution_author_leaderboard_path != Path(""):
+            return self.resolution_author_leaderboard_path
+        return self.data_dir / "resolution_author_leaderboard.json"
 
 
 settings = ApiSettings()

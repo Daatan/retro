@@ -19,6 +19,16 @@ def test_gatekeeper_output():
     assert out.prediction_count_estimate == 2
 
 
+def test_gatekeeper_output_unwraps_properties_envelope():
+    """Nova Lite (MD_JSON mode) intermittently wraps output as {"properties": {...}}
+    instead of the flat shape — retro#306."""
+    out = GatekeeperOutput.model_validate({
+        "properties": {"is_prediction": True, "reason": "Contains forecast", "prediction_count_estimate": 2}
+    })
+    assert out.is_prediction is True
+    assert out.prediction_count_estimate == 2
+
+
 def test_prediction_extraction_clamps():
     pred = PredictionExtraction(
         quote="test",
@@ -83,6 +93,22 @@ def test_prediction_extraction_fact_signal_rejects_out_of_range():
         PredictionExtraction(quote="q", claim="c", stance=0.0, certainty=0.5, fact_signal=1.5)
     with pytest.raises(ValidationError):
         PredictionExtraction(quote="q", claim="c", stance=0.0, certainty=0.5, fact_signal=-1.5)
+
+
+def test_prediction_extraction_unwraps_properties_envelope():
+    pred = PredictionExtraction.model_validate({
+        "properties": {"quote": "q", "claim": "c", "stance": 0.4, "certainty": 0.6}
+    })
+    assert pred.quote == "q"
+    assert pred.stance == 0.4
+
+
+def test_extraction_output_unwraps_properties_envelope():
+    out = ExtractionOutput.model_validate({
+        "properties": {"predictions": [], "author_lean": 0.3, "author_lean_certainty": 0.7}
+    })
+    assert out.author_lean == 0.3
+    assert out.author_lean_certainty == 0.7
 
 
 def test_extraction_output_author_lean_defaults_to_none():

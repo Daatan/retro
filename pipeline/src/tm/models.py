@@ -6,6 +6,16 @@ from enum import Enum
 
 # --- LLM Output Schemas ---
 
+def _unwrap_properties_envelope(data: Any) -> Any:
+    """Nova Lite (MD_JSON mode) intermittently wraps its structured output in a
+    spurious top-level {"properties": {...}} envelope instead of returning the
+    flat schema fields directly, which fails Pydantic validation outright. Unwrap
+    it before field validation runs. See retro#306."""
+    if isinstance(data, dict) and data.keys() == {"properties"} and isinstance(data["properties"], dict):
+        return data["properties"]
+    return data
+
+
 class GatekeeperOutput(BaseModel):
     is_prediction: bool
     reason: str
@@ -16,6 +26,11 @@ class GatekeeperOutput(BaseModel):
                     "its square multiplies the source's aggregation weight. "
                     "Defaults to 1.0 (neutral) when a caller/model omits it.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _unwrap_envelope(cls, data: Any) -> Any:
+        return _unwrap_properties_envelope(data)
 
 
 class PredictionType(str, Enum):
@@ -121,6 +136,11 @@ class PredictionExtraction(BaseModel):
     prediction_type: Optional[PredictionType] = Field(default=None)
     source_authority: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _unwrap_envelope(cls, data: Any) -> Any:
+        return _unwrap_properties_envelope(data)
+
 
 class ExtractionOutput(BaseModel):
     predictions: list[PredictionExtraction]
@@ -149,6 +169,7 @@ class ExtractionOutput(BaseModel):
           1. Valid JSON strings:   '{"quote": "...", ...}'
           2. YAML-style strings:   'quote: ... source_authority: 0.8'
         """
+        data = _unwrap_properties_envelope(data)
         if isinstance(data, dict) and "predictions" in data:
             preds = data["predictions"]
             if not isinstance(preds, list):

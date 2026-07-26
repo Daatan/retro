@@ -444,8 +444,10 @@ class PoolAggregateResult(NamedTuple):
     # Settlement diagnostics for callers that want to log the outcome without
     # re-deriving settled_directions themselves. settlement_suppressed is True
     # when a would-be pin was blocked — by the temporal direction guard on the
-    # legacy path (suppression_reason="settlement_direction") or by conflicting
-    # valid votes on the revalidation path ("settlement_conflict");
+    # legacy path (suppression_reason="settlement_direction"), by conflicting
+    # valid votes on the revalidation path ("settlement_conflict"), or by the
+    # winning direction's votes not clearing settlement_quality_floor despite
+    # clearing settlement_min_sources ("settlement_quality_floor");
     # settled/settled_sources still reflect the *applied* outcome, i.e. no pin.
     settled_sources: int
     settlement_suppressed: bool
@@ -477,6 +479,7 @@ def aggregate_pool(
     claim_archetype: Optional[str] = None,
     settlement_revalidate: bool = False,
     settlement_post_deadline_grace_days: int = 14,
+    settlement_quality_floor: float = 0.0,
 ) -> Optional[PoolAggregateResult]:
     """Pool a set of already-extracted, already-weighted per-source signals
     into a final estimate: the relevance off-topic safety net, logit
@@ -571,6 +574,8 @@ def aggregate_pool(
         demotions: list[tuple[int, str]] = []
         pos = 0
         neg = 0
+        pos_weight = 0.0
+        neg_weight = 0.0
         for i, (s, is_settled) in enumerate(zip(stances, settled_flags)):
             if not is_settled:
                 continue
@@ -585,16 +590,27 @@ def aggregate_pool(
                 demotions.append((i, reason))
             elif s >= 0:
                 pos += 1
+                pos_weight += weights[i]
             else:
                 neg += 1
+                neg_weight += weights[i]
         settlement_demotions = tuple(demotions)
         if pos > 0 and neg > 0:
             settlement_suppressed = True
             suppression_reason = "settlement_conflict"
         elif max(pos, neg) >= settlement_min_sources:
-            settled = True
-            settled_sources = max(pos, neg)
-            mean, ci_low, ci_high, std = _apply_pin(1.0 if pos > 0 else -1.0)
+            winning_weight = pos_weight if pos > neg else neg_weight
+            if settlement_quality_floor > 0 and winning_weight < settlement_quality_floor:
+                # Count clears the bar, but the settling votes are uniformly
+                # weak evidence (low credibility, thin relevance, decayed
+                # recency) — out-counting quality is not the same as agreeing
+                # decisively (retro#279). The pooled mean stands, unpinned.
+                settlement_suppressed = True
+                suppression_reason = "settlement_quality_floor"
+            else:
+                settled = True
+                settled_sources = max(pos, neg)
+                mean, ci_low, ci_high, std = _apply_pin(1.0 if pos > 0 else -1.0)
     elif settlement_min_sources > 0:
         # Legacy path (kill switch off): trust the flags, majority vote,
         # pin-level direction guard — byte-for-byte the pre-revalidation

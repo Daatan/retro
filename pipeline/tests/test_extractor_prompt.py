@@ -116,6 +116,16 @@ def test_foreclosing_negative_date_rule_present():
     assert "leave event_date empty" in PROMPT_PREFIX
 
 
+def test_date_is_not_a_match_section_present():
+    """retro#279: a dated fact about a DIFFERENT (adjacent) event was passing
+    the DATES section's event_date requirement and settling — the date floor
+    was being treated as sufficient on its own, without re-checking adjacency
+    first."""
+    assert "## A DATE IS NOT A MATCH" in PROMPT_PREFIX
+    assert "never a substitute for it" in PROMPT_PREFIX
+    assert "a precisely dated adjacent fact is still adjacent, never settled" in PROMPT_PREFIX
+
+
 def test_author_lean_section_present():
     """author_lean captures the BYLINE author's own forecast for later author-accuracy
     scoring — a separate concern from the event estimate (evidence pool quality work,

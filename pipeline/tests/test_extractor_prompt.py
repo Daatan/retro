@@ -30,6 +30,19 @@ def test_adjacent_events_examples_present():
     assert "leadership change is not a market exit" in PROMPT_PREFIX
 
 
+def test_wrong_belligerent_section_present():
+    assert "## WRONG BELLIGERENT / WRONG PARTY" in PROMPT_PREFIX
+    assert "Check the actor and target BY NAME" in PROMPT_PREFIX
+    assert "This is NEVER settled" in PROMPT_PREFIX
+
+
+def test_wrong_belligerent_examples_present():
+    assert "Two US soldiers were killed in an Iranian attack on a base in Jordan" in PROMPT_PREFIX
+    assert "the US and Jordan, not Israel" in PROMPT_PREFIX
+    assert "IRGC missiles struck US targets in Kuwait and Bahrain overnight" in PROMPT_PREFIX
+    assert "matching the claim exactly" in PROMPT_PREFIX
+
+
 def test_single_winner_contest_section_present():
     """The stance-inversion class: "Spain beat France" / "Argentina stun England"
     extracted as +1 settled FOR "France/England will win" (6 prod rows,

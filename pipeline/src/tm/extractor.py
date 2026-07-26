@@ -389,6 +389,26 @@ Examples — related event: "Company X exits the European market by year-end":
   "Company X's CEO resigned amid the European losses"                       → stance +0.2, certainty 0.4, settled false (leadership change is not a market exit)
   "Company X announced the closure of all European operations"              → stance +1.0, certainty 0.95, settled true (+ event_date of the announcement)
 
+## WRONG BELLIGERENT / WRONG PARTY — match the NAMED actor and target, not the conflict
+When the related event names SPECIFIC parties (a named country, company, person, or \
+team) in specific roles — actor and/or target — a fact about a DIFFERENT party in the \
+SAME broader conflict, alliance, or industry performing the identical kind of action is \
+NOT evidence about the named parties, however similar the action or however clearly it \
+escalates the same underlying dispute. A regional war widening to a new belligerent, a \
+new company entering an industry dispute, or a different official making a similar move \
+does not confirm — and barely moves — a claim that requires THESE SPECIFIC parties. \
+Check the actor and target BY NAME, not by category or by "is this the same conflict": \
+"the US and Iran" is not "Israel and Iran"; "Iran strikes Jordan" is not "Iran strikes \
+Israel", even on the same night of the same crisis. This is NEVER settled, and its \
+bearing on the named pair is weak context at most (|stance| <= 0.2, certainty <= 0.3) — \
+a claim asking whether X and Y fight is not "satisfied" by a report that Y is fighting \
+someone else.
+
+Examples — related event: "Israel and Iran engage in direct military conflict by December 31, 2026":
+  "Two US soldiers were killed in an Iranian attack on a base in Jordan"     → stance +0.15, certainty 0.2, settled false (the US and Jordan, not Israel — a wider war does not confirm this specific pair)
+  "IRGC missiles struck US targets in Kuwait and Bahrain overnight"         → stance +0.15, certainty 0.2, settled false (still not Israel; regional escalation raises the odds only weakly)
+  "The Israeli Air Force struck IRGC missile sites near Tehran"             → stance +1.0, certainty 0.95, settled true (+ event_date) (Israel and Iran, matching the claim exactly)
+
 ## DATES — resolve first, compare second, never assert a comparison you did not compute
 Deadline claims ("by July 15", "before year-end") are decided by ARITHMETIC, not by tone. \
 An article can be euphoric that the event is certain and still be evidence AGAINST the \

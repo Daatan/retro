@@ -306,6 +306,53 @@ class TestPostWindowOccurrence:
         assert agg.mean < 0
 
 
+class TestStaleUndatedForeclosure:
+    """retro#295, the #293 residue: 12 of the same "US bombs Iran 2025" pool's
+    rows had no settlement_event_date at all (so post_window_occurrence above
+    doesn't see them) but were extracted from articles PUBLISHED ~7 months
+    after the 2025-12-31 deadline, reporting the SAME event class recurring in
+    2026 — the same non-sequitur as a dated post-window occurrence, just
+    anchored on ``published`` instead of ``event``. The window genuinely being
+    silent is unaffected; only undated votes from articles published long
+    after the deadline are demoted."""
+
+    def test_undated_vote_from_article_published_long_after_deadline_is_demoted(self):
+        assert settlement_vote_validity(
+            -1.0, None, "2026-07-14", "arrival", "2025-12-31", None, None,
+            today="2026-07-19",
+        ) == "stale_undated_foreclosure"
+
+    def test_undated_vote_from_article_published_within_grace_still_pins(self):
+        # 10 days after the deadline — inside post_deadline_grace_days (14d) —
+        # the ordinary, honest "window closed quietly" case.
+        assert settlement_vote_validity(
+            -1.0, None, "2026-01-10", "arrival", "2025-12-31", None, None,
+            today="2026-07-19",
+        ) is None
+
+    def test_undated_vote_with_no_published_date_is_unaffected(self):
+        # Fail-open on missing metadata, matching
+        # TestLegitimatePinsStillPin.test_post_deadline_undated_negatives_pin's
+        # shape (no published date given at all).
+        assert settlement_vote_validity(
+            -1.0, None, None, "arrival", "2025-12-31", None, None,
+            today="2026-07-19",
+        ) is None
+
+    def test_iran_pool_shape_undated_rows_no_longer_pin(self):
+        # The 12 remaining undated rows from the audit, as a recompute would replay them.
+        agg = _pool(
+            [-1.0, -1.0, -1.0],
+            [True] * 3,
+            [None, None, None],
+            published=["2026-07-12", "2026-07-14", "2026-07-16"],
+            claim_direction="arrival", claim_deadline="2025-12-31",
+        )
+        assert agg.settled is False
+        assert {r for _, r in agg.settlement_demotions} == {"stale_undated_foreclosure"}
+        assert len(agg.settlement_demotions) == 3
+
+
 class TestLegitimatePinsStillPin:
     """The 8 sound pins from the audit must survive (over-tightening risk)."""
 

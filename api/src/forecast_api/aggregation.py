@@ -235,7 +235,16 @@ def settlement_vote_validity(
       deadline (``post_deadline_grace_days``) is honored, for the flipped
       late-arrival class where the occurrence itself proves the miss: the
       Knesset dissolving July 17 against a July 15 deadline settles NO, the
-      same claim "settled" by a strike seven months later does not.
+      same claim "settled" by a strike seven months later does not. The same
+      non-sequitur reaches an UNDATED vote too, via ``published`` instead of
+      ``event`` (retro#295, the #293 residue): 12 of that pool's rows had no
+      ``settlement_event_date`` at all but were extracted from articles
+      *published* ~7 months after the deadline reporting the SAME event class
+      recurring in a later year — timeframe misattribution the extractor
+      prompt already forbids (retro#295's fix), demoted here as a backstop
+      for whatever slips through. An undated vote from an article published
+      within grace of the deadline is unaffected — that is the ordinary,
+      honest "window closed quietly" case.
 
     Every individual check is fail-open on absent metadata (no deadline → no
     deadline comparison), but the date requirement itself is fail-closed: an
@@ -244,6 +253,7 @@ def settlement_vote_validity(
     """
     event = _parse_date(settlement_event_date)
     deadline = _parse_date(claim_deadline)
+    published = _parse_date(published_date)
     ref = _parse_date(today) or datetime.now().date()
 
     occurrence_sign_positive = claim_direction != "survival"
@@ -258,6 +268,21 @@ def settlement_vote_validity(
         window_closed = deadline is not None and deadline <= ref
         if event is None:
             if window_closed:
+                if (
+                    published is not None
+                    and deadline is not None
+                    and published > deadline + timedelta(days=post_deadline_grace_days)
+                ):
+                    # An undated "nothing happened" vote from an article published
+                    # long after the window closed is more likely reporting a LATER,
+                    # different-timeframe occurrence of a recurring event — misread
+                    # as silence on the closed window — than genuine retrospective
+                    # silence (the 2026-07-19 "US bombs Iran 2025" class: mid-2026
+                    # articles about active 2026 strikes, extracted as an undated NO
+                    # for the closed 2025 window). The extractor prompt already
+                    # forbids cross-timeframe extraction (retro#295); this is the
+                    # aggregation-time backstop for rows that slip through it.
+                    return "stale_undated_foreclosure"
                 return None  # window closed — absence of the event is the anchor
             return "undated_foreclosure"
         if deadline is not None and event > deadline:
@@ -281,7 +306,6 @@ def settlement_vote_validity(
         created = _parse_date(claim_created_at)
         if created is not None and event < created:
             return "event_before_claim_window"
-    published = _parse_date(published_date)
     if published is not None and event > published:
         return "event_after_article"
     return None

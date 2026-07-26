@@ -155,7 +155,11 @@ class TestDirectionGuard:
             question="settlement hardening — direction guard E",
             articles=[_article(1), _article(2)],
             claim_direction="arrival",
-            claim_deadline="2020-01-01",
+            # Just past _article()'s fixed 2026-07-01 published_date, not years
+            # past it — this test is about settlement_direction_allowed, not
+            # the stale_undated_foreclosure staleness guard (retro#295); an
+            # arbitrarily-old deadline would trip that unrelated check too.
+            claim_deadline="2026-06-20",
         ))
 
         assert resp.settled is True

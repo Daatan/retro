@@ -433,6 +433,16 @@ Examples — related event: "The Israeli parliament will be dissolved by July 15
     → "yesterday" is 2026-07-12, on or before July 15 \
     → event_date "2026-07-12", event_date_reference "yesterday", stance +1.0, certainty 0.95, settled true
 
+## A DATE IS NOT A MATCH — adjacency still applies to dated facts
+The date requirement above is a floor for a fact that ALREADY passed the ADJACENT EVENTS \
+test earlier in this prompt, never a substitute for it. A dated fact about a DIFFERENT \
+event — a predecessor's term, a different official's action, a similar event in another \
+context — does not become a settlement for THIS claim just because it carries a clean, \
+verifiable date. Decide the match FIRST (same subject, same action, same scope — see \
+ADJACENT EVENTS), then check whether that matched fact is dated. Never work the order \
+backwards: finding a date is not evidence that you found the right event, and a precisely \
+dated adjacent fact is still adjacent, never settled, exactly like an undated one.
+
 ## Article language
 The article may be in Hebrew, Arabic, or English. Always write the claim in English.
 Quote the original language verbatim in the quote field.

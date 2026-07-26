@@ -40,10 +40,10 @@ def _kwargs(**overrides):
     return kw
 
 
-def _pool(stances, settled, dates, published=None, **overrides):
+def _pool(stances, settled, dates, published=None, weights=None, **overrides):
     n = len(stances)
     return aggregate_pool(
-        stances, [1.0] * n, [1.0] * n, settled,
+        stances, weights if weights is not None else [1.0] * n, [1.0] * n, settled,
         settlement_event_dates=dates,
         published_dates=published if published is not None else [None] * n,
         **_kwargs(**overrides),
@@ -351,6 +351,66 @@ class TestStaleUndatedForeclosure:
         assert agg.settled is False
         assert {r for _, r in agg.settlement_demotions} == {"stale_undated_foreclosure"}
         assert len(agg.settlement_demotions) == 3
+
+
+class TestQualityFloor:
+    """retro#279: settlement_min_sources counts HOW MANY valid votes agree,
+    not how much evidence they carry — a pool of uniformly weak sources that
+    each barely clear settlement grade could out-count its way to a pin.
+    settlement_quality_floor requires the winning direction's combined weight
+    (credibility * evidence_weight * recency * relevance^2) to also clear a
+    bar, independent of the settlement_conflict/stale_undated_foreclosure
+    checks above. Disabled by default (0.0) — every other test in this file
+    doesn't set it and is unaffected."""
+
+    def test_uniformly_weak_sources_clear_count_but_not_weight(self):
+        # 2 sources (clears settlement_min_sources=2) at weight 0.05 each — a
+        # never-scored source (credibility floored at 0.1) with thin relevance.
+        agg = _pool(
+            [1.0, 1.0], [True, True], ["2026-07-01", "2026-07-01"],
+            published=["2026-07-01", "2026-07-01"],
+            weights=[0.05, 0.05],
+            settlement_quality_floor=0.5,
+        )
+        assert agg.settled is False
+        assert agg.settlement_suppressed is True
+        assert agg.suppression_reason == "settlement_quality_floor"
+        assert agg.mean > 0  # the pooled mean stands, just unpinned
+
+    def test_strong_sources_clear_both_count_and_weight(self):
+        agg = _pool(
+            [1.0, 1.0], [True, True], ["2026-07-01", "2026-07-01"],
+            published=["2026-07-01", "2026-07-01"],
+            weights=[0.4, 0.4],
+            settlement_quality_floor=0.5,
+        )
+        assert agg.settled is True
+        assert agg.settlement_suppressed is False
+
+    def test_floor_disabled_by_default_weak_sources_still_pin(self):
+        # Same weak-weight shape as the first test, but no floor configured —
+        # byte-for-byte the pre-#279 behavior.
+        agg = _pool(
+            [1.0, 1.0], [True, True], ["2026-07-01", "2026-07-01"],
+            published=["2026-07-01", "2026-07-01"],
+            weights=[0.05, 0.05],
+        )
+        assert agg.settled is True
+
+    def test_floor_ignores_demoted_votes_weight(self):
+        # A high-weight negative vote that's INVALID (undated, window still
+        # open — claim_deadline is 2099) never enters neg/neg_weight at all;
+        # only the two valid, weak positives are tallied against the floor.
+        agg = _pool(
+            [1.0, 1.0, -1.0], [True, True, True],
+            ["2026-07-01", "2026-07-01", None],
+            published=["2026-07-01", "2026-07-01", "2026-07-01"],
+            weights=[0.3, 0.3, 0.9],
+            settlement_quality_floor=0.5,
+            claim_direction="arrival", claim_deadline="2099-12-31",
+        )
+        assert {r for _, r in agg.settlement_demotions} == {"undated_foreclosure"}
+        assert agg.settled is True  # the two 0.3-weight positives sum to 0.6 >= floor
 
 
 class TestLegitimatePinsStillPin:

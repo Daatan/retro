@@ -183,6 +183,26 @@ class ApiSettings(BaseSettings):
     # about the window, and ground truth there was YES). Undated expiry votes
     # are unaffected.
     settlement_post_deadline_grace_days: int = 14
+    # Aggregate quality floor (retro#279): settlement_min_sources only counts
+    # HOW MANY valid votes agree, not how much evidence they carry — a pool of
+    # uniformly weak sources (low credibility, thin relevance, recency-decayed)
+    # that each barely clear settlement grade could still out-count its way to
+    # a pin. When set above 0, requires the winning direction's votes to also
+    # carry at least this much combined weight (credibility · evidence_weight ·
+    # recency · relevance²) — same units as decisiveness_floor's evidence_mass,
+    # just scoped to the settling subset instead of the whole pool. Below it
+    # the pin is suppressed (suppression_reason="settlement_quality_floor") and
+    # the pooled mean stands, same as any other suppressed pin.
+    #
+    # Default 0 (disabled): unlike decisiveness_floor/relevance_weight_floor,
+    # there is no audited incident to calibrate this against yet (#279 doesn't
+    # specify a number either) — 0.5 looked like a natural reuse of
+    # decisiveness_floor's scale but broke multiple legitimate-pin tests once
+    # wired through real per-source weights (credibility/recency/relevance
+    # multiplied together lands lower than a single flat floor assumes). Tune
+    # from real pool data (per-source weight distribution of past legitimate
+    # vs. false settlements) before enabling in prod.
+    settlement_quality_floor: float = 0.0
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.

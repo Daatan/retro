@@ -59,6 +59,23 @@ def test_single_winner_contest_examples_present():
     assert "a non-terminal loss" in PROMPT_PREFIX
 
 
+def test_unverified_interested_party_section_present():
+    """retro#299 (2026-07-19/20 audit): an IRGC damage claim ("claims to have destroyed
+    85 U.S. military targets in Bahrain") scored certainty 0.7-grade despite being an
+    unconfirmed wartime claim by a belligerent — sign was right, magnitude was not.
+    Mirrors the VERIFIED vs CLAIMED test already in FACT_SIGNAL, but applied to the
+    live-facing `certainty` field rather than the shadow fact_signal facet."""
+    assert "## Unverified claims by an interested party — cap certainty" in PROMPT_PREFIX
+    assert "carries certainty no higher than 0.5" in PROMPT_PREFIX
+    assert "UNLESS the article ALSO reports independent confirmation" in PROMPT_PREFIX
+
+
+def test_unverified_interested_party_examples_present():
+    assert "Iran's Islamic Revolutionary Guard Corps claims to have destroyed 85 U.S. military" in PROMPT_PREFIX
+    assert "an interested party's own unconfirmed damage claim" in PROMPT_PREFIX
+    assert "Satellite imagery confirms extensive damage" in PROMPT_PREFIX
+
+
 def test_negated_events_section_present():
     """The negated-claim sign-inversion class (2026-07-19 pool audit): a Kyiv
     Post escalation op-ed scored stance −0.529 on "a ceasefire will NOT be

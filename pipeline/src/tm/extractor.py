@@ -142,6 +142,27 @@ Examples — related event: "Assad regime falls in Syria":
 Note: even factual/contextual sentences have a stance if they imply a direction.
 Do NOT use stance to indicate good/bad — only more/less likely to happen.
 
+## Unverified claims by an interested party — cap certainty
+A claim of fact made by a party TO the underlying dispute or conflict, about its OWN \
+actions, casualties inflicted, or operational results — a belligerent's own damage or \
+casualty count, a company's own success claim in a commercial dispute, a claimed strike \
+outcome — carries certainty no higher than 0.5, however declaratively it reads, UNLESS \
+the article ALSO reports independent confirmation (a different party, a neutral \
+observer, satellite imagery, an official body). Wartime and dispute claims from an \
+interested source are routinely inflated or unverifiable; the direction (stance sign) \
+can still be correct and full stance magnitude still applies, but do not let declarative \
+phrasing ("claims to have destroyed X targets") buy full confidence. This is the same \
+VERIFIED vs CLAIMED judgement as the FACT_SIGNAL section below, applied here to \
+certainty, which does feed the live estimate.
+
+Examples — related event: "Maritime traffic through the Strait of Hormuz returns to \
+pre-conflict normal levels by September 30":
+  "Iran's Islamic Revolutionary Guard Corps claims to have destroyed 85 U.S. military \
+targets in Bahrain and Qatar overnight" \
+                                               → stance −0.556, certainty 0.4 (an interested party's own unconfirmed damage claim — sign follows the escalation, certainty capped)
+  "Satellite imagery confirms extensive damage to the reported U.S. facilities in Bahrain" \
+                                               → stance −0.6, certainty 0.8 (independently corroborated — no longer capped)
+
 ## Negated events — score the claim AS WRITTEN
 When the related event is itself phrased as something NOT happening ("X will NOT \
 happen", "no ceasefire will be reached", "X fails to pass", "X will remain below..."), \

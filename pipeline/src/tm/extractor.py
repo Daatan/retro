@@ -406,11 +406,17 @@ December 31, 2026":
                                                → stance +1.0, certainty 0.95, settled true, event_date resolved from \
                                                  "Tuesday" against the article's date (this question's outcome, reported as fact)
 
-## THE EVENT ITSELF vs. ADJACENT EVENTS — match subject AND action, not topic
+## MATCH THE EVENT — do not credit a near-miss as the event
 Before assigning |stance| >= 0.9 or settled=true, decompose the RELATED EVENT into WHO \
 (the subject, including its type — a person, a party, a company, a country, an \
 institution), WHAT (the exact action or outcome), and WITHIN WHAT SCOPE (threshold, \
-deadline, arena). The reported fact must match ALL three. A fact about:
+deadline, arena). The reported fact must match ALL three — a near-miss on any one of \
+them is evidence, but it is not the event. Two recurring ways a fact can miss the match, \
+below: a different subject/action/arena, or the right kind of action by the wrong named \
+party.
+
+### A different subject type, action, or arena is ADJACENT evidence
+A fact about:
 - a DIFFERENT SUBJECT TYPE — a member of the organization when the claim is about the \
 organization itself, a subsidiary when the claim is about the parent, an official when \
 the claim is about the government;
@@ -431,7 +437,7 @@ Examples — related event: "Company X exits the European market by year-end":
   "Company X's CEO resigned amid the European losses"                       → stance +0.2, certainty 0.4, settled false (leadership change is not a market exit)
   "Company X announced the closure of all European operations"              → stance +1.0, certainty 0.95, settled true (+ event_date of the announcement)
 
-## WRONG BELLIGERENT / WRONG PARTY — match the NAMED actor and target, not the conflict
+### A named-actor claim needs the NAMED actor and target, not just the same conflict
 When the related event names SPECIFIC parties (a named country, company, person, or \
 team) in specific roles — actor and/or target — a fact about a DIFFERENT party in the \
 SAME broader conflict, alliance, or industry performing the identical kind of action is \
@@ -450,6 +456,17 @@ Examples — related event: "Israel and Iran engage in direct military conflict 
   "Two US soldiers were killed in an Iranian attack on a base in Jordan"     → stance +0.15, certainty 0.2, settled false (the US and Jordan, not Israel — a wider war does not confirm this specific pair)
   "IRGC missiles struck US targets in Kuwait and Bahrain overnight"         → stance +0.15, certainty 0.2, settled false (still not Israel; regional escalation raises the odds only weakly)
   "The Israeli Air Force struck IRGC missile sites near Tehran"             → stance +1.0, certainty 0.95, settled true (+ event_date) (Israel and Iran, matching the claim exactly)
+
+### A date does not excuse a near-miss — adjacency still applies to dated facts
+The event_date requirement in the DATES section below is a floor for a fact that has \
+ALREADY passed the match tests above, never a substitute for it. A dated fact about a \
+DIFFERENT event — a predecessor's term, a different official's action, a similar event \
+in another context — does not become a settlement for THIS claim just because it \
+carries a clean, verifiable date. Decide the match FIRST (same subject, same action, \
+same scope, same named actor/target where it applies), then check whether that matched \
+fact is dated. Never work the order backwards: finding a date is not evidence that you \
+found the right event, and a precisely dated adjacent fact is still adjacent, never \
+settled, exactly like an undated one.
 
 ## DATES — resolve first, compare second, never assert a comparison you did not compute
 Deadline claims ("by July 15", "before year-end") are decided by ARITHMETIC, not by tone. \
@@ -494,16 +511,6 @@ Examples — related event: "The Israeli parliament will be dissolved by July 15
   "The Knesset dissolved yesterday" \
     → "yesterday" is 2026-07-12, on or before July 15 \
     → event_date "2026-07-12", event_date_reference "yesterday", stance +1.0, certainty 0.95, settled true
-
-## A DATE IS NOT A MATCH — adjacency still applies to dated facts
-The date requirement above is a floor for a fact that ALREADY passed the ADJACENT EVENTS \
-test earlier in this prompt, never a substitute for it. A dated fact about a DIFFERENT \
-event — a predecessor's term, a different official's action, a similar event in another \
-context — does not become a settlement for THIS claim just because it carries a clean, \
-verifiable date. Decide the match FIRST (same subject, same action, same scope — see \
-ADJACENT EVENTS), then check whether that matched fact is dated. Never work the order \
-backwards: finding a date is not evidence that you found the right event, and a precisely \
-dated adjacent fact is still adjacent, never settled, exactly like an undated one.
 
 ## Article language
 The article may be in Hebrew, Arabic, or English. Always write the claim in English.

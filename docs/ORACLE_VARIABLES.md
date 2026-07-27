@@ -123,6 +123,19 @@ the article's collapsed stance (`derive_settlement_event_date`, forecaster.py). 
 persist it next to `settled` and send it back on `/pool/aggregate`
 (`PoolSourceInput.settlement_event_date`).
 
+#### Claim/stance sign conflicts are logged, not corrected — `flag_claim_stance_sign_conflicts`
+
+retro#298 found rows where the extracted `claim` text and `stance` disagree with each other in
+the same row — e.g. a claim stating a withdrawal *"is mandatory"* scored stance **-0.136**. The
+general case ("does this stance follow from this claim") needs a second LLM call or a verifier
+stage — out of scope here. `flag_claim_stance_sign_conflicts` (`extractor.py`) is the issue's own
+"cheap partial": a deterministic marker check (`is mandatory`/`must`/`is required` vs.
+`will not`/`refuses`/`rejects`, etc.) that logs `event=claim_stance_sign_conflict` when a claim's
+explicit marker and its stance sign disagree. Runs once, right after extraction, before any of
+the guards above can touch `stance` — **observability only, never corrects a prediction**. It is
+narrow by design: literal marker clashes only, so it misses subtler mismatches (a demand read as
+adversarial when it is actually a climb-down, retro#298's own row 6451).
+
 #### Aggregation-time revalidation — `settlement_vote_validity`
 
 Extraction-time guards only protect fresh extractions; a recompute replays stored `settled`

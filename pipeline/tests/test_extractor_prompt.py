@@ -110,6 +110,18 @@ def test_capability_vs_occurrence_examples_present():
     assert "a capability milestone, not a commercial launch" in PROMPT_PREFIX
 
 
+def test_capability_aggregation_cap_section_present():
+    """retro#304: the existing cap bound when an article read as *about* preparation but
+    not when it was topically on-point and every extracted claim was nevertheless
+    intent/expectation — the model treated many accumulating intent signals as an
+    aggregate occurrence signal ("lots of smoke"), e.g. stance 0.6-0.7 instead of the
+    documented |0.3| cap. This section makes the cap explicitly per-claim, independent
+    of the article's overall framing or how many similar signals it contains."""
+    assert "## The capability/intent cap applies PER CLAIM, not to the article's overall urgency" in PROMPT_PREFIX
+    assert "their number or density does not aggregate into occurrence" in PROMPT_PREFIX
+    assert "is not itself a signal that qualifies for a higher cap" in PROMPT_PREFIX
+
+
 def test_capability_companion_clauses_present():
     """Two clauses that bound the sections which otherwise argue the other way:
     "INFER the implication" (What counts as a signal) told the model to do exactly

@@ -30,6 +30,7 @@ from tm.extractor import (
     enforce_deadline_arithmetic,
     enforce_relative_date_resolution,
     enforce_settlement_event_date,
+    flag_claim_stance_sign_conflicts,
     PROMPT_PREFIX as _EXTRACTOR_PROMPT_PREFIX,
     PROMPT_SUFFIX as _EXTRACTOR_PROMPT_SUFFIX,
 )
@@ -480,6 +481,10 @@ async def _process_article(
             event_description=question,
             claim_deadline=claim_deadline,
         )
+        # Observability only (retro#298) — logs claim/stance sign mismatches on the
+        # model's raw output, before any of the deterministic corrections below can
+        # touch stance or settled. Never mutates.
+        flag_claim_stance_sign_conflicts(extraction.predictions)
         # Before any date is compared, make sure the date itself is right: when the
         # article spoke in relative terms ("on Friday"), redo that calendar walk in
         # code — post-#267 the model still resolved the Knesset "Friday" to a

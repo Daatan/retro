@@ -99,6 +99,27 @@ Examples — related event: "Company X will launch a commercial quantum computer
   "Company X opened orders for its first commercial quantum system" \
                                                → stance +0.9, certainty 0.8, settled false (the launch itself, imminent — not yet an accomplished fact)
 
+## The capability/intent cap applies PER CLAIM, not to the article's overall urgency
+Do not let an article that reads as urgent, on-topic, or saturated with intent signals lift the \
+cap above. Five distinct threats, expectations, and preparations reported in the same article \
+are still five capability/intent signals — each is capped individually at |stance| <= 0.3, and \
+their number or density does not aggregate into occurrence. An article can be entirely ABOUT the \
+possibility of a war without any single sentence in it reporting the war itself; extract each \
+claim on its own modality (threat, expectation, preparation) and cap each one, regardless of how \
+charged or imminent the surrounding coverage reads.
+
+Example — related event: "Force F will engage in a significant military conflict with Force G by \
+date D", one article reporting several accumulating signals:
+  "Force F's defense minister threatens a strong response to any attack by Force G" \
+                                               → stance +0.3, certainty 0.3 (a threat, not an attack)
+  "Force F's security assessments expect senior Force G officials will order strikes" \
+                                               → stance +0.3, certainty 0.3 (an expectation, not an occurrence)
+  "A third party is preparing to escalate military attacks on Force G" \
+                                               → stance +0.3, certainty 0.3 (another actor's preparation, not this conflict occurring)
+Each stays capped even though all three appear in one urgent, on-topic article about the same \
+brewing conflict — the aggregate reading of "this is clearly heading to war" is not itself a \
+signal that qualifies for a higher cap.
+
 ## STANCE — the most important field
 Stance measures how strongly this signal implies the RELATED EVENT will occur.
   +1.0 = certain the event WILL happen
@@ -851,4 +872,55 @@ def enforce_settlement_event_date(
         )
         p.settled = False
 
+    return predictions
+
+
+# A claim text asserting a deontic/certainty marker ("is mandatory", "must") reads as
+# supporting its own occurrence; one asserting an explicit negation/refusal reads as
+# opposing it. Deliberately small and literal — this is an observability signal, not a
+# semantic verifier (retro#298 explicitly scoped a full fix as needing a second LLM
+# pass or a verifier stage; the general "does this stance follow from this claim" case
+# stays unimplemented). It will miss subtler mismatches like a demand read as adversarial
+# when it is actually a climb-down (retro#298's own row 6451) — only literal marker
+# clashes are in scope.
+_CLAIM_SUPPORT_MARKERS = [
+    re.compile(p) for p in (
+        r"\bis mandatory\b", r"\bmust\b", r"\bis required\b", r"\bis obligated\b",
+        r"\bis guaranteed\b", r"\bis inevitable\b",
+    )
+]
+_CLAIM_OPPOSE_MARKERS = [
+    re.compile(p) for p in (
+        r"\bwill not\b", r"\bwon'?t\b", r"\brefuses to\b", r"\brejects\b",
+        r"\bdenies\b", r"\bis impossible\b", r"\bruled out\b",
+    )
+]
+
+
+def flag_claim_stance_sign_conflicts(
+    predictions: list[PredictionExtraction],
+) -> list[PredictionExtraction]:
+    """Log (never correct) claims whose own text and stance sign disagree — retro#298.
+
+    retro#298 found rows where the extracted ``claim`` reads as supporting the related
+    event while ``stance`` is negative, or vice versa — e.g. a claim stating a
+    withdrawal "is mandatory" scored stance -0.136. The issue's own "cheap partial"
+    suggestion: flag rows where the claim text contains an explicit support/oppose
+    marker and the stance sign disagrees, purely as an observability signal, before
+    committing to an LLM verifier stage. Predictions are returned unchanged.
+    """
+    for p in predictions:
+        claim_lower = p.claim.lower()
+        has_support = any(m.search(claim_lower) for m in _CLAIM_SUPPORT_MARKERS)
+        has_oppose = any(m.search(claim_lower) for m in _CLAIM_OPPOSE_MARKERS)
+        if has_support and not has_oppose and p.stance < -0.1:
+            logger.warning(
+                "event=claim_stance_sign_conflict marker=support stance=%+.2f claim=%r",
+                p.stance, p.claim[:160],
+            )
+        elif has_oppose and not has_support and p.stance > 0.1:
+            logger.warning(
+                "event=claim_stance_sign_conflict marker=oppose stance=%+.2f claim=%r",
+                p.stance, p.claim[:160],
+            )
     return predictions

@@ -120,25 +120,6 @@ Each stays capped even though all three appear in one urgent, on-topic article a
 brewing conflict — the aggregate reading of "this is clearly heading to war" is not itself a \
 signal that qualifies for a higher cap.
 
-## Unverified claims by an interested party cap CERTAINTY, not stance
-When a claim's only source is the interested or belligerent party itself, self-reporting its \
-OWN actions or successes, and no independent outlet or party corroborates the substance of the \
-claim, keep the full stance (an unverified claim can be exactly as directionally relevant as a \
-confirmed one) but cap certainty at <= 0.5 — wartime damage, casualty, and success claims by \
-either side are routinely inflated, and a party reporting on itself is not corroboration. \
-This is about SOURCING, not sentiment: an independent outlet neutrally relaying "X says it \
-destroyed Y" does not by itself corroborate that Y was destroyed, so the claim still gets the \
-cap. Once ANY independent source confirms the claim's substance — not merely that the claim \
-was made — score certainty normally, uncapped.
-
-Example — related event: "Maritime traffic through the Strait of Hormuz returns to \
-pre-conflict normal levels by September 30":
-  "Iran's Islamic Revolutionary Guard Corps claims to have destroyed 85 U.S. military targets \
-in Bahrain and across the Gulf" (sourced only to the IRGC's own media) \
-                                               → stance −0.56, certainty <= 0.5 (escalation direction is right; the claim is self-reported by a combatant, uncorroborated)
-  "Independent monitors confirm strikes damaged at least 6 U.S.-linked facilities in Bahrain" \
-                                               → stance −0.6, certainty 0.75 (independently corroborated — no cap)
-
 ## STANCE — the most important field
 Stance measures how strongly this signal implies the RELATED EVENT will occur.
   +1.0 = certain the event WILL happen

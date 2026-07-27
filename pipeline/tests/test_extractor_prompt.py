@@ -122,6 +122,25 @@ def test_capability_aggregation_cap_section_present():
     assert "is not itself a signal that qualifies for a higher cap" in PROMPT_PREFIX
 
 
+def test_unverified_interested_party_certainty_cap_section_present():
+    """retro#299: a 2026-07-19/20 audit row scored an IRGC self-claim of destroying 85
+    U.S. targets at stance -0.556 with no certainty discount — the stance sign was right
+    (escalation), but an unverified wartime claim by a belligerent about its own actions
+    was weighted the same as a corroborated report. Unlike the capability/intent cap
+    above, this caps CERTAINTY, not stance — an unverified claim can be exactly as
+    directionally relevant as a confirmed one, just less certain."""
+    assert "## Unverified claims by an interested party cap CERTAINTY, not stance" in PROMPT_PREFIX
+    assert "cap certainty at <= 0.5" in PROMPT_PREFIX
+    assert "a party reporting on itself is not corroboration" in PROMPT_PREFIX
+    assert "score certainty normally, uncapped" in PROMPT_PREFIX
+
+
+def test_unverified_interested_party_examples_present():
+    assert "Iran's Islamic Revolutionary Guard Corps claims to have destroyed 85 U.S. military targets" in PROMPT_PREFIX
+    assert "self-reported by a combatant, uncorroborated" in PROMPT_PREFIX
+    assert "Independent monitors confirm strikes damaged at least 6 U.S.-linked facilities in Bahrain" in PROMPT_PREFIX
+
+
 def test_capability_companion_clauses_present():
     """Two clauses that bound the sections which otherwise argue the other way:
     "INFER the implication" (What counts as a signal) told the model to do exactly

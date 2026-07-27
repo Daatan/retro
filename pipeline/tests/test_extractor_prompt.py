@@ -1,13 +1,25 @@
 """Prompt-content invariants for the extractor.
 
-The adjacent-events section was A/B-sampled against the 2026-07-11 Illouz/Likud
+The adjacent-events rule was A/B-sampled against the 2026-07-11 Illouz/Likud
 false-settlement incident (article about MKs leaving Likud scored settled=true
 for "a party withdraws from the race"). Measured on the incident article at
 temperature 0, n=10: nova-lite produces a settlement-grade claim 10/10 without
-the section and 8/10 with it — hardening, not a full fix (the reliable lever is
+the rule and 8/10 with it — hardening, not a full fix (the reliable lever is
 a stronger extractor model; see docs/ORACLE_VARIABLES.md). nova-lite is
-sensitive even to whitespace changes in this section, so keep its text stable
-and re-run the A/B before rewording.
+sensitive even to whitespace changes in this rule, so keep its text stable
+and re-run the A/B before rewording (see eval_extractor_adjacent_events.py).
+
+retro#300 (2026-07-27): the adjacent-events, wrong-belligerent, and
+date-is-not-a-match sections were consolidated into one "## MATCH THE EVENT"
+block (they were three variations on "don't credit a near-miss as the event",
+scattered across the prompt) — every asserted string below is preserved
+verbatim from the pre-consolidation sections, re-run through
+eval_extractor_adjacent_events.py before/after to confirm no regression.
+Process-evidence, Capability/intent, and Multi-stage were deliberately left
+OUT of the consolidation: they sit earlier in the prompt and reordering them
+risks flipping the recency relationship with "Buried facts" (see
+test_capability_companion_clauses_present) that retro#279/A-date-is-not-a-match
+were built to protect.
 """
 
 from tm.extractor import PROMPT_PREFIX, PROMPT_SUFFIX
@@ -19,8 +31,14 @@ from tm.extractor import PROMPT_PREFIX, PROMPT_SUFFIX
 # placeholder-formatting test below now exercises PROMPT_SUFFIX instead.
 
 
+def test_match_the_event_master_section_present():
+    """retro#300: the unifying frame for the three near-miss rules below."""
+    assert "## MATCH THE EVENT — do not credit a near-miss as the event" in PROMPT_PREFIX
+    assert "WITHIN WHAT SCOPE (threshold, deadline, arena)" in PROMPT_PREFIX
+
+
 def test_adjacent_events_section_present():
-    assert "## THE EVENT ITSELF vs. ADJACENT EVENTS" in PROMPT_PREFIX
+    assert "### A different subject type, action, or arena is ADJACENT evidence" in PROMPT_PREFIX
     assert "it is NEVER settled and never carries the full +-1.0" in PROMPT_PREFIX
     assert "could a fact-checker cite this article alone" in PROMPT_PREFIX
 
@@ -31,7 +49,7 @@ def test_adjacent_events_examples_present():
 
 
 def test_wrong_belligerent_section_present():
-    assert "## WRONG BELLIGERENT / WRONG PARTY" in PROMPT_PREFIX
+    assert "### A named-actor claim needs the NAMED actor and target, not just the same conflict" in PROMPT_PREFIX
     assert "Check the actor and target BY NAME" in PROMPT_PREFIX
     assert "This is NEVER settled" in PROMPT_PREFIX
 
@@ -146,7 +164,7 @@ def test_date_is_not_a_match_section_present():
     the DATES section's event_date requirement and settling — the date floor
     was being treated as sufficient on its own, without re-checking adjacency
     first."""
-    assert "## A DATE IS NOT A MATCH" in PROMPT_PREFIX
+    assert "### A date does not excuse a near-miss" in PROMPT_PREFIX
     assert "never a substitute for it" in PROMPT_PREFIX
     assert "a precisely dated adjacent fact is still adjacent, never settled" in PROMPT_PREFIX
 

@@ -101,8 +101,36 @@ async def _lookup_by_url(pm_url: str) -> Optional[dict]:
     return max(markets, key=slug_score)
 
 
+_STOPWORDS = {
+    "the", "a", "an", "is", "are", "will", "be", "to", "of", "in", "on", "for",
+    "and", "or", "by", "at", "next", "before", "after", "with", "this", "that",
+}
+
+
+def _significant_words(text: str) -> set[str]:
+    """Lowercase words of length >= 4, minus common stopwords."""
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return {w for w in words if len(w) >= 4 and w not in _STOPWORDS}
+
+
+def _relevance_score(query: str, question: str) -> int:
+    """Count of shared significant words between a search query and a
+    candidate market's question — a cheap guard against Gamma's own search
+    returning an unrelated top hit (observed: it can score 0 lexical overlap)."""
+    return len(_significant_words(query) & _significant_words(question))
+
+
 async def _lookup_by_keywords(keywords: list[str], event_name: str) -> Optional[dict]:
-    """Keyword search fallback via Gamma markets API."""
+    """Keyword search fallback via Gamma markets API.
+
+    Gamma's own search relevance is loose enough to return a top hit with zero
+    lexical overlap with the query (observed live: a natural-language forecast
+    question matched an unrelated "before GTA VI?" joke market with zero shared
+    significant words). Scans each query's up-to-5 candidates for the best
+    word-overlap match; only returns a candidate sharing at least one
+    significant word, trying the next query phrasing otherwise rather than
+    confidently returning an unrelated market.
+    """
     queries = [kw for kw in keywords if kw and not kw.startswith('"')] + [event_name]
     queries += [kw.strip('"') for kw in keywords if kw.startswith('"')]
 
@@ -113,10 +141,14 @@ async def _lookup_by_keywords(keywords: list[str], event_name: str) -> Optional[
                     f"{GAMMA_BASE}/markets",
                     params={"search": q, "limit": 5, "active": "false"},
                 )
-                if r.status_code == 200 and r.json():
-                    return r.json()[0]
+                if r.status_code != 200 or not r.json():
+                    continue
+                candidates = r.json()
             except Exception:
                 continue
+            best = max(candidates, key=lambda m: _relevance_score(q, m.get("question", "")))
+            if _relevance_score(q, best.get("question", "")) > 0:
+                return best
     return None
 
 

@@ -770,11 +770,25 @@ Small-tasks breakdown, in order:
   stance lane: **opinion-class rows are included** (author_lean is the
   author's own lean — opinion is the signal), and within one resolution an
   author's rows are **averaged first** (one Brier per author per outcome —
-  the shape validated on gate datapoint #1). Keys are raw
-  whitespace-normalized byline strings; the known byline-identity gaps
-  (HE/EN splits, parse artifacts — news-indexer #161/#162) merge cleanly
-  later because replay-from-scratch reapplies any future identity map to
-  all history. Shadow only: nothing reads it into `/forecast` weighting.
+  the shape validated on gate datapoint #1). Shadow only: nothing reads it
+  into `/forecast` weighting.
+- **Byline identity merge (retro #329; wired in after datapoint #1)** —
+  `rescore_authors_from_disk()` groups raw bylines through
+  `_load_identity_map()`, which fetches news-indexer's curated
+  `Person`/`PersonAlias` map (`GET /authors/admin/people`, the same
+  `NEWS_INDEXER_URL`/`NEWS_INDEXER_API_KEY` retro already uses for search)
+  and flattens it into `{alias: canonical_name}`. Fetched fresh once per
+  rescore call — no caching, the curated set is small (a dozen-ish people)
+  and replay-from-scratch already re-fetches everything else. **Fails open**
+  to `{}` on any error (missing config, timeout, non-200, malformed
+  response), falling back to the raw whitespace-normalized byline — same
+  convention as every other news-indexer-backed dependency in this repo.
+  Normalization also strips Hebrew niqqud/gershayim marks so diacritic
+  variants of the same byline (the exact case news-indexer #161 hand-curated
+  for Ynet/Ynetnews) collapse to one key even before an alias exists.
+  Because scoring replays from scratch, curating a new alias in news-indexer
+  retroactively merges that author's whole history on the *next* rescore —
+  no backfill needed.
 - **Observe** — watch `GET /leaderboard/resolution-shadow` against the live
   `GET /leaderboard` on real resolutions for a while.
 - **Cutover decision** — wire the resolution-informed score into

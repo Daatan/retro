@@ -21,11 +21,14 @@ resolution_author_leaderboard.json.
 """
 import json
 import logging
+import re
 from pathlib import Path
 
+import httpx
 from openskill.models import PlackettLuce
 
 from tm.scorer import brier_score, stance_to_prob
+from tm.web_search import NEWS_INDEXER_API_KEY, NEWS_INDEXER_URL
 
 logger = logging.getLogger(__name__)
 
@@ -146,9 +149,53 @@ def rescore_from_disk(ingest_path: Path, output_path: Path) -> dict:
 
 NO_BYLINE = "(no byline)"
 
+# Hebrew cantillation/niqqud marks (U+0591-U+05C7) and geresh/gershayim
+# (U+05F3-U+05F4) — stripped so e.g. "שילה פריד" and "שילֹה פריד" (a stray
+# gershayim mark) normalize to the same key. The exact case ni#161 hand-
+# curated for Ynet/Ynetnews before an identity map existed to catch it.
+_HEBREW_DIACRITICS_RE = re.compile("[֑-ׇ׳״]")
+
 
 def _normalize_identity(value) -> str:
-    return " ".join(value.split()) if value else ""
+    if not value:
+        return ""
+    return " ".join(_HEBREW_DIACRITICS_RE.sub("", value).split())
+
+
+def _load_identity_map() -> dict[str, str]:
+    """Fetch news-indexer's curated Person/PersonAlias identity map (GET
+    /authors/admin/people) and flatten it into {normalized_alias: canonical_name}.
+
+    Fails open to {} on any error — missing config, timeout, non-200,
+    malformed response — so author grouping falls back to raw normalized
+    byline strings, same fail-open convention as every other news-indexer-
+    backed dependency in this codebase (retro/CLAUDE.md's _secret() note).
+    Currently a small (~dozen), slowly-growing curated set, so no caching:
+    one GET per rescore call is negligible next to the replay itself.
+    """
+    if not (NEWS_INDEXER_URL and NEWS_INDEXER_API_KEY):
+        return {}
+    try:
+        r = httpx.get(
+            f"{NEWS_INDEXER_URL}/authors/admin/people",
+            headers={"x-api-key": NEWS_INDEXER_API_KEY},
+            timeout=httpx.Timeout(connect=2.0, read=5.0, write=2.0, pool=2.0),
+        )
+        r.raise_for_status()
+        people = r.json().get("people", [])
+        identity_map: dict[str, str] = {}
+        for person in people:
+            canonical = person.get("canonical_name")
+            if not canonical:
+                continue
+            for alias_row in person.get("aliases", []):
+                normalized = _normalize_identity(alias_row.get("alias"))
+                if normalized:
+                    identity_map[normalized] = canonical
+        return identity_map
+    except Exception as exc:
+        logger.debug("news_indexer identity map fetch failed (non-fatal): %s", exc)
+        return {}
 
 
 def rescore_authors_from_disk(ingest_path: Path, output_path: Path) -> dict:
@@ -156,10 +203,14 @@ def rescore_authors_from_disk(ingest_path: Path, output_path: Path) -> dict:
     Author-scoring lane: replay every ingested resolution's author_signals
     through a fresh PlackettLuce model and write per-(byline author, outlet)
     shadow scores to output_path. Same replay-from-scratch pattern as
-    rescore_from_disk — which also means a future byline-identity merge (the
-    known HE/EN duplicates and byline-parse artifacts) applies to all history
-    on the next call, no re-ingest needed; until then keys are the raw
-    whitespace-normalized byline strings.
+    rescore_from_disk — which also means the byline-identity merge below
+    applies to all history on the next call, no re-ingest needed.
+
+    Byline identity: raw bylines are grouped through news-indexer's curated
+    Person/PersonAlias map (_load_identity_map()) before keying — the known
+    HE/EN duplicates and byline-parse artifacts collapse into one row when
+    curated there. An unmatched raw byline still keys on its own
+    whitespace-normalized string, same as before the map existed.
 
     Two deliberate departures from the stance lane: opinion-class rows are
     INCLUDED (author_lean is the author's own lean — opinion is the signal,
@@ -167,6 +218,7 @@ def rescore_authors_from_disk(ingest_path: Path, output_path: Path) -> dict:
     so a prolific author is scored once per outcome, not once per article.
     """
     records = _load_records(ingest_path)
+    identity_map = _load_identity_map()
 
     skill_model = PlackettLuce()
     ratings: dict[tuple[str, str], object] = {}
@@ -184,7 +236,9 @@ def rescore_authors_from_disk(ingest_path: Path, output_path: Path) -> dict:
 
         leans_by_key: dict[tuple[str, str], list[float]] = {}
         for s in usable:
-            key = (_normalize_identity(s.get("author")) or NO_BYLINE, _normalize_identity(s.get("outlet_name")))
+            raw_author = _normalize_identity(s.get("author"))
+            author = identity_map.get(raw_author, raw_author) if raw_author else NO_BYLINE
+            key = (author, _normalize_identity(s.get("outlet_name")))
             leans_by_key.setdefault(key, []).append(s["author_lean"])
 
         resolutions_scored += 1

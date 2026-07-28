@@ -54,7 +54,11 @@ async def resolve_market(market: str) -> Optional[dict]:
     by_slug = await _lookup_by_url(f"https://polymarket.com/event/{market}")
     if by_slug:
         return by_slug
-    return await _lookup_by_keywords([market], market)
+    # prefer_open=True: a trader typing a natural-language question wants the
+    # current, tradeable market, not a same-topic one from a past month that
+    # happens to tie on relevance (Gamma runs many near-identical templated
+    # markets over time, e.g. a fresh "Bitcoin reach $Nk" market each month).
+    return await _lookup_by_keywords([market], market, prefer_open=True)
 
 
 def _json_list(raw) -> list:

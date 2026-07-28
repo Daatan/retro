@@ -15,6 +15,14 @@ Two bugs are covered here, found in sequence:
    `/public-search?q=`, Polymarket's real search, with the query reduction that
    endpoint needs.
 
+3. #339 follow-up — once search actually returned candidates, a real-time
+   question could tie in relevance ratio between an old, closed instance of a
+   recurring templated market (Gamma runs a fresh "Bitcoin reach $Nk" market
+   every month) and a current, open one, with the closed one winning purely by
+   iteration order. Fixed with an opt-in `prefer_open` tiebreak, used only by
+   the live MCP lookup — the batch historical fetcher wants a period-matched
+   settled market and stays on the old (deterministic) behavior.
+
 Fixtures are shaped like real captured responses from each endpoint.
 """
 
@@ -319,3 +327,93 @@ class TestLookupByKeywords:
         _patch_client(monkeypatch, fake)
 
         assert await polymarket._lookup_by_keywords(["anything here"], "anything here") is None
+
+
+class TestPreferOpen:
+    """Gamma runs many near-identical templated markets over time (e.g. a fresh
+    "Bitcoin reach $Nk" market every month). Once /public-search actually
+    returns candidates, an old closed instance and a current open one can tie
+    on relevance ratio, with Python's max() picking whichever came first in
+    Gamma's list — observed live: an October-2025 closed "$200k" market beat an
+    equally-relevant, still-open July one purely on iteration order.
+
+    `prefer_open` fixes this for the live MCP lookup only; the batch historical
+    fetcher (prefer_open defaults False) is unaffected — verified by
+    `test_default_behavior_is_unchanged` below.
+    """
+
+    raw = "Will Bitcoin reach $200,000 in 2026?"
+
+    def _payload(self, *markets: dict) -> dict:
+        return {"events": [{"markets": list(markets)}]}
+
+    async def test_breaks_a_tie_toward_the_open_candidate(self, monkeypatch):
+        closed = {"question": "Will Bitcoin reach $200k in October?", "closed": True}
+        open_ = {"question": "Will Bitcoin reach $200k in July?", "closed": False}
+        fake = _FakeAsyncClient({
+            polymarket._search_query(self.raw): self._payload(closed, open_),
+        })
+        _patch_client(monkeypatch, fake)
+
+        result = await polymarket._lookup_by_keywords([self.raw], self.raw, prefer_open=True)
+
+        assert result == open_
+
+    async def test_order_in_the_response_does_not_matter(self, monkeypatch):
+        """The bug was iteration-order-dependent — prove the fix isn't too."""
+        closed = {"question": "Will Bitcoin reach $200k in October?", "closed": True}
+        open_ = {"question": "Will Bitcoin reach $200k in July?", "closed": False}
+        fake = _FakeAsyncClient({
+            polymarket._search_query(self.raw): self._payload(open_, closed),
+        })
+        _patch_client(monkeypatch, fake)
+
+        result = await polymarket._lookup_by_keywords([self.raw], self.raw, prefer_open=True)
+
+        assert result == open_
+
+    async def test_never_prefers_a_less_relevant_open_market(self, monkeypatch):
+        """Openness only breaks ties — it must not outrank a genuinely better
+        match just because that better match happens to be closed."""
+        better_but_closed = {
+            "question": "Will Bitcoin reach $200,000 in 2026?", "closed": True,
+        }
+        worse_but_open = {"question": "Will Ethereum reach $10k?", "closed": False}
+        fake = _FakeAsyncClient({
+            polymarket._search_query(self.raw): self._payload(
+                better_but_closed, worse_but_open
+            ),
+        })
+        _patch_client(monkeypatch, fake)
+
+        result = await polymarket._lookup_by_keywords([self.raw], self.raw, prefer_open=True)
+
+        assert result == better_but_closed
+
+    async def test_default_behavior_is_unchanged(self, monkeypatch):
+        """The batch fetcher never passes prefer_open — it must keep picking
+        whichever candidate _relevance_ratio ranks highest, tie-break included,
+        exactly as before this change."""
+        closed = {"question": "Will Bitcoin reach $200k in October?", "closed": True}
+        open_ = {"question": "Will Bitcoin reach $200k in July?", "closed": False}
+        fake = _FakeAsyncClient({
+            polymarket._search_query(self.raw): self._payload(closed, open_),
+        })
+        _patch_client(monkeypatch, fake)
+
+        result = await polymarket._lookup_by_keywords([self.raw], self.raw)
+
+        assert result == closed  # first in iteration order, as before
+
+    async def test_missing_closed_field_treated_as_open(self, monkeypatch):
+        """Gamma always sends `closed`, but don't crash or misrank if it's absent."""
+        no_closed_field = {"question": "Will Bitcoin reach $200k in July?"}
+        closed = {"question": "Will Bitcoin reach $200k in October?", "closed": True}
+        fake = _FakeAsyncClient({
+            polymarket._search_query(self.raw): self._payload(closed, no_closed_field),
+        })
+        _patch_client(monkeypatch, fake)
+
+        result = await polymarket._lookup_by_keywords([self.raw], self.raw, prefer_open=True)
+
+        assert result == no_closed_field

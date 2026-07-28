@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import json
 
+import httpx
+import pytest
+
+from forecast_api import resolution_scorer
 from forecast_api.resolution_scorer import (
     load_shadow_leaderboard,
     rescore_authors_from_disk,
@@ -130,6 +134,12 @@ def _signal(author, lean, outlet="ynet", evidence_class="opinion"):
 
 
 class TestRescoreAuthorsFromDisk:
+    @pytest.fixture(autouse=True)
+    def _no_identity_map_by_default(self, monkeypatch):
+        # Deterministic + network-free by default; tests below that care about
+        # the identity map override this via their own monkeypatch.setattr.
+        monkeypatch.setattr(resolution_scorer, "_load_identity_map", lambda: {})
+
     def test_missing_ingest_file_produces_empty_board(self, tmp_path):
         summary = rescore_authors_from_disk(tmp_path / "does-not-exist.jsonl", tmp_path / "out.json")
         assert summary["resolutions_total"] == 0
@@ -221,6 +231,128 @@ class TestRescoreAuthorsFromDisk:
         board = load_shadow_leaderboard(tmp_path / "out.json")
         assert board[0]["author"] == "אבי כאלו"
         assert "אבי כאלו" in (tmp_path / "out.json").read_text()
+
+    def test_aliased_bylines_merge_via_the_identity_map(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            resolution_scorer, "_load_identity_map",
+            lambda: {"אבי כאלו": "Avi Kalo", "avi kalo (english byline)": "Avi Kalo"},
+        )
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            _author_record("p1", True, [
+                _signal("אבי כאלו", 0.6, outlet="ynet"),
+                _signal("avi kalo (english byline)", 0.8, outlet="ynet"),
+            ]),
+        ])
+        rescore_authors_from_disk(ingest, tmp_path / "out.json")
+        board = load_shadow_leaderboard(tmp_path / "out.json")
+        assert len(board) == 1
+        assert board[0]["author"] == "Avi Kalo"
+        assert board[0]["articles"] == 2
+
+    def test_unmatched_byline_passes_through_unchanged(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(resolution_scorer, "_load_identity_map", lambda: {"someone else": "Someone Else"})
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [_author_record("p1", True, [_signal("Ben Caspit", 0.5, outlet="maariv")])])
+        rescore_authors_from_disk(ingest, tmp_path / "out.json")
+        board = load_shadow_leaderboard(tmp_path / "out.json")
+        assert board[0]["author"] == "Ben Caspit"
+
+    def test_falls_back_to_raw_grouping_when_identity_map_unavailable(self, tmp_path, monkeypatch):
+        """Simulates news-indexer being unreachable: _load_identity_map already
+        fails open to {} on its own (covered by TestLoadIdentityMap), so the
+        caller-side behavior is just "an empty map changes nothing"."""
+        monkeypatch.setattr(resolution_scorer, "_load_identity_map", lambda: {})
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            _author_record("p1", True, [_signal("Ben  Caspit ", 0.6, outlet="maariv"), _signal(" Ben Caspit", 0.8, outlet="maariv")]),
+        ])
+        rescore_authors_from_disk(ingest, tmp_path / "out.json")
+        board = load_shadow_leaderboard(tmp_path / "out.json")
+        assert len(board) == 1
+        assert board[0]["author"] == "Ben Caspit"
+
+    def test_no_byline_sentinel_is_never_looked_up_in_the_identity_map(self, tmp_path, monkeypatch):
+        # A map that (incorrectly) carried an empty-string alias must not leak into NO_BYLINE.
+        monkeypatch.setattr(resolution_scorer, "_load_identity_map", lambda: {"": "Should Not Apply"})
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [_author_record("p1", True, [_signal(None, 0.5, outlet="jpost")])])
+        rescore_authors_from_disk(ingest, tmp_path / "out.json")
+        board = load_shadow_leaderboard(tmp_path / "out.json")
+        assert board[0]["author"] == "(no byline)"
+
+
+class _FakeResponse:
+    def __init__(self, json_data, status_code=200):
+        self._json_data = json_data
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError("error", request=httpx.Request("GET", "http://ni.test"), response=self)
+
+    def json(self):
+        return self._json_data
+
+
+class TestLoadIdentityMap:
+    def test_returns_empty_when_not_configured(self, monkeypatch):
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_URL", None)
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_API_KEY", None)
+        assert resolution_scorer._load_identity_map() == {}
+
+    def test_flattens_people_and_aliases_into_a_normalized_map(self, monkeypatch):
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_URL", "http://ni.test")
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_API_KEY", "key")
+        people = {
+            "people": [
+                {
+                    "canonical_name": "Itamar Eichner",
+                    "aliases": [{"alias": "איתמר אייכנר"}, {"alias": " Itamar Eichner "}],
+                },
+            ],
+        }
+        monkeypatch.setattr(resolution_scorer.httpx, "get", lambda *a, **k: _FakeResponse(people))
+        identity_map = resolution_scorer._load_identity_map()
+        assert identity_map["איתמר אייכנר"] == "Itamar Eichner"
+        assert identity_map["Itamar Eichner"] == "Itamar Eichner"
+
+    def test_strips_hebrew_diacritics_so_gershayim_variants_match(self, monkeypatch):
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_URL", "http://ni.test")
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_API_KEY", "key")
+        people = {"people": [{"canonical_name": "Shilo Freid", "aliases": [{"alias": "שילה פריד"}]}]}
+        monkeypatch.setattr(resolution_scorer.httpx, "get", lambda *a, **k: _FakeResponse(people))
+        identity_map = resolution_scorer._load_identity_map()
+        # A stray gershayim mark on the raw byline must still hit the same key.
+        assert resolution_scorer._normalize_identity("שילֹה פריד") in identity_map
+
+    def test_fails_open_on_http_error_status(self, monkeypatch):
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_URL", "http://ni.test")
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_API_KEY", "key")
+        monkeypatch.setattr(resolution_scorer.httpx, "get", lambda *a, **k: _FakeResponse({}, status_code=500))
+        assert resolution_scorer._load_identity_map() == {}
+
+    def test_fails_open_on_network_error(self, monkeypatch):
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_URL", "http://ni.test")
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_API_KEY", "key")
+
+        def _raise(*a, **k):
+            raise httpx.ConnectError("boom")
+
+        monkeypatch.setattr(resolution_scorer.httpx, "get", _raise)
+        assert resolution_scorer._load_identity_map() == {}
+
+    def test_skips_people_with_no_canonical_name_and_empty_aliases(self, monkeypatch):
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_URL", "http://ni.test")
+        monkeypatch.setattr(resolution_scorer, "NEWS_INDEXER_API_KEY", "key")
+        people = {
+            "people": [
+                {"canonical_name": None, "aliases": [{"alias": "X"}]},
+                {"canonical_name": "Y", "aliases": [{"alias": ""}]},
+            ],
+        }
+        monkeypatch.setattr(resolution_scorer.httpx, "get", lambda *a, **k: _FakeResponse(people))
+        assert resolution_scorer._load_identity_map() == {}
 
 
 class TestLoadShadowLeaderboard:

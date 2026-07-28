@@ -24,7 +24,7 @@ from .article_fetch import ArticleFetchError, fetch_and_extract
 from .bayesoracle import compute_nodes
 from .config import settings
 from .forecaster import run_forecast
-from .leaderboard import get_leaderboard_data, leaderboard_size
+from .leaderboard import get_leaderboard_data, leaderboard_size, leaderboard_snapshot_date
 from .mcp_auth import SCOPE_FORECAST, SCOPE_READ, CognitoTokenVerifier, require_scope
 from .models import ForecastRequest, SearchRequest
 from .polymarket_live import current_yes_price, is_binary_yesno, resolve_market, summarize_market
@@ -150,12 +150,25 @@ async def bayes_nodes(observations: str = "") -> dict:
 
 
 async def source_leaderboard() -> dict:
-    """Live source-credibility leaderboard (sorted by skill μ−3σ).
+    """Source-credibility leaderboard (sorted by skill μ−3σ).
 
-    Shows which outlets the Oracle trusts and how much — context for weighing the
-    sources behind a forecast.
+    A FROZEN snapshot (see `snapshot_date`), not a live board — this is the
+    legacy vault, retained only as the fallback credibility source. It last
+    changed on that date and only ever covered a handful of outlets, so an
+    outlet's absence doesn't mean the Oracle distrusts it. Context for weighing
+    the sources behind a forecast, not a claim about what the Oracle currently
+    trusts.
     """
-    return {"sources": get_leaderboard_data(), "count": leaderboard_size()}
+    return {
+        "sources": get_leaderboard_data(),
+        "count": leaderboard_size(),
+        "snapshot_date": leaderboard_snapshot_date(),
+        "note": (
+            "Frozen vault snapshot, not regenerated since snapshot_date — retained as the "
+            "credibility fallback, not a live ranking. See GET /leaderboard/resolution-shadow "
+            "for the newer, resolution-informed board (small sample size)."
+        ),
+    }
 
 
 async def polymarket_market(market: str) -> dict:

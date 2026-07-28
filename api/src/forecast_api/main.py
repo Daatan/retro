@@ -90,7 +90,9 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
-# Allow oracle-test.html on GitHub Pages to call this API
+# Allow oracle-test.html / oracle-mcp-test.html on GitHub Pages to call this API.
+# "Authorization" is for oracle-mcp-test.html's browser-side /mcp calls (Bearer
+# token from the Cognito PKCE flow) — REST endpoints still use x-api-key only.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -101,7 +103,7 @@ app.add_middleware(
     # so localhost dev origins need a regex.
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "x-api-key"],
+    allow_headers=["Content-Type", "x-api-key", "Authorization"],
 )
 
 

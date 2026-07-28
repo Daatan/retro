@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Oracle MCP — Connection Test Console</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #080F1A;
+      --surface:   #0E1F35;
+      --surface2:  #142843;
+      --border:    #1C3452;
+      --accent:    #3B82F6;
+      --accent-hi: #60A5FA;
+      --muted:     #4B6280;
+      --text:      #E2E8F0;
+      --text-dim:  #8BA3BC;
+      --yes:       #22C55E;
+      --no:        #EF4444;
+      --warn:      #F59E0B;
+      --radius:    12px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+
+    .logo { display: flex; align-items: center; gap: .6rem; margin-bottom: .35rem; }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+      border-radius: 8px;
+      display: grid; place-items: center;
+      font-size: 1rem;
+    }
+    .logo h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; }
+    .logo span { color: var(--text-dim); font-weight: 400; font-size: .9rem; }
+    .subtitle { color: var(--text-dim); font-size: .88rem; margin: .6rem 0 2rem; line-height: 1.5; }
+    .subtitle a { color: var(--accent-hi); }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .card-label {
+      font-size: .7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .1em;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    .status-row { display: flex; align-items: center; gap: .6rem; font-size: .88rem; margin-bottom: 1rem; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .dot.ok { background: var(--yes); box-shadow: 0 0 6px var(--yes); }
+    .dot.err { background: var(--no); }
+    .dot.pending { background: var(--warn); }
+
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: .85rem;
+      font-weight: 600;
+      padding: .6rem 1.2rem;
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: .45rem;
+      transition: background .15s, opacity .15s;
+    }
+    .btn:hover { background: var(--accent-hi); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn.secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+    .btn.secondary:hover { border-color: var(--accent); background: var(--surface2); }
+    .btn.danger { background: transparent; border: 1px solid var(--no); color: var(--no); }
+    .btn.danger:hover { background: rgba(239,68,68,.1); }
+
+    .btn-row { display: flex; flex-wrap: wrap; gap: .6rem; }
+
+    input[type=text] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: .85rem;
+      font-family: inherit;
+      padding: .55rem .8rem;
+      outline: none;
+      transition: border-color .15s;
+      margin-bottom: .6rem;
+    }
+    input[type=text]:focus { border-color: var(--accent); }
+    input[type=text]::placeholder { color: var(--muted); }
+
+    .tool-block { border-bottom: 1px solid var(--border); padding: 1rem 0; }
+    .tool-block:last-child { border-bottom: none; padding-bottom: 0; }
+    .tool-block:first-child { padding-top: 0; }
+    .tool-name { font-family: ui-monospace, monospace; font-size: .82rem; color: var(--accent-hi); margin-bottom: .3rem; }
+    .tool-desc { font-size: .78rem; color: var(--text-dim); margin-bottom: .7rem; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 13px; height: 13px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    .spinner.on { display: inline-block; }
+
+    pre.output {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: .9rem;
+      font-size: .78rem;
+      font-family: ui-monospace, monospace;
+      color: var(--text-dim);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 360px;
+      overflow-y: auto;
+      margin-top: .7rem;
+      display: none;
+    }
+    pre.output.on { display: block; }
+    pre.output.err { color: var(--no); border-color: var(--no); }
+
+    .identity { font-size: .82rem; color: var(--text-dim); }
+    .identity b { color: var(--text); }
+
+    .footer { color: var(--muted); font-size: .78rem; margin-top: 2rem; line-height: 1.6; }
+    .footer a { color: var(--text-dim); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">
+      <div class="logo-icon">🔮</div>
+      <h1>Oracle MCP <span>— connection test console</span></h1>
+    </div>
+    <p class="subtitle">
+      Verifies the OAuth login flow (native Cognito or Google) and calls a few
+      tools against <code>https://oracle.daatan.com/mcp</code>. For the actual
+      trader-facing docs, see
+      <a href="https://github.com/Daatan/docs/blob/main/oracle-mcp.md" target="_blank">oracle-mcp.md</a>.
+      This page uses no stored secrets — it's a public OAuth client (PKCE),
+      the same mechanism Claude's own connector uses.
+    </p>
+
+    <div class="card">
+      <div class="card-label">Connection</div>
+      <div class="status-row">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusText">Not connected</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="connectBtn" onclick="startLogin()">Sign in via Cognito</button>
+        <button class="btn danger" id="disconnectBtn" onclick="disconnect()" style="display:none">Disconnect</button>
+      </div>
+      <div id="identityBlock" style="margin-top:1rem; display:none" class="identity"></div>
+    </div>
+
+    <div class="card" id="toolsCard" style="display:none">
+      <div class="card-label">Tools</div>
+
+      <div class="tool-block">
+        <div class="tool-name">tools/list</div>
+        <div class="tool-desc">Confirm the connection can actually reach /mcp and list what's available.</div>
+        <button class="btn secondary" onclick="listTools()">
+          <span class="spinner" id="spin-list"></span> List tools
+        </button>
+        <pre class="output" id="out-list"></pre>
+      </div>
+
+      <div class="tool-block">
+        <div class="tool-name">source_leaderboard()</div>
+        <div class="tool-desc">Cheap, read-scope tool — live source credibility ranking.</div>
+        <button class="btn secondary" onclick="callTool('source_leaderboard', {}, 'leaderboard')">
+          <span class="spinner" id="spin-leaderboard"></span> Call
+        </button>
+        <pre class="output" id="out-leaderboard"></pre>
+      </div>
+
+      <div class="tool-block">
+        <div class="tool-name">polymarket_market(market)</div>
+        <div class="tool-desc">Read-scope. Paste a Polymarket URL, slug, or Gamma id.</div>
+        <input type="text" id="marketInput" placeholder="e.g. will-x-happen-by-2027" />
+        <button class="btn secondary" onclick="callTool('polymarket_market', {market: document.getElementById('marketInput').value}, 'market')">
+          <span class="spinner" id="spin-market"></span> Call
+        </button>
+        <pre class="output" id="out-market"></pre>
+      </div>
+
+      <div class="tool-block">
+        <div class="tool-name">forecast(question)</div>
+        <div class="tool-desc">
+          Forecast-scope, expensive — live news + LLM pipeline. Can take
+          tens of seconds, occasionally longer.
+        </div>
+        <input type="text" id="questionInput" placeholder="e.g. Will the Fed cut rates in 2026?" />
+        <button class="btn secondary" onclick="callTool('forecast', {question: document.getElementById('questionInput').value}, 'forecast')">
+          <span class="spinner" id="spin-forecast"></span> Call (slow)
+        </button>
+        <pre class="output" id="out-forecast"></pre>
+      </div>
+    </div>
+
+    <p class="footer">
+      Engineering reference (auth internals, Terraform, Cognito provisioning):
+      <a href="https://github.com/Daatan/retro/blob/main/docs/ORACLE_MCP.md" target="_blank">retro/docs/ORACLE_MCP.md</a>.
+      Tokens are kept in <code>sessionStorage</code> only — closing the tab
+      clears them.
+    </p>
+  </div>
+
+<script>
+  // Public OAuth client (PKCE) — this id is meant to be public, same as it's
+  // embedded in Claude's own connector config. No client secret involved.
+  const COGNITO_DOMAIN = 'https://daatan-oracle.auth.eu-central-1.amazoncognito.com'
+  const CLIENT_ID = '7rgd2a1kscnhgjahc9k5p6673h'
+  const MCP_URL = 'https://oracle.daatan.com/mcp/'
+  const SCOPES = 'openid email oracle-mcp/read oracle-mcp/forecast'
+  const REDIRECT_URI = location.origin + location.pathname
+
+  // ── PKCE helpers ──────────────────────────────────────────────
+  function base64url(bytes) {
+    return btoa(String.fromCharCode(...bytes))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  }
+  function randomVerifier() {
+    const bytes = new Uint8Array(64)
+    crypto.getRandomValues(bytes)
+    return base64url(bytes)
+  }
+  async function challengeFor(verifier) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+    return base64url(new Uint8Array(digest))
+  }
+
+  // ── Login flow ────────────────────────────────────────────────
+  async function startLogin() {
+    const verifier = randomVerifier()
+    const state = randomVerifier()
+    sessionStorage.setItem('pkce_verifier', verifier)
+    sessionStorage.setItem('oauth_state', state)
+    const challenge = await challengeFor(verifier)
+
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      response_type: 'code',
+      scope: SCOPES,
+      redirect_uri: REDIRECT_URI,
+      state,
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+    })
+    // No identity_provider forced — the hosted UI shows both native Cognito
+    // login AND "Sign in with Google", same as what a real trader sees.
+    location.href = `${COGNITO_DOMAIN}/oauth2/authorize?${params}`
+  }
+
+  async function exchangeCode(code) {
+    const verifier = sessionStorage.getItem('pkce_verifier')
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: CLIENT_ID,
+      code,
+      redirect_uri: REDIRECT_URI,
+      code_verifier: verifier,
+    })
+    const res = await fetch(`${COGNITO_DOMAIN}/oauth2/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`Token exchange failed (${res.status}): ${text}`)
+    }
+    return res.json()
+  }
+
+  function decodeJwt(token) {
+    try {
+      const payload = token.split('.')[1]
+      return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+    } catch { return null }
+  }
+
+  function setConnected(accessToken, idToken) {
+    sessionStorage.setItem('access_token', accessToken)
+    document.getElementById('statusDot').className = 'dot ok'
+    document.getElementById('statusText').textContent = 'Connected'
+    document.getElementById('connectBtn').style.display = 'none'
+    document.getElementById('disconnectBtn').style.display = 'inline-flex'
+    document.getElementById('toolsCard').style.display = 'block'
+
+    const idBlock = document.getElementById('identityBlock')
+    const claims = idToken ? decodeJwt(idToken) : decodeJwt(accessToken)
+    if (claims) {
+      const email = claims.email || '(no email claim — native/M2M token)'
+      const iss = claims.iss ? claims.iss.split('/').pop() : '?'
+      idBlock.innerHTML = `Signed in as <b>${escapeHtml(email)}</b> · issuer <code>${escapeHtml(iss)}</code>`
+      idBlock.style.display = 'block'
+    }
+  }
+
+  function disconnect() {
+    sessionStorage.removeItem('access_token')
+    sessionStorage.removeItem('pkce_verifier')
+    sessionStorage.removeItem('oauth_state')
+    document.getElementById('statusDot').className = 'dot'
+    document.getElementById('statusText').textContent = 'Not connected'
+    document.getElementById('connectBtn').style.display = 'inline-flex'
+    document.getElementById('disconnectBtn').style.display = 'none'
+    document.getElementById('toolsCard').style.display = 'none'
+    document.getElementById('identityBlock').style.display = 'none'
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+  }
+
+  // ── MCP calls ─────────────────────────────────────────────────
+  let rpcId = 1
+  async function mcpCall(method, params) {
+    const token = sessionStorage.getItem('access_token')
+    const res = await fetch(MCP_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: rpcId++, method, params }),
+    })
+    const text = await res.text()
+    let parsed
+    try { parsed = JSON.parse(text) } catch { parsed = text }
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${typeof parsed === 'string' ? parsed : JSON.stringify(parsed)}`)
+    return parsed
+  }
+
+  async function runWithSpinner(key, fn) {
+    const spin = document.getElementById(`spin-${key}`)
+    const out = document.getElementById(`out-${key}`)
+    spin.classList.add('on')
+    out.classList.remove('on', 'err')
+    try {
+      const result = await fn()
+      out.textContent = JSON.stringify(result, null, 2)
+      out.classList.add('on')
+    } catch (e) {
+      out.textContent = e.message || String(e)
+      out.classList.add('on', 'err')
+    } finally {
+      spin.classList.remove('on')
+    }
+  }
+
+  function listTools() {
+    runWithSpinner('list', () => mcpCall('tools/list', {}))
+  }
+  function callTool(name, args, outKey) {
+    runWithSpinner(outKey, () => mcpCall('tools/call', { name, arguments: args }))
+  }
+
+  // ── Boot: handle callback, or restore existing session ─────────
+  ;(async function boot() {
+    const url = new URL(location.href)
+    const code = url.searchParams.get('code')
+    const state = url.searchParams.get('state')
+    const error = url.searchParams.get('error')
+
+    if (error) {
+      document.getElementById('statusDot').className = 'dot err'
+      document.getElementById('statusText').textContent =
+        `Login failed: ${error} — ${url.searchParams.get('error_description') || ''}`
+      history.replaceState({}, '', REDIRECT_URI)
+      return
+    }
+
+    if (code) {
+      document.getElementById('statusDot').className = 'dot pending'
+      document.getElementById('statusText').textContent = 'Exchanging code for token…'
+      const expectedState = sessionStorage.getItem('oauth_state')
+      history.replaceState({}, '', REDIRECT_URI) // scrub ?code from the URL/history immediately
+      if (state !== expectedState) {
+        document.getElementById('statusDot').className = 'dot err'
+        document.getElementById('statusText').textContent = 'State mismatch — possible CSRF, aborting. Try again.'
+        return
+      }
+      try {
+        const tokens = await exchangeCode(code)
+        setConnected(tokens.access_token, tokens.id_token)
+      } catch (e) {
+        document.getElementById('statusDot').className = 'dot err'
+        document.getElementById('statusText').textContent = e.message
+      }
+      return
+    }
+
+    const existing = sessionStorage.getItem('access_token')
+    if (existing) setConnected(existing, null)
+  })()
+</script>
+</body>
+</html>

@@ -239,7 +239,9 @@ async def _public_search(client: httpx.AsyncClient, q: str) -> list[dict]:
     ]
 
 
-async def _lookup_by_keywords(keywords: list[str], event_name: str) -> Optional[dict]:
+async def _lookup_by_keywords(
+    keywords: list[str], event_name: str, *, prefer_open: bool = False
+) -> Optional[dict]:
     """Keyword search fallback via Gamma's `/public-search`.
 
     Deliberately NOT `/markets?search=`: that endpoint ignores the query
@@ -255,6 +257,20 @@ async def _lookup_by_keywords(keywords: list[str], event_name: str) -> Optional[
     alone stops discriminating once the search actually returns topical results.
     A phrasing that yields nothing acceptable falls through to the next one
     rather than confidently returning an unrelated market.
+
+    `prefer_open` breaks ties in relevance ratio toward an open market rather
+    than the first one Gamma happened to list. It never overrides a genuinely
+    more relevant match — only ties. Off by default: this function is shared
+    with the batch historical fetcher (`resolve_market` below), which wants a
+    period-matched settled market, not the newest recurring one. The live MCP
+    lookup (`api/.../polymarket_live.py`) passes `prefer_open=True`, because a
+    trader typing a natural-language question almost always wants the current,
+    tradeable market — Gamma runs many near-identical templated markets across
+    months (e.g. a fresh "Bitcoin reach $Nk" market every month), and without
+    this a same-ratio stale one can win on iteration order alone. Observed
+    live: "Will Bitcoin reach $200,000 in 2026?" matched an October-2025,
+    already-closed "$200k in October?" market over an equally-relevant, still-
+    open "$200K in July?" one purely because it came first in Gamma's list.
     """
     queries = [kw for kw in keywords if kw and not kw.startswith('"')] + [event_name]
     queries += [kw.strip('"') for kw in keywords if kw.startswith('"')]
@@ -272,7 +288,15 @@ async def _lookup_by_keywords(keywords: list[str], event_name: str) -> Optional[
                 candidates = await _public_search(client, " ".join(tokens[:2]))
             if not candidates:
                 continue
-            best = max(candidates, key=lambda m: _relevance_ratio(raw, m.get("question", "")))
+
+            def rank(m: dict) -> tuple:
+                ratio = _relevance_ratio(raw, m.get("question", ""))
+                # `not m.get("closed", False)` is True for an open market, which
+                # sorts after False — so ties in ratio favor open. The ratio
+                # always compares first, so this never outranks a better match.
+                return (ratio, not m.get("closed", False)) if prefer_open else (ratio,)
+
+            best = max(candidates, key=rank)
             if _relevance_ratio(raw, best.get("question", "")) >= _MIN_RELEVANCE_RATIO:
                 return best
     return None

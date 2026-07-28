@@ -2,12 +2,17 @@
 #
 # The Oracle is an OAuth 2.1 Resource Server (see api/src/forecast_api/mcp_auth.py
 # and docs/ORACLE_MCP.md); this pool mints the JWT access tokens it verifies.
-# Logins are NATIVE Cognito accounts, created admin-only (no public self-signup —
-# these tokens spend LLM/search credits). Google federation is DEFERRED (see the
-# commented block below; uncomment + provide the Secrets Manager secret to add
-# it). Two app clients: the Claude MCP client (Authorization Code + PKCE, human
-# login via the DCR façade in api/src/forecast_api/mcp_dcr.py) and daatan's M2M
-# client (client_credentials).
+# Two app clients: the Claude MCP client (Authorization Code + PKCE, human login
+# via the DCR façade in api/src/forecast_api/mcp_dcr.py) and daatan's M2M client
+# (client_credentials).
+#
+# Login: NATIVE Cognito accounts (admin-invite only — `admin_create_user_config`
+# below) PLUS Google federation (self-service — see the note below).
+# `allow_admin_create_user_only` only gates the native username/password sign-up
+# form; it does NOT restrict federated IdP logins. Anyone with a Google account
+# can sign in via the Claude client once the Google IdP is active — that is
+# intentional (self-service trader onboarding), not a gap. Native admin-created
+# accounts (e.g. the initial mark@daatan.com) keep working unaffected.
 #
 # ── NOT a blanket apply ──────────────────────────────────────────────────────
 # These are NEW resources. Create them with -target, one at a time, per the
@@ -15,21 +20,24 @@
 #   terraform apply -target=aws_cognito_user_pool.oracle_mcp
 #   terraform apply -target=aws_cognito_resource_server.oracle_mcp
 #   terraform apply -target=aws_cognito_user_pool_domain.oracle_mcp
+#   terraform apply -target=aws_cognito_identity_provider.google
 #   terraform apply -target=aws_cognito_user_pool_client.claude
 #   terraform apply -target=aws_cognito_user_pool_client.m2m
 # (The pool, resource server, domain, and m2m client are already applied. This
-#  change adds admin_create_user_config to the pool and the new claude client, so
-#  apply just those two: -target=aws_cognito_user_pool.oracle_mcp and
-#  -target=aws_cognito_user_pool_client.claude.)
+#  change adds the Google IdP and updates the claude client's
+#  supported_identity_providers, so apply just those two:
+#  -target=aws_cognito_identity_provider.google and
+#  -target=aws_cognito_user_pool_client.claude — the IdP must apply first, the
+#  client's depends_on enforces that ordering.)
 #
-# ── Manual prerequisite (ONLY if enabling the deferred Google federation) ─────
-# Native Cognito login needs no external prerequisite. To add Google later:
-# create a Google OAuth 2.0 client (Cloud Console) whose authorized redirect URI
-# is https://<domain>.auth.eu-central-1.amazoncognito.com/oauth2/idpresponse,
-# store {client_id, client_secret} as JSON in Secrets Manager under
-# var.google_oauth_secret_id, then uncomment the Google block below and add
-# "Google" back to the claude client's supported_identity_providers. The secret
-# is read via a data source so it never lands in the tf files or state as a literal.
+# ── Manual prerequisite (Google federation) ───────────────────────────────────
+# Requires a Google OAuth 2.0 client (Cloud Console — outside this repo's/any
+# CLI's reach, a human has to click through it) whose authorized redirect URI is
+# https://<domain>.auth.eu-central-1.amazoncognito.com/oauth2/idpresponse. Store
+# {client_id, client_secret} as JSON in Secrets Manager under
+# var.google_oauth_secret_id BEFORE running `terraform plan` — the data source
+# below fails the plan if the secret doesn't exist yet. The secret is read via a
+# data source so it never lands in the tf files or state as a literal.
 
 variable "cognito_domain_prefix" {
   description = "Globally-unique prefix for the Cognito hosted-UI domain."
@@ -56,13 +64,9 @@ variable "claude_callback_urls" {
   ]
 }
 
-# ── Google federation (DEFERRED — native Cognito login is the current path) ───
-# Uncomment this data source + locals and the aws_cognito_identity_provider
-# "google" resource below, add "Google" to the claude client's
-# supported_identity_providers, and provide var.google_oauth_secret_id in Secrets
-# Manager to enable Google login. Left commented so a plan never reads a secret
-# that doesn't exist yet.
-/*
+# ── Google federation ──────────────────────────────────────────────────────────
+# Requires var.google_oauth_secret_id to exist in Secrets Manager first (see the
+# header note) — this data source fails the plan otherwise.
 data "aws_secretsmanager_secret_version" "google_oauth" {
   secret_id = var.google_oauth_secret_id
 }
@@ -70,7 +74,6 @@ data "aws_secretsmanager_secret_version" "google_oauth" {
 locals {
   google_oauth = jsondecode(data.aws_secretsmanager_secret_version.google_oauth.secret_string)
 }
-*/
 
 resource "aws_cognito_user_pool" "oracle_mcp" {
   name = "oracle-mcp"
@@ -122,8 +125,7 @@ resource "aws_cognito_resource_server" "oracle_mcp" {
   }
 }
 
-# Google as the upstream identity provider (DEFERRED — see the note above).
-/*
+# Google as the upstream identity provider.
 resource "aws_cognito_identity_provider" "google" {
   user_pool_id  = aws_cognito_user_pool.oracle_mcp.id
   provider_name = "Google"
@@ -140,7 +142,6 @@ resource "aws_cognito_identity_provider" "google" {
     username = "sub"
   }
 }
-*/
 
 # Public client for the Claude MCP connector: Authorization Code + PKCE, no secret.
 # The DCR façade (api/src/forecast_api/mcp_dcr.py) hands this client's id back to
@@ -160,7 +161,7 @@ resource "aws_cognito_user_pool_client" "claude" {
     "oracle-mcp/forecast",
   ]
   callback_urls                = var.claude_callback_urls
-  supported_identity_providers = ["COGNITO"] # native accounts; add "Google" to federate
+  supported_identity_providers = ["COGNITO", "Google"] # native admin-created accounts + self-service Google sign-in
 
   # Short-lived access tokens; refresh handles longevity.
   access_token_validity  = 60 # minutes
@@ -174,7 +175,7 @@ resource "aws_cognito_user_pool_client" "claude" {
 
   explicit_auth_flows = ["ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_SRP_AUTH"]
 
-  depends_on = [aws_cognito_resource_server.oracle_mcp]
+  depends_on = [aws_cognito_resource_server.oracle_mcp, aws_cognito_identity_provider.google]
 }
 
 # Machine-to-machine client for daatan's own agents: client_credentials only.

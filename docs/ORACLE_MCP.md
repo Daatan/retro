@@ -47,8 +47,11 @@ signature via JWKS) and maps `scope` claims to tools.
 - **Scopes:** `oracle-mcp/read` (the global floor, all cheap tools) and
   `oracle-mcp/forecast` (the two expensive tools).
 - **Humans** authenticate with Authorization Code + PKCE via the Cognito hosted
-  UI (native Cognito accounts, admin-invite only — see the DCR façade below).
-  **Services** (e.g. daatan's own agents) use the `client_credentials` grant.
+  UI — either a native Cognito account (admin-invite only) or self-service
+  Google sign-in, once Google federation is applied (see Provisioning §1). See
+  the DCR façade below. **Services** (e.g. daatan's own agents, or an
+  individually-provisioned trader M2M client) use the `client_credentials`
+  grant.
 - **Discovery:** the protected-resource metadata (RFC 9728) is served at
   `https://oracle.daatan.com/.well-known/oauth-protected-resource/mcp`; a 401
   returns `WWW-Authenticate` pointing there.
@@ -148,20 +151,31 @@ End-to-end steps to flip `/mcp` from inert 404 to live. All AWS work is
 `eu-central-1`, account `272007598366`; the Oracle box (`i-00ac444b94c5ff9b2`) is
 **SSM-only, no SSH**.
 
-### 1. (Optional) Google federation — DEFERRED
+### 1. Google federation (self-service trader sign-in)
 
-Login uses **native Cognito accounts** by default; skip this step. To add Google
-federation later, uncomment the Google block in `terraform/cognito.tf`, add
-`"Google"` to the claude client's `supported_identity_providers`, create a Google
-OAuth 2.0 client whose redirect URI is
-`https://daatan-oracle.auth.eu-central-1.amazoncognito.com/oauth2/idpresponse`, and
-store its creds (read via a data source — never a literal in tf/state):
+`terraform/cognito.tf` already carries the Google IdP resource and the claude
+client's `supported_identity_providers` — nothing to uncomment. This step is
+just the external prerequisite: create a Google OAuth 2.0 client (Cloud
+Console — this part can't be done via CLI/Terraform, a human has to click
+through it) whose redirect URI is
+`https://daatan-oracle.auth.eu-central-1.amazoncognito.com/oauth2/idpresponse`,
+then store its creds (read via a data source — never a literal in tf/state):
 
 ```bash
 aws secretsmanager create-secret --region eu-central-1 \
   --name daatan/cognito-google-oauth \
   --secret-string '{"client_id":"<GOOGLE_CLIENT_ID>","client_secret":"<GOOGLE_CLIENT_SECRET>"}'
 ```
+
+The `data "aws_secretsmanager_secret_version" "google_oauth"` block fails any
+`plan`/`apply` in this file until the secret above exists — create it first.
+
+Native Cognito accounts (admin-invite only, `admin-create-user`) still work
+independently of this — Google federation is additive, not a replacement.
+**Note:** `allow_admin_create_user_only` on the pool does **not** gate
+federated logins, only the native sign-up form — once the Google IdP is
+applied, *any* Google account holder can sign in via the claude client. That's
+intentional here (self-service trader onboarding), not an oversight.
 
 ### 2. Apply Cognito (`-target`, in dependency order)
 
@@ -173,11 +187,12 @@ cd terraform
 terraform init          # real S3 backend (state key retro/)
 # export TF_VAR_cognito_domain_prefix=daatan-oracle   # only if the default is taken
 
-# Native login (default): no Google IdP. The pool, resource server, domain, and
-# m2m client already exist from the M2M rollout — this change adds admin-invite-only
-# to the pool (in-place) and the new public claude client, so apply just those two:
-terraform apply -target=aws_cognito_user_pool.oracle_mcp     # in-place: admin_create_user_config
-terraform apply -target=aws_cognito_user_pool_client.claude  # the public PKCE client
+# Pool, resource server, domain, m2m client, and claude client already exist.
+# Adding Google federation only touches two resources — apply just those, IdP first
+# (the claude client's depends_on enforces that order, but -target doesn't chain
+# dependencies across separate invocations, so do it explicitly):
+terraform apply -target=aws_cognito_identity_provider.google  # requires the Secrets Manager secret to exist first (§1)
+terraform apply -target=aws_cognito_user_pool_client.claude   # adds "Google" to supported_identity_providers
 
 # Capture what the box + smoke tests need:
 terraform output -raw cognito_user_pool_id

@@ -823,9 +823,14 @@ Small-tasks breakdown, in order:
   (`resolution_shadow_brier_prior_n`, default 10) replaces a minimum per-source
   count: it degrades smoothly instead of at a cliff, so a newcomer with two
   lucky calls lands near 1.05 rather than at the upper clamp. One global gate,
-  `resolution_shadow_min_global_predictions` (default 50 — where simulated
-  correlation stabilises at ~0.97), holds every source at 1.0 until the dataset
-  as a whole is worth trusting. The OpenSkill fields stay on the board for
+  `resolution_shadow_min_global_predictions` (default **15** as of retro#341;
+  originally 50 per retro#337's uncommitted simulation, corr ~0.97 there —
+  but #341 found 50 unreachable in any useful timeframe on the real claim mix
+  and that nobody had checked anything between n=6 and n=50.
+  `pipeline/scripts/simulate_shadow_gate_correlation.py` fills that gap
+  against the real weight formula: corr reaches 0.91 by n=15, the lowest n
+  clearing a 0.90 bound), holds every source at 1.0 until the dataset as a
+  whole is worth trusting. The OpenSkill fields stay on the board for
   display/ranking only.
   **Replace, not blend:** under the flag the vault is never consulted, and a
   source without resolution history falls back to neutral 1.0 — not to a frozen
@@ -840,7 +845,7 @@ Small-tasks breakdown, in order:
   `resolution_feedback.jsonl`: it pools each resolution twice (shadow weights vs
   flat 1.0), leave-one-out, and compares Brier. On today's 6 resolutions it
   reports shadow **0.0018 worse** — the honest answer at that sample size, and
-  the reason the gate is 50 rather than 6. When it turns convincingly positive,
+  the reason the gate is 15 rather than 6. When it turns convincingly positive,
   set the env var and restart `oracle-api.service`; revert is the same in
   reverse, no deploy either way (same story as `SETTLEMENT_REVALIDATE`).
 - **The manual vault is legacy** — `data/leaderboard.json`, `data/events/*.json`

@@ -44,10 +44,17 @@ class ApiSettings(BaseSettings):
     resolution_shadow_credibility_enabled: bool = False
     # Global gate: scoreable resolutions (resolution_scorer.count_resolutions)
     # required before ANY source's shadow score is trusted; below it every
-    # source gets neutral 1.0. 50 is where simulated correlation between a
-    # source's true accuracy and its resulting weight reaches ~0.97 and
-    # stabilises — a starting floor, not a proven optimum.
-    resolution_shadow_min_global_predictions: int = 50
+    # source gets neutral 1.0. Originally 50 (retro#337, uncommitted sim: corr
+    # ~0.97 there). retro#341 found 50 is unreachable in any useful timeframe
+    # on the real claim mix (~3.7 scoreable resolutions/week) and that there
+    # was no simulation data between n=6 (corr 0.81) and n=50 — so 50 wasn't
+    # actually the lowest-n floor, just the only point anyone had checked.
+    # pipeline/scripts/simulate_shadow_gate_correlation.py fills that gap
+    # against the real weight formula: corr is already 0.91 by n=15, the
+    # lowest n clearing a 0.90 bound — a deliberate trade of ~0.06 correlation
+    # for reaching the gate in weeks instead of ~3 months. Revisit upward once
+    # real resolution volume makes a higher n cheap again.
+    resolution_shadow_min_global_predictions: int = 15
     # Credibility is derived from the source's Brier score, NOT from its
     # OpenSkill skill_conservative: sigma barely moves in these large
     # multi-team matches, so mu-3*sigma stays pinned near 0 and the vault's

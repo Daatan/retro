@@ -76,6 +76,33 @@
     .dot.ok  { background: var(--yes); box-shadow: 0 0 6px var(--yes); }
     .dot.err { background: var(--no); }
 
+    .key-input-row { display: flex; gap: .4rem; }
+    .key-input-row input {
+      flex: 1; min-width: 0;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: .78rem;
+      font-family: ui-monospace, monospace;
+      padding: .4rem .6rem;
+      outline: none;
+    }
+    .key-input-row input:focus { border-color: var(--accent); }
+    .key-input-row button {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-size: .78rem;
+      padding: .4rem .7rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .key-input-row button:hover { border-color: var(--accent); color: var(--text); }
+    .key-status { font-size: .72rem; color: var(--muted); margin-top: .4rem; line-height: 1.4; }
+    .key-status.ok { color: var(--yes); }
+
     .quick-list { display: flex; flex-direction: column; gap: .4rem; }
     .quick-btn {
       text-align: left;
@@ -570,6 +597,15 @@
     </div>
 
     <div class="sidebar-section">
+      <div class="sidebar-label">API Key</div>
+      <div class="key-input-row">
+        <input type="password" id="apiKeyInput" placeholder="paste your x-api-key" autocomplete="off" />
+        <button onclick="saveApiKey()">Save</button>
+      </div>
+      <div class="key-status" id="keyStatus"></div>
+    </div>
+
+    <div class="sidebar-section">
       <div class="sidebar-label">API Status</div>
       <div class="health-row">
         <div class="dot" id="health-dot"></div>
@@ -667,9 +703,30 @@
   const API_URL = 'https://oracle.daatan.com'
   let defaultGatekeeperPrompt = ''
   let defaultExtractorPrompt = ''
-  const API_KEY = '9870459c54c22091444f55ac5757966b153021c2478a95aafa47e6510c623a46'
 
   const $ = id => document.getElementById(id)
+
+  // ── API key — stored client-side only (localStorage), never shipped in
+  // source. Get one from the team; it's the shared `x-api-key` the Oracle
+  // REST API expects. ─────────────────────────────
+  function getApiKey() { return localStorage.getItem('oracle_api_key') || '' }
+  function saveApiKey() {
+    const val = $('apiKeyInput').value.trim()
+    if (!val) return
+    localStorage.setItem('oracle_api_key', val)
+    updateKeyStatus()
+  }
+  function updateKeyStatus() {
+    const key = getApiKey()
+    $('apiKeyInput').value = key
+    if (key) {
+      $('keyStatus').textContent = 'Key saved in this browser.'
+      $('keyStatus').classList.add('ok')
+    } else {
+      $('keyStatus').textContent = 'Stored locally only — get a key from the team.'
+      $('keyStatus').classList.remove('ok')
+    }
+  }
 
   // ── Health check ─────────────────────────────
   async function checkHealth() {
@@ -714,6 +771,7 @@
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runForecast()
     })
 
+    updateKeyStatus()
     checkHealth()
   })
 
@@ -721,6 +779,7 @@
   async function runForecast() {
     const q = $('question').value.trim()
     if (!q) { $('question').focus(); return }
+    if (!getApiKey()) { $('apiKeyInput').focus(); return }
 
     $('run-btn').disabled = true
     $('spinner').style.display = 'block'
@@ -748,7 +807,7 @@
 
       const res = await fetch(`${API_URL}/forecast`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+        headers: { 'Content-Type': 'application/json', 'x-api-key': getApiKey() },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(120000),
       })

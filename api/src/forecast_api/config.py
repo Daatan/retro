@@ -295,14 +295,17 @@ class ApiSettings(BaseSettings):
     def mcp_allowed_origins(self) -> list[str]:
         """Origin header values the MCP transport accepts. Non-browser clients
         omit Origin (allowed outright); a browser client on the resource host's
-        own origin is allowed."""
+        own origin is allowed. Also allows the GitHub Pages origin that hosts
+        oracle-mcp-test.html — same trust boundary as the CORSMiddleware
+        allow_origins list in main.py, since that page calls /mcp directly
+        from the browser with a real Bearer token, not just REST endpoints."""
         from urllib.parse import urlparse
 
         parsed = urlparse(self.mcp_resource_url)
         if not parsed.netloc:
-            return []
+            return ["https://daatan.github.io"]
         origin = f"{parsed.scheme}://{parsed.netloc}"
-        return [origin, f"{origin}:*"]
+        return [origin, f"{origin}:*", "https://daatan.github.io"]
 
     @property
     def mcp_as_issuer(self) -> Optional[str]:

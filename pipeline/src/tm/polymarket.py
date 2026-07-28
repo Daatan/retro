@@ -4,7 +4,8 @@ Polymarket historical data fetcher.
 Lookup order for each event:
   1. If ev["polymarket"]["url"] is set, extract event-slug + market-slug from the URL
      and query the Gamma events API directly — precise, no ambiguity.
-  2. Fall back to keyword search via the Gamma markets API.
+  2. Fall back to keyword search via Gamma's /public-search (NOT /markets?search=,
+     which ignores the query entirely — see _lookup_by_keywords).
 
 Price history is fetched from the CLOB API using the YES-outcome token ID.
 Timestamps from the CLOB are Unix seconds (not milliseconds).
@@ -120,34 +121,159 @@ def _relevance_score(query: str, question: str) -> int:
     return len(_significant_words(query) & _significant_words(question))
 
 
-async def _lookup_by_keywords(keywords: list[str], event_name: str) -> Optional[dict]:
-    """Keyword search fallback via Gamma markets API.
+def _relevance_ratio(query: str, question: str) -> float:
+    """Share of the query's significant words the candidate covers.
 
-    Gamma's own search relevance is loose enough to return a top hit with zero
-    lexical overlap with the query (observed live: a natural-language forecast
-    question matched an unrelated "before GTA VI?" joke market with zero shared
-    significant words). Scans each query's up-to-5 candidates for the best
-    word-overlap match; only returns a candidate sharing at least one
-    significant word, trying the next query phrasing otherwise rather than
-    confidently returning an unrelated market.
+    A raw count was sufficient while `/markets?search=` ignored the query and
+    every candidate shared literally nothing (#334). Against `/public-search`,
+    which actually works, candidates are topically *adjacent*, so one shared
+    entity is routinely enough to score 1 while answering a different question
+    — live examples: "Estonia four-day working week" matching "Will Mart Helme
+    be the next President of Estonia?", and "Bitcoin reach $200,000" matching
+    "Will MicroStrategy buy 200+ Bitcoin in next purchase?". Requiring a
+    proportion of the query to be covered rejects both while keeping genuine
+    matches, which share most of their salient words.
+    """
+    q_words = _significant_words(query)
+    if not q_words:
+        return 0.0
+    return _relevance_score(query, question) / len(q_words)
+
+
+# Half the query's significant words must appear in the candidate's question.
+_MIN_RELEVANCE_RATIO = 0.5
+
+
+# Query shaping for /public-search. Deliberately separate from _STOPWORDS above:
+# that set guards *relevance scoring* (content words, length >= 4), this one
+# shapes *the query we send*, so it also drops short function words and the
+# framing verbs ("officially", "signs", "announces") that never appear in a
+# market title.
+_QUERY_STOPWORDS = {
+    "a", "an", "the", "of", "or", "and", "to", "in", "on", "for", "by", "be", "will", "is",
+    "are", "was", "were", "between", "with", "from", "at", "as", "that", "this", "it", "its",
+    "they", "their", "than", "then", "officially", "official", "formally", "formal", "sign",
+    "signed", "signs", "announce", "announced", "announces", "reach", "reached", "within",
+    "before", "after", "during", "over", "about", "into", "per", "whether",
+}
+
+# Market titles say "US", never "USA" — the literal token zeroes out results.
+_TOKEN_ALIASES = {"usa": "us", "u.s.a": "us", "u.s": "us"}
+
+_MAX_QUERY_TOKENS = 6
+
+
+def _compact_amounts(text: str) -> str:
+    """Rewrite comma-grouped amounts into the compact form market titles use.
+
+    Claims are written "$200,000"; Polymarket titles say "$200k". Without this
+    the tokenizer splits the amount into "200" and "000" — two fragments too
+    short for the relevance guard to count, which also burn two of the six
+    query slots. Verified live: `bitcoin 200 000 2026` finds nothing, while
+    `bitcoin 200k` returns the real "Will Bitcoin reach $200k in ...?" markets.
+    """
+    def repl(match: re.Match) -> str:
+        n = int(match.group(0).replace(",", ""))
+        if 1000 <= n < 1_000_000 and n % 1000 == 0:
+            return f" {n // 1000}k "
+        return f" {n} "
+
+    return re.sub(r"\d{1,3}(?:,\d{3})+", repl, text)
+
+
+def _search_query(text: str) -> str:
+    """Reduce a verbose claim or event name to a short, search-friendly query.
+
+    `/public-search` returns nothing for long natural-language strings and
+    weights leading tokens heavily, so keep only salient content words and lead
+    with proper nouns — the tokens market titles key on. Mirrors daatan's
+    `buildMarketSearchQuery()` (`src/lib/services/external-markets.ts`), which
+    solved the same quirks against the same API.
+    """
+    cleaned = _compact_amounts(text)
+    cleaned = re.sub(r"\([^)]*\)", " ", cleaned)
+    cleaned = re.sub(r"[^A-Za-z0-9\s.]", " ", cleaned)
+    words = [w for w in cleaned.split() if w]
+
+    def norm(w: str) -> str:
+        lw = w.lower().rstrip(".")
+        return _TOKEN_ALIASES.get(lw, lw)
+
+    def keep(w: str) -> bool:
+        return len(w) >= 2 and w not in _QUERY_STOPWORDS
+
+    proper = [norm(w) for w in words if w[:1].isupper()]
+    ordered = [w for w in proper if keep(w)] + [w for w in map(norm, words) if keep(w)]
+
+    out: list[str] = []
+    for w in ordered:
+        if w not in out:
+            out.append(w)
+        if len(out) >= _MAX_QUERY_TOKENS:
+            break
+    return " ".join(out)
+
+
+async def _public_search(client: httpx.AsyncClient, q: str) -> list[dict]:
+    """Flatten `/public-search` into a list of Gamma market rows.
+
+    The response is `{"events": [{"markets": [...]}, ...]}`; those market rows
+    carry the same `question`/`conditionId`/`clobTokenIds` fields the rest of
+    this module expects. Closed markets are kept deliberately — this is a
+    historical fetcher, so a settled market is usually exactly what we want.
+    """
+    try:
+        r = await client.get(f"{GAMMA_BASE}/public-search", params={"q": q})
+        if r.status_code != 200:
+            return []
+        data = r.json()
+    except Exception:
+        return []
+    if not isinstance(data, dict):
+        return []
+    return [
+        mk
+        for ev in (data.get("events") or [])
+        for mk in (ev.get("markets") or [])
+        if isinstance(mk, dict)
+    ]
+
+
+async def _lookup_by_keywords(keywords: list[str], event_name: str) -> Optional[dict]:
+    """Keyword search fallback via Gamma's `/public-search`.
+
+    Deliberately NOT `/markets?search=`: that endpoint ignores the query
+    entirely and returns a volume-ranked default listing, so this fallback could
+    never match on keywords at all (#339 — `search=bitcoin` returned no Bitcoin
+    market). `/public-search` is Polymarket's real search, but it returns
+    nothing for long natural-language strings, so each phrasing is reduced to
+    its salient tokens first, with one broader retry.
+
+    The relevance guard from #334 stays as a backstop, tightened from "shares at
+    least one significant word" to "covers at least `_MIN_RELEVANCE_RATIO` of
+    the query's significant words" — see `_relevance_ratio` for why the count
+    alone stops discriminating once the search actually returns topical results.
+    A phrasing that yields nothing acceptable falls through to the next one
+    rather than confidently returning an unrelated market.
     """
     queries = [kw for kw in keywords if kw and not kw.startswith('"')] + [event_name]
     queries += [kw.strip('"') for kw in keywords if kw.startswith('"')]
 
     async with httpx.AsyncClient(timeout=15) as client:
-        for q in queries[:4]:
-            try:
-                r = await client.get(
-                    f"{GAMMA_BASE}/markets",
-                    params={"search": q, "limit": 5, "active": "false"},
-                )
-                if r.status_code != 200 or not r.json():
-                    continue
-                candidates = r.json()
-            except Exception:
+        for raw in queries[:4]:
+            q = _search_query(raw)
+            if not q:
                 continue
-            best = max(candidates, key=lambda m: _relevance_score(q, m.get("question", "")))
-            if _relevance_score(q, best.get("question", "")) > 0:
+            candidates = await _public_search(client, q)
+            # Rare or over-specific token sets come back empty; retry once with
+            # just the leading two tokens for broader recall before giving up.
+            tokens = q.split()
+            if not candidates and len(tokens) > 2:
+                candidates = await _public_search(client, " ".join(tokens[:2]))
+            if not candidates:
+                continue
+            best = max(candidates, key=lambda m: _relevance_ratio(raw, m.get("question", "")))
+            if _relevance_ratio(raw, best.get("question", "")) >= _MIN_RELEVANCE_RATIO:
                 return best
     return None
 

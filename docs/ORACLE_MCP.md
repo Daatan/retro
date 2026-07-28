@@ -99,7 +99,12 @@ port (`http://localhost:8080/callback`, registered on the client) if you need it
 
 ### Adding to a client
 
-A human first needs a Cognito account (admin-invite only — no self-signup):
+Once Google federation is applied (§1), a human needs **no prior account** —
+they just sign in with their own Google account on first connect (see below).
+This is the self-service trader path.
+
+Native Cognito accounts remain available as an admin-invite alternative (e.g.
+for someone without/unwilling to use a Google account):
 
 ```bash
 aws cognito-idp admin-create-user --region eu-central-1 \
@@ -110,7 +115,8 @@ aws cognito-idp admin-create-user --region eu-central-1 \
 
 Then in **claude.ai** (or Claude Desktop): Settings → Connectors → Add custom
 connector → `https://oracle.daatan.com/mcp`, and complete the Cognito login when
-prompted. (Claude Code's `claude mcp add --transport http oracle
+prompted — **Sign in with Google** appears alongside the native username/password
+form once §1 is applied. (Claude Code's `claude mcp add --transport http oracle
 https://oracle.daatan.com/mcp` also works, but its ephemeral loopback port must be
 pinned to a registered callback — see the DCR façade note above.)
 
@@ -258,8 +264,9 @@ curl -s -X POST https://oracle.daatan.com/register -H 'Content-Type: application
 # "initialize first" error is fine; it's past auth). Token request uses the M2M
 # snippet in Auth (both scopes).
 
-# Human flow: create a Cognito account (admin-create-user, see Adding to a client),
-# then add https://oracle.daatan.com/mcp as a custom connector in claude.ai.
+# Human flow: add https://oracle.daatan.com/mcp as a custom connector in
+# claude.ai and sign in with Google (self-service) or a native Cognito account
+# (admin-create-user, see Adding to a client).
 ```
 
 **Rollback:** re-run the Step-3 SSM with just the `sed` delete line +

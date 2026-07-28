@@ -124,6 +124,80 @@ class TestRescoreFromDisk:
         board_second = {s["id"]: s for s in load_shadow_leaderboard(out)}
         assert board_second["bbc"]["skill_mu"] == board_first["bbc"]["skill_mu"]
 
+    def test_same_source_rows_average_within_one_resolution(self, tmp_path):
+        """Three articles from one outlet on one prediction = ONE scored
+        prediction at the mean stance, not three — same shape the author lane
+        already uses, and what `predictions` must mean for the downstream
+        shrinkage denominator to be honest."""
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            _record("p1", False, [_source("ynet", 0.2), _source("ynet", 0.4), _source("ynet", 0.6)]),
+        ])
+        rescore_from_disk(ingest, tmp_path / "out.json")
+        board = {s["id"]: s for s in load_shadow_leaderboard(tmp_path / "out.json")}
+        entry = board["ynet"]
+        assert entry["predictions"] == 1
+        assert entry["articles"] == 3
+        # mean stance 0.4 -> P 0.7, outcome False: 0.7^2 = 0.49
+        assert entry["brier_score"] == 0.49
+
+    def test_mixed_sign_rows_never_make_a_source_compete_against_itself(self, tmp_path):
+        """Regression: rows were fed to rate() individually, so an outlet with
+        both a right and a wrong article landed in `winners` AND `losers`,
+        competed against itself, and the loser write-back clobbered its winner
+        update. Averaging first means it takes exactly one side."""
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            # ynet nets +0.5 (correct on a True outcome); blog is plainly wrong.
+            _record("p1", True, [_source("ynet", 0.9), _source("ynet", -0.4), _source("blog", -0.9)]),
+        ])
+        rescore_from_disk(ingest, tmp_path / "out.json")
+        board = {s["id"]: s for s in load_shadow_leaderboard(tmp_path / "out.json")}
+
+        assert board["ynet"]["predictions"] == 1
+        assert board["ynet"]["articles"] == 2
+        # The net-correct outlet must gain, not be dragged below the loser by
+        # its own contradictory row.
+        assert board["ynet"]["skill_mu"] > 25.0
+        assert board["blog"]["skill_mu"] < 25.0
+        assert board["ynet"]["skill_conservative"] > board["blog"]["skill_conservative"]
+
+    def test_single_source_is_counted_by_distinct_source_not_row_count(self, tmp_path):
+        """Several rows from ONE outlet is still a single-source resolution —
+        there is no ranking counterparty, however many articles it filed."""
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            _record("p1", True, [_source("ynet", 0.8), _source("ynet", 0.6), _source("ynet", 0.9)]),
+        ])
+        summary = rescore_from_disk(ingest, tmp_path / "out.json")
+        assert summary["resolutions_single_source"] == 1
+
+
+class TestCountResolutions:
+    def test_missing_file_is_zero(self, tmp_path):
+        assert resolution_scorer.count_resolutions(tmp_path / "nope.jsonl") == 0
+
+    def test_counts_resolutions_not_sources_or_articles(self, tmp_path):
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            _record("p1", True, [_source("bbc", 0.8), _source("bbc", 0.7), _source("cnn", 0.6)]),
+            _record("p2", False, [_source("bbc", -0.8)]),
+        ])
+        assert resolution_scorer.count_resolutions(ingest) == 2
+
+    def test_matches_what_rescore_actually_scored(self, tmp_path):
+        """The gate must count exactly the resolutions that produced scores —
+        incomplete and opinion-only records are excluded by both."""
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            _record("p1", True, [_source("bbc", 0.8), _source("cnn", -0.8)]),
+            _record("p2", None, [_source("bbc", 0.8)]),                                  # no outcome
+            _record("p3", True, []),                                                     # no sources
+            _record("p4", True, [_source("pundit", 0.9, evidence_class="opinion")]),      # opinion only
+        ])
+        summary = rescore_from_disk(ingest, tmp_path / "out.json")
+        assert resolution_scorer.count_resolutions(ingest) == summary["resolutions_scored"] == 1
+
 
 def _author_record(prediction_id, outcome, author_signals):
     return {"prediction_id": prediction_id, "outcome": outcome, "resolved_at": "2026-07-25", "author_signals": author_signals}

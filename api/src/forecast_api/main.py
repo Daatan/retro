@@ -16,7 +16,7 @@ from .bayesoracle import compute_nodes
 from .cache import forecast_cache
 from .config import settings
 from .forecaster import run_forecast, run_pool_aggregate
-from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache
+from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache, refresh_shadow_cache
 from .resolution_feedback import ingest_resolution
 from .resolution_scorer import load_shadow_leaderboard, rescore_authors_from_disk, rescore_from_disk
 from tm.config import settings as _pipeline_settings
@@ -45,8 +45,15 @@ async def lifespan(app: FastAPI):
     path = settings.resolved_leaderboard_path
     await refresh_cache(path)
     logger.info("Oracle API starting — leaderboard: %d sources, port: %d", leaderboard_size(), settings.port)
+    # The resolution-shadow board only feeds credibility when the cutover flag
+    # is on, so skip the extra disk reads entirely when it isn't.
+    shadow_board = shadow_feedback = None
+    if settings.resolution_shadow_credibility_enabled:
+        shadow_board = settings.resolved_resolution_leaderboard_path
+        shadow_feedback = settings.resolved_resolution_feedback_path
+        await refresh_shadow_cache(shadow_board, shadow_feedback)
     refresh_task = asyncio.create_task(
-        background_refresh_loop(path, settings.leaderboard_refresh_seconds)
+        background_refresh_loop(path, settings.leaderboard_refresh_seconds, shadow_board, shadow_feedback)
     )
     try:
         if _mcp is not None:
@@ -171,8 +178,10 @@ async def leaderboard_ingest(
     to refresh the resolution-informed shadow score — see
     GET /leaderboard/resolution-shadow.
 
-    Storage/shadow only — does not affect get_credibility_weight() or
-    leaderboard.json. Idempotent on prediction_id: re-sending the same
+    Storage/shadow only while resolution_shadow_credibility_enabled is off
+    (the default) — the rescored board is then read by nothing but
+    GET /leaderboard/resolution-shadow, and leaderboard.json is untouched
+    either way. Idempotent on prediction_id: re-sending the same
     prediction_id is a no-op (already_ingested=true), safe for a
     fire-and-forget retry on the caller's side.
     """
@@ -188,6 +197,14 @@ async def leaderboard_ingest(
             settings.resolved_resolution_feedback_path,
             settings.resolved_resolution_author_leaderboard_path,
         )
+        # Pick the freshly-scored board up immediately rather than waiting out
+        # the daily refresh timer — otherwise live weights would lag a new
+        # resolution by up to leaderboard_refresh_seconds.
+        if settings.resolution_shadow_credibility_enabled:
+            await refresh_shadow_cache(
+                settings.resolved_resolution_leaderboard_path,
+                settings.resolved_resolution_feedback_path,
+            )
     return result
 
 

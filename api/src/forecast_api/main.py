@@ -16,7 +16,14 @@ from .bayesoracle import compute_nodes
 from .cache import forecast_cache
 from .config import settings
 from .forecaster import run_forecast, run_pool_aggregate
-from .leaderboard import background_refresh_loop, get_leaderboard_data, leaderboard_size, refresh_cache, refresh_shadow_cache
+from .leaderboard import (
+    background_refresh_loop,
+    get_leaderboard_data,
+    leaderboard_size,
+    leaderboard_snapshot_date,
+    refresh_cache,
+    refresh_shadow_cache,
+)
 from .resolution_feedback import ingest_resolution
 from .resolution_scorer import load_shadow_leaderboard, rescore_authors_from_disk, rescore_from_disk
 from tm.config import settings as _pipeline_settings
@@ -158,10 +165,18 @@ async def bayes_nodes(
 @app.get("/leaderboard", tags=["Meta"])
 async def leaderboard(_: None = Depends(verify_api_key)):
     """
-    Return the live source credibility leaderboard, sorted by skill conservative score (μ − 3σ).
-    Refreshed every N seconds from leaderboard.json (no restart required).
+    Return the source credibility leaderboard, sorted by skill conservative score (μ − 3σ).
+
+    A FROZEN snapshot (see `snapshot_date`) — the legacy vault, kept only as
+    the credibility fallback. Watched for manual rewrites every N seconds, but
+    nothing has regenerated it since 2026-03-28. See GET /leaderboard/resolution-shadow
+    for the newer, resolution-informed board (small sample size).
     """
-    return {"sources": get_leaderboard_data(), "count": leaderboard_size()}
+    return {
+        "sources": get_leaderboard_data(),
+        "count": leaderboard_size(),
+        "snapshot_date": leaderboard_snapshot_date(),
+    }
 
 
 @app.post("/leaderboard/ingest", response_model=IngestResolutionResponse, tags=["Meta"])

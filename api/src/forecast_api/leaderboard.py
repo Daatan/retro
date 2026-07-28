@@ -19,6 +19,7 @@ settings.resolution_shadow_credibility_enabled (docs/ORACLE_VARIABLES.md §9):
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import settings
@@ -28,6 +29,11 @@ logger = logging.getLogger(__name__)
 
 # source_id → leaderboard entry dict
 _cache: dict[str, dict] = {}
+# mtime of leaderboard.json as of the last successful refresh_cache(), or None
+# if the file didn't exist. Surfaced via leaderboard_snapshot_date() so callers
+# can tell how stale the vault is (retro#340) instead of trusting a "live"
+# label that stopped being true once nothing regenerated the file.
+_snapshot_mtime: float | None = None
 # source_id → resolution-shadow entry dict, plus the global scoreable-resolution
 # count that gates it. Kept separate from _cache rather than merged: the two
 # boards have different provenance and different lifecycles, and the flag has to
@@ -51,12 +57,29 @@ def _load_from_disk(path: Path) -> dict[str, dict]:
     return {}
 
 
+def _mtime_or_none(path: Path) -> float | None:
+    return path.stat().st_mtime if path.exists() else None
+
+
 async def refresh_cache(path: Path) -> None:
+    global _snapshot_mtime
     loaded = await asyncio.to_thread(_load_from_disk, path)
+    mtime = await asyncio.to_thread(_mtime_or_none, path)
     async with _cache_lock:
         _cache.clear()
         _cache.update(loaded)
+        _snapshot_mtime = mtime
     logger.info("Leaderboard refreshed: %d sources loaded", len(_cache))
+
+
+def leaderboard_snapshot_date() -> str | None:
+    """ISO date leaderboard.json was last written on disk, or None if it's
+    missing. This is the vault's provenance, not a "last checked" timestamp —
+    nothing has regenerated the file since 2026-03-28, so this date has been
+    static for months and callers should treat it as a frozen baseline."""
+    if _snapshot_mtime is None:
+        return None
+    return datetime.fromtimestamp(_snapshot_mtime, tz=timezone.utc).date().isoformat()
 
 
 def _load_shadow_from_disk(board_path: Path) -> dict[str, dict]:

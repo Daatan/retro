@@ -570,7 +570,7 @@ with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
 2. `extractor.extract_predictions()` — LLM extraction: `stance`, `certainty`, `claim`, etc.
 
 **Stage 3 — Weight by Source Credibility**
-1. `leaderboard.get_credibility_weight(source_id)` — OpenSkill conservative score (μ − 3σ) from `leaderboard.json`
+1. `leaderboard.get_credibility_weight(source_id)` — OpenSkill conservative score (μ − 3σ) from `leaderboard.json`. That vault is **legacy**: nothing in production has regenerated it since 2026-03-28, so it returns a neutral 1.0 for almost every live source. Setting `RESOLUTION_SHADOW_CREDIBILITY_ENABLED=true` switches this to a shrunk **Brier** score over real daatan resolutions (`resolution_leaderboard.json`) instead — off by default, see [ORACLE_VARIABLES.md](ORACLE_VARIABLES.md) §9 for why Brier and not the vault's μ − 3σ transform
 2. `weight = credibility × class_weight[evidence_class] × recency × relevance²` per prediction (S2 cutover; `class_weight` keyed by the extractor's `evidence_class` — `cited_probability` carries the old ×4 anchor premium, `reported_fact`/`cited_share`/`reporting`/`opinion` fill out the rest of the lookup table; unclassified claims fall back to their own `certainty`) (see [ORACLE_VARIABLES.md](ORACLE_VARIABLES.md) for the audit of these knobs)
 
 **Stage 4 — Aggregate → Distribution** (`aggregation.aggregate_pool`, wrapping `pool_sources`)

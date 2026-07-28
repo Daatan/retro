@@ -48,6 +48,34 @@ def _load_records(path: Path) -> list[dict]:
     return records
 
 
+def _usable_sources(record: dict) -> list[dict]:
+    """The rows rescore_from_disk() actually scores for one record.
+
+    Opinion-class rows are excluded — the same exclusion policy as the
+    credibility feedback loop's Q7 decision, enforced here rather than merely
+    trusted from the caller: daatan already filters opinion-class before
+    pushing, but a future /leaderboard/ingest caller shouldn't be able to
+    silently bypass the rule by omission. Rows without a stance or a source id
+    are unscoreable and dropped too. Returns [] for an incomplete record.
+
+    Shared with count_resolutions() so the credibility gate counts exactly the
+    resolutions that were scored, and the two can't drift apart.
+    """
+    if record.get("outcome") is None or not record.get("sources"):
+        return []
+    return [
+        s for s in record["sources"]
+        if s.get("evidence_class") != "opinion" and s.get("stance") is not None and s.get("source")
+    ]
+
+
+def count_resolutions(ingest_path: Path) -> int:
+    """How many ingested resolutions are actually scoreable — the global gate
+    for resolution-shadow credibility (settings.resolution_shadow_min_global_predictions).
+    Counts resolutions, not source rows or articles."""
+    return sum(1 for record in _load_records(ingest_path) if _usable_sources(record))
+
+
 def rescore_from_disk(ingest_path: Path, output_path: Path) -> dict:
     """
     Replay every ingested resolution through a fresh PlackettLuce model and
@@ -55,6 +83,16 @@ def rescore_from_disk(ingest_path: Path, output_path: Path) -> dict:
     summary dict (for logging) of how many resolutions/sources were scored
     or skipped and why. Never raises — a malformed line is logged and
     skipped by _load_records, not fatal to the whole rescore.
+
+    Within one resolution a source's rows are averaged before scoring, so a
+    source is scored once per outcome rather than once per article — the same
+    shape rescore_authors_from_disk() already uses. This is not cosmetic: the
+    row-level version put a source with mixed-sign rows into BOTH `winners`
+    and `losers`, so it competed against itself in rate() and the loser
+    write-back then clobbered its winner update (28 such source-resolutions
+    across the first 6 real ingests). It also made `predictions` count
+    articles, overstating how much independent evidence a prolific source
+    had — the count downstream shrinkage divides by.
     """
     records = _load_records(ingest_path)
 
@@ -73,34 +111,30 @@ def rescore_from_disk(ingest_path: Path, output_path: Path) -> dict:
             resolutions_skipped_incomplete += 1
             continue
 
-        # Same exclusion policy as the credibility feedback loop's Q7
-        # decision — enforced here too, not just trusted from the caller:
-        # daatan already filters opinion-class before pushing, but a future
-        # caller of /leaderboard/ingest shouldn't be able to silently bypass
-        # the rule by omission.
-        usable = [
-            s for s in sources
-            if s.get("evidence_class") != "opinion" and s.get("stance") is not None and s.get("source")
-        ]
         articles_skipped_opinion += sum(1 for s in sources if s.get("evidence_class") == "opinion")
+        usable = _usable_sources(record)
         if not usable:
             resolutions_skipped_incomplete += 1
             continue
 
+        stances_by_source: dict[str, list[float]] = {}
+        for s in usable:
+            stances_by_source.setdefault(s["source"], []).append(s["stance"])
+
         resolutions_scored += 1
-        if len(usable) < 2:
+        if len(stances_by_source) < 2:
             resolutions_single_source += 1  # still scored below (brier), just no ranking counterparty
 
         event_predictions: list[tuple[str, float]] = []
-        for s in usable:
-            sid = s["source"]
-            stance = s["stance"]
+        for sid, stances in stances_by_source.items():
+            mean_stance = sum(stances) / len(stances)
             if sid not in ratings:
                 ratings[sid] = skill_model.rating()
-                stats[sid] = {"predictions": 0, "brier_total": 0.0}
+                stats[sid] = {"predictions": 0, "articles": 0, "brier_total": 0.0}
             stats[sid]["predictions"] += 1
-            stats[sid]["brier_total"] += brier_score(stance_to_prob(stance), outcome)
-            event_predictions.append((sid, stance))
+            stats[sid]["articles"] += len(stances)
+            stats[sid]["brier_total"] += brier_score(stance_to_prob(mean_stance), outcome)
+            event_predictions.append((sid, mean_stance))
 
         # A lone source (or a unanimous group) has no ranking counterparty —
         # same "all right or all wrong, no information" case Scorer.run()
@@ -129,6 +163,7 @@ def rescore_from_disk(ingest_path: Path, output_path: Path) -> dict:
             "skill_sigma": round(r.sigma, 2),
             "skill_conservative": round(r.mu - 3 * r.sigma, 2),
             "predictions": n,
+            "articles": s["articles"],
         })
     shadow_leaderboard.sort(key=lambda x: x["skill_conservative"], reverse=True)
 

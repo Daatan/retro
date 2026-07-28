@@ -679,7 +679,10 @@ Open, in suggested order:
   actively-scraped international sources. Fixing this for real means
   building a resolution-outcome feedback loop (daatan `Prediction` resolves
   → which sources contributed → retro scoring) — its own design pass, on par
-  with the evidence pool / S2 above, not a quick fix.
+  with the evidence pool / S2 above, not a quick fix. **That loop is now
+  built (§9), and retro #337 wires it into `get_credibility_weight()` behind
+  `RESOLUTION_SHADOW_CREDIBILITY_ENABLED` — still off by default, so this
+  paragraph describes live behaviour until the flag is flipped.**
 
 ## 9. Credibility feedback loop (scoped 2026-07-10)
 
@@ -789,15 +792,73 @@ Small-tasks breakdown, in order:
   Because scoring replays from scratch, curating a new alias in news-indexer
   retroactively merges that author's whole history on the *next* rescore —
   no backfill needed.
-- **Observe** — watch `GET /leaderboard/resolution-shadow` against the live
-  `GET /leaderboard` on real resolutions for a while.
-- **Cutover decision** — wire the resolution-informed score into
-  `get_credibility_weight()` (replace or blend with the vault-curated
-  skill), gated so it can be reverted.
-- **Decide the manual vault's fate** — keep `data/events/*.json` /
-  `Scorer.run()` as a supplementary override for sources with too few
-  resolutions to trust yet, or retire it once resolution-driven scoring is
-  proven.
+- **Per-resolution dedupe in the stance lane (retro #337)** — `rescore_from_disk()`
+  now averages a source's rows within one resolution before scoring, as the
+  author lane always did. The row-level version put a source with mixed-sign
+  rows into **both** `winners` and `losers`, so it competed against itself in
+  `rate()` and the loser write-back clobbered its winner update — 28 such
+  source-resolutions across the first 6 real ingests (one resolution alone:
+  113 rows over 30 distinct sources, 12 of them on both sides). It also made
+  `predictions` count *articles*, overstating independent evidence: 14 sources
+  had ≥8 rows while **none** had ≥8 distinct resolutions. Any shadow-board
+  ordering eyeballed before this fix was unreliable. `articles` is now reported
+  alongside `predictions`, mirroring the author board.
+- **Cutover — the credibility signal is Brier, not `skill_conservative`
+  (retro #337)** — `get_credibility_weight()` reads the resolution-shadow board
+  when `RESOLUTION_SHADOW_CREDIBILITY_ENABLED=true` (default **off**).
+  Measured before choosing: reusing the vault's `1.0 + skill_conservative/25`
+  transform would have been a **no-op**. σ barely moves in these large
+  multi-team OpenSkill matches, so `μ−3σ` stays pinned near 0 — weights spanned
+  **0.986…1.016 (1.03×) on the real board** and 0.951…1.037 (1.09×) simulated at
+  100 resolutions, i.e. a source right 90% of the time would outweigh one right
+  20% of the time by ~9%, noise against `class_weight` (16×) and recency (50×).
+  The *ranking* is fine (corr +0.98 with true accuracy); the absolute scale is
+  not. Brier separates properly (corr −0.98, ~2.5× spread at 100 resolutions):
+
+      b_shrunk = (brier_mean·n + prior_n·0.25) / (n + prior_n)
+      weight   = clamp(1.0 + (0.25 − b_shrunk)·slope, w_min, w_max)
+
+  Brier 0.25 — uninformed, or consistently hedged — maps to exactly 1.0, so an
+  unknown source is neutral by construction. Shrinkage toward that prior
+  (`resolution_shadow_brier_prior_n`, default 10) replaces a minimum per-source
+  count: it degrades smoothly instead of at a cliff, so a newcomer with two
+  lucky calls lands near 1.05 rather than at the upper clamp. One global gate,
+  `resolution_shadow_min_global_predictions` (default 50 — where simulated
+  correlation stabilises at ~0.97), holds every source at 1.0 until the dataset
+  as a whole is worth trusting. The OpenSkill fields stay on the board for
+  display/ranking only.
+  **Replace, not blend:** under the flag the vault is never consulted, and a
+  source without resolution history falls back to neutral 1.0 — not to a frozen
+  2022 backtest of 5 outlets, which would reintroduce exactly the stale-score
+  ambiguity the cutover removes. Flag off ⇒ byte-identical to the pre-#337 path.
+  **Watch `evidence_mass`:** it is `Σ weight`, so it feeds `decisiveness_floor`
+  and thin-evidence CI widening. Weights centre on 1.0 by construction, but on
+  the 6 real resolutions the mean lands at 0.950 — poorly-scoring pools will
+  widen their CI slightly sooner.
+- **Flipping it is manual, and gated on evidence** — run
+  `pipeline/scripts/backtest_shadow_credibility.py` against a copy of the box's
+  `resolution_feedback.jsonl`: it pools each resolution twice (shadow weights vs
+  flat 1.0), leave-one-out, and compares Brier. On today's 6 resolutions it
+  reports shadow **0.0018 worse** — the honest answer at that sample size, and
+  the reason the gate is 50 rather than 6. When it turns convincingly positive,
+  set the env var and restart `oracle-api.service`; revert is the same in
+  reverse, no deploy either way (same story as `SETTLEMENT_REVALIDATE`).
+- **The manual vault is legacy** — `data/leaderboard.json`, `data/events/*.json`
+  and `tm.scorer.Scorer.run()` are retained *only* as the flag-off fallback and
+  as test-fixture coverage. Nothing in production has called `Scorer.run()`
+  since the vault froze on 2026-03-28 (no cron, timer or workflow does — it is
+  reachable only via `python -m tm.scorer` and the pipeline tests), so naming it
+  legacy is intent, not a functional change. Full retirement — deleting the
+  module, the event fixtures and their tests — stays a separate decision;
+  "unused but documented" is a stable end state too.
+- **The author lane is deliberately NOT part of this cutover.**
+  `author_lean` / `resolution_author_leaderboard.json` feed no live number.
+  They score a *person's own directional record*, opinion-class **included**,
+  because the columnist's opinion is the signal; the source lane scores
+  *whether an outlet's reporting was right*, opinion-class **excluded**. The two
+  boards deliberately invert that rule, so folding author scores into
+  `get_credibility_weight()` would destroy what each one measures. Author-level
+  weighting, if ever wanted, needs its own design pass.
 
 ## 10. Recency weighting is only as good as the upstream date (2026-07-13)
 

@@ -25,6 +25,51 @@ class ApiSettings(BaseSettings):
     # per-(author, outlet) board replayed from the same feedback file's
     # author_signals (resolution_scorer.rescore_authors_from_disk).
     resolution_author_leaderboard_path: Path = Path("")  # empty = data_dir/resolution_author_leaderboard.json
+    # Step 4 — the cutover (docs/ORACLE_VARIABLES.md §9). When True,
+    # get_credibility_weight() sources credibility from the resolution-informed
+    # shadow board above instead of the vault-curated leaderboard.json. Full
+    # REPLACEMENT, not a blend: under the flag the vault is never consulted,
+    # and a source without enough resolution history falls back to neutral 1.0
+    # rather than to a 2022 backtest of 5 outlets that has been frozen since
+    # 2026-03-28 (nothing in prod regenerates it — see the §8 "credibility
+    # still ≈1.0" note; the vault is legacy, kept only as this flag's OFF path).
+    #
+    # Default False — new behaviour, unlike settlement_revalidate's default-on
+    # bug fix. Flipping it is a manual step after enough real resolutions
+    # accumulate AND a human reviews the backtest
+    # (pipeline/scripts/backtest_shadow_credibility.py): set
+    # RESOLUTION_SHADOW_CREDIBILITY_ENABLED=true in the env and restart
+    # oracle-api.service. Revert is the same in reverse — no deploy either way,
+    # same revert story as SETTLEMENT_REVALIDATE below.
+    resolution_shadow_credibility_enabled: bool = False
+    # Global gate: scoreable resolutions (resolution_scorer.count_resolutions)
+    # required before ANY source's shadow score is trusted; below it every
+    # source gets neutral 1.0. 50 is where simulated correlation between a
+    # source's true accuracy and its resulting weight reaches ~0.97 and
+    # stabilises — a starting floor, not a proven optimum.
+    resolution_shadow_min_global_predictions: int = 50
+    # Credibility is derived from the source's Brier score, NOT from its
+    # OpenSkill skill_conservative: sigma barely moves in these large
+    # multi-team matches, so mu-3*sigma stays pinned near 0 and the vault's
+    # 1.0 + conservative/25 transform maps every source to ~1.0 (measured
+    # spread 1.03x on the real board, 1.09x simulated at 100 resolutions —
+    # i.e. the cutover would have been a no-op). Brier separates properly
+    # (spread ~2.5x at 100 resolutions) and needs no ranking counterparty.
+    # The OpenSkill fields stay on the board for display/ranking only.
+    #
+    # Shrinkage toward the uninformed prior (Brier 0.25) instead of a minimum
+    # per-source count: it degrades smoothly rather than at a cliff, so a
+    # lucky new source with 2 near-perfect calls lands at ~1.08, not ~1.48.
+    # Higher = more conservative. Expressed in pseudo-resolutions.
+    resolution_shadow_brier_prior_n: float = 10.0
+    # Slope mapping Brier distance-from-0.25 to weight. Brier 0.25 (uninformed
+    # or consistently hedged) maps to exactly 1.0, so an unknown source is
+    # neutral by construction; a perfect source approaches the upper clamp.
+    resolution_shadow_brier_slope: float = 2.0
+    # Hard bounds on the resulting weight, so no single source can dominate or
+    # be zeroed out of a pool on scoring alone.
+    resolution_shadow_weight_min: float = 0.25
+    resolution_shadow_weight_max: float = 2.0
 
     max_articles: int = 10
     host: str = "127.0.0.1"

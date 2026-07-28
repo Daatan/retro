@@ -285,7 +285,11 @@ false, and `/mcp` reverts to inert 404 with the REST API untouched.
   localhost and reject nginx-forwarded `Host: oracle.daatan.com` with `421 Invalid
   Host header`. The allowed `Host`/`Origin` values are derived from `MCP_RESOURCE_URL`
   (`config.mcp_allowed_hosts` / `mcp_allowed_origins`), so they follow the resource
-  host automatically — no separate config to keep in sync.
+  host automatically. **One hand-maintained exception**: `mcp_allowed_origins` also
+  hardcodes `https://daatan.github.io` (same trust boundary as `main.py`'s CORS
+  `allow_origins` list), so `oracle-mcp-test.html` can call `/mcp` directly from the
+  browser with a real Bearer token. If that page's hosting path ever moves, this
+  origin needs updating by hand.
 - **Slow forecasts** inherit the 120s nginx/gunicorn cap; long tails can 504. A
   dedicated `location /mcp` with a longer `proxy_read_timeout` is a possible
   follow-up.

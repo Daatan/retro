@@ -136,11 +136,59 @@
       word-break: break-word;
       max-height: 360px;
       overflow-y: auto;
-      margin-top: .7rem;
       display: none;
     }
     pre.output.on { display: block; }
-    pre.output.err { color: var(--no); border-color: var(--no); }
+    pre.output.err { color: var(--no); border-color: var(--no); display: block; }
+
+    /* ── Result summary (parsed, human-readable) ─────────────── */
+    .summary { margin-top: .7rem; }
+    .summary:empty { display: none; margin-top: 0; }
+
+    .summary-list { display: flex; flex-direction: column; gap: .3rem; }
+    .summary-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      gap: 1rem; font-size: .82rem; padding: .4rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-row b { color: var(--text); font-family: ui-monospace, monospace; white-space: nowrap; }
+    .summary-row span { color: var(--text-dim); text-align: right; }
+    .summary-note { font-size: .74rem; color: var(--muted); margin-top: .5rem; }
+
+    .summary-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 1rem 1.1rem;
+    }
+    .summary-q { font-size: .92rem; font-weight: 600; margin-bottom: .7rem; line-height: 1.4; }
+    .summary-stats {
+      display: flex; flex-wrap: wrap; align-items: center;
+      gap: .35rem 1rem; font-size: .82rem; color: var(--text-dim);
+    }
+    .summary-stats b { color: var(--text); }
+    .summary-prob {
+      font-size: 2rem; font-weight: 800; line-height: 1;
+      margin-bottom: .6rem; display: flex; align-items: baseline; gap: .5rem;
+    }
+    .summary-prob span { font-size: .7rem; font-weight: 400; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .badge {
+      font-size: .68rem; font-weight: 700; padding: .18rem .55rem;
+      border-radius: 999px; text-transform: uppercase; letter-spacing: .03em;
+    }
+    .badge-ok { background: rgba(34,197,94,.15); color: var(--yes); }
+    .badge-muted { background: rgba(75,98,128,.25); color: var(--text-dim); }
+
+    /* ── Raw JSON, collapsed behind a toggle ─────────────────── */
+    details.raw-details { display: none; margin-top: .7rem; }
+    details.raw-details.on { display: block; }
+    details.raw-details summary {
+      cursor: pointer; font-size: .74rem; color: var(--muted);
+      user-select: none; list-style: revert;
+    }
+    details.raw-details summary:hover { color: var(--text-dim); }
+    details.raw-details pre.output { margin-top: .5rem; }
 
     .identity { font-size: .82rem; color: var(--text-dim); }
     .identity b { color: var(--text); }
@@ -186,7 +234,11 @@
         <button class="btn secondary" onclick="listTools()">
           <span class="spinner" id="spin-list"></span> List tools
         </button>
-        <pre class="output" id="out-list"></pre>
+        <div class="summary" id="summary-list"></div>
+        <details class="raw-details" id="details-list">
+          <summary>Raw JSON</summary>
+          <pre class="output" id="out-list"></pre>
+        </details>
       </div>
 
       <div class="tool-block">
@@ -195,7 +247,11 @@
         <button class="btn secondary" onclick="callTool('source_leaderboard', {}, 'leaderboard')">
           <span class="spinner" id="spin-leaderboard"></span> Call
         </button>
-        <pre class="output" id="out-leaderboard"></pre>
+        <div class="summary" id="summary-leaderboard"></div>
+        <details class="raw-details" id="details-leaderboard">
+          <summary>Raw JSON</summary>
+          <pre class="output" id="out-leaderboard"></pre>
+        </details>
       </div>
 
       <div class="tool-block">
@@ -205,7 +261,11 @@
         <button class="btn secondary" onclick="callTool('polymarket_market', {market: document.getElementById('marketInput').value}, 'market')">
           <span class="spinner" id="spin-market"></span> Call
         </button>
-        <pre class="output" id="out-market"></pre>
+        <div class="summary" id="summary-market"></div>
+        <details class="raw-details" id="details-market">
+          <summary>Raw JSON</summary>
+          <pre class="output" id="out-market"></pre>
+        </details>
       </div>
 
       <div class="tool-block">
@@ -218,7 +278,11 @@
         <button class="btn secondary" onclick="callTool('forecast', {question: document.getElementById('questionInput').value}, 'forecast')">
           <span class="spinner" id="spin-forecast"></span> Call (slow)
         </button>
-        <pre class="output" id="out-forecast"></pre>
+        <div class="summary" id="summary-forecast"></div>
+        <details class="raw-details" id="details-forecast">
+          <summary>Raw JSON</summary>
+          <pre class="output" id="out-forecast"></pre>
+        </details>
       </div>
     </div>
 
@@ -358,18 +422,116 @@
     return parsed
   }
 
+  // ── Result rendering ────────────────────────────────────────────
+  // Tool results arrive as MCP content blocks whose "text" field is itself
+  // a JSON string (see the isError/content envelope in the MCP spec) — left
+  // as-is that's an escaped-quote soup. Parse it in place so the raw view is
+  // actually readable, and pull it out separately to drive the summary card.
+  function tryParseJson(s) {
+    if (typeof s !== 'string') return s
+    try { return JSON.parse(s) } catch { return s }
+  }
+
+  function unwrapMcpResult(parsed) {
+    if (parsed && parsed.result && Array.isArray(parsed.result.content)) {
+      const content = parsed.result.content.map(item =>
+        item.type === 'text' ? { ...item, text: tryParseJson(item.text) } : item
+      )
+      return { ...parsed, result: { ...parsed.result, content } }
+    }
+    return parsed
+  }
+
+  function firstParsedContent(envelope) {
+    const content = envelope?.result?.content
+    if (Array.isArray(content) && content.length && content[0].type === 'text') {
+      return tryParseJson(content[0].text)
+    }
+    return null
+  }
+
+  function renderSummary(key, envelope) {
+    try {
+      if (key === 'list') {
+        const tools = envelope?.result?.tools || []
+        if (!tools.length) return ''
+        return '<div class="summary-list">' + tools.map(t =>
+          `<div class="summary-row"><b>${escapeHtml(t.name)}</b><span>${escapeHtml(t.description || '')}</span></div>`
+        ).join('') + '</div>'
+      }
+
+      const data = firstParsedContent(envelope)
+      if (!data || typeof data !== 'object') return ''
+
+      if (key === 'leaderboard' && Array.isArray(data.sources)) {
+        const shown = data.sources.slice(0, 10)
+        const rows = shown.map(s =>
+          `<div class="summary-row"><b>${escapeHtml(s.name || s.id)}</b><span>Elo ${Math.round(s.elo)} · Brier ${(s.brier_score ?? 0).toFixed(3)} · ${((s.accuracy ?? 0) * 100).toFixed(0)}% acc (${s.predictions ?? 0} preds)</span></div>`
+        ).join('')
+        return `<div class="summary-list">${rows}</div><div class="summary-note">${data.count ?? data.sources.length} sources total, showing top ${shown.length}</div>`
+      }
+
+      if (key === 'market' && data.question) {
+        const yesPct = data.yes_price != null ? (data.yes_price * 100).toFixed(1) : '?'
+        const vol = data.volume != null ? Math.round(Number(data.volume)).toLocaleString() : '?'
+        const closed = !!data.closed
+        const badgeText = closed ? 'Closed' : (data.active ? 'Active' : 'Inactive')
+        const endDate = data.end_date ? escapeHtml(String(data.end_date).slice(0, 10)) : null
+        return `
+          <div class="summary-card">
+            <div class="summary-q">${escapeHtml(data.question)}</div>
+            <div class="summary-stats">
+              <span><b>${yesPct}%</b> YES</span>
+              <span>Vol <b>$${vol}</b></span>
+              <span class="badge ${closed ? 'badge-muted' : 'badge-ok'}">${badgeText}</span>
+              ${endDate ? `<span>ends ${endDate}</span>` : ''}
+            </div>
+          </div>`
+      }
+
+      if (key === 'forecast' && data.probability != null) {
+        const pct = Math.round(data.probability * 100)
+        const sources = Array.isArray(data.sources) ? data.sources : []
+        const sourceRows = sources.map(s => {
+          const stance = typeof s.stance === 'number' ? (s.stance >= 0 ? '+' : '') + s.stance.toFixed(2) : '?'
+          const cred = typeof s.credibility_weight === 'number' ? s.credibility_weight.toFixed(2) : '?'
+          return `<div class="summary-row"><b>${escapeHtml(s.source_name || '?')}</b><span>stance ${stance} · cred ${cred}</span></div>`
+        }).join('')
+        return `
+          <div class="summary-card">
+            <div class="summary-prob">${pct}%<span>probability</span></div>
+            <div class="summary-stats">
+              <span>confidence: <b>${escapeHtml(data.confidence ?? '?')}</b></span>
+              <span>${data.articles_used ?? 0} articles</span>
+              ${data.settled ? '<span class="badge badge-ok">settled</span>' : ''}
+              ${data.insufficient_data ? '<span class="badge badge-muted">insufficient data</span>' : ''}
+            </div>
+            ${sourceRows ? `<div class="summary-list" style="margin-top:.7rem">${sourceRows}</div>` : ''}
+          </div>`
+      }
+    } catch (e) { /* fall through to raw JSON only */ }
+    return ''
+  }
+
   async function runWithSpinner(key, fn) {
     const spin = document.getElementById(`spin-${key}`)
     const out = document.getElementById(`out-${key}`)
+    const details = document.getElementById(`details-${key}`)
+    const summaryEl = document.getElementById(`summary-${key}`)
     spin.classList.add('on')
     out.classList.remove('on', 'err')
+    if (details) { details.classList.remove('on'); details.open = false }
+    if (summaryEl) summaryEl.innerHTML = ''
     try {
       const result = await fn()
-      out.textContent = JSON.stringify(result, null, 2)
+      out.textContent = JSON.stringify(unwrapMcpResult(result), null, 2)
       out.classList.add('on')
+      if (details) details.classList.add('on')
+      if (summaryEl) summaryEl.innerHTML = renderSummary(key, result)
     } catch (e) {
       out.textContent = e.message || String(e)
       out.classList.add('on', 'err')
+      if (details) { details.classList.add('on'); details.open = true }
     } finally {
       spin.classList.remove('on')
     }

@@ -57,10 +57,14 @@ variable "claude_callback_urls" {
   # https://claude.ai/api/mcp/auth_callback covers claude.ai web + Claude Desktop
   # (both use this single fixed callback). The localhost entry is for Claude Code
   # CLI run with a FIXED port — Cognito can't match Claude Code's default
-  # ephemeral loopback port, so pin it (complete login on :8080).
+  # ephemeral loopback port, so pin it (complete login on :8080). The GitHub
+  # Pages entry is oracle-mcp-test.html's own redirect_uri — it's a public SPA
+  # PKCE client-side flow (no server), so it registers itself as its own
+  # callback, same pattern as any browser-based OAuth client.
   default = [
     "https://claude.ai/api/mcp/auth_callback",
     "http://localhost:8080/callback",
+    "https://daatan.github.io/retro/oracle-mcp-test.html",
   ]
 }
 

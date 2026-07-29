@@ -162,16 +162,44 @@ settlement vote re-proves its anchor inside `aggregate_pool()` on every call —
   says nothing about the window — the 2026-07-19 pool audit's "US bombs Iran in 2025" rows
   were settled NO at 0.93+ by July-2026 strike articles while ground truth was YES. Within
   the grace it is the flipped late-arrival class (Knesset dissolving July 17 vs a July 15
-  deadline) and stands.
+  deadline) and stands. A third, narrower case sits between `undated_foreclosure` and
+  `post_window_occurrence`: an **undated** non-occurrence vote where the window IS already
+  closed, but the article itself was *published* more than `settlement_post_deadline_grace_days`
+  after the deadline, is demoted too (`stale_undated_foreclosure`, retro#295/#293) — an undated
+  "nothing happened" read from an article that late is more likely a misread of a LATER,
+  different-timeframe recurrence of the same event class than genuine retrospective silence on
+  the closed window (the same 2026-07-19 audit's "US bombs Iran in 2025" class: mid-2026
+  articles about active 2026 strikes extracted as an undated NO for the already-closed 2025
+  window). The extractor prompt already forbids cross-timeframe extraction (retro#295); this
+  check is the aggregation-time backstop for rows that slip through it — keyed on
+  `published_date` rather than `event_date`, since there is no event date to anchor on. An
+  undated non-occurrence vote from an article published within grace of a closed window is
+  unaffected — that stays the ordinary, honest "window closed quietly" case.
 
 Demoted votes keep their stance (ordinary evidence; `event=settlement_vote_demoted` with a
 reason per row). Valid votes in **both** directions suppress the pin entirely
 (`settlement_suppressed`, `settlement_conflict` — one extraction is provably wrong, and
 facts are not decided by outvoting; the England 4-vs-1 stance-inversion pool is the
 canonical case). The pin then requires `settlement_min_sources` **unanimous** valid votes.
+
+Clearing `settlement_min_sources` is a **count**, not a quality check — a pool of uniformly
+weak sources (low credibility, thin relevance, recency-decayed) that each barely clear
+settlement grade could still out-count its way to a pin. `settlement_quality_floor`
+(retro#279, default **0 = disabled**) additionally requires the winning direction's votes to
+carry at least this much *combined weight* (`credibility × evidence_weight × recency ×
+relevance²` — the same per-source `weight` term the pool itself uses, summed over the
+winning direction's valid votes only) before the pin is honored; below it the pin is
+suppressed too (`suppression_reason="settlement_quality_floor"`) and the pooled mean stands,
+same as any other suppressed pin. Left at 0 because there is no audited incident to calibrate
+it against yet — 0.5 (reusing `decisiveness_floor`'s scale) broke multiple legitimate-pin
+tests once wired through real per-source weights, since credibility/recency/relevance
+multiplied together lands lower than a single flat floor assumes; tune from real pool data
+before enabling in prod.
+
 `PoolAggregateResponse` exposes `settlement_suppressed`/`settlement_suppression_reason`/
 `settlement_votes_demoted` for callers. Regression fixtures from the audit:
-`api/tests/test_settlement_revalidation.py`.
+`api/tests/test_settlement_revalidation.py`; quality-floor fixtures:
+`TestQualityFloor` in the same file.
 
 ### 2.2 Per-article (gatekeeper LLM — `pipeline/src/tm/gatekeeper.py`)
 
@@ -201,7 +229,7 @@ canonical case). The pin then requires `settlement_min_sources` **unanimous** va
 | `mean, std, ci_low, ci_high` | weighted-mean logit pool + dispersion, stance scale |
 | `evidence_mass = Σ weight` | thin-evidence CI widening (floor 0.5, inflation 0.45) |
 | `relevance_mass = Σ relevance²` | off-topic abstention (floor 0.05) |
-| `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — **revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at (scheduled), claim_deadline]` and ≤ its article's date; a non-occurrence vote needs a closed window (dated anchors at most `settlement_post_deadline_grace_days` past it) or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
+| `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — **revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at (scheduled), claim_deadline]` and ≤ its article's date; a non-occurrence vote needs a closed window (dated anchors at most `settlement_post_deadline_grace_days` past it, or an undated vote from an article published within that grace — else `stale_undated_foreclosure`) or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Count alone isn't enough either: `settlement_quality_floor` (default 0 = off) additionally requires the winning direction's combined per-source weight to clear a bar, else the pin is suppressed (`settlement_quality_floor`). Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
 | `insufficient_data, reason, placeholder, articles_used/found` | abstention encoding |
 
 Config constants (12): `recency_half_life_days=7`, `recency_floor=0.02`,
@@ -524,7 +552,9 @@ Shipped, in the accepted sequencing order (§6):
   against historical-background "settlements" (the F-35 failure mode),
   demotions/suppressions logged (`settlement_demoted`/`settlement_suppressed`).
 - **Adjacent-event prompt hardening (2026-07-12)** — extractor prompt section
-  "THE EVENT ITSELF vs. ADJACENT EVENTS": a definitively reported fact about an
+  "THE EVENT ITSELF vs. ADJACENT EVENTS" (renamed/consolidated into "MATCH THE
+  EVENT — do not credit a near-miss as the event" by #323 — see the
+  2026-07-26/27 addendum below): a definitively reported fact about an
   adjacent event (a member leaving when the claim is about the organization, a
   similar-but-different action, a different arena) must not settle the claim or
   carry ±1.0 (the Illouz/Likud incident: "MK leaves Likud" scored stance +1.0
@@ -539,6 +569,37 @@ Shipped, in the accepted sequencing order (§6):
   Bedrock IAM grant (see infra/iam/README.md §4); verified live — the incident
   article now scores stance +0.31 / settled=false (~66%) instead of +1.0/settled
   (99%). Batch pipeline (`truthmachine.service`) deliberately stays on nova-lite.
+- **Extractor guard consolidation (2026-07-26/27)** — three more prompt guards
+  in the same "don't let a near-miss read as the event" family, all in
+  `extractor.py`:
+  - retro#299 "Unverified claims by an interested party — cap certainty": a
+    claim of fact made by a party TO the underlying dispute about its OWN
+    actions, casualties, or results (a belligerent's own damage count, a
+    company's own success claim) carries certainty no higher than 0.5,
+    however declaratively worded, unless the article also reports
+    independent confirmation (a different party, a neutral observer,
+    satellite imagery). Stance sign and magnitude are unaffected — only
+    certainty is capped, since wartime/dispute self-reporting is routinely
+    inflated or unverifiable.
+  - retro#304 "The capability/intent cap applies PER CLAIM, not to the
+    article's overall urgency": the existing capability/intent cap
+    (|stance| ≤ 0.3 for a demonstrated capability, threat, or expectation
+    that is not yet an occurrence) now explicitly applies to each claim
+    independently — five capability/intent signals reported in one urgent,
+    saturated article are still five separately-capped signals; their
+    number or density does not itself aggregate into occurrence.
+  - retro#300/#317, merged by #323 into "MATCH THE EVENT — do not credit a
+    near-miss as the event" (the section this doc quoted above as "THE EVENT
+    ITSELF vs. ADJACENT EVENTS"): the WHO/WHAT/SCOPE decomposition now nests
+    three subsections instead of three separate headings — the original
+    subject/action/arena adjacency test, #317's new named-actor rule (a fact
+    about a different party in the same broader conflict is NOT evidence for
+    a claim naming specific parties — "Iran strikes Jordan" is not "Iran
+    strikes Israel", even the same night of the same crisis; capped at
+    |stance| ≤ 0.2, certainty ≤ 0.3, never settled), and a short "a date does
+    not excuse a near-miss" note (a clean, verifiable date on an adjacent
+    fact does not promote it to a settlement — decide the match first, check
+    the date second, never the other way around).
 - **Prod data fixes (2026-07-08)** — F-35 `settled` latch cleared (audit found
   no other bad latches); all 409 pre-v1.31.2 `oracleSnapshot` rows normalized
   to percent, removing the two-scale historical caveat from live data.

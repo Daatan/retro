@@ -409,6 +409,10 @@ async def _process_article(
 
     source_name = result.source or _source_id_from_url(result.url)
     article_date = result.published_date or datetime.now().strftime("%Y-%m-%d")
+    # A t.me post is short-form (retro#297): mirrors news-indexer's rematch.py:_is_short_form,
+    # which feeds the same hint to the gatekeeper on its /relevance rescue path — one line
+    # duplicated on purpose rather than threading a flag through three repos.
+    short_form = urlparse(result.url or "").netloc.lower().removeprefix("www.") == "t.me"
 
     gate_start = time.perf_counter()
     supplied = _supplied_verdict(result) if settings.reuse_supplied_relevance else None
@@ -480,6 +484,7 @@ async def _process_article(
             event_name=question,
             event_description=question,
             claim_deadline=claim_deadline,
+            short_form=short_form,
         )
         # Observability only (retro#298) — logs claim/stance sign mismatches on the
         # model's raw output, before any of the deterministic corrections below can

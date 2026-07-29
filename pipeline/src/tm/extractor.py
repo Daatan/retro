@@ -673,6 +673,27 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
 """
 
 
+# Appended ONLY for short_form callers (retro#297). The "### Buried facts" rule above tells the
+# model to scan the WHOLE article and credit a decisive clause however incidental — correct for a
+# long article, and actively wrong for a terse multi-topic social post: from one IRGC post it
+# minted claims about Ukrainian attrition strategy AND the S&P 500 CAPE ratio (pushed at cosine
+# 0.03-0.09). A short post doesn't bury facts; either it speaks about the related event or it
+# doesn't.
+#
+# Opt-in and append-only, exactly like gatekeeper._SHORT_FORM_OVERRIDE (#264/#266): the prompt
+# every existing caller sends is byte-for-byte unchanged (test_extractor_short_form.py).
+_SHORT_FORM_OVERRIDE = """
+
+**Short-form source.** This item is a terse social-media / messaging post (e.g. a journalist's
+Telegram channel), not a full news article. A post this short has one primary topic and no
+buried facts: the "Buried facts" whole-article scan above is written for long articles and does
+NOT apply here. Extract signals only when the post's own primary topic bears on the related
+event. A passing mention, an aside, or a list item on an unrelated subject is not evidence about
+the related event — if the post as a whole is about a different matter, extract nothing rather
+than stretch a phrase into a claim.
+"""
+
+
 async def extract_predictions(
     article_text: str,
     source_name: str,
@@ -681,6 +702,7 @@ async def extract_predictions(
     event_description: str,
     journalist: str = "unknown",
     claim_deadline: Optional[str] = None,
+    short_form: bool = False,
 ) -> tuple["ExtractionOutput", dict]:
     """Returns (ExtractionOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
 
@@ -688,6 +710,10 @@ async def extract_predictions(
     resolved ``event_date`` against it rather than hunting the deadline out of the claim's
     prose. Callers that don't classify claims may omit it — the prompt then says "not given"
     and behaviour is unchanged.
+
+    ``short_form`` opts into scoping a social-media post to its own primary topic instead of
+    the whole-article buried-facts scan (retro#297). It defaults to False and only ever
+    APPENDS to the prompt, so the text every existing caller sends is byte-for-byte unchanged.
     """
     prompt = PROMPT_SUFFIX.format(
         article_text=article_text,
@@ -698,6 +724,8 @@ async def extract_predictions(
         event_description=event_description,
         claim_deadline=claim_deadline or "not given",
     )
+    if short_form:
+        prompt += _SHORT_FORM_OVERRIDE
     return await complete_structured(
         settings.extractor_model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
         cached_prefix=PROMPT_PREFIX,

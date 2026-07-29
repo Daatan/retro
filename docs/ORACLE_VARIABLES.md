@@ -219,7 +219,7 @@ before enabling in prod.
 | `credibility` | leaderboard lookup | **1.0 for every source observed in prod** — layer currently inert |
 | `quantitative_multiplier` | 4.0 if any claim carries an estimate, else 1.0 | stacks with the certainty-0.9 floor |
 | **`weight`** | `credibility × avg_certainty × rweight × relevance² × quant_mult` | pool weight |
-| `fact_signal` (shadow) | claim-weighted **mean** of per-claim `fact_signal` over the **same** scored claims as `avg_stance`; `None` if none carried one | Phase 2 fact-lane counterpart of `avg_stance`, un-fused from author assertion; **read by nothing in aggregation** — surfaced on `SourceSignal`/`sources[]` only for daatan persistence + the offline fact-lane gate harness (`pipeline/scripts/backtest_fact_signal_gate.py`: stance-vs-fact_signal paired Brier through the real `/pool/aggregate`; any estimator cutover is gated on it turning convincingly positive, same evidence standard as the credibility flag). Its facets `event_actors`/`event_target`/`is_occurrence`/`verified` ride from the **dominant** (max \|fact_signal\|) claim so they stay internally coherent. |
+| `fact_signal` (shadow) | claim-weighted **mean** of per-claim `fact_signal` over the **same** scored claims as `avg_stance`; `None` if none carried one | Phase 2 fact-lane counterpart of `avg_stance`, un-fused from author assertion; **read by nothing in aggregation** — surfaced on `SourceSignal`/`sources[]` only for daatan persistence + the offline fact-lane gate harness (`pipeline/scripts/backtest_fact_signal_gate.py`: stance-vs-fact_signal paired Brier through the real `/pool/aggregate`; any estimator cutover is gated on it turning convincingly positive, same evidence standard as the credibility flag). Extraction-side, the FACT_SIGNAL prompt carries a **decider-statement exception** (2026-07-29, A/B-gated): an on-record statement by the actor/authority whose own act would resolve the claim — announcement or denial alike — enters the fact lane as a capped precursor instead of being nulled as opinion; assertions *about* the decider's intent by opponents or analysts stay claimed-and-unverified. Wording is numeral-free by design (magnitude policy belongs in estimator config); see `test_extractor_prompt.py::test_decider_statements_exception_present` for the A/B evidence and re-run bar. Its facets `event_actors`/`event_target`/`is_occurrence`/`verified` ride from the **dominant** (max \|fact_signal\|) claim so they stay internally coherent. |
 | `author_lean`, `author_lean_certainty` (shadow) | passed through from `ExtractionOutput` (retro #308/#309) — the byline author's OWN forecast | author-accuracy scoring lane; **not read by aggregation** |
 
 ### 2.4 Pool level (`aggregation.py`, `forecaster.py:799-932`)
@@ -836,6 +836,14 @@ Small-tasks breakdown, in order:
   author's rows are **averaged first** (one Brier per author per outcome —
   the shape validated on gate datapoint #1). Shadow only: nothing reads it
   into `/forecast` weighting.
+- **Known residual in `author_lean` (retro #326 — documented, deliberately
+  not fixed)** — the Behrendt/tagesschau class: commentary that *concedes the
+  event is happening* but imports its downstream-consequence worry as a
+  negative lean still leaks (extracted claims all arrival-affirming, lean
+  still negative). Two prompt attempts did not flip it (one made the broader
+  case worse), so it stands deferred on the same evidence bar as everything
+  else in this lane: revisit only if the resolution-time author Brier
+  (retro #315 — still outcome-starved) shows the subclass matters.
 - **Byline identity merge (retro #329; wired in after datapoint #1)** —
   `rescore_authors_from_disk()` groups raw bylines through
   `_load_identity_map()`, which fetches news-indexer's curated

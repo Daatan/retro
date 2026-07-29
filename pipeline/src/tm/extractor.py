@@ -547,7 +547,18 @@ of quoted opinion, and of interpretive framing. Where stance may blend "what is 
 with "what the facts show", fact_signal is ONLY the second: +1 the facts establish the event \
 happened or is happening, -1 the facts establish it will not or cannot, 0 the facts bear on \
 it but point neither way. Return null (omit fact_signal and its facets) when the prediction \
-rests on opinion, advocacy, or expectation with no reported fact that bears on the event.
+rests on opinion, advocacy, or expectation with no reported fact that bears on the event. \
+The one EXCEPTION — DECIDER STATEMENTS: a public, on-record statement by the decider — the \
+actor or authority whose own act or announcement would itself resolve the claim, including \
+a senior official speaking for that authority — is itself a reported fact about intent, \
+however rhetorical or dismissive its phrasing, and must never be nulled as opinion. A \
+stated intent or commitment to act is a positive precursor of the event; a denial, refusal, \
+or ruling-out is a negative precursor — both under the same OCCURRENCE vs PRECURSOR rule as \
+any physical precursor, with weaker or hedged expressions of intent scoring smaller than \
+firm commitments. For such a statement, verified means the statement itself was \
+independently reported as made. An assertion about the decider's intent by an opponent, \
+analyst, or unnamed source is not a decider statement and remains \
+claimed-and-unverified at most.
 Discipline fact_signal by three tests, and record the facets that justify each:
   - DYAD. Name WHO acts (event_actors) and the TARGET of the action (event_target) in the \
 fact. A fact whose actor-target pair is NOT the claim's pair — a strike by a different \

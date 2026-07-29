@@ -46,28 +46,28 @@
     "articles_used": 4,
     "reasoning": "If Netanyahu remains PM (A does not happen), Eizenkot's path to PM is blocked by the incumbent's dominance and Likud's structural advantage; if Netanyahu is removed (A happens), Eizenkot becomes a credible centrist alternative to Bennett, particularly if he can position himself as a compromise candidate acceptable to both center and right-leaning voters. This represents a moderate-to-strong positive causal link (~0.16 difference), with the conditional probabilities reflecting Eizenkot's current 13.3% baseline and his demonstrated appeal in polling (44% suitability rating) as a secondary option.",
     "pY_corr": 0.01,
-    "pN_corr": 0.399,
-    "r2_corr": 0.067,
-    "n_corr": 226,
+    "pN_corr": 0.411,
+    "r2_corr": 0.0713,
+    "n_corr": 227,
     "pY_bin": 0.152,
-    "pN_bin": 0.245,
+    "pN_bin": 0.253,
     "n_hi": 17,
-    "n_lo": 33,
+    "n_lo": 34,
     "std_hi": 0.158,
-    "std_lo": 0.198,
+    "std_lo": 0.2,
     "pY_blend": 0.185,
-    "pN_blend": 0.207,
+    "pN_blend": 0.214,
     "pY_ci": [
       0.09,
       0.279
     ],
     "pN_ci": [
-      0.122,
-      0.292
+      0.129,
+      0.298
     ],
     "w_llm": 1.0,
     "w_emp_Y": 1.7,
-    "w_emp_N": 3.3
+    "w_emp_N": 3.4
   },
   {
     "source": "BIBI_OUT",

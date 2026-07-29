@@ -241,3 +241,32 @@ def test_prompt_placeholders_still_format():
         event_description="x",
         claim_deadline="2026-07-15",
     )
+
+
+def test_decider_statements_exception_present():
+    """Signal Lanes WS5: a decider's on-record statement is an intent-fact, not opinion.
+
+    Fixes the Medvedev-denial class: the fact lane dropped official denials as
+    "opinion" while keeping opponents' assertions, a measured upward bias
+    (negative-stance rows nulled 33.0% vs 22.6% for positive, fact-era pool).
+    A/B'd 2026-07-29 on live Haiku (3 runs/side): denial enters as a capped
+    negative precursor 3/3 (was 0/3), F-35 mirror case flips −0.40→≈0, the
+    over-trigger control (Fed official on a market claim) stays null 3/3, and
+    the 22-article mobilization regression DEFLATES further (+0.278→+0.149
+    mean fact_signal) — no rumor inflation. The wording is numeral-free by
+    design: magnitude policy lives in estimator config, prompts only classify.
+    Wording is Haiku-sensitive (two iterations were needed — "authority
+    including a senior official speaking for it" is what made Medvedev-class
+    denials register); re-run the A/B kit before rewording.
+    """
+    assert "The one EXCEPTION — DECIDER STATEMENTS" in PROMPT_PREFIX
+    assert "whose own act or announcement would itself resolve the claim" in PROMPT_PREFIX
+    assert "including a senior official speaking for that authority" in PROMPT_PREFIX
+    assert "must never be nulled as opinion" in PROMPT_PREFIX
+    assert "a denial, refusal, or ruling-out is a negative precursor" in PROMPT_PREFIX
+    assert "remains claimed-and-unverified at most" in PROMPT_PREFIX
+    # the null rule the exception carves out of must stay intact
+    assert (
+        "Return null (omit fact_signal and its facets) when the prediction "
+        "rests on opinion, advocacy, or expectation with no reported fact that bears on the event."
+    ) in PROMPT_PREFIX

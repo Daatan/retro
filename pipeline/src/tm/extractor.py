@@ -559,6 +559,14 @@ firm commitments. For such a statement, verified means the statement itself was 
 independently reported as made. An assertion about the decider's intent by an opponent, \
 analyst, or unnamed source is not a decider statement and remains \
 claimed-and-unverified at most.
+NEGATIVE PRECURSORS — the graded scale runs in BOTH directions, and not only for decider \
+statements: a reported fact that makes the event less likely — an obstacle emerging, a \
+preparation reversed or abandoned, a contrary or rival development, a measured indicator \
+moving against the event — bears on the event and is scored as a graded negative precursor \
+(is_occurrence false, same cap), never nulled merely because it points against the claim. \
+Reserve the extreme negative for facts that establish the event cannot happen, exactly as \
+the extreme positive is reserved for the event itself having occurred; between the \
+extremes, grade contrary facts with the same discipline as supporting ones.
 Discipline fact_signal by three tests, and record the facets that justify each:
   - DYAD. Name WHO acts (event_actors) and the TARGET of the action (event_target) in the \
 fact. A fact whose actor-target pair is NOT the claim's pair — a strike by a different \

@@ -270,3 +270,31 @@ def test_decider_statements_exception_present():
         "Return null (omit fact_signal and its facets) when the prediction "
         "rests on opinion, advocacy, or expectation with no reported fact that bears on the event."
     ) in PROMPT_PREFIX
+
+
+def test_negative_precursor_ladder_present():
+    """Signal Lanes WS5b: contrary reported facts are graded negative precursors, not null.
+
+    Generalizes WS5's negative-precursor category beyond decider statements.
+    The fact lane was a positive-evidence accumulator by construction: the
+    extreme-negative anchor demands near-impossibility while the positive side
+    has a graded precursor ladder, so negative-stance rows nulled out 1.5x more
+    often (33.0% vs 22.6%, fact-era pool). A/B'd 2026-07-29 on live Haiku,
+    12-row nulled-negative sample (3 runs/side): gain-expected rows produce a
+    negative fact_signal in 16/18 patched runs vs 8/17 baseline (polls vs
+    "Likud will win", deal-in-limbo vs "agreement signed", "IRGC reluctant"
+    vs "Iran will initiate"); a pure-opinion control column stays null 3/3.
+    Regressions: the 22-article mobilization set keeps deflating (mean stored
+    +0.273 -> +0.182, zero rows inflated >+0.1) and the WS5 5-case set holds
+    (denial negative 2/3, F-35 2/3, over-trigger control clean 3/3 — the
+    decider rule never fires on the Fed/market claim). Known residual, both
+    sides equally: precursor magnitudes can exceed the prompt's cap with
+    is_occurrence=false — the estimator-side clamp is issue #354/D1.
+    Numeral-free by design; re-run the A/B kit before rewording.
+    """
+    assert "NEGATIVE PRECURSORS — the graded scale runs in BOTH directions" in PROMPT_PREFIX
+    assert "never nulled merely because it points against the claim" in PROMPT_PREFIX
+    assert "Reserve the extreme negative for facts that establish the event cannot happen" in PROMPT_PREFIX
+    assert "grade contrary facts with the same discipline as supporting ones" in PROMPT_PREFIX
+    # WS5's decider exception must survive the addition intact
+    assert "The one EXCEPTION — DECIDER STATEMENTS" in PROMPT_PREFIX

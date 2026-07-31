@@ -52,6 +52,7 @@ def _prediction(
     certainty: float,
     settled: bool | None = None,
     quantitative_estimate: float | None = None,
+    evidence_class: str | None = None,
 ) -> PredictionExtraction:
     # Positive settled claims carry an event_date on/before the article date
     # (2026-07-01): enforce_settlement_event_date demotes undated positive
@@ -61,6 +62,7 @@ def _prediction(
     return PredictionExtraction(
         quote="quote", claim="claim", stance=stance, certainty=certainty,
         settled=settled, quantitative_estimate=quantitative_estimate,
+        evidence_class=evidence_class,
         event_date="2026-06-30" if settled and stance > 0 else None,
     )
 
@@ -214,8 +216,13 @@ class TestBelowGradeRealignment:
         # weight premium via that same estimate. That let a misaligned stance
         # get amplified rather than corrected — exactly what
         # resolve_stance_certainty exists to prevent (see its docstring).
+        # Since retro#362 the realignment requires evidence_class ==
+        # "cited_probability" — the premium it defends against is that class's.
         _patch_pipeline(monkeypatch, {
-            "source-1": [_prediction(-0.7, 0.5, settled=True, quantitative_estimate=0.7)],
+            "source-1": [_prediction(
+                -0.7, 0.5, settled=True, quantitative_estimate=0.7,
+                evidence_class="cited_probability",
+            )],
             "source-2": [_prediction(0.0, 0.5)],
         })
         resp = await forecaster.run_forecast(ForecastRequest(

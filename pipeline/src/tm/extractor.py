@@ -245,21 +245,26 @@ Examples — related event: "England will win their World Cup semi-final on 2026
                                                → stance −1.0, certainty 0.95, settled true, event_date "2026-07-15" (England's semi-final is decided — and lost; the triumphant tone is Argentina's, NOT support for England)
 
 ## Cited quantitative estimates — extract them as a distinct anchor
-When the article itself cites an explicit modeled probability, poll number, seat \
-projection, or market price FOR THE RELATED EVENT ITSELF (not a proxy stage) — e.g. \
-"a model gives Team X an 18.83% chance to win the tournament", "the poll puts \
-Candidate Y at 45%", "the prediction market prices the deal at 33%" — extract that \
+When the article itself cites an explicit modeled, polled, or market-priced \
+PROBABILITY OF THE RELATED EVENT ITSELF (not a proxy stage) — e.g. "a model gives \
+Team X an 18.83% chance to win the tournament", "the prediction market prices the \
+deal at 33%", "the forecaster puts the odds of an agreement at 45%" — extract that \
 figure into `quantitative_estimate` as a probability in [0, 1] (convert percentages: \
 18.83% → 0.1883). Set `stance` to match it (`stance = 2 × quantitative_estimate − 1`) \
-and `certainty` high (≥ 0.8) — a named model, poll, or market is a much stronger \
+and `certainty` high (≥ 0.8) — a named model or market is a much stronger \
 anchor than qualitative "favorite"/"strong candidate" framing, even when several \
-qualitative articles exist alongside it. Leave `quantitative_estimate` null when the \
-article has no such explicit cited figure — general "leading in the polls" or "seen \
-as the favorite" language without a stated number is NOT a quantitative estimate; \
-keep using the sections above for that. Also leave it null for a CASUAL or \
-CONVERSATIONAL figure of speech — a pundit, fan, coach, or player tossing out "I'd \
-give it a 50-50 chance" or "there's maybe a 90% chance" is voicing a personal opinion, \
-not citing a model/poll/market; only a NAMED formal source counts.
+qualitative articles exist alongside it. A vote share, poll share, seat count, or \
+seat projection is NOT a probability of the event — "the party polls at 28%" is a \
+share of the vote, not a 28% chance of winning: leave `quantitative_estimate` null \
+for those, score their stance by comparing the figure against the claim's threshold \
+(see Numeric thresholds above), and classify them `cited_share` below. Leave \
+`quantitative_estimate` null when the article has no such explicit cited figure — \
+general "leading in the polls" or "seen as the favorite" language without a stated \
+number is NOT a quantitative estimate; keep using the sections above for that. Also \
+leave it null for a CASUAL or CONVERSATIONAL figure of speech — a pundit, fan, coach, \
+or player tossing out "I'd give it a 50-50 chance" or "there's maybe a 90% chance" is \
+voicing a personal opinion, not citing a model/poll/market; only a NAMED formal \
+source counts.
 
 Examples — related event: "France wins the 2026 World Cup":
   "Simulations by Opta give France the best chance of winning the tournament, at 18.83%" \
@@ -272,12 +277,13 @@ Examples — related event: "France wins the 2026 World Cup":
 Examples — related event: "Likud wins more than 33 seats in the election":
   "A poll-aggregator model gives Likud a 22% chance of winning more than 33 seats" \
                                                → stance −0.56, certainty 0.85, quantitative_estimate 0.22
+  "The latest poll puts Likud at 28% of the vote" \
+                                               → stance −0.5, certainty 0.7, quantitative_estimate null (a vote SHARE, not a chance of the event — compare against the threshold, classify cited_share)
   "Likud is seen as gaining momentum heading into the vote" \
                                                → stance +0.2, certainty 0.3, quantitative_estimate null (momentum, no cited figure)
 
 ## EVIDENCE CLASS — optional; classify the KIND of evidence this claim is
-This is a new, EXPERIMENTAL field. It is not yet used to weight anything —
-classify it independently and honestly; do not let it influence stance or
+Classify it independently and honestly; do not let it influence stance or
 certainty, and vice versa. If a claim genuinely does not fit one category
 cleanly, OMIT the field entirely rather than guessing — a missing
 evidence_class is fine, a wrong one is worse than none.
@@ -296,10 +302,10 @@ Choose exactly one of:
   cited_share         — the claim cites a poll SHARE, vote share, or seat
                         count. This is explicitly NOT a probability the
                         event occurs — "the party polls at 28%" is a share
-                        of the vote, not a 28% chance of winning. Use this
-                        even when the same figure would also populate
-                        `quantitative_estimate` under today's (separate,
-                        unrelated) rules for that field.
+                        of the vote, not a 28% chance of winning. A share
+                        must NEVER populate `quantitative_estimate` (that
+                        field is only for genuine probabilities of the
+                        event itself — see Cited quantitative estimates).
   reporting           — ordinary hedged or prospective news coverage: "is
                         expected to", "sources say", "is likely to" — a
                         genuine report, but about a future or uncertain
@@ -613,8 +619,9 @@ Each prediction has five core fields, plus several used only when applicable:
   quote (string — original language), claim (string — English), \
 stance (float −1 to 1), certainty (float 0 to 1), settled (boolean — true only when \
 the source reports the outcome as an accomplished fact), quantitative_estimate \
-(float 0 to 1, OMIT this field entirely unless the source cites an explicit modeled \
-probability/poll/market figure for the event itself — see the section above), \
+(float 0 to 1, OMIT this field entirely unless the source cites an explicit modeled/ \
+market/polled PROBABILITY of the event itself — never a vote share or seat count, \
+see the section above), \
 evidence_class (one of reported_fact / cited_probability / cited_share / reporting / \
 opinion, OMIT this field entirely if none fits cleanly — see the section above), \
 event_date (string YYYY-MM-DD — the absolute date the article gives for the RELATED \

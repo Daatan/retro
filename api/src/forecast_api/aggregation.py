@@ -119,6 +119,7 @@ def resolve_stance_certainty(
     certainty: float,
     quantitative_estimate: Optional[float],
     *,
+    evidence_class: Optional[str] = None,
     min_certainty: float = 0.9,
 ) -> tuple[float, float]:
     """Resolve a source's (stance, certainty), overriding both from an explicit
@@ -129,10 +130,20 @@ def resolve_stance_certainty(
     cited quantitative_estimate, but nothing enforces that — a misaligned
     stance would get amplified, not fixed, by evidence_class_weight's
     cited_probability premium below (a correctly-extracted number weighted onto
-    the wrong direction is worse than not extracting it at all). Returns
-    ``(stance, certainty)`` unchanged when ``quantitative_estimate`` is ``None``.
+    the wrong direction is worse than not extracting it at all).
+
+    The rewrite applies ONLY to ``evidence_class == "cited_probability"``: that
+    class is defined as "the same figure that would populate
+    quantitative_estimate as a genuine probability of the event occurring". Any
+    other class carrying a number — a cited_share vote share, a seat count, a
+    reported measurement — is a different quantity whose value is NOT a
+    probability of the event, so ``prob_to_stance`` on it is a category error
+    (retro#362: 47 of the 117 qe-carrying prod pool rows were cited_share seat
+    shares rewritten to stance = 2×share−1 at certainty 0.9). Unclassified
+    (``None``) claims are also left alone — missing data must not increase
+    influence. Returns ``(stance, certainty)`` unchanged in all those cases.
     """
-    if quantitative_estimate is None:
+    if quantitative_estimate is None or evidence_class != "cited_probability":
         return stance, certainty
     return prob_to_stance(quantitative_estimate), max(certainty, min_certainty)
 

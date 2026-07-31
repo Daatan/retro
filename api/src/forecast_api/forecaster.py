@@ -890,7 +890,10 @@ async def _run_forecast_inner(
             ):
                 resolved_predictions.append(p)
                 continue
-            stance, certainty = resolve_stance_certainty(p.stance, p.certainty, p.quantitative_estimate)
+            stance, certainty = resolve_stance_certainty(
+                p.stance, p.certainty, p.quantitative_estimate,
+                evidence_class=p.evidence_class,
+            )
             resolved_predictions.append(p.model_copy(update={"stance": stance, "certainty": certainty}))
         predictions = resolved_predictions
 

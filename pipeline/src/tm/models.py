@@ -48,19 +48,22 @@ class PredictionExtraction(BaseModel):
     settled: Optional[bool] = Field(default=None, description="True when the source reports the outcome as an accomplished fact (event occurred, or became permanently impossible) — not a prediction, however confident. A POSITIVE settlement (event occurred) must be accompanied by event_date; one without a parseable event_date, or dated after the article itself, is demoted to ordinary evidence in code (enforce_settlement_event_date). A NEGATIVE settlement (became impossible) carries the FORECLOSING event's date in event_date when the article dates it — the rival's win, the elimination, the death that made the outcome impossible; leave it empty when the impossibility comes only from time expiring or the foreclosure is undated")
     quantitative_estimate: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
-        description="An explicit modeled probability, poll number, or market price the "
-                    "source cites FOR THE RELATED EVENT ITSELF (not a proxy stage), as a "
-                    "probability in [0,1]. Null when the source has no such cited figure — "
-                    "qualitative 'favorite'/'front-runner' framing without a stated number "
-                    "does not count.",
+        description="An explicit modeled/poll/market PROBABILITY the source cites FOR THE "
+                    "RELATED EVENT ITSELF (not a proxy stage), as a probability in [0,1]. "
+                    "Null when the source has no such cited figure — qualitative "
+                    "'favorite'/'front-runner' framing without a stated number does not "
+                    "count, and neither does a vote share, seat count, or poll share (those "
+                    "are cited_share evidence, not probabilities of the event; retro#362).",
     )
     evidence_class: Optional[Literal[
         "reported_fact", "cited_probability", "cited_share", "reporting", "opinion",
     ]] = Field(
         default=None,
-        description="EXPERIMENTAL, shadow-classification only (S2, retro "
-                    "docs/ORACLE_VARIABLES.md §5) — not yet used to weight anything. "
-                    "The kind of evidence this claim is, independent of stance/certainty. "
+        description="The kind of evidence this claim is, independent of stance/certainty "
+                    "(S2, retro docs/ORACLE_VARIABLES.md §5). LOAD-BEARING since the S2 "
+                    "weight cutover: keys the cross-article evidence_class_weight lookup, "
+                    "and only cited_probability authorizes the quantitative_estimate "
+                    "stance rewrite (resolve_stance_certainty, retro#362). "
                     "Omit entirely rather than guessing when none fits cleanly.",
     )
     # --- fact_signal lane (EXPERIMENTAL, shadow — Phase 2 of the author-scoring redesign) ---

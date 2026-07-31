@@ -23,7 +23,7 @@ consequences of that redundancy, not of any single bug.
 |---|---|---|---|
 | `stance` | −1..1 | direction & strength of "event will happen" | pydantic-bounded, no clamping (out-of-range ⇒ article dropped) |
 | `certainty` | 0..1 | linguistic confidence (0 = hedged, 1 = absolute) | weight factor AND within-article claim weight |
-| `quantitative_estimate` | 0..1, optional | cited model/poll/market probability | overrides stance+certainty via `resolve_stance_certainty`; triggers the 4× premium |
+| `quantitative_estimate` | 0..1, optional | cited model/market probability of the event itself (never a vote share/seat count — those are `cited_share`) | overrides stance+certainty via `resolve_stance_certainty` ONLY when `evidence_class=cited_probability` (retro#362); that class carries the 4× premium |
 | `settled` | bool | outcome reported as accomplished fact | feeds the ±0.94 settlement pin; a POSITIVE settlement is demoted unless dated — see `enforce_settlement_event_date` below |
 | `event_date` | ISO date, optional | when the article says the event itself occurs/occurred | compared against `claim_deadline` by `enforce_deadline_arithmetic`; REQUIRED for a positive `settled`; for a NEGATIVE `settled` it carries the FORECLOSING event's date when the article dates it (the rival's win, the elimination — optional: time-expiry impossibilities stay undated) — see below |
 | `event_date_reference` | text, optional | the article's verbatim relative expression behind `event_date` ("on Friday", "yesterday") | code redoes the calendar walk from it and overrides a disagreeing `event_date` (`enforce_relative_date_resolution`) — see below |
@@ -232,12 +232,14 @@ before enabling in prod.
 | `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — **revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at (scheduled), claim_deadline]` and ≤ its article's date; a non-occurrence vote needs a closed window (dated anchors at most `settlement_post_deadline_grace_days` past it, or an undated vote from an article published within that grace — else `stale_undated_foreclosure`) or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Count alone isn't enough either: `settlement_quality_floor` (default 0 = off) additionally requires the winning direction's combined per-source weight to clear a bar, else the pin is suppressed (`settlement_quality_floor`). Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
 | `insufficient_data, reason, placeholder, articles_used/found` | abstention encoding |
 
-Config constants (12): `recency_half_life_days=7`, `recency_floor=0.02`,
+Config constants (11): `recency_half_life_days=7`, `recency_floor=0.02`,
 `logit_clamp=0.01`, `relevance_weight_floor=0.05`,
-`quantitative_anchor_weight=4`, `syndication_title_similarity=0.8`,
+`syndication_title_similarity=0.8`,
 `decisiveness_floor=0.5`, `thin_evidence_ci_inflation=0.45`,
 `defer_on_thin_evidence=False`, `settlement_min_sources=2`,
 `settlement_stance=0.94`, `min_certainty=0.9`.
+(`quantitative_anchor_weight` was deleted in the S2 cutover — its 4× premium
+lives on as `evidence_class_weight["cited_probability"]`.)
 
 ### 2.5 Persisted in daatan (`prisma/schema.prisma`)
 
@@ -969,3 +971,22 @@ stripped) reads identically to a genuine fresh report; the one differentiator
 pursued further. If a pooled estimate looks anomalously confident again,
 check the suspect source's `published_at` against its own page metadata
 before assuming the extractor or gatekeeper prompt is at fault.
+
+## 2026-08-01 — quantitative rewrite guarded by evidence class (retro#362, lane-soundness F5)
+
+`resolve_stance_certainty` used to fire on ANY non-null `quantitative_estimate`
+— no class guard — while the extractor prompt's qe section itself listed "poll
+number, seat projection" and "the poll puts Candidate Y at 45%" as qe-worthy
+figures and the `cited_share` class definition simultaneously called the same
+figure "explicitly NOT a probability". Measured on prod (2026-08-01): 117
+COMPLETE pool rows carried qe, 47 of them `cited_share` vs 14
+`cited_probability` — Knesset seat shares rewritten to `stance = 2×share−1` at
+certainty 0.9, bit-exact on single-claim rows. Both sides fixed: the rewrite
+now applies only to `evidence_class == "cited_probability"` (unclassified
+claims are also left alone — missing data must not increase influence), and
+the prompt's qe section extracts probabilities of the event only, routing
+shares/seat counts to `cited_share` + Numeric-thresholds stance comparison.
+End-state remains a typed quantity `{value, kind}` (lane-soundness plan R4);
+this guard is the interim protection. Persisted pool rows extracted before
+this fix keep their rewritten stances (daatan does not store qe, so they are
+not recomputable) — the 47 cited_share rows predate it and age out by recency.

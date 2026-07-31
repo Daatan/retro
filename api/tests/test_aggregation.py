@@ -195,26 +195,62 @@ class TestPoolSources:
 
 class TestResolveStanceCertainty:
     def test_unchanged_when_no_estimate(self):
-        assert resolve_stance_certainty(0.3, 0.5, None) == (0.3, 0.5)
+        assert resolve_stance_certainty(
+            0.3, 0.5, None, evidence_class="cited_probability"
+        ) == (0.3, 0.5)
 
     def test_overrides_stance_to_match_estimate(self):
-        stance, _certainty = resolve_stance_certainty(0.3, 0.5, 0.1883)
+        stance, _certainty = resolve_stance_certainty(
+            0.3, 0.5, 0.1883, evidence_class="cited_probability"
+        )
         assert stance == pytest.approx(prob_to_stance(0.1883))
         assert stance < 0  # correctly flips the misaligned positive stance
 
     def test_raises_certainty_to_floor(self):
-        _stance, certainty = resolve_stance_certainty(0.3, 0.5, 0.1883)
+        _stance, certainty = resolve_stance_certainty(
+            0.3, 0.5, 0.1883, evidence_class="cited_probability"
+        )
         assert certainty == 0.9
 
     def test_does_not_lower_an_already_high_certainty(self):
-        _stance, certainty = resolve_stance_certainty(0.3, 0.97, 0.1883)
+        _stance, certainty = resolve_stance_certainty(
+            0.3, 0.97, 0.1883, evidence_class="cited_probability"
+        )
         assert certainty == 0.97
 
     def test_estimate_of_zero_still_overrides(self):
         # 0.0 is a valid cited probability (not falsy-None) — must still apply.
-        stance, certainty = resolve_stance_certainty(0.8, 0.2, 0.0)
+        stance, certainty = resolve_stance_certainty(
+            0.8, 0.2, 0.0, evidence_class="cited_probability"
+        )
         assert stance == pytest.approx(-1.0)
         assert certainty == 0.9
+
+    # retro#362 — the rewrite is a category error for any figure that is not a
+    # probability of the event itself, so every class except cited_probability
+    # (and unclassified) must pass through untouched.
+
+    def test_cited_share_is_never_rewritten(self):
+        # "Likud polls at 22 seats" → qe 0.183: a seat SHARE. 2×0.183−1 = −0.63
+        # at certainty 0.9 would be a fabricated probability judgment.
+        assert resolve_stance_certainty(
+            -0.4, 0.6, 0.183, evidence_class="cited_share"
+        ) == (-0.4, 0.6)
+
+    def test_unclassified_is_never_rewritten(self):
+        # Missing data must not increase influence: no class → no forced 0.9.
+        assert resolve_stance_certainty(0.3, 0.5, 0.1883) == (0.3, 0.5)
+        assert resolve_stance_certainty(
+            0.3, 0.5, 0.1883, evidence_class=None
+        ) == (0.3, 0.5)
+
+    @pytest.mark.parametrize(
+        "klass", ["reported_fact", "reporting", "opinion"]
+    )
+    def test_other_classes_are_never_rewritten(self, klass):
+        assert resolve_stance_certainty(
+            0.3, 0.5, 0.45, evidence_class=klass
+        ) == (0.3, 0.5)
 
 
 class TestQuantitativeMisalignmentRegression:
@@ -247,6 +283,7 @@ class TestQuantitativeMisalignmentRegression:
     def test_resolve_stance_certainty_prevents_the_amplification(self):
         resolved_stance, resolved_certainty = resolve_stance_certainty(
             self.MISALIGNED_STANCE, self.MISALIGNED_CERTAINTY, self.CITED_ESTIMATE,
+            evidence_class="cited_probability",
         )
         assert resolved_stance < 0  # flipped to match the cited 18.83%
 

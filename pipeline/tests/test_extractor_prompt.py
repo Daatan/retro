@@ -298,3 +298,43 @@ def test_negative_precursor_ladder_present():
     assert "grade contrary facts with the same discipline as supporting ones" in PROMPT_PREFIX
     # WS5's decider exception must survive the addition intact
     assert "The one EXCEPTION — DECIDER STATEMENTS" in PROMPT_PREFIX
+
+
+def test_quantitative_estimate_share_exclusion_present():
+    """retro#362 (lane-soundness F5): shares must never enter quantitative_estimate.
+
+    The qe section taught poll numbers and seat projections into
+    quantitative_estimate ("the poll puts Candidate Y at 45%") and told the
+    model to self-align stance = 2*qe-1, while the cited_share class definition
+    said the same figure "is explicitly NOT a probability" and even sanctioned
+    the collision ("use this even when the same figure would also populate
+    quantitative_estimate"). The prompt contradicted itself and the code
+    enforced the wrong side: measured on prod (2026-08-01), 47 of the 117
+    qe-carrying pool rows were cited_share — Knesset seat shares rewritten to
+    stance = 2*share-1 at certainty 0.9, bit-exact on single-claim rows. The
+    code-side guard (resolve_stance_certainty rewrites cited_probability only)
+    is the enforcement; these strings keep the prompt teaching the same rule
+    so the model's own stance/qe emissions stop encoding the category error.
+
+    A/B'd 2026-08-01 on live Haiku (Oracle box, 3 runs/side, 5 cases): the two
+    real Likud poll articles (the Kantar flash behind the bit-exact prod row +
+    a Channel 13 jpost piece) emitted qe for a seat count in 3/6 baseline runs
+    and 0/6 patched runs while keeping cited_share classification; the
+    genuine-probability controls (poll-aggregator model 22%, Polymarket 18%)
+    kept qe with aligned stance 3/3 on BOTH sides; the no-figure momentum
+    control stayed qe-null both sides. Zero regressions, one iteration.
+    """
+    assert "PROBABILITY OF THE RELATED EVENT ITSELF" in PROMPT_PREFIX
+    assert "seat projection is NOT a probability of the event" in PROMPT_PREFIX
+    assert "leave `quantitative_estimate` null for those" in PROMPT_PREFIX
+    assert "classify them `cited_share` below" in PROMPT_PREFIX
+    # the class definition must agree (the old text sanctioned the collision)
+    # (the enum block keeps hard newlines/indentation — normalize before matching)
+    flat = " ".join(PROMPT_PREFIX.split())
+    assert "A share must NEVER populate `quantitative_estimate`" in flat
+    assert "use this even when the same figure" not in flat.lower()
+    # the genuine-probability anchor behavior must survive the narrowing
+    assert "Set `stance` to match it" in PROMPT_PREFIX
+    assert "a model gives Team X an 18.83% chance to win the tournament" in PROMPT_PREFIX
+    # and the output contract must carry the same exclusion
+    assert "never a vote share or seat count" in PROMPT_SUFFIX

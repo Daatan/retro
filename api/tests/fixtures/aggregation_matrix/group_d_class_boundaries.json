@@ -1,0 +1,749 @@
+{
+  "group": "D",
+  "title": "Evidence-class boundaries — the weight table and its edges",
+  "notes": "Group D pins the five-class lookup itself: the table's values, their ratios, the unclassified→certainty fallback and its range, and what happens to a class weight when the article carrying it also carries something else. Cases D1–D6 correspond to the audit's D1'–D6' traces. The sixth possible edge — an evidence_class string outside the five — is unreachable through this harness by construction: PredictionExtraction.evidence_class is a pydantic Literal, so evidence_class_weight's `default` parameter is defensive only and is covered by the unit tests in test_aggregation.py instead.",
+  "cases": [
+    {
+      "id": "D1",
+      "name": "the five-class weight table, one article per class",
+      "traces": [
+        "M1",
+        "D3-refit"
+      ],
+      "notes": "Five articles identical in stance, certainty, credibility, date and relevance — only the class differs. Their weights are the table verbatim: cited_probability 4.0, cited_share 1.5, reported_fact 1.0, reporting 0.6, opinion 0.25. Any refit of these constants (audit item D3) moves this one case and should move very little else.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.5,
+              "certainty": 0.7,
+              "evidence_class": "cited_probability"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.5,
+              "certainty": 0.7,
+              "evidence_class": "cited_share"
+            }
+          ]
+        },
+        {
+          "source": "charlie",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.5,
+              "certainty": 0.7,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "delta",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.5,
+              "certainty": 0.7,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "echo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.5,
+              "certainty": 0.7,
+              "evidence_class": "opinion"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['evidence_weight'] == 4.0",
+        "sources[1]['evidence_weight'] == 1.5",
+        "sources[2]['evidence_weight'] == 1.0",
+        "sources[3]['evidence_weight'] == 0.6",
+        "sources[4]['evidence_weight'] == 0.25"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 5,
+        "settled": false,
+        "mean": 0.5,
+        "std": 0.0,
+        "ci_low": 0.5,
+        "ci_high": 0.5,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.5,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "cited_probability",
+            "evidence_weight": 4.0,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 4.0,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 0.5,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "cited_share",
+            "evidence_weight": 1.5,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 1.5,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "charlie",
+            "stance": 0.5,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 1.0,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "delta",
+            "stance": 0.5,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "echo",
+            "stance": 0.5,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "opinion",
+            "evidence_weight": 0.25,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.25,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "D2",
+      "name": "a claim the classifier skipped outranks one it classified",
+      "traces": [
+        "R3",
+        "F1"
+      ],
+      "notes": "Unclassified evidence falls back to its own certainty, so a confident claim the extractor never labelled (certainty 0.95 → weight 0.95) outweighs an identically confident claim it did label as reporting (0.6). Silence about the evidence type buys more influence than the answer would have.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.7,
+              "certainty": 0.95
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.7,
+              "certainty": 0.95,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['evidence_class'] is None",
+        "abs(sources[0]['evidence_weight'] - 0.95) < 1e-9",
+        "sources[0]['weight'] > sources[1]['weight']",
+        "mean > 0"
+      ],
+      "known_bad": {
+        "finding": "R3",
+        "expected_behavior": "A missing evidence_class is missing data. The fallback may not exceed what the classifier would have granted — under R3 it should sit at or below the weakest plausible class, never above a classified peer."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": 0.1934,
+        "std": 0.6828,
+        "ci_low": -0.753,
+        "ci_high": 0.98,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.7,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": null,
+            "evidence_weight": 0.95,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.95,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": -0.7,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "D3",
+      "name": "the unclassified fallback spans the whole table",
+      "traces": [
+        "R3"
+      ],
+      "notes": "The same fallback that pushed D2's claim above `reporting` drops this one (certainty 0.1) below `opinion`. One unclassified claim's weight ranges over [0, 1] purely on the extractor's stated confidence — a scale with no relationship to the class scale it substitutes for, whose top is 4.0.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.7,
+              "certainty": 0.1
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.7,
+              "certainty": 0.1,
+              "evidence_class": "opinion"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['evidence_weight'] - 0.1) < 1e-9",
+        "sources[0]['weight'] < sources[1]['weight']",
+        "mean < 0"
+      ],
+      "known_bad": {
+        "finding": "R3",
+        "expected_behavior": "Two incommensurable scales must not share one slot. R5's factored weights give assertion-kind and provenance their own axes instead of a certainty-shaped hole in the class table."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": -0.3555,
+        "std": 0.6349,
+        "ci_low": -1.0,
+        "ci_high": 0.7944,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.7,
+            "certainty": 0.1,
+            "credibility_weight": 1.0,
+            "evidence_class": null,
+            "evidence_weight": 0.1,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.1,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": -0.7,
+            "certainty": 0.1,
+            "credibility_weight": 1.0,
+            "evidence_class": "opinion",
+            "evidence_weight": 0.25,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.25,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "D4",
+      "name": "the same anchor is worth a third as much wrapped in commentary",
+      "traces": [
+        "F1",
+        "D4-prime"
+      ],
+      "notes": "Both articles cite the same model at 20%. The first reports it and nothing else (weight 4.0); the second surrounds it with three paragraphs of comment, dropping to (4.0 + 3×0.25)/4 = 1.1875 — and the commentary does not merely dilute the anchor's weight, it erases its direction: the article's stance is exactly 0.0, the -0.6 anchor cancelled claim-for-claim by opinion. Identical evidence, opposite contribution, decided entirely by how much colour the outlet wrapped around it — the mixed-class credibility drop the D4' trace named. (evidence_weight is rounded to 3dp on the response.)",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.6,
+              "certainty": 0.9,
+              "quantitative_estimate": 0.2,
+              "evidence_class": "cited_probability"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.6,
+              "certainty": 0.9,
+              "quantitative_estimate": 0.2,
+              "evidence_class": "cited_probability"
+            },
+            {
+              "stance": 0.3,
+              "certainty": 0.6,
+              "evidence_class": "opinion"
+            },
+            {
+              "stance": 0.3,
+              "certainty": 0.6,
+              "evidence_class": "opinion"
+            },
+            {
+              "stance": 0.3,
+              "certainty": 0.6,
+              "evidence_class": "opinion"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['evidence_weight'] == 4.0",
+        "abs(sources[1]['evidence_weight'] - 1.1875) < 0.001",
+        "abs(sources[0]['stance'] + 0.6) < 1e-9",
+        "abs(sources[1]['stance']) < 1e-9"
+      ],
+      "known_bad": {
+        "finding": "F1",
+        "expected_behavior": "The anchor is one claim and should reach the pool as one claim at its own weight, regardless of what else its article contained."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": -0.4888,
+        "std": 0.2534,
+        "ci_low": -0.84,
+        "ci_high": -0.1376,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": -0.6,
+            "certainty": 0.9,
+            "credibility_weight": 1.0,
+            "evidence_class": "cited_probability",
+            "evidence_weight": 4.0,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 4.0,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": -0.0,
+            "certainty": 0.675,
+            "credibility_weight": 1.0,
+            "evidence_class": "opinion",
+            "evidence_weight": 1.188,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 1.188,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "D5",
+      "name": "a cited vote share outweighs a reported fact",
+      "traces": [
+        "D3-refit",
+        "F4"
+      ],
+      "notes": "cited_share sits at 1.5 and reported_fact at 1.0, so a poll number about a proxy quantity is weighted 50% above a directly reported fact about the event itself. Of the four non-baseline constants only cited_probability's 4.0 has a documented derivation (the France/Opta regression); this ordering is the clearest case for audit item D3's refit once claim-level outcome data exists.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.7,
+              "quantitative_estimate": 0.55,
+              "evidence_class": "cited_share"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.6,
+              "certainty": 0.9,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['weight'] > sources[1]['weight']",
+        "abs(sources[0]['stance'] - 0.6) < 1e-9",
+        "mean > 0"
+      ],
+      "known_bad": {
+        "finding": "F4",
+        "expected_behavior": "The class constants need a data-derived refit (D3). Nothing today justifies a proxy share outweighing a direct report of the event."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": 0.1377,
+        "std": 0.5881,
+        "ci_low": -0.6774,
+        "ci_high": 0.9529,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.6,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "cited_share",
+            "evidence_weight": 1.5,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 1.5,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": -0.6,
+            "certainty": 0.9,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 1.0,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "D6",
+      "name": "four opinions equal one reported fact",
+      "traces": [
+        "M1",
+        "R5"
+      ],
+      "notes": "opinion 0.25 against reported_fact 1.0 is a 4:1 ratio, so four commentators exactly cancel one report of the event in the weight sum — and, because pooling is in log-odds, equal weight at equal confidence lands the mean at zero. This is the ratio the author-lane cutover will change when opinion stops feeding the fused estimate.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.7,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.7,
+              "certainty": 0.8,
+              "evidence_class": "opinion"
+            }
+          ]
+        },
+        {
+          "source": "charlie",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.7,
+              "certainty": 0.8,
+              "evidence_class": "opinion"
+            }
+          ]
+        },
+        {
+          "source": "delta",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.7,
+              "certainty": 0.8,
+              "evidence_class": "opinion"
+            }
+          ]
+        },
+        {
+          "source": "echo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.7,
+              "certainty": 0.8,
+              "evidence_class": "opinion"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['weight'] - 4.0 * sources[1]['weight']) < 1e-9",
+        "abs(mean) < 1e-9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 5,
+        "settled": false,
+        "mean": -0.0,
+        "std": 0.7,
+        "ci_low": -0.6136,
+        "ci_high": 0.6136,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": -0.7,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 1.0,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 0.7,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "opinion",
+            "evidence_weight": 0.25,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.25,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "charlie",
+            "stance": 0.7,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "opinion",
+            "evidence_weight": 0.25,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.25,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "delta",
+            "stance": 0.7,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "opinion",
+            "evidence_weight": 0.25,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.25,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "echo",
+            "stance": 0.7,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "opinion",
+            "evidence_weight": 0.25,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.25,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    }
+  ]
+}

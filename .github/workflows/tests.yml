@@ -11,6 +11,10 @@ on:
     paths:
       - api/**
       - pipeline/**
+      # The case studies are hand-edited data, and test_event_validation.py
+      # validates the committed set — so a bad edit to an event file alone must
+      # trigger this workflow, not just changes under pipeline/.
+      - data/events/**
       - .github/workflows/tests.yml
   workflow_call:
 

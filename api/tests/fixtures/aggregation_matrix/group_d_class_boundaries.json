@@ -188,7 +188,8 @@
       "name": "a claim the classifier skipped outranks one it classified",
       "traces": [
         "R3",
-        "F1"
+        "F1",
+        "F10"
       ],
       "notes": "Unclassified evidence falls back to its own certainty, so a confident claim the extractor never labelled (certainty 0.95 → weight 0.95) outweighs an identically confident claim it did label as reporting (0.6). Silence about the evidence type buys more influence than the answer would have.",
       "articles": [
@@ -279,7 +280,8 @@
       "id": "D3",
       "name": "the unclassified fallback spans the whole table",
       "traces": [
-        "R3"
+        "R3",
+        "F10"
       ],
       "notes": "The same fallback that pushed D2's claim above `reporting` drops this one (certainty 0.1) below `opinion`. One unclassified claim's weight ranges over [0, 1] purely on the extractor's stated confidence — a scale with no relationship to the class scale it substitutes for, whose top is 4.0.",
       "articles": [

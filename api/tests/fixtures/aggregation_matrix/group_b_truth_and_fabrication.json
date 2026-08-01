@@ -656,7 +656,7 @@
         "F4",
         "R5"
       ],
-      "notes": "A single article cites a model at 80%. cited_probability carries weight 4.0 and rewrites the claim's stance to +0.6 at certainty 0.9, so it outweighs three independent outlets reporting -0.7 (0.6 each) and flips the pooled sign. The 4.0 is applied to any number the extractor labels cited_probability; no provenance is checked.",
+      "notes": "A single article cites a model at 80%. cited_probability carries weight 4.0 and rewrites the claim's stance to +0.6 at certainty 0.9, so it outweighs three independent outlets reporting -0.7 (0.6 each) and flips the pooled sign. The 4.0 is applied to any number the extractor labels cited_probability; no provenance is checked. FIXED by F4 (retro#369, enforced 2026-08-01): the claim names no allowlisted source, so enforce_anchor_provenance demotes it to `reporting` (0.6) and the three honest reports now carry the pooled sign.",
       "articles": [
         {
           "source": "alpha",
@@ -713,33 +713,29 @@
         }
       ],
       "invariants": [
-        "mean > 0",
-        "abs(sources[0]['weight'] - 4.0) < 1e-9"
+        "mean < 0",
+        "abs(sources[0]['weight'] - 0.6) < 1e-9"
       ],
-      "known_bad": {
-        "finding": "F4",
-        "expected_behavior": "The cited_probability premium needs a provenance check (interim: a config allowlist of named model/market sources). An unattributable percentage should not be worth six honest reports."
-      },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 4,
         "settled": false,
-        "mean": 0.2059,
-        "std": 0.6015,
-        "ci_low": -0.3836,
-        "ci_high": 0.7954,
+        "mean": -0.444,
+        "std": 0.5671,
+        "ci_low": -0.98,
+        "ci_high": 0.1118,
         "sources": [
           {
             "source": "alpha",
             "stance": 0.6,
-            "certainty": 0.9,
+            "certainty": 0.7,
             "credibility_weight": 1.0,
-            "evidence_class": "cited_probability",
-            "evidence_weight": 4.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
             "recency_weight": 1.0,
             "relevance_score": 1.0,
-            "weight": 4.0,
+            "weight": 0.6,
             "settled": null,
             "settlement_event_date": null,
             "fact_signal": null,
@@ -807,7 +803,7 @@
       "traces": [
         "F4"
       ],
-      "notes": "The leaderboard has already knocked this outlet down to credibility 0.3 — and 0.3 × 4.0 = 1.2 still beats a fully trusted reporting article at 1.0 × 0.6. Class weight overwhelms the credibility signal by design, which means quoting a fake percentage is the cheapest way past the source-trust defence.",
+      "notes": "The leaderboard has already knocked this outlet down to credibility 0.3 — and 0.3 × 4.0 = 1.2 still beats a fully trusted reporting article at 1.0 × 0.6. Class weight overwhelms the credibility signal by design, which means quoting a fake percentage is the cheapest way past the source-trust defence. FIXED by F4 (retro#369, enforced 2026-08-01): demoted to `reporting`, the de-weighted outlet's anchor is 0.3 x 0.6 = 0.18 against the trusted outlet's 0.6 — credibility now bounds the class premium instead of the reverse.",
       "articles": [
         {
           "source": "alpha",
@@ -838,33 +834,29 @@
         }
       ],
       "invariants": [
-        "sources[0]['weight'] > sources[1]['weight']",
-        "mean > 0"
+        "sources[0]['weight'] < sources[1]['weight']",
+        "mean < 0"
       ],
-      "known_bad": {
-        "finding": "F4",
-        "expected_behavior": "Credibility should bound the class premium, not the other way round: a de-weighted outlet's unattributable anchor must not outweigh a trusted outlet's direct reporting."
-      },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 2,
         "settled": false,
-        "mean": 0.2089,
-        "std": 0.7072,
-        "ci_low": -0.7712,
-        "ci_high": 0.98,
+        "mean": -0.5948,
+        "std": 0.6015,
+        "ci_low": -0.98,
+        "ci_high": 0.2388,
         "sources": [
           {
             "source": "alpha",
-            "stance": 0.7,
-            "certainty": 0.9,
+            "stance": 0.6,
+            "certainty": 0.7,
             "credibility_weight": 0.3,
-            "evidence_class": "cited_probability",
-            "evidence_weight": 4.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
             "recency_weight": 1.0,
             "relevance_score": 1.0,
-            "weight": 1.2,
+            "weight": 0.18,
             "settled": null,
             "settlement_event_date": null,
             "fact_signal": null,
@@ -1128,7 +1120,7 @@
         "F23",
         "F4"
       ],
-      "notes": "\"Critics falsely claim an 80% chance\" — the article is debunking the figure, and a plausible extraction records exactly what the sentence contains: a cited_probability of 0.8. The 4.0 premium and the stance rewrite both fire on the number the article exists to deny. Pinned as the reference shape for F23's adversarial-extractor probe.",
+      "notes": "\"Critics falsely claim an 80% chance\" — the article is debunking the figure, and a plausible extraction records exactly what the sentence contains: a cited_probability of 0.8. The 4.0 premium and the stance rewrite both fire on the number the article exists to deny. Pinned as the reference shape for F23's adversarial-extractor probe. F4 (retro#369, enforced 2026-08-01) blunts this instance: naming no allowlisted source, the claim is demoted to `reporting` and the stance rewrite no longer fires, so certainty stays the extractor's own 0.6 rather than being floored to 0.9. F23 itself is untouched — the same debunking sentence citing an allowlisted market would still buy the 4.0 premium.",
       "articles": [
         {
           "source": "alpha",
@@ -1160,33 +1152,33 @@
       ],
       "invariants": [
         "abs(sources[0]['stance'] - 0.6) < 1e-9",
-        "abs(sources[0]['certainty'] - 0.9) < 1e-9",
-        "mean > 0.2"
+        "abs(sources[0]['certainty'] - 0.6) < 1e-9",
+        "mean < 0"
       ],
       "known_bad": {
         "finding": "F23",
-        "expected_behavior": "Prompt-shaped adversarial text needs a detector (per-domain |stance| and anchor-rate spikes against the domain's own baseline); nothing today distinguishes a cited anchor from a quoted-to-refute one."
+        "expected_behavior": "Prompt-shaped adversarial text needs a detector (per-domain |stance| and anchor-rate spikes against the domain's own baseline); nothing today distinguishes a cited anchor from a quoted-to-refute one. F4 (retro#369) blunts THIS instance only, because the sentence happens to name nobody — a debunking sentence that cited Kalshi would still be extracted as a live anchor at 4.0."
       },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 2,
         "settled": false,
-        "mean": 0.4175,
-        "std": 0.4416,
-        "ci_low": -0.1945,
-        "ci_high": 0.98,
+        "mean": -0.0832,
+        "std": 0.5326,
+        "ci_low": -0.8213,
+        "ci_high": 0.6549,
         "sources": [
           {
             "source": "alpha",
             "stance": 0.6,
-            "certainty": 0.9,
+            "certainty": 0.6,
             "credibility_weight": 1.0,
-            "evidence_class": "cited_probability",
-            "evidence_weight": 4.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
             "recency_weight": 1.0,
             "relevance_score": 1.0,
-            "weight": 4.0,
+            "weight": 0.6,
             "settled": null,
             "settlement_event_date": null,
             "fact_signal": null,

@@ -57,15 +57,20 @@ class Settings(BaseSettings):
     ]
     # Whether the demotion is APPLIED. Off = shadow: the check runs and logs
     # `event=anchor_provenance_unattributed` on every claim it would demote, but
-    # the class is left alone, so prod behaviour and the R8 fixtures are
-    # unchanged. Same compute-but-don't-use shape as the credibility shadow lane.
-    # Flip on together with regenerating the R8 cases named on retro#369.
-    anchor_provenance_enforced: bool = False
+    # the class is left alone. Same compute-but-don't-use shape as the
+    # credibility shadow lane.
+    # ENFORCED since 2026-08-01 (retro#369). Shipped in shadow first (PR #376) so
+    # the firing rate and the cited sources could be measured on live traffic
+    # before the demotion target was picked; the R8 cases named on the issue
+    # (B5/B6/B9) were regenerated in the same commit that flipped this.
+    anchor_provenance_enforced: bool = True
     # What an unattributed cited_probability becomes once enforcement is on.
-    # PLACEHOLDER pending the policy decision on retro#369 — `reporting` (0.6)
-    # says "we cannot check who produced this figure, so it is ordinary hedged
-    # coverage"; `cited_share` (1.5) would keep a premium on an uncheckable
-    # number. Because the demotion is a class relabel, it also stops
+    # DECIDED 2026-08-01 on retro#369: `reporting` (0.6) — "we cannot check who
+    # produced this figure, so it is ordinary hedged coverage". The rejected
+    # alternative was `cited_share` (1.5), which would have kept a premium above
+    # `reported_fact` (1.0) on an uncheckable number — i.e. left B6's finding
+    # standing, that quoting a fake figure is the cheapest way past the
+    # source-trust defence. Because the demotion is a class relabel, it also stops
     # resolve_stance_certainty rewriting stance from the figure (that rewrite
     # keys on cited_probability — retro#362), which is the actual attack in R8
     # case B9.

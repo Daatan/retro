@@ -12,8 +12,11 @@ checkable source (Opta ×5, Kalshi ×4, Polymarket), ~6 are not cited probabilit
 at all — price targets from Goldman Sachs and Citigroup, and two carrying no
 figure whatsoever. One check does both jobs.
 
-SHADOW by default: with anchor_provenance_enforced off the check logs what it
-would demote and changes nothing. These tests drive both sides explicitly.
+ENFORCED by default since 2026-08-01 (retro#369) — it shipped in shadow first
+(PR #376) so the firing rate could be measured on live traffic before the
+demotion target was chosen. The target is `reporting` (0.6): an uncheckable
+figure is ordinary coverage. `anchor_provenance_enforced` survives as the
+rollback, so these tests drive both sides explicitly.
 """
 import pytest
 
@@ -100,7 +103,7 @@ def test_an_empty_list_is_a_no_op(enforced):
     assert enforce_anchor_provenance([]) == []
 
 
-# ── fail-closed, and the shadow default ───────────────────────────────────────
+# ── fail-closed, and the enforced default ─────────────────────────────────────
 
 
 def test_a_missing_quote_falls_back_to_the_claim(enforced):
@@ -117,18 +120,35 @@ def test_no_text_at_all_fails_closed(enforced):
     assert out.evidence_class == "reporting"
 
 
-def test_shadow_is_the_default_and_changes_nothing():
-    """Default config: the check runs, logs, and leaves the class alone — so
-    merging this cannot move prod behaviour or the R8 snapshots."""
-    assert settings.anchor_provenance_enforced is False
+def test_enforcement_is_the_default_and_the_target_is_reporting():
+    """Default config since retro#369: the demotion is APPLIED. Pinning the
+    default here means a future edit to the flag or the target has to come
+    through this test — the R8 cases B5/B6/B9 move with it."""
+    assert settings.anchor_provenance_enforced is True
+    assert settings.unattributed_probability_class == "reporting"
+    [out] = enforce_anchor_provenance([pred("a market prices this at 80%")])
+    assert out.evidence_class == "reporting"
+
+
+def test_shadow_survives_as_the_rollback(monkeypatch):
+    """The flag is the rollback path, not dead config: with it off the check
+    still runs and logs but leaves the class alone."""
+    monkeypatch.setattr(settings, "anchor_provenance_enforced", False)
     [out] = enforce_anchor_provenance([pred("a market prices this at 80%")])
     assert out.evidence_class == "cited_probability"
 
 
-def test_shadow_still_reports_what_it_would_do(caplog):
+def test_the_log_line_reports_the_enforcement_state(caplog):
     with caplog.at_level("WARNING"):
         enforce_anchor_provenance([pred("a market prices this at 80%")])
     assert "event=anchor_provenance_unattributed" in caplog.text
+    assert "enforced=True" in caplog.text
+
+
+def test_the_log_line_reports_the_shadow_state_too(caplog, monkeypatch):
+    monkeypatch.setattr(settings, "anchor_provenance_enforced", False)
+    with caplog.at_level("WARNING"):
+        enforce_anchor_provenance([pred("a market prices this at 80%")])
     assert "enforced=False" in caplog.text
 
 

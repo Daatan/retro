@@ -59,8 +59,14 @@ def _prediction(
     # settlements, and these tests exercise the gates DOWNSTREAM of that guard.
     # Negative settlements carry none by definition (the event never occurred).
     # test_settlement_event_date.py (pipeline) covers the guard itself.
+    # A cited_probability claim has to name an allowlisted source or
+    # enforce_anchor_provenance (F4, retro#369) demotes it to `reporting`, and
+    # the realignment these tests exercise keys on that class (retro#362). The
+    # subject here is the settlement gate, not provenance, so the fixture names
+    # a source. "Kalshi" is on cited_probability_source_allowlist.
+    quote = "Kalshi traders put it at 20%." if evidence_class == "cited_probability" else "quote"
     return PredictionExtraction(
-        quote="quote", claim="claim", stance=stance, certainty=certainty,
+        quote=quote, claim="claim", stance=stance, certainty=certainty,
         settled=settled, quantitative_estimate=quantitative_estimate,
         evidence_class=evidence_class,
         event_date="2026-06-30" if settled and stance > 0 else None,

@@ -1006,6 +1006,71 @@ def enforce_precursor_cap(
     return predictions
 
 
+def _names_allowlisted_source(text: str) -> Optional[str]:
+    """The allowlisted source named in ``text``, or None. Word-boundary and
+    case-insensitive; internal spaces match any run of whitespace so a name
+    broken across a line still matches."""
+    for name in settings.cited_probability_source_allowlist:
+        pattern = r"\b" + re.escape(name).replace(r"\ ", r"\s+") + r"\b"
+        if re.search(pattern, text, re.IGNORECASE):
+            return name
+    return None
+
+
+def enforce_anchor_provenance(
+    predictions: list[PredictionExtraction],
+) -> list[PredictionExtraction]:
+    """``cited_probability`` must name a source whose figure could be verified.
+
+    That class carries the largest weight in the table (4.0) and authorizes the
+    stance rewrite (``resolve_stance_certainty``), and nothing checks where the
+    number came from. So it is the cheapest thing in the system to fabricate:
+    land one sentence of "a market prices this at 80%" in any article we crawl
+    and you have bought the strongest evidence class there is. The prompt's own
+    canonical example — "a poll-aggregator model gives Likud a 22% chance" —
+    names nobody, which is precisely the shape at issue.
+
+    Prod audit (2026-08-01, retro#369) over all 16 ``cited_probability`` rows,
+    mean evidence_weight 2.34, the highest of any class: about ten genuinely
+    name a checkable source (Opta ×5, Kalshi ×4, Polymarket), and about six are
+    not cited probabilities at all — Goldman Sachs' "$110 Brent by year-end",
+    Citigroup's "$82,000 price target", and two carrying no figure whatsoever
+    ("Fed rate hikes are increasingly likely"). One check does both jobs: a
+    claim naming no verifiable source is not an anchor, whether because the
+    number was invented or because there was never a probability there at all.
+
+    Deliberately fails CLOSED — the same asymmetry :func:`enforce_settlement_event_date`
+    applies to an undated positive settlement. An unverifiable premium is the
+    exposure itself, so absence of provenance costs the premium; the claim keeps
+    its stance and certainty and still votes as ordinary evidence.
+
+    Interim by construction (retro#369): R5's provenance axis makes "who stands
+    behind this" a field rather than a text scan, and this function should be
+    deleted then, not migrated.
+
+    Shadow by default. With ``anchor_provenance_enforced`` off, the check runs
+    and logs every claim it *would* demote but changes nothing — which is what
+    produces the firing rate the demotion target should be chosen against.
+    """
+    for p in predictions:
+        if p.evidence_class != "cited_probability":
+            continue
+        source = _names_allowlisted_source(p.quote or p.claim or "")
+        if source is not None:
+            continue
+        logger.warning(
+            "event=anchor_provenance_unattributed enforced=%s demote_to=%s "
+            "qe=%s stance=%+.2f claim=%r",
+            settings.anchor_provenance_enforced,
+            settings.unattributed_probability_class,
+            p.quantitative_estimate, p.stance, p.claim[:120],
+        )
+        if settings.anchor_provenance_enforced:
+            p.evidence_class = settings.unattributed_probability_class
+
+    return predictions
+
+
 # A claim text asserting a deontic/certainty marker ("is mandatory", "must") reads as
 # supporting its own occurrence; one asserting an explicit negation/refusal reads as
 # opposing it. Deliberately small and literal — this is an observability signal, not a

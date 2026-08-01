@@ -23,7 +23,7 @@ consequences of that redundancy, not of any single bug.
 |---|---|---|---|
 | `stance` | −1..1 | direction & strength of "event will happen" | pydantic-bounded, no clamping (out-of-range ⇒ article dropped) |
 | `certainty` | 0..1 | linguistic confidence (0 = hedged, 1 = absolute) | weight factor AND within-article claim weight |
-| `quantitative_estimate` | 0..1, optional | cited model/market probability of the event itself (never a vote share/seat count — those are `cited_share`) | overrides stance+certainty via `resolve_stance_certainty` ONLY when `evidence_class=cited_probability` (retro#362); that class carries the 4× premium |
+| `quantitative_estimate` | 0..1, optional | cited model/market probability of the event itself (never a vote share/seat count — those are `cited_share`) | overrides stance+certainty via `resolve_stance_certainty` ONLY when `evidence_class=cited_probability` (retro#362); that class carries the 4× premium — and, since retro#369, only if the claim's `quote` names a source on `cited_probability_source_allowlist` (`tm/config.py`); an unattributed figure is demoted by `enforce_anchor_provenance`, which also costs it the rewrite. **Shadow until `anchor_provenance_enforced`.** |
 | `settled` | bool | outcome reported as accomplished fact | feeds the ±0.94 settlement pin; a POSITIVE settlement is demoted unless dated — see `enforce_settlement_event_date` below |
 | `event_date` | ISO date, optional | when the article says the event itself occurs/occurred | compared against `claim_deadline` by `enforce_deadline_arithmetic`; REQUIRED for a positive `settled`; for a NEGATIVE `settled` it carries the FORECLOSING event's date when the article dates it (the rival's win, the elimination — optional: time-expiry impossibilities stay undated) — see below |
 | `event_date_reference` | text, optional | the article's verbatim relative expression behind `event_date` ("on Friday", "yesterday") | code redoes the calendar walk from it and overrides a disagreeing `event_date` (`enforce_relative_date_resolution`) — see below |
@@ -1123,3 +1123,67 @@ almost exactly (0.90/0.80, −0.82/−0.82, 0.75/0.75) — the prompt's "never l
 fact_signal pull stance, or stance pull fact_signal" is not holding on this
 population. That is evidence for the retro#354 D-family argument, recorded on the
 issue rather than acted on here.
+
+## 2026-08-01 — cited_probability gains a provenance check, in shadow (retro#369, lane-soundness F4)
+
+`cited_probability` carries the largest weight in the table (**4.0**) and is the
+only class that authorizes the stance rewrite — and nothing checked where the
+number came from. One sentence of "a market prices this at 80%" in any article we
+crawl buys the strongest evidence class in the system. The prompt's own canonical
+example ("a poll-aggregator model gives Likud a 22% chance") names nobody, which
+is precisely the shape.
+
+Prod audit over all **16** live `cited_probability` rows (mean `evidence_weight`
+**2.34**, the highest of any class): about ten genuinely name a checkable source —
+**Opta ×5, Kalshi ×4, Polymarket** — and about six are not cited probabilities at
+all: Goldman Sachs' "$110 Brent by year-end", Citigroup's "$82,000 price target",
+JPMorgan's "$114 per barrel", and two carrying no figure whatsoever ("Fed rate
+hikes are increasingly likely"). One check does both jobs: a claim naming no
+verifiable source is not an anchor, whether the number was invented or there was
+never a probability there to begin with.
+
+`enforce_anchor_provenance` (`extractor.py`) scans the claim's verbatim `quote`
+for a name on `cited_probability_source_allowlist` (`tm/config.py` — the two
+integrated markets, named forecasting models, named pollsters; word-boundary,
+case-insensitive) and demotes the class when it finds none. Because the demotion
+is a class relabel, it also stops `resolve_stance_certainty` rewriting stance from
+the figure. It **fails closed** — the same asymmetry `enforce_settlement_event_date`
+applies to an undated positive settlement: an unverifiable premium is the exposure
+itself, so absence of provenance costs the premium. The claim keeps its stance and
+certainty and still votes as ordinary evidence.
+
+**Shipped in shadow.** `anchor_provenance_enforced` defaults **off**: the check
+runs and logs `event=anchor_provenance_unattributed` on every claim it would
+demote, but changes nothing — so prod behaviour and every R8 snapshot are
+untouched. The demotion target (`unattributed_probability_class`, typed as the
+five-class Literal so a typo fails at startup) is a **placeholder pending the
+policy decision**: `reporting` (0.6) says "we cannot check who produced this
+figure, so it is ordinary coverage"; `cited_share` (1.5) would keep a premium on
+an uncheckable number.
+
+R8 protocol, both ways. Committed default (shadow): **no case moves**, 59 pass.
+Dry run with enforcement on and the target at `reporting`, measured not predicted:
+
+| Case | mean today | mean enforced |
+|---|---|---|
+| **B5** — one cited probability outguns three honest reports | +0.2059 | **−0.444** |
+| **B6** — the same number from a credibility-0.3 outlet still outguns a trusted one | +0.2089 | **−0.5948** |
+| **B9** — a debunking sentence's number becomes an anchor | +0.4175 | **−0.0832** |
+
+Two corrections to the acceptance surface predicted on the issue. **A15 does not
+move, and should not**: its anchor is meant to be legitimate (its `known_bad`
+says the claim "should reach the pool as its own atom at weight 4.0") — its
+complaint is F1's averaging, which an allowlist does not touch. And **D1 moved
+for a fixture reason, not a table reason**: the prediction was that D1 would move
+only if the demotion were implemented as a weight-table change; in fact four
+untagged cases (**A12, A13, D1, D4**) moved because the matrix runner's synthetic
+`quote` ("Fixture quote 0.") names nobody, so anchors those cases intend as
+legitimate were demoted. Each of the four says so in its own notes — A12's "a
+named model baseline must not be flipped", A13's "defying the models that gave
+him 22%", D4's "both articles cite the same model at 20%". They now carry a
+`quote` naming a real source, which is a no-op under shadow and leaves the flip
+clean: enforcement moves **exactly B5, B6, B9** and nothing else.
+
+Interim by construction: R5's provenance axis makes "who stands behind this" a
+field rather than a text scan, and this function should be **deleted** then, not
+migrated — do not grow the allowlist into a general-purpose source registry.

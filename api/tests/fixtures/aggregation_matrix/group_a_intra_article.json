@@ -733,6 +733,7 @@
           "credibility": 1.0,
           "claims": [
             {
+              "quote": "Opta's model puts his chance at 20%.",
               "stance": 0.8,
               "certainty": 0.5,
               "quantitative_estimate": 0.2,
@@ -792,6 +793,7 @@
           "credibility": 1.0,
           "claims": [
             {
+              "quote": "He was sworn in on Tuesday, defying Opta's model, which had given him 22%.",
               "stance": 1.0,
               "certainty": 0.95,
               "settled": true,
@@ -919,6 +921,7 @@
               "evidence_class": "opinion"
             },
             {
+              "quote": "Kalshi traders put it at 20%.",
               "stance": -0.6,
               "certainty": 0.9,
               "quantitative_estimate": 0.2,

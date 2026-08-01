@@ -27,6 +27,7 @@ from tm.gatekeeper import (
 )
 from tm.extractor import (
     extract_predictions,
+    enforce_anchor_provenance,
     enforce_deadline_arithmetic,
     enforce_precursor_cap,
     enforce_relative_date_resolution,
@@ -516,6 +517,12 @@ async def _process_article(
         # policy, so enforce it in code — before the fusion below reads fact_signal
         # for both the article mean and the dominant-claim facets.
         extraction.predictions = enforce_precursor_cap(extraction.predictions)
+        # The strongest evidence class (4.0, and the only one that authorizes the
+        # stance rewrite) must name a source whose figure could be checked —
+        # otherwise one fabricated sentence buys it (retro#369). Runs before
+        # resolve_stance_certainty below, so a demoted claim also stops rewriting
+        # stance from its own number. SHADOW until anchor_provenance_enforced.
+        extraction.predictions = enforce_anchor_provenance(extraction.predictions)
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", result.url, exc)
         extract_ms = (time.perf_counter() - extract_start) * 1000

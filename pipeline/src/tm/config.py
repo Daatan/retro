@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
+from typing import Literal
 
 
 class Settings(BaseSettings):
@@ -31,6 +32,51 @@ class Settings(BaseSettings):
     # (forecast_api/config.py) and retro#354's D1. Value is the prompt's own
     # literal, changed only by a deliberate policy decision. See retro#367.
     fact_signal_precursor_cap: float = 0.3
+
+    # ── cited_probability provenance (retro#369, lane-soundness F4) ──────────
+    # `cited_probability` carries the highest class weight (4.0) and forces
+    # certainty, with no check on WHO produced the number: one sentence of "a
+    # market prices this at 80%" in any article we crawl buys the strongest
+    # evidence class in the system. The allowlist is what may claim that
+    # provenance — venues whose figure a reader could go and verify. Interim by
+    # design: R5 replaces it with a provenance axis and this should then be
+    # DELETED, not migrated, so do not grow it into a general source registry.
+    #
+    # Matched case-insensitively on word boundaries against the claim's verbatim
+    # `quote`. Seeded from what the live pool actually cites (prod audit
+    # 2026-08-01: Opta 5 rows, Kalshi 4, Polymarket 1) plus the two integrated
+    # markets and the standard national pollsters.
+    cited_probability_source_allowlist: list[str] = [
+        # prediction markets — already integrated, independently checkable
+        "Polymarket", "Kalshi", "Metaculus", "PredictIt", "Betfair", "Smarkets",
+        # named forecasting models / stats providers
+        "Opta", "FiveThirtyEight", "538", "Silver Bulletin", "Elo",
+        # named pollsters
+        "Gallup", "Ipsos", "YouGov", "Siena", "Quinnipiac", "Marist",
+        "Rasmussen", "Morning Consult", "Pew", "Datafolha", "Angus Reid",
+    ]
+    # Whether the demotion is APPLIED. Off = shadow: the check runs and logs
+    # `event=anchor_provenance_unattributed` on every claim it would demote, but
+    # the class is left alone, so prod behaviour and the R8 fixtures are
+    # unchanged. Same compute-but-don't-use shape as the credibility shadow lane.
+    # Flip on together with regenerating the R8 cases named on retro#369.
+    anchor_provenance_enforced: bool = False
+    # What an unattributed cited_probability becomes once enforcement is on.
+    # PLACEHOLDER pending the policy decision on retro#369 — `reporting` (0.6)
+    # says "we cannot check who produced this figure, so it is ordinary hedged
+    # coverage"; `cited_share` (1.5) would keep a premium on an uncheckable
+    # number. Because the demotion is a class relabel, it also stops
+    # resolve_stance_certainty rewriting stance from the figure (that rewrite
+    # keys on cited_probability — retro#362), which is the actual attack in R8
+    # case B9.
+    # Typed as the Literal rather than a bare str on purpose: a typo here would
+    # otherwise put an unknown label on a claim and silently fall through to
+    # evidence_class_weight_default, breaking the "evidence_class is a Literal of
+    # five keys, pydantic rejects anything else at extraction time" invariant the
+    # api-side weight table documents. This way a bad value fails at startup.
+    unattributed_probability_class: Literal[
+        "reported_fact", "cited_probability", "cited_share", "reporting", "opinion",
+    ] = "reporting"
 
     # Optional: override API base/key (for Ollama or other OpenAI-compatible backends)
     model_api_base: str = ""

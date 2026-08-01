@@ -102,7 +102,7 @@
         "mean": 0.9,
         "std": 0.7704,
         "ci_low": 0.1296,
-        "ci_high": 1.0,
+        "ci_high": 0.98,
         "sources": [
           {
             "source": "alpha",
@@ -205,7 +205,7 @@
         "mean": -0.5778,
         "std": 0.6474,
         "ci_low": -0.98,
-        "ci_high": 0.3195,
+        "ci_high": 0.4686,
         "sources": [
           {
             "source": "alpha",
@@ -292,7 +292,7 @@
         "mean": -0.3507,
         "std": 0.7589,
         "ci_low": -0.98,
-        "ci_high": 0.7011,
+        "ci_high": 0.758,
         "sources": [
           {
             "source": "alpha",
@@ -377,7 +377,7 @@
         "mean": -0.7839,
         "std": 0.2224,
         "ci_low": -0.98,
-        "ci_high": -0.4758,
+        "ci_high": -0.3566,
         "sources": [
           {
             "source": "alpha",
@@ -464,8 +464,8 @@
         "settled": false,
         "mean": 0.0,
         "std": 0.8568,
-        "ci_low": -1.0,
-        "ci_high": 1.0,
+        "ci_low": -0.98,
+        "ci_high": 0.98,
         "sources": [
           {
             "source": "alpha",
@@ -540,7 +540,7 @@
         "mean": 0.6,
         "std": 0.45,
         "ci_low": 0.15,
-        "ci_high": 1.0,
+        "ci_high": 0.98,
         "sources": [
           {
             "source": "alpha",
@@ -593,8 +593,8 @@
         "articles_used": 1,
         "settled": false,
         "mean": 0.98,
-        "std": 0.0,
-        "ci_low": 0.98,
+        "std": 0.1,
+        "ci_low": 0.784,
         "ci_high": 0.98,
         "sources": [
           {
@@ -623,7 +623,7 @@
       "traces": [
         "F16"
       ],
-      "notes": "The CI is computed from disagreement only. Four sources that all say +0.4 at certainty 0.5 disagree by nothing, so the interval collapses to a point — the estimator claims total precision on evidence it has itself classified as hedged. F16's unanimity floor is the fix.",
+      "notes": "The CI is computed from disagreement only. Four sources that all say +0.4 at certainty 0.5 disagree by nothing, so the interval collapses to a point — the estimator claims total precision on evidence it has itself classified as hedged. F16's unanimity floor is the fix. FIXED (retro#365, F16): widen_ci_for_unresolved_dispersion floors the band at 1.96*sigma/sqrt(n_eff), so these four effective sources publish width 0.196 instead of 0.0. Paired with B11 (n_eff 1, width 0.392) the two invariants pin the decay property: one effective source pays the full floor, four pay half.",
       "articles": [
         {
           "source": "alpha",
@@ -679,22 +679,18 @@
         }
       ],
       "invariants": [
-        "ci_high - ci_low == 0.0",
-        "std == 0.0"
+        "ci_high - ci_low > 0.15",
+        "std > 0.09"
       ],
-      "known_bad": {
-        "finding": "F16",
-        "expected_behavior": "Unanimity is not precision. The interval needs a floor that survives zero observed disagreement, and effective-N (Kish) rather than a raw row count."
-      },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 4,
         "settled": false,
         "mean": 0.4,
-        "std": 0.0,
-        "ci_low": 0.4,
-        "ci_high": 0.4,
+        "std": 0.1,
+        "ci_low": 0.302,
+        "ci_high": 0.498,
         "sources": [
           {
             "source": "alpha",
@@ -1121,8 +1117,8 @@
         "settled": false,
         "mean": -0.7829,
         "std": 0.9328,
-        "ci_low": -1.0,
-        "ci_high": 1.0,
+        "ci_low": -0.98,
+        "ci_high": 0.98,
         "sources": [
           {
             "source": "alpha",
@@ -1214,8 +1210,8 @@
         "articles_used": 2,
         "settled": false,
         "mean": 0.98,
-        "std": 0.0,
-        "ci_low": 0.98,
+        "std": 0.1,
+        "ci_low": 0.8412,
         "ci_high": 0.98,
         "sources": [
           {
@@ -1302,9 +1298,9 @@
         "articles_used": 2,
         "settled": false,
         "mean": -0.98,
-        "std": 0.0,
+        "std": 0.1,
         "ci_low": -0.98,
-        "ci_high": -0.98,
+        "ci_high": -0.8412,
         "sources": [
           {
             "source": "alpha",

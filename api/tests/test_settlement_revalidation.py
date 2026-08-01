@@ -34,6 +34,7 @@ def _kwargs(**overrides):
         settlement_min_sources=2,
         settlement_stance=api_settings.settlement_stance,
         logit_clamp=api_settings.logit_clamp,
+        pool_dispersion_floor=api_settings.pool_dispersion_floor,
         settlement_revalidate=True,
     )
     kw.update(overrides)

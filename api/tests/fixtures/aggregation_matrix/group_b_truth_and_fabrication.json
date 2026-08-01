@@ -49,7 +49,7 @@
         "settled": false,
         "mean": 0.6707,
         "std": 0.5447,
-        "ci_low": -0.0842,
+        "ci_low": -0.268,
         "ci_high": 0.98,
         "sources": [
           {
@@ -229,8 +229,8 @@
         "settled": false,
         "mean": -0.0629,
         "std": 0.5976,
-        "ci_low": -0.4533,
-        "ci_high": 0.3275,
+        "ci_low": -0.6412,
+        "ci_high": 0.5154,
         "sources": [
           {
             "source": "alpha",
@@ -395,7 +395,7 @@
         "F2",
         "F20"
       ],
-      "notes": "Every article carries verified=false — each is relaying the same interested party's assertion, none confirms it independently. The pool sees four agreeing sources, produces a confident positive mean and a narrow interval, and nothing anywhere records that the underlying observation count is one. F20's clamp (retro#368) moved the mean to the cap but collapsed the interval to zero width, because four distinct stances map onto one constant. A clamp manufactures agreement it cannot justify — recorded here as the reason F2/F16 are not optional.",
+      "notes": "Every article carries verified=false — each is relaying the same interested party's assertion, none confirms it independently. The pool sees four agreeing sources, produces a confident positive mean and a narrow interval, and nothing anywhere records that the underlying observation count is one. F20's clamp (retro#368) moved the mean to the cap but collapsed the interval to zero width, because four distinct stances map onto one constant. A clamp manufactures agreement it cannot justify — recorded here as the reason F2/F16 are not optional. F16 (retro#365) restored a width: the floor gives these four echoes 0.196, 4.7x the 0.042 they had before F20's clamp. The F2 complaint stands untouched and is now HARDER TO SEE — a tidy +-9.8pp band looks like an estimate earned from four independent sources. Only clustering can collapse them; when it does, n_eff falls and this floor widens automatically with no knob retuned.",
       "articles": [
         {
           "source": "alpha",
@@ -464,7 +464,7 @@
       ],
       "invariants": [
         "abs(mean - 0.3) < 1e-9",
-        "ci_high - ci_low < 1e-9",
+        "ci_high - ci_low > 0.15",
         "all(s['verified'] is False for s in sources)"
       ],
       "known_bad": {
@@ -477,9 +477,9 @@
         "articles_used": 4,
         "settled": false,
         "mean": 0.3,
-        "std": 0.0,
-        "ci_low": 0.3,
-        "ci_high": 0.3,
+        "std": 0.1,
+        "ci_low": 0.202,
+        "ci_high": 0.398,
         "sources": [
           {
             "source": "alpha",
@@ -847,7 +847,7 @@
         "mean": -0.5948,
         "std": 0.6015,
         "ci_low": -0.98,
-        "ci_high": 0.2388,
+        "ci_high": 0.352,
         "sources": [
           {
             "source": "alpha",
@@ -946,9 +946,9 @@
         "articles_used": 2,
         "settled": false,
         "mean": 0.3,
-        "std": 0.0,
-        "ci_low": 0.3,
-        "ci_high": 0.3,
+        "std": 0.1,
+        "ci_low": 0.1614,
+        "ci_high": 0.4386,
         "sources": [
           {
             "source": "alpha",
@@ -1059,7 +1059,7 @@
         "mean": -0.8624,
         "std": 0.5828,
         "ci_low": -0.98,
-        "ci_high": -0.203,
+        "ci_high": 0.0204,
         "sources": [
           {
             "source": "alpha",
@@ -1168,8 +1168,8 @@
         "settled": false,
         "mean": -0.0832,
         "std": 0.5326,
-        "ci_low": -0.8213,
-        "ci_high": 0.6549,
+        "ci_low": -0.844,
+        "ci_high": 0.6776,
         "sources": [
           {
             "source": "alpha",
@@ -1214,7 +1214,7 @@
       "traces": [
         "R5"
       ],
-      "notes": "Three opinion-class articles carry 0.25 each, so evidence_mass 0.75 clears decisiveness_floor and the estimator answers from commentary alone with no widening. Documented, deliberate behaviour today (opinion feeds the fused estimate at 0.25); R5's factored weights are where the assertion-kind axis eventually decides whether it should.",
+      "notes": "Three opinion-class articles carry 0.25 each, so evidence_mass 0.75 clears decisiveness_floor and the estimator answers from commentary alone with no widening. Documented, deliberate behaviour today (opinion feeds the fused estimate at 0.25); R5's factored weights are where the assertion-kind axis eventually decides whether it should. Moved by F16 (retro#365): three unanimous opinion articles no longer publish a point estimate as a 95% interval; n_eff 3.0 gives width 0.226. The R5 complaint — that opinion feeds the fused estimate at all — is untouched.",
       "articles": [
         {
           "source": "alpha",
@@ -1259,7 +1259,7 @@
       "invariants": [
         "insufficient_data is False",
         "abs(mean - 0.7) < 1e-6",
-        "ci_high - ci_low == 0.0"
+        "ci_high - ci_low > 0.20"
       ],
       "expect": {
         "insufficient_data": false,
@@ -1267,9 +1267,9 @@
         "articles_used": 3,
         "settled": false,
         "mean": 0.7,
-        "std": 0.0,
-        "ci_low": 0.7,
-        "ci_high": 0.7,
+        "std": 0.1,
+        "ci_low": 0.5868,
+        "ci_high": 0.8132,
         "sources": [
           {
             "source": "alpha",
@@ -1331,7 +1331,7 @@
       "traces": [
         "F16"
       ],
-      "notes": "One article, weight 1.0, clears the decisiveness floor on its own — so no widening applies, and with n=1 there is no disagreement to measure. The estimator reports a point estimate with no uncertainty from one source.",
+      "notes": "One article, weight 1.0, clears the decisiveness floor on its own — so no widening applies, and with n=1 there is no disagreement to measure. The estimator reports a point estimate with no uncertainty from one source. FIXED (retro#365, F16): n_eff is exactly 1.0 here, so this pool pays the floor undivided — width 0.392, the widest the floor can produce. This is the case the floor exists for: 11.8% of live pool rows would clear decisiveness_floor alone if freshly published, and the last four zero-width snapshots in prod (2026-07-14) were all exactly this shape.",
       "articles": [
         {
           "source": "alpha",
@@ -1348,22 +1348,18 @@
         }
       ],
       "invariants": [
-        "ci_high - ci_low == 0.0",
+        "ci_high - ci_low > 0.35",
         "insufficient_data is False"
       ],
-      "known_bad": {
-        "finding": "F16",
-        "expected_behavior": "An interval derived only from between-source disagreement is undefined at n=1; effective-N plus a unanimity floor must give a single source a visibly uncertain band."
-      },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 1,
         "settled": false,
         "mean": 0.75,
-        "std": 0.0,
-        "ci_low": 0.75,
-        "ci_high": 0.75,
+        "std": 0.1,
+        "ci_low": 0.554,
+        "ci_high": 0.946,
         "sources": [
           {
             "source": "alpha",
@@ -1821,7 +1817,7 @@
         "R3",
         "F16"
       ],
-      "notes": "Credibility 0 zeroes the source's pull on the pooled mean, but the row is still present: it enters the relevance mass that clears the off-topic gate and the n that divides the standard error. A blocked source cannot vote, yet it can still tighten the interval and keep an otherwise off-topic pool alive.",
+      "notes": "Credibility 0 zeroes the source's pull on the pooled mean, but the row is still present: it enters the relevance mass that clears the off-topic gate and the n that divides the standard error. A blocked source cannot vote, yet it can still tighten the interval and keep an otherwise off-topic pool alive. FIXED (retro#365, F16), but by BOTH halves jointly, which is worth being precise about: var_p was already exactly zero here (the blocked row's deviation is multiplied by weight 0), so Kish alone moves the width not at all. Kish's contribution is that the divisor is n_eff 1.0 rather than n 2 — the blocked row buys no precision — and the dispersion floor then supplies the width. The result is exactly the band a lone bravo would get. Note prod has no instance of this shape: credibility_weight is a constant 1.0 across all 6,143 live pool rows.",
       "articles": [
         {
           "source": "alpha",
@@ -1855,19 +1851,15 @@
         "abs(mean - 0.6) < 1e-6",
         "n == 2"
       ],
-      "known_bad": {
-        "finding": "F16",
-        "expected_behavior": "n in the standard error must be an effective sample size (Kish), so a zero-weight row cannot buy precision it contributes nothing to."
-      },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 2,
         "settled": false,
         "mean": 0.6,
-        "std": 0.0,
-        "ci_low": 0.6,
-        "ci_high": 0.6,
+        "std": 0.1,
+        "ci_low": 0.404,
+        "ci_high": 0.796,
         "sources": [
           {
             "source": "alpha",
@@ -2096,8 +2088,8 @@
         "settled": false,
         "mean": 0.2832,
         "std": 0.7736,
-        "ci_low": -0.2222,
-        "ci_high": 0.7885,
+        "ci_low": -0.4655,
+        "ci_high": 0.98,
         "sources": [
           {
             "source": "alpha",

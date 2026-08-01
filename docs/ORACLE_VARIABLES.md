@@ -226,18 +226,25 @@ before enabling in prod.
 
 | variable | role |
 |---|---|
-| `mean, std, ci_low, ci_high` | weighted-mean logit pool + dispersion, stance scale |
+| `mean, std, ci_low, ci_high` | weighted-mean logit pool + dispersion, stance scale; SEM divides by Kish `n_eff = (Σw)²/Σw²`, and the width is floored at `1.96·pool_dispersion_floor/√n_eff` so a unanimous pool cannot publish a point (F16) |
 | `evidence_mass = Σ weight` | thin-evidence CI widening (floor 0.5, inflation 0.45) |
 | `relevance_mass = Σ relevance²` | off-topic abstention (floor 0.05) |
 | `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — **revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at (scheduled), claim_deadline]` and ≤ its article's date; a non-occurrence vote needs a closed window (dated anchors at most `settlement_post_deadline_grace_days` past it, or an undated vote from an article published within that grace — else `stale_undated_foreclosure`) or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Count alone isn't enough either: `settlement_quality_floor` (default 0 = off) additionally requires the winning direction's combined per-source weight to clear a bar, else the pin is suppressed (`settlement_quality_floor`). Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
 | `insufficient_data, reason, placeholder, articles_used/found` | abstention encoding |
 
-Config constants (11): `recency_half_life_days=7`, `recency_floor=0.02`,
+Config constants (12): `recency_half_life_days=7`, `recency_floor=0.02`,
 `logit_clamp=0.01`, `relevance_weight_floor=0.05`,
 `syndication_title_similarity=0.8`,
 `decisiveness_floor=0.5`, `thin_evidence_ci_inflation=0.45`,
-`defer_on_thin_evidence=False`, `settlement_min_sources=2`,
+`defer_on_thin_evidence=False`, `pool_dispersion_floor=0.05`,
+`settlement_min_sources=2`,
 `settlement_stance=0.94`, `min_certainty=0.9`.
+`logit_clamp` is not only the per-source log-odds guard: it also bounds the
+pooled CI endpoints and (since F16) the thin-evidence widening term.
+`pool_dispersion_floor` is the minimum published interval width, as a
+between-source standard deviation in probability space — **a policy number, not
+a measurement**, in the same class as `interested_party_stance_cap`; see the
+derivation of its ceiling and its 5.2% binding rate in `config.py`.
 (`quantitative_anchor_weight` was deleted in the S2 cutover — its 4× premium
 lives on as `evidence_class_weight["cited_probability"]`.)
 

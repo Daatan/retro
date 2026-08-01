@@ -14,6 +14,7 @@ import pytest
 from forecast_api.aggregation import (
     aggregate_pool,
     claim_weighted_stance,
+    effective_sample_size,
     evidence_class_weight,
     logit,
     pool_sources,
@@ -37,6 +38,7 @@ def _aggregate_kwargs(**overrides):
         settlement_min_sources=api_settings.settlement_min_sources,
         settlement_stance=api_settings.settlement_stance,
         logit_clamp=api_settings.logit_clamp,
+        pool_dispersion_floor=api_settings.pool_dispersion_floor,
     )
     kw.update(overrides)
     return kw
@@ -44,16 +46,16 @@ def _aggregate_kwargs(**overrides):
 
 class TestWidenCiForThinEvidence:
     def test_noop_when_no_deficit(self):
-        out = widen_ci_for_thin_evidence(0.2, 0.1, 0.3, 0.05, deficit=0.0, max_inflation=0.45)
+        out = widen_ci_for_thin_evidence(0.2, 0.1, 0.3, 0.05, deficit=0.0, max_inflation=0.45, clamp_eps=0.01)
         assert out == (0.1, 0.3, 0.05)
 
     def test_noop_when_inflation_zero(self):
-        out = widen_ci_for_thin_evidence(0.2, 0.1, 0.3, 0.05, deficit=1.0, max_inflation=0.0)
+        out = widen_ci_for_thin_evidence(0.2, 0.1, 0.3, 0.05, deficit=1.0, max_inflation=0.0, clamp_eps=0.01)
         assert out == (0.1, 0.3, 0.05)
 
     def test_widens_band_and_brackets_mean(self):
         ci_low, ci_high, std = widen_ci_for_thin_evidence(
-            0.2, 0.15, 0.25, 0.05, deficit=0.5, max_inflation=0.45
+            0.2, 0.15, 0.25, 0.05, deficit=0.5, max_inflation=0.45, clamp_eps=0.01
         )
         assert ci_low < 0.15
         assert ci_high > 0.25
@@ -62,14 +64,14 @@ class TestWidenCiForThinEvidence:
 
     def test_full_deficit_spans_nearly_everything(self):
         ci_low, ci_high, _std = widen_ci_for_thin_evidence(
-            0.0, -0.1, 0.1, 0.1, deficit=1.0, max_inflation=0.45
+            0.0, -0.1, 0.1, 0.1, deficit=1.0, max_inflation=0.45, clamp_eps=0.01
         )
         assert (ci_high - ci_low) > 1.5
 
     def test_widening_grows_monotonically_with_deficit(self):
         widths = []
         for d in (0.1, 0.4, 0.8):
-            lo, hi, _ = widen_ci_for_thin_evidence(0.0, -0.1, 0.1, 0.1, deficit=d, max_inflation=0.45)
+            lo, hi, _ = widen_ci_for_thin_evidence(0.0, -0.1, 0.1, 0.1, deficit=d, max_inflation=0.45, clamp_eps=0.01)
             widths.append(hi - lo)
         assert widths[0] < widths[1] < widths[2]
 
@@ -617,3 +619,122 @@ class TestAggregatePool:
         )
         assert result is not None
         assert result.settled is False
+
+
+class TestEffectiveSampleSize:
+    """Kish's n_eff — defect (a) of F16 / retro#365."""
+
+    def test_equal_weights_give_exactly_n(self):
+        assert effective_sample_size([0.6] * 4) == pytest.approx(4.0)
+
+    def test_single_source_is_one(self):
+        assert effective_sample_size([0.7]) == pytest.approx(1.0)
+
+    def test_near_weightless_rows_buy_almost_nothing(self):
+        # The attack (a) exists to stop: pad a real pool with rows that carry
+        # no weight and the raw count would shrink the standard error by ~sqrt.
+        padded = effective_sample_size([1.0, 1.0] + [1e-9] * 98)
+        assert padded == pytest.approx(2.0, abs=1e-3)
+
+    def test_a_blocked_row_does_not_count(self):
+        # B15's shape: one real source, one zeroed by credibility.
+        assert effective_sample_size([0.0, 0.6]) == pytest.approx(1.0)
+
+    def test_never_exceeds_n_and_never_below_one(self):
+        for weights in ([0.1, 0.2, 0.3], [5.0, 0.001], [1.0] * 7, [0.0, 0.0]):
+            assert 1.0 <= effective_sample_size(weights) <= len(weights)
+
+    def test_degenerate_inputs_fall_back_to_the_row_count(self):
+        # Mirrors pool_sources' zero-total guard, which flattens to 1.0 each.
+        assert effective_sample_size([0.0, 0.0, 0.0]) == pytest.approx(3.0)
+        assert effective_sample_size([]) == 0.0
+
+
+class TestDispersionFloor:
+    """The unanimity floor — defect (b) of F16 / retro#365."""
+
+    def test_unanimous_pool_no_longer_publishes_a_point(self):
+        result = aggregate_pool([0.4] * 4, [0.6] * 4, [1.0] * 4, [False] * 4,
+                                **_aggregate_kwargs())
+        assert result is not None
+        assert result.ci_high - result.ci_low > 0.15
+        assert result.ci_low < result.mean < result.ci_high
+
+    def test_single_strong_source_pays_the_floor_undivided(self):
+        one = aggregate_pool([0.75], [1.0], [1.0], [False], **_aggregate_kwargs())
+        four = aggregate_pool([0.75] * 4, [1.0] * 4, [1.0] * 4, [False] * 4,
+                              **_aggregate_kwargs())
+        assert one is not None and four is not None
+        # n_eff 1 vs 4 ⇒ the floor halves. This is the decay property; without
+        # it the floor would be a flat minimum and unanimity would never pay off.
+        assert (one.ci_high - one.ci_low) == pytest.approx(
+            2.0 * (four.ci_high - four.ci_low), rel=1e-3
+        )
+
+    def test_the_floor_never_narrows_a_dispersed_pool(self):
+        stances = [0.9, 0.1, -0.4, 0.6]
+        floored = aggregate_pool(stances, [1.0] * 4, [1.0] * 4, [False] * 4,
+                                 **_aggregate_kwargs())
+        off = aggregate_pool(stances, [1.0] * 4, [1.0] * 4, [False] * 4,
+                             **_aggregate_kwargs(pool_dispersion_floor=0.0))
+        assert floored is not None and off is not None
+        assert floored.ci_low == off.ci_low
+        assert floored.ci_high == off.ci_high
+
+    def test_widths_decay_monotonically_with_effective_n(self):
+        widths = []
+        for k in range(1, 9):
+            r = aggregate_pool([0.4] * k, [0.6] * k, [1.0] * k, [False] * k,
+                               **_aggregate_kwargs())
+            assert r is not None
+            widths.append(r.ci_high - r.ci_low)
+        assert widths == sorted(widths, reverse=True)
+        assert all(a > b for a, b in zip(widths, widths[1:]))
+
+    def test_zero_disables_the_floor(self):
+        r = aggregate_pool([0.4] * 4, [0.6] * 4, [1.0] * 4, [False] * 4,
+                           **_aggregate_kwargs(pool_dispersion_floor=0.0))
+        assert r is not None
+        # The pre-F16 behaviour, ULP noise aside: unanimity reads as precision.
+        assert r.ci_high - r.ci_low < 1e-9
+
+    def test_the_floor_never_moves_the_mean(self):
+        """The load-bearing safety property: F16 is an interval change only."""
+        cases = [
+            ([0.4] * 4, [0.6] * 4),
+            ([0.75], [1.0]),
+            ([-0.9, 0.6], [0.0, 0.6]),
+            ([0.8, 0.8, 0.75, 0.8], [1.0] * 4),
+            ([0.98, -0.98], [2.0, 0.001]),
+            ([0.0] * 3, [0.3, 0.3, 0.3]),
+        ]
+        for stances, weights in cases:
+            n = len(stances)
+            on = aggregate_pool(stances, weights, [1.0] * n, [False] * n,
+                                **_aggregate_kwargs())
+            off = aggregate_pool(stances, weights, [1.0] * n, [False] * n,
+                                 **_aggregate_kwargs(pool_dispersion_floor=0.0))
+            assert on is not None and off is not None
+            assert on.mean == off.mean, f"mean moved for {stances}/{weights}"
+
+    def test_the_floor_does_not_stack_on_thin_evidence_widening(self):
+        """A thin *and* unanimous pool must not be charged twice — the floor is
+        a min/max against the widened band, not an addition to it."""
+        thin = _aggregate_kwargs()
+        r = aggregate_pool([0.4], [0.05], [1.0], [False], **thin)
+        off = aggregate_pool([0.4], [0.05], [1.0], [False],
+                             **_aggregate_kwargs(pool_dispersion_floor=0.0))
+        assert r is not None and off is not None
+        assert r.thin_evidence is True
+        # Thin widening already dominates the floor here, so the band is
+        # untouched by it.
+        assert r.ci_low == off.ci_low
+        assert r.ci_high == off.ci_high
+
+    def test_widened_band_respects_the_pooling_clamp(self):
+        """Defect (c): the widening term used to be the only path to a literal
+        0%–100% interval, endpoints the estimator's own clamp calls unreachable."""
+        r = aggregate_pool([0.0], [0.001], [1.0], [False], **_aggregate_kwargs())
+        assert r is not None
+        assert r.ci_low >= -0.98 - 1e-9
+        assert r.ci_high <= 0.98 + 1e-9

@@ -395,7 +395,7 @@
         "F2",
         "F20"
       ],
-      "notes": "Every article carries verified=false — each is relaying the same interested party's assertion, none confirms it independently. The pool sees four agreeing sources, produces a confident positive mean and a narrow interval, and nothing anywhere records that the underlying observation count is one.",
+      "notes": "Every article carries verified=false — each is relaying the same interested party's assertion, none confirms it independently. The pool sees four agreeing sources, produces a confident positive mean and a narrow interval, and nothing anywhere records that the underlying observation count is one. F20's clamp (retro#368) moved the mean to the cap but collapsed the interval to zero width, because four distinct stances map onto one constant. A clamp manufactures agreement it cannot justify — recorded here as the reason F2/F16 are not optional.",
       "articles": [
         {
           "source": "alpha",
@@ -463,27 +463,27 @@
         }
       ],
       "invariants": [
-        "mean > 0.7",
-        "ci_high - ci_low < 0.1",
+        "abs(mean - 0.3) < 1e-9",
+        "ci_high - ci_low < 1e-9",
         "all(s['verified'] is False for s in sources)"
       ],
       "known_bad": {
         "finding": "F2",
-        "expected_behavior": "Four relays of one unverified assertion are one piece of evidence. Clustering should collapse them, and the interval should widen rather than narrow when no source verified anything."
+        "expected_behavior": "Four relays of one unverified assertion are one piece of evidence. Clustering should collapse them, and the interval should widen rather than narrow when no source verified anything. F20's clamp (retro#368) fixed the LOCATION — the mean drops 0.7884 -> 0.3 — but made the interval strictly WORSE: all four echoes clamp to the identical cap, so between-source disagreement goes to zero and the CI collapses from width 0.042 to width 0.0. The second invariant now pins that zero explicitly. Only effective-N plus clustering (F16/retro#365, F2) can move it; a magnitude clamp cannot."
       },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 4,
         "settled": false,
-        "mean": 0.7884,
-        "std": 0.0217,
-        "ci_low": 0.7672,
-        "ci_high": 0.8096,
+        "mean": 0.3,
+        "std": 0.0,
+        "ci_low": 0.3,
+        "ci_high": 0.3,
         "sources": [
           {
             "source": "alpha",
-            "stance": 0.8,
+            "stance": 0.3,
             "certainty": 0.85,
             "credibility_weight": 1.0,
             "evidence_class": "reporting",
@@ -500,7 +500,7 @@
           },
           {
             "source": "bravo",
-            "stance": 0.8,
+            "stance": 0.3,
             "certainty": 0.85,
             "credibility_weight": 1.0,
             "evidence_class": "reporting",
@@ -517,7 +517,7 @@
           },
           {
             "source": "charlie",
-            "stance": 0.75,
+            "stance": 0.3,
             "certainty": 0.85,
             "credibility_weight": 1.0,
             "evidence_class": "reporting",
@@ -534,7 +534,7 @@
           },
           {
             "source": "delta",
-            "stance": 0.8,
+            "stance": 0.3,
             "certainty": 0.85,
             "credibility_weight": 1.0,
             "evidence_class": "reporting",
@@ -558,7 +558,7 @@
       "traces": [
         "F20"
       ],
-      "notes": "Two articles identical in stance, certainty and class; one carries verified=true, the other verified=false. The weights that come out are bit-identical — `verified` reaches the response and daatan's storage, and is read by nothing in aggregation.",
+      "notes": "Two articles identical in stance, certainty and class; one carries verified=true, the other verified=false. The weights that come out are bit-identical — `verified` reaches the response and daatan's storage, and is read by nothing in aggregation. F20's code-side clamp landed in retro#368 and moved sources[1] to the cap; the case is retagged F7, which owns the surviving weight-side identity.",
       "articles": [
         {
           "source": "alpha",
@@ -595,22 +595,24 @@
       ],
       "invariants": [
         "sources[0]['weight'] == sources[1]['weight']",
+        "abs(sources[1]['stance'] - 0.3) < 1e-9",
+        "sources[0]['stance'] != sources[1]['stance']",
         "sources[0]['verified'] is True",
         "sources[1]['verified'] is False"
       ],
       "known_bad": {
-        "finding": "F20",
-        "expected_behavior": "An unverified interested-party claim must not buy the same certainty as independently reported fact — F20 lands a code-side stance clamp for exactly this pair."
+        "finding": "F7",
+        "expected_behavior": "F20's location half is FIXED (retro#368): the unverified twin is clamped to the cap, so the pair is no longer bit-identical and the pooled mean drops 0.9 -> 0.7118 with the CI opening from zero width. What remains is the WEIGHT half, which is F7 and deliberately out of F20's scope: both claims still resolve to evidence_weight 1.0, so `verified` still buys an interested party the same weight as independent confirmation. The first invariant pins that remaining identity."
       },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 2,
         "settled": false,
-        "mean": 0.9,
-        "std": 0.0,
-        "ci_low": 0.9,
-        "ci_high": 0.9,
+        "mean": 0.7118,
+        "std": 0.3202,
+        "ci_low": 0.2681,
+        "ci_high": 0.98,
         "sources": [
           {
             "source": "alpha",
@@ -631,7 +633,7 @@
           },
           {
             "source": "bravo",
-            "stance": 0.9,
+            "stance": 0.3,
             "certainty": 0.9,
             "credibility_weight": 1.0,
             "evidence_class": "reported_fact",
@@ -891,7 +893,7 @@
         "F2",
         "F12"
       ],
-      "notes": "settlement_min_sources is a count of ARTICLES, not of independent observations. Two syndicated copies of the same fabricated \"it happened\" report, both dated and both settlement-grade, satisfy it and pin the estimate to +0.94. Upstream title-similarity dedup is the only thing standing between this and prod, and it does not survive a rewrite.",
+      "notes": "settlement_min_sources is a count of ARTICLES, not of independent observations. Two syndicated copies of the same fabricated \"it happened\" report, both dated and both settlement-grade, satisfy it and pin the estimate to +0.94. Upstream title-similarity dedup is the only thing standing between this and prod, and it does not survive a rewrite. The pin now fails only as a side effect of F20's stance clamp (retro#368) pulling both claims below the settlement grade gate; see known_bad — this is masking, not a fix.",
       "articles": [
         {
           "source": "alpha",
@@ -931,26 +933,26 @@
         }
       ],
       "invariants": [
-        "settled is True",
-        "abs(mean - 0.94) < 1e-9"
+        "settled is False",
+        "abs(mean - 0.3) < 1e-9"
       ],
       "known_bad": {
         "finding": "F12",
-        "expected_behavior": "The settlement count must be over independent clusters, and unverified settlement votes from de-weighted outlets should not clear the bar at all (settlement_quality_floor is 0 in prod today)."
+        "expected_behavior": "The settlement count must be over independent clusters, and unverified settlement votes from de-weighted outlets should not clear the bar at all (settlement_quality_floor is 0 in prod today). NOT FIXED — MASKED. F20's stance clamp (retro#368) drags both hoax claims from 1.0 to the cap, which drops them below the settlement grade gate, so `settled` goes True -> False and the pin stops firing. That is a side effect of a location-axis clamp, not a settlement defence: it holds only because these claims carry verified=false. A hoax marked verified=true, or with verified null (87% of live pool rows), still pins exactly as before. F12 still needs its own explicit floor — retro#372."
       },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 2,
-        "settled": true,
-        "mean": 0.94,
-        "std": 0.06,
-        "ci_low": 0.82,
-        "ci_high": 0.99,
+        "settled": false,
+        "mean": 0.3,
+        "std": 0.0,
+        "ci_low": 0.3,
+        "ci_high": 0.3,
         "sources": [
           {
             "source": "alpha",
-            "stance": 1.0,
+            "stance": 0.3,
             "certainty": 0.95,
             "credibility_weight": 0.4,
             "evidence_class": "reported_fact",
@@ -958,8 +960,8 @@
             "recency_weight": 0.82,
             "relevance_score": 1.0,
             "weight": 0.328,
-            "settled": true,
-            "settlement_event_date": "2026-07-29",
+            "settled": null,
+            "settlement_event_date": null,
             "fact_signal": 1.0,
             "is_occurrence": true,
             "verified": false,
@@ -967,7 +969,7 @@
           },
           {
             "source": "bravo",
-            "stance": 1.0,
+            "stance": 0.3,
             "certainty": 0.95,
             "credibility_weight": 0.4,
             "evidence_class": "reported_fact",
@@ -975,8 +977,8 @@
             "recency_weight": 0.82,
             "relevance_score": 1.0,
             "weight": 0.328,
-            "settled": true,
-            "settlement_event_date": "2026-07-29",
+            "settled": null,
+            "settlement_event_date": null,
             "fact_signal": 1.0,
             "is_occurrence": true,
             "verified": false,
@@ -992,7 +994,7 @@
         "F12",
         "R7"
       ],
-      "notes": "Same two hoax settlements as B7, plus a same-day correction from a trusted outlet stating flatly that it did not happen. Settlement is a regime switch, not a vote: once the pin fires the pooled mean is discarded, so the correction changes nothing at all. Note the correction is not itself a settlement (it dates no foreclosing event), which is exactly how a real correction reads.",
+      "notes": "Same two hoax settlements as B7, plus a same-day correction from a trusted outlet stating flatly that it did not happen. Settlement is a regime switch, not a vote: once the pin fires the pooled mean is discarded, so the correction changes nothing at all. Note the correction is not itself a settlement (it dates no foreclosing event), which is exactly how a real correction reads. The correction now wins, but only because F20's clamp (retro#368) removed the pin rather than because the correction can suppress one; see known_bad.",
       "articles": [
         {
           "source": "alpha",
@@ -1042,26 +1044,26 @@
         }
       ],
       "invariants": [
-        "settled is True",
-        "abs(mean - 0.94) < 1e-9"
+        "settled is False",
+        "mean < 0"
       ],
       "known_bad": {
         "finding": "F12",
-        "expected_behavior": "A high-credibility contemporaneous denial is evidence that the settlement votes are wrong. Settlement hardening should let a fresh, credible contradiction suppress a pin instead of being discarded by it."
+        "expected_behavior": "A high-credibility contemporaneous denial is evidence that the settlement votes are wrong. Settlement hardening should let a fresh, credible contradiction suppress a pin instead of being discarded by it. NOT FIXED — MASKED, by the same side effect as B7: F20's stance clamp (retro#368) pulls the two hoax claims below the settlement grade gate, the pin stops firing, and the fresh correction consequently wins the pool (mean 0.94 -> -0.8624). The correction is still not SUPPRESSING a pin; there is simply no longer a pin to suppress, and only because these claims are marked verified=false. F12's own fix is retro#372."
       },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 3,
-        "settled": true,
-        "mean": 0.94,
-        "std": 0.06,
-        "ci_low": 0.82,
-        "ci_high": 0.99,
+        "settled": false,
+        "mean": -0.8624,
+        "std": 0.5828,
+        "ci_low": -0.98,
+        "ci_high": -0.203,
         "sources": [
           {
             "source": "alpha",
-            "stance": 1.0,
+            "stance": 0.3,
             "certainty": 0.95,
             "credibility_weight": 0.4,
             "evidence_class": "reported_fact",
@@ -1069,8 +1071,8 @@
             "recency_weight": 0.82,
             "relevance_score": 1.0,
             "weight": 0.328,
-            "settled": true,
-            "settlement_event_date": "2026-07-29",
+            "settled": null,
+            "settlement_event_date": null,
             "fact_signal": null,
             "is_occurrence": null,
             "verified": null,
@@ -1078,7 +1080,7 @@
           },
           {
             "source": "bravo",
-            "stance": 1.0,
+            "stance": 0.3,
             "certainty": 0.95,
             "credibility_weight": 0.4,
             "evidence_class": "reported_fact",
@@ -1086,8 +1088,8 @@
             "recency_weight": 0.82,
             "relevance_score": 1.0,
             "weight": 0.328,
-            "settled": true,
-            "settlement_event_date": "2026-07-29",
+            "settled": null,
+            "settlement_event_date": null,
             "fact_signal": null,
             "is_occurrence": null,
             "verified": null,

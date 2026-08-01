@@ -1006,6 +1006,69 @@ def enforce_precursor_cap(
     return predictions
 
 
+def enforce_interested_party_stance_cap(
+    predictions: list[PredictionExtraction],
+) -> list[PredictionExtraction]:
+    """An interested party's unverified assertion may not vote at full magnitude.
+
+    The prompt's interested-party rule (``extractor.py``'s VERIFIED vs CLAIMED
+    section) caps ``certainty`` at 0.5 on a claim only an interested party asserts,
+    while stating that "full stance magnitude still applies". That is a weight-only
+    discount, and a vote's location in the pool is stance ALONE
+    (``stance_to_prob = (stance + 1) / 2``, aggregation.py) — so under normalization
+    it cancels: N unverified interested-party claims at stance +1 still pool to
+    +0.99. The one rule written to discount self-serving claims had no effect in
+    precisely the case it exists for. This closes the location side (retro#368, F20).
+
+    **Keyed on ``verified`` directly.** The issue proposed keying on the prompt's
+    implied signature — high ``|stance|`` with low ``certainty`` — and warned not to
+    assume it held. The prod audit (2026-08-01) found it does not, and is in fact
+    inverted: on 1,418 pool rows carrying the marker, ``|stance|`` and ``certainty``
+    are strongly COUPLED on unverified claims (corr **+0.68**, against +0.79 on
+    verified ones), unverified rows sit LOWER on both axes (avg ``|stance|`` 0.374
+    vs 0.431, avg certainty 0.456 vs 0.547), and the proposed key fired on **1 row
+    in 1,418** — which was ``verified=true``. No cell in the threshold sweep was both
+    precise and material. ``verified`` is the extractor's own marker and needs no
+    inference.
+
+    Only magnitude moves, and only on the stance axis. The sign an interested party
+    points is a genuine judgement — a company denying a merger is evidence about the
+    merger — while how far an unverified assertion may push the estimate is policy
+    (``interested_party_stance_cap``, config.py). Certainty, class and every facet
+    are untouched here; the certainty cap the prompt already promises is retro#378.
+
+    Fail-open in the same asymmetry as :func:`enforce_precursor_cap`: a ``verified``
+    of ``None`` — the extractor did not judge, which is the case on 87% of live pool
+    rows, since the marker is populated only on extractions since 2026-07-09 and was
+    never backfilled — or ``True`` leaves the claim exactly as the model returned it.
+    Only an explicitly-marked unverified claim is in scope; this never invents a
+    judgement the model declined to make.
+
+    One interaction, declared: ``resolve_stance_certainty`` runs later, at
+    aggregation, and re-derives stance from a cited figure for
+    ``cited_probability`` claims — so it can override this clamp for a claim that is
+    both ``verified=false`` and a provenance-passing ``cited_probability``. That has
+    **zero live instances** (all 5 ``cited_probability`` rows in the prod pool are
+    ``verified=true``), and is arguably right anyway: a checkable market figure is
+    not an interested party's assertion, whoever repeated it.
+    """
+    cap = settings.interested_party_stance_cap
+    for p in predictions:
+        if p.verified is not False:
+            continue
+        if abs(p.stance) <= cap:
+            continue
+        clamped = cap if p.stance > 0 else -cap
+        logger.warning(
+            "event=interested_party_stance_clamped stance=%+.2f -> %+.2f cap=%.2f "
+            "certainty=%.2f evidence_class=%s claim=%r",
+            p.stance, clamped, cap, p.certainty, p.evidence_class, p.claim[:120],
+        )
+        p.stance = clamped
+
+    return predictions
+
+
 def _names_allowlisted_source(text: str) -> Optional[str]:
     """The allowlisted source named in ``text``, or None. Word-boundary and
     case-insensitive; internal spaces match any run of whitespace so a name

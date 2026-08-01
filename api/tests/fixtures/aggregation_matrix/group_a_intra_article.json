@@ -1211,7 +1211,7 @@
         "F9",
         "F20"
       ],
-      "notes": "fact_signal is a claim-weighted mean over the same scored claims as stance, and its qualifying facets (is_occurrence, verified) come from the single dominant claim. Here a precursor fact at +0.8 with is_occurrence=false outweighs a verified occurrence. F9's clamp landed in retro#367 and moved this snapshot's fact_signal 0.625 → 0.25 without touching mean, exactly as predicted. What it does NOT fix: the clamped precursor (0.3) still outranks the occurrence claim (0.1), so the article is still filed with the precursor's facets — that half needs per-claim persistence (F1, retro#364).",
+      "notes": "fact_signal is a claim-weighted mean over the same scored claims as stance, and its qualifying facets (is_occurrence, verified) come from the single dominant claim. Here a precursor fact at +0.8 with is_occurrence=false outweighs a verified occurrence. F9's clamp landed in retro#367 and moved this snapshot's fact_signal 0.625 → 0.25 without touching mean, exactly as predicted. What it does NOT fix: the clamped precursor (0.3) still outranks the occurrence claim (0.1), so the article is still filed with the precursor's facets — that half needs per-claim persistence (F1, retro#364). F20's stance clamp (retro#368) then moved this article's stance 0.5 -> 0.3 without touching any facet, which is why the three invariants below still hold unchanged: the clamp is a location-axis fix and the facet collapse this case is tagged for is untouched.",
       "articles": [
         {
           "source": "alpha",
@@ -1256,14 +1256,14 @@
         "reason": null,
         "articles_used": 1,
         "settled": false,
-        "mean": 0.425,
+        "mean": 0.275,
         "std": 0.0,
-        "ci_low": 0.425,
-        "ci_high": 0.425,
+        "ci_low": 0.275,
+        "ci_high": 0.275,
         "sources": [
           {
             "source": "alpha",
-            "stance": 0.425,
+            "stance": 0.275,
             "certainty": 0.6,
             "credibility_weight": 1.0,
             "evidence_class": "reported_fact",

@@ -29,6 +29,7 @@ from tm.extractor import (
     extract_predictions,
     enforce_anchor_provenance,
     enforce_deadline_arithmetic,
+    enforce_interested_party_stance_cap,
     enforce_precursor_cap,
     enforce_relative_date_resolution,
     enforce_settlement_event_date,
@@ -521,8 +522,15 @@ async def _process_article(
         # stance rewrite) must name a source whose figure could be checked —
         # otherwise one fabricated sentence buys it (retro#369). Runs before
         # resolve_stance_certainty below, so a demoted claim also stops rewriting
-        # stance from its own number. SHADOW until anchor_provenance_enforced.
+        # stance from its own number. Enforced since 2026-08-01.
         extraction.predictions = enforce_anchor_provenance(extraction.predictions)
+        # And an interested party's UNVERIFIED assertion may not vote at full
+        # magnitude: the prompt discounts only its certainty, which cancels under
+        # normalization because a vote's location is stance alone (retro#368).
+        # Runs after the demotion above so the log line carries the resolved class.
+        extraction.predictions = enforce_interested_party_stance_cap(
+            extraction.predictions,
+        )
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", result.url, exc)
         extract_ms = (time.perf_counter() - extract_start) * 1000

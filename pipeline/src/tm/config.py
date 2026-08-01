@@ -33,6 +33,30 @@ class Settings(BaseSettings):
     # literal, changed only by a deliberate policy decision. See retro#367.
     fact_signal_precursor_cap: float = 0.3
 
+    # ── interested-party stance (retro#368, lane-soundness F20) ──────────────
+    # Magnitude ceiling for a claim the extractor marked `verified=false` — the
+    # dominant fact is only ASSERTED by an interested party, not independently
+    # reported. The prompt's interested-party rule caps certainty at 0.5 while
+    # explicitly saying "full stance magnitude still applies"; but a vote's
+    # location in the pool is stance ALONE (`stance_to_prob = (stance+1)/2`,
+    # aggregation.py), so a certainty-only discount is weight-only and cancels
+    # under normalization. This is the location-side half. The weight-side half
+    # — enforcing the certainty cap the prompt already promises, violated on
+    # 30.3% of live unverified rows — is retro#378.
+    #
+    # Keyed on `verified` DIRECTLY, not on an inferred signature. The issue
+    # originally proposed keying on high-|stance| + low-certainty; the prod audit
+    # (2026-08-01, retro#368) killed that: |stance| and certainty are strongly
+    # COUPLED on unverified rows (corr +0.68, vs +0.79 on verified), unverified
+    # rows sit LOWER on both axes, and the proposed key fired on 1 row in 1,418
+    # — which was verified=true. No threshold in the sweep was both precise and
+    # material.
+    #
+    # Same policy-lives-in-config placement as fact_signal_precursor_cap above:
+    # the model judges WHETHER the fact is independently reported, code decides
+    # how far an unverified assertion may push the estimate.
+    interested_party_stance_cap: float = 0.3
+
     # ── cited_probability provenance (retro#369, lane-soundness F4) ──────────
     # `cited_probability` carries the highest class weight (4.0) and forces
     # certainty, with no check on WHO produced the number: one sentence of "a

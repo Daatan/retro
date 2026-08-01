@@ -42,8 +42,14 @@ def _gate_ok():
 
 
 def _prediction(evidence_class=None, stance=0.4, certainty=0.6) -> PredictionExtraction:
+    # A cited_probability claim has to name an allowlisted source or
+    # enforce_anchor_provenance (F4, retro#369) demotes it to `reporting` before
+    # any of these gates run. These tests are about the class weight table, not
+    # about provenance — test_anchor_provenance.py owns that — so the fixture
+    # names one. "Kalshi" is on cited_probability_source_allowlist.
+    quote = "Kalshi traders put it at 20%." if evidence_class == "cited_probability" else "quote"
     return PredictionExtraction(
-        quote="quote", claim="claim", stance=stance, certainty=certainty,
+        quote=quote, claim="claim", stance=stance, certainty=certainty,
         evidence_class=evidence_class,
     )
 

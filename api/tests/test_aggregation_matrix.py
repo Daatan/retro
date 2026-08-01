@@ -293,6 +293,7 @@ def _check_invariants(case: dict, snapshot: dict) -> list[str]:
         "reason": snapshot["reason"], "sources": snapshot["sources"],
         "prob": lambda stance: (stance + 1.0) / 2.0,
         "abs": abs, "len": len, "any": any, "all": all,
+        "sum": sum, "min": min, "max": max,
     }
     failures = []
     for expr in case.get("invariants", []):

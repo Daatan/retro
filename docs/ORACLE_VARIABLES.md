@@ -990,3 +990,36 @@ End-state remains a typed quantity `{value, kind}` (lane-soundness plan R4);
 this guard is the interim protection. Persisted pool rows extracted before
 this fix keep their rewritten stances (daatan does not store qe, so they are
 not recomputable) — the 47 cited_share rows predate it and age out by recency.
+
+## 2026-08-01 — the aggregation trace matrix is committed (retro#370, lane-soundness R8)
+
+Every mechanic described above now has a pinned fixture. `api/tests/fixtures/aggregation_matrix/`
+holds 57 cases in four groups — A intra-article composition (20), B fabrication
+and the defences (17), C pool dynamics (14), D evidence-class boundaries (6) —
+replayed through the real `run_forecast` by `api/tests/test_aggregation_matrix.py`
+with only the gatekeeper/extractor calls, the leaderboard lookup and the clock
+stubbed. Everything else in the chain (the date enforcers, settlement grading and
+settled-replace, `claim_weighted_stance`, `resolve_stance_certainty`,
+`evidence_class_weight`, `pool_sources`, thin-evidence widening, `aggregate_pool`
+with settlement revalidation) executes as production code, so the numbers pin the
+estimator rather than a test-local copy of its arithmetic.
+
+Why fixtures and not a backtest: R8. Agreement with the live system measures
+consistency, not correctness — it certifies any change that preserves an existing
+bug — and at N < 20 resolutions a Brier holdout is noise. So no aggregator or
+architecture change ships on agreement alone; the bar is zero *unexplained*
+fixture movement plus a PR that names the case IDs it intends to move.
+
+Each case carries hand-written directional invariants alongside the generated
+snapshot (the snapshot says what the estimator does, the invariant says what the
+case is about), so a PR cannot regenerate its way out of a behavioural claim. 27
+cases are tagged `known_bad` with the finding that indicts them (F1 ×6, R3 ×5,
+F12 ×4, F2/F4/F16 ×3 each, F9, F20, F23) — those are the snapshots the Phase-1
+PRs are *supposed* to move. Regenerate with
+`AGG_MATRIX_UPDATE=1 uv run pytest tests/test_aggregation_matrix.py`; the git diff
+is the movement report. Full conventions: the README in that fixture directory.
+
+Config is not overridden by the harness — cases run against `settings` as prod has
+it, so a class-weight refit (D3) or a floor change surfaces as declared fixture
+movement. The same case bodies are intended to become F22's extraction-drift
+canary, run against the live extractor on a schedule.

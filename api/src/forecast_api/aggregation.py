@@ -70,14 +70,28 @@ def recency_weight(
     """Exponential recency decay: ``0.5 ** (age_days / half_life_days)``.
 
     ``age_days`` is measured from ``article_date`` up to ``ref_date`` (the newest
-    article / "now"). Returns ``1.0`` (neutral) when either date is missing or
-    unparseable — an article is never penalised merely for lacking a date. The
-    result is floored at ``floor`` so very old articles still count a little.
+    article / "now"). The result is floored at ``floor`` so very old articles
+    still count a little.
+
+    An article with **no usable date decays straight to** ``floor`` (F13, design
+    rule R3: missing data never increases influence). It used to return a
+    neutral 1.0 — the single best multiplier the term can produce — so an
+    article that never said when it was written outweighed an honest, dated
+    three-week-old report by 50×, and the less we knew about a source the more
+    it was worth. The floor is the other end of the same scale: an undated
+    article is treated as maximally stale rather than maximally fresh. It still
+    votes; it just cannot buy influence with an absence.
+
+    ``ref_date`` missing or ``half_life_days <= 0`` is a different thing — the
+    caller has switched recency off, or has no reference point at all — and
+    still returns a neutral 1.0 for every article alike.
     """
     art = _parse_date(article_date)
     ref = _parse_date(ref_date)
-    if art is None or ref is None or half_life_days <= 0:
+    if ref is None or half_life_days <= 0:
         return 1.0
+    if art is None:
+        return floor
     age_days = max(0, (ref - art).days)
     w = 0.5 ** (age_days / half_life_days)
     return max(floor, w)
@@ -328,6 +342,7 @@ def evidence_class_weight(
     *,
     weights: dict[str, float],
     default: float = 0.6,
+    unclassified_cap: float = 0.25,
 ) -> float:
     """Per-claim weight component for the cross-article ``weight`` term (S2
     cutover, retro docs/ORACLE_VARIABLES.md §5).
@@ -344,12 +359,21 @@ def evidence_class_weight(
     18.83%) is exactly this failure; see ``weights["cited_probability"]``.
 
     Unclassified evidence (``evidence_class`` is ``None`` — the extractor omitted
-    it) falls back to the claim's own ``certainty`` instead of a lookup, so
-    partial classification coverage doesn't regress weighting quality for claims
-    the classifier skipped.
+    it) falls back to the claim's own ``certainty``, so partial classification
+    coverage doesn't regress weighting quality for claims the classifier skipped
+    — but **capped at** ``unclassified_cap`` (F10, design rule R3: missing data
+    never increases influence). Certainty and the class table are two
+    incommensurable scales sharing one slot: uncapped, a confident unlabelled
+    claim resolved to 0.95 and out-weighed an identically confident claim the
+    classifier *did* label ``reporting`` (0.6) — silence about the evidence type
+    bought more influence than any answer would have. With the cap at the
+    weakest class's weight, an unlabelled claim can tie the weakest classified
+    one and never beat it, while a hedged unlabelled claim still resolves below
+    that on its own certainty (the conservative direction is preserved, not
+    flattened).
     """
     if evidence_class is None:
-        return certainty
+        return min(certainty, unclassified_cap)
     return weights.get(evidence_class, default)
 
 
@@ -437,11 +461,12 @@ class PoolAggregateResult(NamedTuple):
     per-source signals into a final estimate.
 
     ``insufficient_reason`` is ``None`` on a usable result. When set
-    (``"all_articles_off_topic"`` or ``"no_decisive_signal"``), ``mean``/
-    ``std``/``ci_low``/``ci_high``/``settled`` are not computed (pooling was
-    skipped entirely, matching the live pipeline's early-return) and carry
-    placeholder zeros — callers must check ``insufficient_reason`` first,
-    the same way the live pipeline checks it before touching those fields.
+    (``"all_articles_off_topic"``, ``"no_usable_weight"`` or
+    ``"no_decisive_signal"``), ``mean``/``std``/``ci_low``/``ci_high``/
+    ``settled`` are not computed (pooling was skipped entirely, matching the
+    live pipeline's early-return) and carry placeholder zeros — callers must
+    check ``insufficient_reason`` first, the same way the live pipeline checks
+    it before touching those fields.
     """
     mean: float
     std: float
@@ -511,9 +536,10 @@ def aggregate_pool(
     Returns ``None`` only when there is nothing to pool at all (empty
     input) — an unambiguous "no sources" case every caller handles the same
     way. When sources exist but the set is entirely off-topic
-    (``relevance_weight_floor``) or too thin to trust with
-    ``defer_on_thin_evidence`` set, pooling is skipped and the result's
-    ``insufficient_reason`` says why (``"all_articles_off_topic"`` /
+    (``relevance_weight_floor``), carries no weight at all (F14), or is too
+    thin to trust with ``defer_on_thin_evidence`` set, pooling is skipped and
+    the result's ``insufficient_reason`` says why
+    (``"all_articles_off_topic"`` / ``"no_usable_weight"`` /
     ``"no_decisive_signal"``) — each caller builds its own
     insufficient-data response around that reason (the live pipeline adds
     request-specific fetch/gate/extract diagnostics a pool recompute has no
@@ -526,11 +552,23 @@ def aggregate_pool(
     all_off_topic = relevance_mass < relevance_weight_floor
 
     evidence_mass = sum(weights)
+    # F14 (design rule R3): every source weighs exactly nothing — every one of
+    # them was blocked by credibility, or zeroed by relevance, or both. Pooling
+    # anyway means falling through pool_sources' zero-total guard, which
+    # replaces the weights with a flat 1.0 each: the answer would then come
+    # from precisely the rows the weighting judged worthless, and it would come
+    # out unweighted. Abstain instead — "we have nothing usable" is the honest
+    # reading, and the caller already knows how to render it.
+    no_usable_weight = not all_off_topic and evidence_mass <= 0.0
     thin_evidence = not all_off_topic and evidence_mass < decisiveness_floor
-    no_decisive_signal = thin_evidence and defer_on_thin_evidence
+    no_decisive_signal = thin_evidence and defer_on_thin_evidence and not no_usable_weight
 
-    if all_off_topic or no_decisive_signal:
-        reason = "all_articles_off_topic" if all_off_topic else "no_decisive_signal"
+    if all_off_topic or no_usable_weight or no_decisive_signal:
+        reason = (
+            "all_articles_off_topic" if all_off_topic
+            else "no_usable_weight" if no_usable_weight
+            else "no_decisive_signal"
+        )
         return PoolAggregateResult(
             mean=0.0, std=0.0, ci_low=0.0, ci_high=0.0, settled=False,
             n=len(stances), evidence_mass=evidence_mass, thin_evidence=thin_evidence,

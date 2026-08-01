@@ -165,6 +165,17 @@ class ApiSettings(BaseSettings):
     # claims the classifier skipped. See evidence_class_weight() in
     # aggregation.py.
     evidence_class_weight_default: float = 0.6
+    # Ceiling on that certainty fallback (F10, design rule R3: missing data never
+    # increases influence). Certainty [0,1] and the class table [0.25, 4.0] are
+    # different scales sharing one slot, so an uncapped fallback let a confident
+    # UNCLASSIFIED claim (0.95) out-weigh an identically confident claim the
+    # classifier did label `reporting` (0.6) — see evidence_class_weight().
+    # Set to the weakest class's weight: an unlabelled claim can tie the weakest
+    # classified one, never beat it, and a hedged unlabelled claim still lands
+    # below on its own certainty. Measured blast radius when introduced
+    # (prod, 2026-08-01): 33 of 5729 COMPLETE pool rows are unclassified (0.6%),
+    # all of them above the cap (certainty 0.38–0.74, mean 0.58).
+    evidence_class_weight_unclassified_cap: float = 0.25
     # Syndication dedupe: two search results are treated as the same (re-hosted)
     # story when their title-token Jaccard is >= this. Kept high so genuinely
     # different stories sharing a topic word are not merged; only true re-prints

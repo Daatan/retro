@@ -139,7 +139,10 @@ class TestEvidenceWeightExposure:
             api_settings.evidence_class_weight["cited_probability"],
         )
 
-    async def test_unclassified_source_exposes_its_own_certainty(self, monkeypatch):
+    async def test_unclassified_source_exposes_its_capped_certainty(self, monkeypatch):
+        """R3/F10: an unclassified claim still falls back to its own certainty,
+        capped at the weakest class's weight so silence about the evidence type
+        can never out-weigh an answer (certainty 0.73 → 0.25, not 0.73)."""
         _patch_pipeline(monkeypatch, {
             "source-1": [_prediction(evidence_class=None, certainty=0.73)],
         })
@@ -147,7 +150,21 @@ class TestEvidenceWeightExposure:
             question="evidence weight exposure — unclassified",
             articles=[_article(1)],
         ))
-        assert resp.sources[0].evidence_weight == pytest.approx(0.73)
+        assert resp.sources[0].evidence_weight == pytest.approx(
+            api_settings.evidence_class_weight_unclassified_cap,
+        )
+
+    async def test_hedged_unclassified_source_stays_below_the_cap(self, monkeypatch):
+        """The cap is a ceiling, not a floor — a barely-certain unclassified claim
+        keeps its own lower weight rather than being promoted to 0.25."""
+        _patch_pipeline(monkeypatch, {
+            "source-1": [_prediction(evidence_class=None, certainty=0.08)],
+        })
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="evidence weight exposure — hedged unclassified",
+            articles=[_article(1)],
+        ))
+        assert resp.sources[0].evidence_weight == pytest.approx(0.08)
 
 
 class TestEvidenceClassExposure:

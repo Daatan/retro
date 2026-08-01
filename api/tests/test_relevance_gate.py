@@ -8,6 +8,8 @@ tuples, so these assertions are
 fully deterministic.
 """
 
+from datetime import datetime
+
 import pytest
 from pydantic import ValidationError
 
@@ -39,17 +41,27 @@ class TestGatekeeperRelevanceScore:
 
 # --- run_forecast wiring ----------------------------------------------------
 
-def _preds(stance: float, certainty: float = 0.8):
+def _preds(stance: float, certainty: float = 0.8, evidence_class=None):
     return [PredictionExtraction(
         quote="q", claim="c", stance=stance, certainty=certainty, specificity=1.0, settled=None,
+        evidence_class=evidence_class,
     )]
 
 
-def _wire(monkeypatch, articles, certainty: float = 0.8):
+def _wire(monkeypatch, articles, certainty: float = 0.8, evidence_class=None):
     """Stub search + per-article processing. ``articles`` is a list of
     ``(url, relevance, stance)``; each yields one prediction with that stance
-    and the given certainty (drives the evidence-mass / decisiveness floor)."""
-    results = [SearchResult(title="t", url=url, snippet="s", source=url) for url, _, _ in articles]
+    and the given certainty. Evidence mass (hence the decisiveness floor) comes
+    from ``evidence_class`` when set, and otherwise from certainty capped at
+    ``evidence_class_weight_unclassified_cap`` (R3/F10)."""
+    # Dated "today": recency is a neutral 1.0 for every article, so these tests
+    # isolate the relevance and certainty/class terms. (Leaving the date empty
+    # would now decay every article to recency_floor — R3/F13.)
+    today = datetime.now().strftime("%Y-%m-%d")
+    results = [
+        SearchResult(title="t", url=url, snippet="s", source=url, published_date=today)
+        for url, _, _ in articles
+    ]
     monkeypatch.setattr(forecaster, "search_articles", lambda q, limit: list(results))
 
     async def _no_distill(question):
@@ -66,7 +78,7 @@ def _wire(monkeypatch, articles, certainty: float = 0.8):
     ):
         rel, stance = by_url[result.url]
         timings.append({"url": result.url, "outcome": "ok"})
-        return (result, rel, _preds(stance, certainty), None, None)
+        return (result, rel, _preds(stance, certainty, evidence_class), None, None)
     monkeypatch.setattr(forecaster, "_process_article_bounded", _bounded)
 
 
@@ -156,12 +168,15 @@ class TestThinEvidenceWidensCI:
         assert (resp.ci_high - resp.ci_low) > 1.0
 
     async def test_strong_pool_keeps_tight_ci(self, monkeypatch):
-        # Full certainty + high relevance clears the floor: no widening, a forecast
-        # with a normal (tight) CI.
+        # Classified reported_fact (weight 1.0) + high relevance clears the floor:
+        # no widening, a forecast with a normal (tight) CI. The class is what makes
+        # the pool strong post-S2-cutover — an equally confident UNCLASSIFIED pool is
+        # capped at 0.25 per claim (R3/F10) and lands under the floor, which is the
+        # intended reading of "we do not know what kind of evidence this is".
         _wire(monkeypatch, [
             ("http://a.com/1", 0.9, 0.4),
             ("http://b.com/2", 0.9, 0.5),
-        ], certainty=0.9)
+        ], certainty=0.9, evidence_class="reported_fact")
         resp = await forecaster.run_forecast(ForecastRequest(question="strong probe e2?"))
 
         assert resp.insufficient_data is False

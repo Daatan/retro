@@ -945,6 +945,7 @@ async def _run_forecast_inner(
                 p.evidence_class, p.certainty,
                 weights=settings.evidence_class_weight,
                 default=settings.evidence_class_weight_default,
+                unclassified_cap=settings.evidence_class_weight_unclassified_cap,
             )
             for p in predictions
         ) / len(predictions)
@@ -1078,6 +1079,9 @@ async def _run_forecast_inner(
         if agg is not None and agg.insufficient_reason == "all_articles_off_topic":
             outcome_counts["all_low_relevance"] = len(relevances)
             reason = "all_articles_off_topic"
+        elif agg is not None and agg.insufficient_reason == "no_usable_weight":
+            outcome_counts["zero_weight_pool"] = len(all_weights)
+            reason = "no_usable_weight"
         elif agg is not None and agg.insufficient_reason == "no_decisive_signal":
             outcome_counts["low_evidence_mass"] = len(all_weights)
             reason = "no_decisive_signal"
@@ -1240,7 +1244,15 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             s.published_date, ref_date,
             settings.recency_half_life_days, floor=settings.recency_floor,
         )
-        evidence_weight = s.evidence_weight if s.evidence_weight is not None else s.certainty
+        # A row with no stored evidence_weight (legacy, pre-S2-cutover) falls back
+        # to its certainty under the same R3 cap the live path applies to an
+        # unclassified claim — the two are the same missing-data shape, and an
+        # uncapped fallback would let the rows we know least about weigh most
+        # (F10; 22 of 5729 prod COMPLETE rows, all above the cap, 2026-08-01).
+        evidence_weight = (
+            s.evidence_weight if s.evidence_weight is not None
+            else min(s.certainty, settings.evidence_class_weight_unclassified_cap)
+        )
         weight = s.credibility_weight * evidence_weight * rweight * (s.relevance_score ** 2)
         stances.append(s.stance)
         weights.append(weight)

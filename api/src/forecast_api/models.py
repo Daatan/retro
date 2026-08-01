@@ -222,7 +222,7 @@ class ForecastResponse(BaseModel):
     sources: list[SourceSignal]
     placeholder: bool = Field(default=False, description="True if this is a stub response (pipeline not yet wired)")
     insufficient_data: bool = Field(default=False, description="True when the forecast could not be computed (no usable articles). mean/ci are NOT a real estimate — render 'couldn't answer', not 0%.")
-    reason: Optional[str] = Field(default=None, description="When insufficient_data: why. One of no_search_results | all_articles_off_topic | no_decisive_signal | all_fetches_failed | extraction_errors | no_usable_predictions | timeout | no_result. (no_decisive_signal only when defer_on_thin_evidence is set; otherwise thin evidence yields a wide-CI estimate.)")
+    reason: Optional[str] = Field(default=None, description="When insufficient_data: why. One of no_search_results | all_articles_off_topic | no_usable_weight | no_decisive_signal | all_fetches_failed | extraction_errors | no_usable_predictions | timeout | no_result. (no_usable_weight: every surviving source carried zero aggregation weight — blocked by credibility and/or zeroed by relevance — so there was nothing to pool. no_decisive_signal only when defer_on_thin_evidence is set; otherwise thin evidence yields a wide-CI estimate.)")
     articles_found: int = Field(default=0, description="How many search results were considered before filtering")
     outcome_counts: dict[str, int] = Field(default_factory=dict, description="Per-article outcome histogram (gate_rejected, gate_error, empty_text, extract_error, unhandled_error, ok, …) — explains an empty forecast")
     provider: str = Field(default="", description="Search provider that served the underlying article search. May be a pseudo-provider: 'caller' (articles supplied by the request), 'search_cache', or 'none'.")
@@ -267,7 +267,7 @@ class PoolAggregateResponse(BaseModel):
     articles_used: int
     settled: bool = Field(default=False, description="Same settlement-override semantics as ForecastResponse.settled")
     insufficient_data: bool = Field(default=False, description="True when no usable estimate could be pooled. mean/ci are NOT a real estimate.")
-    reason: Optional[str] = Field(default=None, description="When insufficient_data: no_sources | all_articles_off_topic | no_decisive_signal")
+    reason: Optional[str] = Field(default=None, description="When insufficient_data: no_sources | all_articles_off_topic | no_usable_weight | no_decisive_signal")
     settlement_suppressed: bool = Field(default=False, description="True when a would-be settlement pin was suppressed — 'settlement_conflict' (valid settled votes in both directions, revalidation path) or 'settlement_direction' (temporal guard, legacy path). Diagnostics only; the pooled mean stands.")
     settlement_suppression_reason: Optional[str] = Field(default=None, description="Why the pin was suppressed, when settlement_suppressed")
     settlement_votes_demoted: int = Field(default=0, description="How many of the request's settled votes failed aggregation-time revalidation (settlement_vote_validity) and were counted as ordinary evidence instead. Per-vote reasons are logged server-side (event=settlement_vote_demoted).")

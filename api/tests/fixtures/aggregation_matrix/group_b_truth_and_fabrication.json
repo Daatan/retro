@@ -1914,12 +1914,12 @@
     },
     {
       "id": "B16",
-      "name": "when every source is blocked, blocked sources decide the answer",
+      "name": "when every source is blocked, the pool abstains",
       "traces": [
         "R3",
         "F14"
       ],
-      "notes": "Both articles come from credibility-0 outlets, so every weight is 0 — and pool_sources' zero-total guard replaces the weights with a flat 1.0 each rather than declining to answer. The estimate is then the unweighted opinion of exactly the sources the leaderboard rejected. The pool does self-report as thin (mass 0, so the CI is widened to its maximum), which is the only signal a caller gets.",
+      "notes": "Fixed by the R3 bundle (retro#366): both articles come from credibility-0 outlets, so every weight is 0. Pooling used to fall through pool_sources' zero-total guard, which replaces the weights with a flat 1.0 each — the answer (+0.824) came, unweighted, from exactly the rows the leaderboard had rejected. aggregate_pool now abstains first with reason `no_usable_weight`; a pool with no weight at all is not thin evidence, it is no evidence.",
       "articles": [
         {
           "source": "alpha",
@@ -1949,60 +1949,20 @@
         }
       ],
       "invariants": [
-        "sources[0]['weight'] == 0.0",
-        "sources[1]['weight'] == 0.0",
-        "insufficient_data is False",
-        "mean > 0.7"
+        "insufficient_data is True",
+        "reason == 'no_usable_weight'",
+        "n == 0"
       ],
-      "known_bad": {
-        "finding": "R3",
-        "expected_behavior": "Zero total weight is missing evidence, not a licence to weight everything equally: the pool should abstain (or defer) rather than answer from rows it has already valued at nothing."
-      },
       "expect": {
-        "insufficient_data": false,
-        "reason": null,
-        "articles_used": 2,
+        "insufficient_data": true,
+        "reason": "no_usable_weight",
+        "articles_used": 0,
         "settled": false,
-        "mean": 0.8242,
-        "std": 0.9,
-        "ci_low": -0.2184,
-        "ci_high": 1.0,
-        "sources": [
-          {
-            "source": "alpha",
-            "stance": 0.9,
-            "certainty": 0.9,
-            "credibility_weight": 0.0,
-            "evidence_class": "reporting",
-            "evidence_weight": 0.6,
-            "recency_weight": 1.0,
-            "relevance_score": 1.0,
-            "weight": 0.0,
-            "settled": null,
-            "settlement_event_date": null,
-            "fact_signal": null,
-            "is_occurrence": null,
-            "verified": null,
-            "author_lean": null
-          },
-          {
-            "source": "bravo",
-            "stance": 0.7,
-            "certainty": 0.9,
-            "credibility_weight": 0.0,
-            "evidence_class": "reporting",
-            "evidence_weight": 0.6,
-            "recency_weight": 1.0,
-            "relevance_score": 1.0,
-            "weight": 0.0,
-            "settled": null,
-            "settlement_event_date": null,
-            "fact_signal": null,
-            "is_occurrence": null,
-            "verified": null,
-            "author_lean": null
-          }
-        ]
+        "mean": 0.0,
+        "std": 0.0,
+        "ci_low": -0.2,
+        "ci_high": 0.2,
+        "sources": []
       }
     },
     {

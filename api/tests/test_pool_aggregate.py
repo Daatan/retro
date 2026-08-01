@@ -49,6 +49,34 @@ class TestEmptyAndInsufficient:
         assert resp.reason == "all_articles_off_topic"
 
 
+class TestZeroWeightPool:
+    async def test_all_zero_weight_sources_abstain(self):
+        """R3/F14 through the endpoint: every row blocked by credibility, so
+        nothing carries weight. The recompute must abstain rather than answer
+        from the rows it just valued at zero."""
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[
+                _source(stance=0.9, credibility_weight=0.0),
+                _source(stance=0.7, credibility_weight=0.0),
+            ],
+        ))
+        assert resp.insufficient_data is True
+        assert resp.reason == "no_usable_weight"
+        assert resp.articles_used == 2
+
+    async def test_legacy_row_without_evidence_weight_is_capped(self):
+        """R3/F10 on the recompute path: a pre-S2-cutover row with no stored
+        evidence_weight falls back to certainty under the same cap the live path
+        applies to an unclassified claim, so the rows we know least about cannot
+        weigh most. certainty 0.9 → 0.25, so this pool lands below the
+        decisiveness floor and self-reports with a widened CI."""
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[_source(stance=0.6, certainty=0.9, evidence_weight=None)],
+        ))
+        assert resp.insufficient_data is False
+        assert (resp.ci_high - resp.ci_low) > 0.5
+
+
 class TestBasicPooling:
     async def test_pools_a_single_source_toward_its_own_stance(self):
         resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(

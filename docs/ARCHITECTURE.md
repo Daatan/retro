@@ -557,7 +557,7 @@ POST /forecast
 
 When the pipeline can't compute a real estimate it returns `insufficient_data: true`
 with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
-`no_decisive_signal`) instead of a forecast — see "Deferral / insufficient-data" below.
+`no_usable_weight`, `no_decisive_signal`) instead of a forecast — see "Deferral / insufficient-data" below.
 
 ### Pipeline
 
@@ -614,7 +614,7 @@ with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
 
 ### Deferral / insufficient-data
 
-Aggregation enforces two safety floors (`api/src/forecast_api/config.py`):
+Aggregation enforces three safety floors (`api/src/forecast_api/config.py`):
 
 - **`relevance_weight_floor` (0.05)** — if the summed relevance mass
   (Σ `relevance_score²` over surviving articles) is below this, the whole set is
@@ -628,6 +628,24 @@ Aggregation enforces two safety floors (`api/src/forecast_api/config.py`):
   low-confidence wide-band estimate rather than an abstention. Setting
   `defer_on_thin_evidence=True` restores the old behavior — a thin pool then
   returns `insufficient_data=true`, `reason="no_decisive_signal"` instead.
+- **zero total weight** — if every surviving source weighs exactly nothing
+  (blocked by credibility, zeroed by relevance, or both) the pool abstains with
+  `reason="no_usable_weight"`, regardless of `defer_on_thin_evidence`. Pooling
+  anyway would fall through `pool_sources`' zero-total guard, which replaces the
+  weights with a flat 1.0 each — the answer would then come, unweighted, from
+  exactly the rows the weighting judged worthless (lane-soundness F14, design
+  rule R3). A pool with no weight at all is not thin evidence, it is no evidence.
+
+Design rule **R3 — missing data never increases influence** — governs the two
+absences that feed those floors, so neither can buy influence:
+
+- an article with **no usable date** decays to `recency_floor` rather than
+  returning a neutral 1.0 (F13);
+- a claim with **no `evidence_class`** still falls back to its own certainty, but
+  capped at `evidence_class_weight_unclassified_cap` (0.25, the weakest class's
+  weight), so an unlabelled claim can tie the weakest labelled one and never beat
+  it (F10). The same cap applies on the recompute path to a persisted row with no
+  stored `evidence_weight`.
 
 Hedged/low-certainty articles are no longer dropped pre-aggregation — `certainty`
 is purely a downweighting factor in `weight = credibility · certainty · recency ·

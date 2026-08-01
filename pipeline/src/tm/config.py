@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     # independent of caching) surfaced while verifying this.
     enable_prompt_cache: bool = True
 
+    # Magnitude ceiling for a PRECURSOR fact (`is_occurrence=false`): the largest
+    # |fact_signal| a fact that merely precedes the event may carry. The extractor
+    # prompt has taught this number since the fact lane shipped, but a prompt is
+    # guidance — enforce_precursor_cap (extractor.py) is what makes it true. Lives
+    # here, not in the prompt, because magnitude is estimator policy: the same
+    # numbers-out-of-prompts direction as the evidence_class weight table
+    # (forecast_api/config.py) and retro#354's D1. Value is the prompt's own
+    # literal, changed only by a deliberate policy decision. See retro#367.
+    fact_signal_precursor_cap: float = 0.3
+
     # Optional: override API base/key (for Ollama or other OpenAI-compatible backends)
     model_api_base: str = ""
     model_api_key: str = ""

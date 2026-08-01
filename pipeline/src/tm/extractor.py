@@ -957,6 +957,55 @@ def enforce_settlement_event_date(
     return predictions
 
 
+def enforce_precursor_cap(
+    predictions: list[PredictionExtraction],
+) -> list[PredictionExtraction]:
+    """A precursor's ``fact_signal`` may not exceed the precursor cap.
+
+    The OCCURRENCE-vs-PRECURSOR rule in the prompt caps a fact that merely precedes
+    the event at ``|0.3|`` "no matter how sustained, repeated, or intensifying it is
+    — a conflict escalating over many days, or a preparation repeated night after
+    night, is still not the discrete event happening". Nothing enforced it. A live
+    audit of the pool (2026-08-01, retro#367) found **269 of 1101** precursor rows —
+    24.4% — above the cap, reaching ``|0.90|``; and since the stored value is the
+    claim-weighted MEAN over an article's claims while ``is_occurrence`` comes from
+    the single dominant one, that 24.4% is a floor on the per-claim breach rate.
+    Four more over-cap emissions were observed directly during the WS5/WS5b A/B runs
+    (recorded on retro#354).
+
+    So the model reports *whether* the fact is the event; the magnitude contract is
+    enforced here. Only magnitude moves — the sign a precursor points is a genuine
+    judgement, how far it may push the estimate is policy (``fact_signal_precursor_cap``,
+    config.py). Every other field is untouched: a clamped claim keeps its stance,
+    certainty and facets and votes exactly as before in the stance lane.
+
+    Runs before fusion, which fixes a second-order effect too: the dominant fact —
+    the max-``|fact_signal|`` claim, whose facets are the ones stored for the whole
+    article (forecaster.py) — can no longer be captured by an over-cap precursor
+    outranking a genuine occurrence claim.
+
+    Fail-open in every direction: a null ``fact_signal``, or an ``is_occurrence`` that
+    is null (the extractor did not judge) or true (the fact IS the event), leaves the
+    claim exactly as the model returned it. Only an explicitly-marked precursor is in
+    scope — this never invents a judgement the model declined to make.
+    """
+    cap = settings.fact_signal_precursor_cap
+    for p in predictions:
+        if p.fact_signal is None or p.is_occurrence is not False:
+            continue
+        if abs(p.fact_signal) <= cap:
+            continue
+        clamped = cap if p.fact_signal > 0 else -cap
+        logger.warning(
+            "event=precursor_cap_clamped fact_signal=%+.2f -> %+.2f cap=%.2f "
+            "verified=%s claim=%r",
+            p.fact_signal, clamped, cap, p.verified, p.claim[:120],
+        )
+        p.fact_signal = clamped
+
+    return predictions
+
+
 # A claim text asserting a deontic/certainty marker ("is mandatory", "must") reads as
 # supporting its own occurrence; one asserting an explicit negation/refusal reads as
 # opposing it. Deliberately small and literal — this is an observability signal, not a

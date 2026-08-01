@@ -1208,7 +1208,7 @@
         "F9",
         "F20"
       ],
-      "notes": "fact_signal is a claim-weighted mean over the same scored claims as stance, and its qualifying facets (is_occurrence, verified) come from the single dominant claim. Here a precursor fact at +0.8 with is_occurrence=false outweighs a verified occurrence — F9's clamp is what should stop that, and it will move this snapshot's fact_signal without touching mean.",
+      "notes": "fact_signal is a claim-weighted mean over the same scored claims as stance, and its qualifying facets (is_occurrence, verified) come from the single dominant claim. Here a precursor fact at +0.8 with is_occurrence=false outweighs a verified occurrence. F9's clamp landed in retro#367 and moved this snapshot's fact_signal 0.625 → 0.25 without touching mean, exactly as predicted. What it does NOT fix: the clamped precursor (0.3) still outranks the occurrence claim (0.1), so the article is still filed with the precursor's facets — that half needs per-claim persistence (F1, retro#364).",
       "articles": [
         {
           "source": "alpha",
@@ -1240,13 +1240,13 @@
         }
       ],
       "invariants": [
-        "sources[0]['fact_signal'] > 0.5",
+        "sources[0]['fact_signal'] <= 0.3",
         "sources[0]['is_occurrence'] is False",
         "sources[0]['verified'] is False"
       ],
       "known_bad": {
-        "finding": "F9",
-        "expected_behavior": "|fact_signal| from a non-occurrence precursor must be clamped below the occurrence cap, and the dominant-claim facet collapse should not let an unverified precursor speak for a verified occurrence."
+        "finding": "F1",
+        "expected_behavior": "F9's magnitude half is fixed (retro#367): a precursor can no longer carry more than the cap into the article mean, and the first invariant now pins that. What remains: the dominant-claim facet collapse still lets the precursor speak for the whole article — clamped it is 0.3 against the occurrence claim's 0.1, so is_occurrence=false / verified=false are what get stored for an article that does contain a verified occurrence. Only per-claim persistence fixes that (retro#364)."
       },
       "expect": {
         "insufficient_data": false,
@@ -1270,7 +1270,7 @@
             "weight": 0.8,
             "settled": null,
             "settlement_event_date": null,
-            "fact_signal": 0.625,
+            "fact_signal": 0.25,
             "is_occurrence": false,
             "verified": false,
             "author_lean": null

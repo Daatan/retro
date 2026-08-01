@@ -1,0 +1,154 @@
+{
+  "group": "A",
+  "title": "Intra-article composition — claims to one article signal",
+  "cases": [
+    {
+      "id": "A1",
+      "name": "single claim passes through unchanged",
+      "traces": [
+        "M1"
+      ],
+      "notes": "The degenerate case: one claim, neutral credibility, same-day article, full relevance. Its stance is the article's stance and the pooled mean is that stance back through the logit round-trip.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['stance'] - 0.6) < 1e-9",
+        "abs(mean - 0.6) < 1e-6",
+        "sources[0]['recency_weight'] == 1.0"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.6,
+        "std": 0.0,
+        "ci_low": 0.6,
+        "ci_high": 0.6,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A2",
+      "name": "certainty weighting lets the decisive claim dominate the hedged one",
+      "traces": [
+        "M1"
+      ],
+      "notes": "Two opposing claims in one article: decisive +0.9 at certainty 0.9, hedged -0.9 at certainty 0.1. A flat mean would cancel to 0; certainty weighting must land near the decisive claim.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.9,
+              "certainty": 0.9,
+              "evidence_class": "reporting"
+            },
+            {
+              "stance": -0.9,
+              "certainty": 0.1,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['stance'] > 0.6",
+        "mean > 0.6"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.72,
+        "std": 0.0,
+        "ci_low": 0.72,
+        "ci_high": 0.72,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.72,
+            "certainty": 0.5,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A3",
+      "name": "off-topic-only pool abstains rather than estimating",
+      "traces": [
+        "R3"
+      ],
+      "notes": "Relevance 0.2 on a single article gives relevance_mass 0.04, below relevance_weight_floor — the pipeline must abstain with all_articles_off_topic instead of reporting a confident stance from tangential coverage.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 0.2,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.9,
+              "certainty": 0.9,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "insufficient_data is True",
+        "reason == 'all_articles_off_topic'"
+      ],
+      "expect": {
+        "insufficient_data": true,
+        "reason": "all_articles_off_topic",
+        "articles_used": 0,
+        "settled": false,
+        "mean": 0.0,
+        "std": 0.0,
+        "ci_low": -0.2,
+        "ci_high": 0.2,
+        "sources": []
+      }
+    }
+  ]
+}

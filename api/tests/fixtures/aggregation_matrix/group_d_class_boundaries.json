@@ -19,6 +19,7 @@
           "credibility": 1.0,
           "claims": [
             {
+              "quote": "Opta's model gives it a 50% chance.",
               "stance": 0.5,
               "certainty": 0.7,
               "evidence_class": "cited_probability"
@@ -379,6 +380,7 @@
           "credibility": 1.0,
           "claims": [
             {
+              "quote": "Opta's model gives it a 20% chance.",
               "stance": -0.6,
               "certainty": 0.9,
               "quantitative_estimate": 0.2,
@@ -393,6 +395,7 @@
           "credibility": 1.0,
           "claims": [
             {
+              "quote": "Opta's model gives it a 20% chance.",
               "stance": -0.6,
               "certainty": 0.9,
               "quantitative_estimate": 0.2,

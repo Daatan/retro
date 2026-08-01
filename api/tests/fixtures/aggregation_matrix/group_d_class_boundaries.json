@@ -185,13 +185,13 @@
     },
     {
       "id": "D2",
-      "name": "a claim the classifier skipped outranks one it classified",
+      "name": "a claim the classifier skipped cannot outrank one it classified",
       "traces": [
         "R3",
         "F1",
         "F10"
       ],
-      "notes": "Unclassified evidence falls back to its own certainty, so a confident claim the extractor never labelled (certainty 0.95 → weight 0.95) outweighs an identically confident claim it did label as reporting (0.6). Silence about the evidence type buys more influence than the answer would have.",
+      "notes": "Fixed by the R3 bundle (retro#366): the unclassified fallback used to resolve to raw certainty, so a confident unlabelled claim (0.95) out-weighed an identically confident `reporting` claim (0.6) and dragged the pool to +0.193 — silence about the evidence type bought more influence than any answer would have. Capped at the weakest class's weight (0.25), the labelled claim now decides the sign.",
       "articles": [
         {
           "source": "alpha",
@@ -221,23 +221,19 @@
       ],
       "invariants": [
         "sources[0]['evidence_class'] is None",
-        "abs(sources[0]['evidence_weight'] - 0.95) < 1e-9",
-        "sources[0]['weight'] > sources[1]['weight']",
-        "mean > 0"
+        "abs(sources[0]['evidence_weight'] - 0.25) < 1e-9",
+        "sources[0]['weight'] <= sources[1]['weight']",
+        "mean < 0"
       ],
-      "known_bad": {
-        "finding": "R3",
-        "expected_behavior": "A missing evidence_class is missing data. The fallback may not exceed what the classifier would have granted — under R3 it should sit at or below the weakest plausible class, never above a classified peer."
-      },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 2,
         "settled": false,
-        "mean": 0.1934,
-        "std": 0.6828,
-        "ci_low": -0.753,
-        "ci_high": 0.98,
+        "mean": -0.3427,
+        "std": 0.6402,
+        "ci_low": -0.98,
+        "ci_high": 0.5446,
         "sources": [
           {
             "source": "alpha",
@@ -245,10 +241,10 @@
             "certainty": 0.95,
             "credibility_weight": 1.0,
             "evidence_class": null,
-            "evidence_weight": 0.95,
+            "evidence_weight": 0.25,
             "recency_weight": 1.0,
             "relevance_score": 1.0,
-            "weight": 0.95,
+            "weight": 0.25,
             "settled": null,
             "settlement_event_date": null,
             "fact_signal": null,

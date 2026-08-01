@@ -1023,3 +1023,51 @@ Config is not overridden by the harness — cases run against `settings` as prod
 it, so a class-weight refit (D3) or a floor change surfaces as declared fixture
 movement. The same case bodies are intended to become F22's extraction-drift
 canary, run against the live extractor on a schedule.
+
+## 2026-08-01 — missing data no longer increases influence (retro#366, lane-soundness R3: F13+F10+F14)
+
+Three places resolved an absence to the *most favourable* value available. Each
+was found separately; they are one anti-pattern, so they ship as one PR.
+
+- **F13 — missing article date.** `recency_weight` returned a neutral **1.0**
+  when the date was missing or unparseable: the single best multiplier the term
+  can produce. An undated article therefore outweighed an honest, dated
+  three-week-old report by 50×, and the less we knew about a source the more it
+  was worth. It now decays straight to `recency_floor` (0.02) — treated as
+  maximally stale rather than maximally fresh. A missing *reference* date or
+  `half_life_days <= 0` is a different thing (recency switched off) and still
+  returns 1.0 for every article alike.
+- **F10 — missing `evidence_class`, pool side.** The unclassified fallback
+  resolved to the claim's own `certainty`, uncapped. Certainty [0, 1] and the
+  class table [0.25, 4.0] are incommensurable scales sharing one slot, so a
+  confident unlabelled claim (0.95) out-weighed an identically confident claim
+  the classifier *did* label `reporting` (0.6). The fallback is now
+  `min(certainty, evidence_class_weight_unclassified_cap)` with the cap at 0.25,
+  the weakest class's weight: an unlabelled claim can tie the weakest labelled
+  one and never beat it, while a hedged unlabelled claim still resolves below
+  that on its own certainty. The same cap applies in `run_pool_aggregate` to a
+  legacy row with no stored `evidence_weight` — the same missing-data shape.
+  (F10's *fusion-side* half — class weights weighting claims within an article —
+  stays deferred: the destination architecture deletes the fusion step.)
+- **F14 — zero-weight pool.** `pool_sources` has a zero-total guard that
+  replaces the weights with a flat 1.0 each, so a pool in which every source was
+  blocked by credibility and/or zeroed by relevance produced an *unweighted*
+  answer from exactly the rows the weighting judged worthless. `aggregate_pool`
+  now abstains first with `reason="no_usable_weight"`, regardless of
+  `defer_on_thin_evidence` — no weight at all is not thin evidence, it is no
+  evidence. `all_articles_off_topic` still takes precedence when both hold.
+
+Measured before choosing constants (prod, 2026-08-01, 5729 COMPLETE evidence-pool
+rows): **4 rows (0.1%)** carry no `published_date`, touching 1 of 115 pools;
+**33 rows (0.6%)** are unclassified and *all* of them sit above the 0.25 cap
+(certainty 0.38–0.74, mean 0.58); **22 rows (0.4%)** have no stored
+`evidence_weight`, all above the cap; **0 of 115 pools** have zero total weight,
+so F14 is purely defensive on today's traffic. The blast radius is small in every
+direction — these are guards against the shapes that are rare precisely because
+they are pathological.
+
+R8 protocol: four matrix cases moved, all declared — **C6** (F13, the undated
+article now ties the stale dated one at the floor instead of beating it 50-to-1),
+**D2** and **A14** (F10, the capped fallback), **B16** (F14, now abstains). Their
+`known_bad` tags are removed; the fixtures now pin the fixed behaviour and the
+invariants state the R3 rule directly. No other case moved.

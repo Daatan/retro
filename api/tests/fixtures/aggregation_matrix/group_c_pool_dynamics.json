@@ -418,12 +418,12 @@
     },
     {
       "id": "C6",
-      "name": "an undated article outweighs a dated stale one",
+      "name": "an undated article cannot outweigh a dated one",
       "traces": [
         "R3",
         "F13"
       ],
-      "notes": "recency_weight returns a neutral 1.0 when the date is missing, so an article that never said when it was written is weighted like today's news and beats an honest, dated three-week-old report 50-to-1. Missing metadata increases influence — the exact shape R3 forbids.",
+      "notes": "Fixed by the R3 bundle (retro#366): recency_weight used to return a neutral 1.0 when the date was missing, so an article that never said when it was written beat an honest dated three-week-old report 50-to-1 and the pool read +0.784 toward it. An undated article now decays straight to recency_floor, which is where the dated 2026-01-01 article already sat: both weigh 0.012, they cancel, and the mean is 0.0. Missing metadata can no longer raise influence — the invariant below states that directly.",
       "articles": [
         {
           "source": "alpha",
@@ -453,22 +453,19 @@
         }
       ],
       "invariants": [
-        "sources[0]['recency_weight'] == 1.0",
-        "mean > 0.5"
+        "sources[0]['recency_weight'] == 0.02",
+        "sources[0]['weight'] <= sources[1]['weight']",
+        "abs(mean) < 1e-9"
       ],
-      "known_bad": {
-        "finding": "R3",
-        "expected_behavior": "An undated article must not be weighted above a dated one. R3's rule is that absent metadata can only lower influence, never raise it."
-      },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 2,
         "settled": false,
-        "mean": 0.7839,
-        "std": 0.2224,
-        "ci_low": 0.4758,
-        "ci_high": 0.98,
+        "mean": 0.0,
+        "std": 0.8568,
+        "ci_low": -1.0,
+        "ci_high": 1.0,
         "sources": [
           {
             "source": "alpha",
@@ -477,9 +474,9 @@
             "credibility_weight": 1.0,
             "evidence_class": "reporting",
             "evidence_weight": 0.6,
-            "recency_weight": 1.0,
+            "recency_weight": 0.02,
             "relevance_score": 1.0,
-            "weight": 0.6,
+            "weight": 0.012,
             "settled": null,
             "settlement_event_date": null,
             "fact_signal": null,

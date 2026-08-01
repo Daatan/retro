@@ -109,10 +109,28 @@ class TestRecencyWeight:
         # 120 days is well past where decay < floor
         assert recency_weight("2026-02-15", "2026-06-15", 7.0, floor=0.02) == 0.02
 
-    def test_missing_date_is_neutral(self):
-        assert recency_weight(None, "2026-06-15", 7.0) == 1.0
+    def test_missing_article_date_decays_to_the_floor(self):
+        # R3/F13: an undated article is treated as maximally stale, not maximally
+        # fresh. It used to return a neutral 1.0 — the best multiplier the term can
+        # produce — so knowing less about a source made it worth more.
+        assert recency_weight(None, "2026-06-15", 7.0, floor=0.02) == 0.02
+        assert recency_weight("", "2026-06-15", 7.0, floor=0.02) == 0.02
+        assert recency_weight("not-a-date", "2026-06-15", 7.0, floor=0.02) == 0.02
+
+    def test_undated_never_outweighs_a_dated_article(self):
+        # The invariant behind F13, stated directly: whatever date an article
+        # carries, having one can only help it relative to having none.
+        undated = recency_weight(None, "2026-06-15", 7.0, floor=0.02)
+        for dated in ("2026-06-15", "2026-06-08", "2026-05-16", "2026-02-15"):
+            assert recency_weight(dated, "2026-06-15", 7.0, floor=0.02) >= undated
+
+    def test_recency_disabled_stays_neutral_for_everyone(self):
+        # A missing REFERENCE date, or a non-positive half-life, means the caller
+        # has switched recency off — that is not an article-level absence, and it
+        # must not be confused with one.
         assert recency_weight("2026-06-15", None, 7.0) == 1.0
-        assert recency_weight("not-a-date", "2026-06-15", 7.0) == 1.0
+        assert recency_weight(None, None, 7.0) == 1.0
+        assert recency_weight("2026-06-08", "2026-06-15", 0.0) == 1.0
 
     def test_future_article_is_not_boosted(self):
         # age is floored at 0, so a future date is treated as "today"
@@ -304,11 +322,25 @@ class TestEvidenceClassWeight:
         "opinion": 0.25,
     }
 
-    def test_unclassified_falls_back_to_certainty(self):
-        # evidence_class omitted by the extractor — don't regress weighting
-        # quality for claims the classifier skipped.
-        assert evidence_class_weight(None, 0.73, weights=self.WEIGHTS) == 0.73
-        assert evidence_class_weight(None, 0.0, weights=self.WEIGHTS) == 0.0
+    def test_unclassified_falls_back_to_certainty_under_a_cap(self):
+        # evidence_class omitted by the extractor — still fall back to certainty so
+        # partial classifier coverage doesn't flatten everything, but cap it (R3/F10):
+        # certainty and the class table are different scales sharing one slot.
+        assert evidence_class_weight(None, 0.73, weights=self.WEIGHTS, unclassified_cap=0.25) == 0.25
+        # Below the cap the fallback is unchanged — the conservative direction is
+        # preserved, not flattened.
+        assert evidence_class_weight(None, 0.1, weights=self.WEIGHTS, unclassified_cap=0.25) == 0.1
+        assert evidence_class_weight(None, 0.0, weights=self.WEIGHTS, unclassified_cap=0.25) == 0.0
+
+    def test_unclassified_never_outweighs_any_classified_claim(self):
+        # The invariant behind F10, stated directly, at the prod cap.
+        cap = api_settings.evidence_class_weight_unclassified_cap
+        weakest = min(self.WEIGHTS.values())
+        assert cap <= weakest
+        for certainty in (0.0, 0.25, 0.6, 0.9, 1.0):
+            unclassified = evidence_class_weight(None, certainty, weights=self.WEIGHTS, unclassified_cap=cap)
+            for cls in self.WEIGHTS:
+                assert unclassified <= evidence_class_weight(cls, certainty, weights=self.WEIGHTS)
 
     def test_known_classes_use_the_lookup_table(self):
         for cls, expected in self.WEIGHTS.items():
@@ -449,6 +481,53 @@ class TestAggregatePool:
     def test_all_off_topic_returns_insufficient_reason(self):
         result = aggregate_pool(
             [0.5, 0.5], [1.0, 1.0], [0.05, 0.05], [False, False],
+            **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.insufficient_reason == "all_articles_off_topic"
+
+    def test_zero_total_weight_abstains(self):
+        # R3/F14: every source weighs nothing (blocked by credibility, zeroed by
+        # relevance, or both). Pooling anyway would fall through pool_sources'
+        # zero-total guard, which replaces the weights with a flat 1.0 each — the
+        # answer would come, unweighted, from exactly the rows the weighting judged
+        # worthless. Abstain instead.
+        result = aggregate_pool(
+            [0.9, 0.7], [0.0, 0.0], [1.0, 1.0], [False, False],
+            **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.insufficient_reason == "no_usable_weight"
+        assert result.n == 2
+        assert result.evidence_mass == 0.0
+
+    def test_zero_total_weight_abstains_even_with_defer_off(self):
+        # Distinct from thin evidence: defer_on_thin_evidence controls whether a
+        # THIN pool answers with a wide CI, and it is off in prod. A pool with no
+        # weight at all is not thin evidence, it is no evidence.
+        result = aggregate_pool(
+            [0.9], [0.0], [1.0], [False],
+            **_aggregate_kwargs(defer_on_thin_evidence=False),
+        )
+        assert result is not None
+        assert result.insufficient_reason == "no_usable_weight"
+
+    def test_one_weighted_source_among_zeroes_still_pools(self):
+        # The guard is for a pool with NO usable weight — a single surviving source
+        # is thin, not absent, and must still produce an estimate.
+        result = aggregate_pool(
+            [0.9, -0.9], [0.0, 0.6], [1.0, 1.0], [False, False],
+            **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.insufficient_reason is None
+        assert result.mean < 0
+
+    def test_off_topic_takes_precedence_over_zero_weight(self):
+        # Both conditions hold (relevance 0 zeroes the weights too); the off-topic
+        # reason is the more informative one and is reported first.
+        result = aggregate_pool(
+            [0.5, 0.5], [0.0, 0.0], [0.0, 0.0], [False, False],
             **_aggregate_kwargs(),
         )
         assert result is not None

@@ -838,12 +838,12 @@
     },
     {
       "id": "A14",
-      "name": "an unclassified claim is weighted by its own certainty",
+      "name": "an unclassified claim is weighted by its own certainty, capped",
       "traces": [
         "R3",
         "F10"
       ],
-      "notes": "evidence_class None does not fall through to the 0.6 default — it falls back to the claim's certainty (0.73), so partial classifier coverage doesn't systematically re-rank the pool. The exposed evidence_class stays null.",
+      "notes": "evidence_class None does not fall through to the 0.6 default — it falls back to the claim's own certainty (0.73), capped at the weakest class's weight (R3/F10), so partial classifier coverage cannot re-rank the pool upward. The capped weight sits below the decisiveness floor, so the single-source pool self-reports with a widened CI. The exposed evidence_class stays null.",
       "articles": [
         {
           "source": "alpha",
@@ -859,8 +859,9 @@
         }
       ],
       "invariants": [
-        "abs(sources[0]['evidence_weight'] - 0.73) < 1e-9",
-        "sources[0]['evidence_class'] is None"
+        "abs(sources[0]['evidence_weight'] - 0.25) < 1e-9",
+        "sources[0]['evidence_class'] is None",
+        "ci_high - ci_low > 0.5"
       ],
       "expect": {
         "insufficient_data": false,
@@ -868,9 +869,9 @@
         "articles_used": 1,
         "settled": false,
         "mean": 0.5,
-        "std": 0.0,
-        "ci_low": 0.5,
-        "ci_high": 0.5,
+        "std": 0.45,
+        "ci_low": 0.05,
+        "ci_high": 0.95,
         "sources": [
           {
             "source": "alpha",
@@ -878,10 +879,10 @@
             "certainty": 0.73,
             "credibility_weight": 1.0,
             "evidence_class": null,
-            "evidence_weight": 0.73,
+            "evidence_weight": 0.25,
             "recency_weight": 1.0,
             "relevance_score": 1.0,
-            "weight": 0.73,
+            "weight": 0.25,
             "settled": null,
             "settlement_event_date": null,
             "fact_signal": null,

@@ -28,6 +28,7 @@ from tm.gatekeeper import (
 from tm.extractor import (
     extract_predictions,
     enforce_deadline_arithmetic,
+    enforce_precursor_cap,
     enforce_relative_date_resolution,
     enforce_settlement_event_date,
     flag_claim_stance_sign_conflicts,
@@ -510,6 +511,11 @@ async def _process_article(
         extraction.predictions = enforce_settlement_event_date(
             extraction.predictions, article_date,
         )
+        # A fact that merely PRECEDES the event is capped at |0.3| by the prompt and
+        # by 24.4% of live pool rows ignored it (retro#367). Magnitude is estimator
+        # policy, so enforce it in code — before the fusion below reads fact_signal
+        # for both the article mean and the dominant-claim facets.
+        extraction.predictions = enforce_precursor_cap(extraction.predictions)
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", result.url, exc)
         extract_ms = (time.perf_counter() - extract_start) * 1000

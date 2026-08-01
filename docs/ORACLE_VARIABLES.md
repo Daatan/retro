@@ -219,7 +219,7 @@ before enabling in prod.
 | `credibility` | leaderboard lookup | **1.0 for every source observed in prod** — layer currently inert |
 | `quantitative_multiplier` | 4.0 if any claim carries an estimate, else 1.0 | stacks with the certainty-0.9 floor |
 | **`weight`** | `credibility × avg_certainty × rweight × relevance² × quant_mult` | pool weight |
-| `fact_signal` (shadow) | claim-weighted **mean** of per-claim `fact_signal` over the **same** scored claims as `avg_stance`; `None` if none carried one | Phase 2 fact-lane counterpart of `avg_stance`, un-fused from author assertion; **read by nothing in aggregation** — surfaced on `SourceSignal`/`sources[]` only for daatan persistence + the offline fact-lane gate harness (`pipeline/scripts/backtest_fact_signal_gate.py`: stance-vs-fact_signal paired Brier through the real `/pool/aggregate`; any estimator cutover is gated on it turning convincingly positive, same evidence standard as the credibility flag). Extraction-side, the FACT_SIGNAL prompt carries a **decider-statement exception** (2026-07-29, A/B-gated): an on-record statement by the actor/authority whose own act would resolve the claim — announcement or denial alike — enters the fact lane as a capped precursor instead of being nulled as opinion; assertions *about* the decider's intent by opponents or analysts stay claimed-and-unverified. A companion **negative-precursor ladder** (2026-07-29, WS5b, A/B-gated) generalizes the negative side beyond decider statements: any contrary reported fact — an obstacle emerging, a preparation reversed, an opposing development, a measured indicator moving against the event — enters the fact lane as a graded negative precursor instead of null, with the extreme negative reserved for established impossibility; this closes the measured null asymmetry (negative-stance rows nulled 33.0% vs 22.6% for positive, fact-era pool) while the mobilization regression keeps deflating (see `test_extractor_prompt.py::test_negative_precursor_ladder_present` for the A/B record). Wording is numeral-free by design (magnitude policy belongs in estimator config); see `test_extractor_prompt.py::test_decider_statements_exception_present` for the A/B evidence and re-run bar. Its facets `event_actors`/`event_target`/`is_occurrence`/`verified` ride from the **dominant** (max \|fact_signal\|) claim so they stay internally coherent. |
+| `fact_signal` (shadow) | claim-weighted **mean** of per-claim `fact_signal` over the **same** scored claims as `avg_stance`; `None` if none carried one | Phase 2 fact-lane counterpart of `avg_stance`, un-fused from author assertion; **read by nothing in aggregation** — surfaced on `SourceSignal`/`sources[]` only for daatan persistence + the offline fact-lane gate harness (`pipeline/scripts/backtest_fact_signal_gate.py`: stance-vs-fact_signal paired Brier through the real `/pool/aggregate`; any estimator cutover is gated on it turning convincingly positive, same evidence standard as the credibility flag). Extraction-side, the FACT_SIGNAL prompt carries a **decider-statement exception** (2026-07-29, A/B-gated): an on-record statement by the actor/authority whose own act would resolve the claim — announcement or denial alike — enters the fact lane as a capped precursor instead of being nulled as opinion; assertions *about* the decider's intent by opponents or analysts stay claimed-and-unverified. A companion **negative-precursor ladder** (2026-07-29, WS5b, A/B-gated) generalizes the negative side beyond decider statements: any contrary reported fact — an obstacle emerging, a preparation reversed, an opposing development, a measured indicator moving against the event — enters the fact lane as a graded negative precursor instead of null, with the extreme negative reserved for established impossibility; this closes the measured null asymmetry (negative-stance rows nulled 33.0% vs 22.6% for positive, fact-era pool) while the mobilization regression keeps deflating (see `test_extractor_prompt.py::test_negative_precursor_ladder_present` for the A/B record). Wording is numeral-free by design (magnitude policy belongs in estimator config); see `test_extractor_prompt.py::test_decider_statements_exception_present` for the A/B evidence and re-run bar. Its facets `event_actors`/`event_target`/`is_occurrence`/`verified` ride from the **dominant** (max \|fact_signal\|) claim so they stay internally coherent. Magnitude for a **precursor** is enforced in code, not by the prompt (retro#367): `enforce_precursor_cap` clamps per-claim \|`fact_signal`\| to `fact_signal_precursor_cap` (`tm/config.py`, **0.3**) whenever the extractor set `is_occurrence=false`, in the `enforce_*` chain immediately before this fusion — so both the mean and the dominant-claim selection see the capped value. |
 | `author_lean`, `author_lean_certainty` (shadow) | passed through from `ExtractionOutput` (retro #308/#309) — the byline author's OWN forecast | author-accuracy scoring lane; **not read by aggregation** |
 
 ### 2.4 Pool level (`aggregation.py`, `forecaster.py:799-932`)
@@ -1071,3 +1071,55 @@ article now ties the stale dated one at the floor instead of beating it 50-to-1)
 **D2** and **A14** (F10, the capped fallback), **B16** (F14, now abstains). Their
 `known_bad` tags are removed; the fixtures now pin the fixed behaviour and the
 invariants state the R3 rule directly. No other case moved.
+
+## 2026-08-01 — the precursor cap is enforced in code (retro#367, lane-soundness F9)
+
+A fact that only *precedes* the event — a mobilisation, a capability, an
+escalation — has been capped at \|`fact_signal`\| ≤ **0.3** by the extractor
+prompt since the fact lane shipped, in the OCCURRENCE-vs-PRECURSOR rule, "no
+matter how sustained, repeated, or intensifying it is". Nothing enforced it.
+
+Prod audit before choosing anything (2026-08-01, `evidence_pool_articles`): of
+the **1101** rows carrying `is_occurrence=false`, **269 — 24.4%** — are above the
+cap; 187 in 0.3–0.5, 69 in 0.5–0.7, **13 above 0.7**, worst \|0.90\|, mean
+magnitude among the breaches 0.464. And that 24.4% is a *floor* on the per-claim
+rate, not the rate: the stored number is the claim-weighted mean over an
+article's claims while `is_occurrence` comes from the single dominant one, so a
+lone over-cap claim diluted by in-contract siblings never appears in the count.
+Four further over-cap emissions were seen directly during the WS5/WS5b A/B runs
+(retro#354).
+
+`enforce_precursor_cap` (`extractor.py`, called from the `enforce_*` chain in
+`forecaster.py`) is the enforcement, and it is deliberately narrow:
+
+- **Only magnitude moves.** Sign, `stance`, `certainty`, `settled` and the facets
+  are untouched — which direction a precursor points is a genuine judgement; how
+  far it may push the estimate is policy.
+- **The number lives in config** (`fact_signal_precursor_cap`, `tm/config.py`),
+  not in the prompt and not in the code — the same numbers-out-of-prompts
+  direction as the `evidence_class` weight table and retro#354's D1. The prompt
+  keeps the literal for now; a test pins the two together so they cannot drift,
+  and a later prompt cleanup can drop the numeral and keep the qualitative rule.
+- **Fail-open in every direction.** A null `fact_signal`, or an `is_occurrence`
+  that is null (the extractor declined to judge) or true, is left exactly as the
+  model returned it. The clamp never invents a judgement the model didn't make.
+- **It runs before fusion**, which fixes a second-order effect too: the dominant
+  claim — whose facets are stored for the whole article — can no longer be
+  captured by an over-cap precursor outranking a genuine occurrence claim.
+
+R8 protocol: one matrix case moved, declared — **A20** (`fact_signal` 0.625 →
+0.25, `mean` untouched, exactly as the case's own notes predicted). Its
+`known_bad` tag is **narrowed, not removed**: F9's magnitude half is fixed and
+the first invariant now pins it, but the case's second complaint survives — the
+clamped precursor (0.3) still outranks the occurrence claim (0.1), so the article
+is still filed with `is_occurrence=false` / `verified=false` despite containing a
+verified occurrence. That is the fusion collapse itself (F1) and only per-claim
+persistence fixes it, so the tag now traces retro#364. No other case moved.
+
+Not in scope, and deliberately: the prompt numeral (see above), the
+`fact_signal → aggregate_pool` cutover (still gated on the offline harness), and
+the observation that in the audited over-cap rows `fact_signal` tracks `stance`
+almost exactly (0.90/0.80, −0.82/−0.82, 0.75/0.75) — the prompt's "never let
+fact_signal pull stance, or stance pull fact_signal" is not holding on this
+population. That is evidence for the retro#354 D-family argument, recorded on the
+issue rather than acted on here.

@@ -1917,7 +1917,7 @@
       "name": "when every source is blocked, blocked sources decide the answer",
       "traces": [
         "R3",
-        "F13"
+        "F14"
       ],
       "notes": "Both articles come from credibility-0 outlets, so every weight is 0 — and pool_sources' zero-total guard replaces the weights with a flat 1.0 each rather than declining to answer. The estimate is then the unweighted opinion of exactly the sources the leaderboard rejected. The pool does self-report as thin (mass 0, so the CI is widened to its maximum), which is the only signal a caller gets.",
       "articles": [

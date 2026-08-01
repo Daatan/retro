@@ -840,7 +840,8 @@
       "id": "A14",
       "name": "an unclassified claim is weighted by its own certainty",
       "traces": [
-        "R3"
+        "R3",
+        "F10"
       ],
       "notes": "evidence_class None does not fall through to the 0.6 default — it falls back to the claim's certainty (0.73), so partial classifier coverage doesn't systematically re-rank the pool. The exposed evidence_class stays null.",
       "articles": [

@@ -234,6 +234,14 @@ def _source_snapshot(s) -> dict:
         "weight": _r(weight),
         "settled": s.settled,
         "settlement_event_date": s.settlement_event_date,
+        # Shadow lanes. Nothing in aggregation reads these yet, which is exactly
+        # why they need pinning: F9 (clamp |fact_signal| when is_occurrence is
+        # false) and the author lane both move numbers no estimate assertion
+        # would catch.
+        "fact_signal": _r(s.fact_signal),
+        "is_occurrence": s.is_occurrence,
+        "verified": s.verified,
+        "author_lean": _r(s.author_lean),
     }
 
 

@@ -1,0 +1,1280 @@
+{
+  "group": "A",
+  "title": "Intra-article composition — many claims to one article signal",
+  "notes": "Group A holds the article boundary: how a set of extracted claims collapses into the single (stance, certainty, evidence_weight, settled, fact_signal) tuple the pool then sees. Most of the lane-soundness Tier-S findings live here — F1 is precisely the claim that this collapse is lossy.",
+  "cases": [
+    {
+      "id": "A1",
+      "name": "single claim passes through unchanged",
+      "traces": [
+        "M1"
+      ],
+      "notes": "The degenerate case: one claim, neutral credibility, same-day article, full relevance. Its stance is the article's stance and the pooled mean is that stance back through the logit round-trip.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['stance'] - 0.6) < 1e-9",
+        "abs(mean - 0.6) < 1e-6",
+        "sources[0]['recency_weight'] == 1.0"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.6,
+        "std": 0.0,
+        "ci_low": 0.6,
+        "ci_high": 0.6,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A2",
+      "name": "certainty weighting lets the decisive claim dominate the hedged one",
+      "traces": [
+        "M1"
+      ],
+      "notes": "Two opposing claims in one article: decisive +0.9 at certainty 0.9, hedged -0.9 at certainty 0.1. A flat mean would cancel to 0; certainty weighting must land near the decisive claim.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.9,
+              "certainty": 0.9,
+              "evidence_class": "reporting"
+            },
+            {
+              "stance": -0.9,
+              "certainty": 0.1,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['stance'] > 0.6",
+        "mean > 0.6"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.72,
+        "std": 0.0,
+        "ci_low": 0.72,
+        "ci_high": 0.72,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.72,
+            "certainty": 0.5,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A3",
+      "name": "equal certainties reduce to a plain mean",
+      "traces": [
+        "M1"
+      ],
+      "notes": "Certainty weighting must not distort a set where every claim is equally certain — three claims at certainty 0.5 collapse to their arithmetic mean.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.9,
+              "certainty": 0.5,
+              "evidence_class": "reporting"
+            },
+            {
+              "stance": 0.3,
+              "certainty": 0.5,
+              "evidence_class": "reporting"
+            },
+            {
+              "stance": -0.3,
+              "certainty": 0.5,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['stance'] - 0.3) < 1e-9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.3,
+        "std": 0.0,
+        "ci_low": 0.3,
+        "ci_high": 0.3,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.3,
+            "certainty": 0.5,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A4",
+      "name": "reported fact and the author's own conclusion collapse into one number",
+      "traces": [
+        "F1",
+        "R5"
+      ],
+      "notes": "The founding F1 case. The article reports a mild fact (+0.2, reported_fact, weight 1.0) and the columnist's confident conclusion (+0.95, opinion, weight 0.25). Two different KINDS of evidence, and the article emits one stance plus one evidence_weight that is the flat mean of two class weights — so the opinion drags the stance up while the fact's class weight subsidises it. Nothing downstream can separate them again.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.2,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            },
+            {
+              "stance": 0.95,
+              "certainty": 0.8,
+              "evidence_class": "opinion"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['stance'] - 0.575) < 1e-9",
+        "abs(sources[0]['evidence_weight'] - 0.625) < 1e-9"
+      ],
+      "known_bad": {
+        "finding": "F1",
+        "expected_behavior": "Under claims_detail persistence the fact and the conclusion stay separable, each carrying its own class weight, instead of averaging into a single stance at a single blended weight."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.575,
+        "std": 0.0,
+        "ci_low": 0.575,
+        "ci_high": 0.575,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.575,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 0.625,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.625,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A5",
+      "name": "facts pointing NO plus an opinion pointing YES read as neutral",
+      "traces": [
+        "F1",
+        "R5"
+      ],
+      "notes": "The mirror of A4 and the more dangerous half: the reported facts say -0.7, the byline's conclusion says +0.9, and the article emits ~+0.1 — an article whose FACTS oppose the claim contributes a near-neutral vote. The opinion class weight (0.25) never gets to matter, because the cancellation happens before weighting.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.7,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            },
+            {
+              "stance": 0.9,
+              "certainty": 0.8,
+              "evidence_class": "opinion"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['stance']) < 0.15"
+      ],
+      "known_bad": {
+        "finding": "F1",
+        "expected_behavior": "The fact-bearing claim should survive to the pool as its own atom at reported_fact weight; today it is cancelled inside the article by an opinion worth a quarter as much."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.1,
+        "std": 0.0,
+        "ci_low": 0.1,
+        "ci_high": 0.1,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.1,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 0.625,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.625,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A6",
+      "name": "one decisive occurrence diluted by tangential precursor claims",
+      "traces": [
+        "F1",
+        "deleted-F8"
+      ],
+      "notes": "The occurrence-dilution trace. A single claim reports the event itself (+0.95, certainty 0.95) alongside three routine precursor claims at +0.1. Certainty weighting helps but cannot rescue the signal: volume inside one article moves the article's stance far below the occurrence it reports.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.95,
+              "certainty": 0.95,
+              "evidence_class": "reported_fact",
+              "is_occurrence": true,
+              "fact_signal": 0.9
+            },
+            {
+              "stance": 0.1,
+              "certainty": 0.6,
+              "evidence_class": "reporting",
+              "is_occurrence": false,
+              "fact_signal": 0.1
+            },
+            {
+              "stance": 0.1,
+              "certainty": 0.6,
+              "evidence_class": "reporting",
+              "is_occurrence": false,
+              "fact_signal": 0.1
+            },
+            {
+              "stance": 0.1,
+              "certainty": 0.6,
+              "evidence_class": "reporting",
+              "is_occurrence": false,
+              "fact_signal": 0.1
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['stance'] < 0.55"
+      ],
+      "known_bad": {
+        "finding": "F1",
+        "expected_behavior": "An article reporting the event as having occurred should not be diluted below half its occurrence claim by its own background paragraphs."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.3936,
+        "std": 0.0,
+        "ci_low": 0.3936,
+        "ci_high": 0.3936,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.394,
+            "certainty": 0.688,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.7,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.7,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": 0.376,
+            "is_occurrence": true,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A7",
+      "name": "all-zero certainty falls back to a plain mean instead of dividing by zero",
+      "traces": [
+        "M1",
+        "R3"
+      ],
+      "notes": "weighted_mean's zero-total branch. Two claims at certainty 0.0 still produce a stance (their arithmetic mean, +0.3) — the extractor's total absence of confidence does not remove the article from the pool, it just leaves it weighted by evidence class alone.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.8,
+              "certainty": 0.0,
+              "evidence_class": "reporting"
+            },
+            {
+              "stance": -0.2,
+              "certainty": 0.0,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['stance'] - 0.3) < 1e-9",
+        "insufficient_data is False"
+      ],
+      "known_bad": {
+        "finding": "R3",
+        "expected_behavior": "Zero stated certainty is missing information; under R3 it must not buy the same influence as a merely low-certainty claim would."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.3,
+        "std": 0.0,
+        "ci_low": 0.3,
+        "ci_high": 0.3,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.3,
+            "certainty": 0.0,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A8",
+      "name": "specificity multiplies certainty in the claim weighting",
+      "traces": [
+        "M1"
+      ],
+      "notes": "The live extractor never emits specificity, so this path is dormant — pinned because it is still executed on every article and would silently change behaviour the day a prompt starts emitting the field. The +0.9 claim is scoped down to specificity 0.1, so the -0.9 claim dominates despite equal certainty.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.9,
+              "certainty": 0.8,
+              "specificity": 0.1,
+              "evidence_class": "reporting"
+            },
+            {
+              "stance": -0.9,
+              "certainty": 0.8,
+              "specificity": 1.0,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['stance'] < -0.5"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": -0.7364,
+        "std": 0.0,
+        "ci_low": -0.7364,
+        "ci_high": -0.7364,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": -0.736,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A9",
+      "name": "a settlement-grade claim replaces the article's whole claim set",
+      "traces": [
+        "M1",
+        "R7"
+      ],
+      "notes": "settled_preds or predictions: the dated, decisive settlement claim is scored alone, so the article's colour quotes cannot average a verdict down. Note the asymmetry this pins — avg_certainty and avg_evidence_weight are still computed over ALL claims, including the ones the stance ignored.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-29",
+              "evidence_class": "reported_fact"
+            },
+            {
+              "stance": -0.4,
+              "certainty": 0.6,
+              "evidence_class": "opinion"
+            },
+            {
+              "stance": 0.1,
+              "certainty": 0.5,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['stance'] - 1.0) < 1e-9",
+        "sources[0]['settled'] is True",
+        "sources[0]['settlement_event_date'] == '2026-07-29'"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.98,
+        "std": 0.0,
+        "ci_low": 0.98,
+        "ci_high": 0.98,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.683,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 0.617,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.50594,
+            "settled": true,
+            "settlement_event_date": "2026-07-29",
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A10",
+      "name": "a below-grade settlement is demoted to ordinary evidence",
+      "traces": [
+        "R7"
+      ],
+      "notes": "The 2026-07-08 F-35 false-pin class. settled=true at stance -0.8 / certainty 0.52 clears neither settlement_min_claim_stance (0.9) nor _certainty (0.9), so it stops replacing the claim set: the article's stance becomes the ordinary certainty-weighted mean and it carries no settlement flag into the pool.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.8,
+              "certainty": 0.52,
+              "settled": true,
+              "event_date": "2026-07-29",
+              "evidence_class": "reported_fact"
+            },
+            {
+              "stance": 0.4,
+              "certainty": 0.8,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['settled'] is not True",
+        "sources[0]['stance'] > -0.8"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": -0.0727,
+        "std": 0.0,
+        "ci_low": -0.0727,
+        "ci_high": -0.0727,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": -0.073,
+            "certainty": 0.66,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 0.8,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.656,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A11",
+      "name": "a cited vote share does NOT rewrite the claim's stance",
+      "traces": [
+        "F5"
+      ],
+      "notes": "retro#362/PR#363, live since 2026-08-01. A cited_share claim carrying quantitative_estimate 0.45 (a poll share, not a probability of the event) keeps the extractor's stance +0.3 and its stated certainty — the old code rewrote it to 2*0.45-1 = -0.1 at certainty 0.9, inverting 47 of 117 qe-carrying prod rows.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.3,
+              "certainty": 0.6,
+              "quantitative_estimate": 0.45,
+              "evidence_class": "cited_share"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['stance'] - 0.3) < 1e-9",
+        "abs(sources[0]['certainty'] - 0.6) < 1e-9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.3,
+        "std": 0.0,
+        "ci_low": 0.3,
+        "ci_high": 0.3,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.3,
+            "certainty": 0.6,
+            "credibility_weight": 1.0,
+            "evidence_class": "cited_share",
+            "evidence_weight": 1.5,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 1.5,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A12",
+      "name": "a cited probability rewrites stance and floors certainty",
+      "traces": [
+        "M2"
+      ],
+      "notes": "The surviving half of the qe rewrite: a cited_probability of 0.2 against an extractor stance of +0.8 is realigned to -0.6 at certainty max(c, 0.9). This is the France/Opta regression's fix — a named model baseline must not be amplified in the wrong direction by the cited_probability weight premium.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.8,
+              "certainty": 0.5,
+              "quantitative_estimate": 0.2,
+              "evidence_class": "cited_probability"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['stance'] + 0.6) < 1e-9",
+        "abs(sources[0]['certainty'] - 0.9) < 1e-9",
+        "abs(sources[0]['evidence_weight'] - 4.0) < 1e-9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": -0.6,
+        "std": 0.0,
+        "ci_low": -0.6,
+        "ci_high": -0.6,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": -0.6,
+            "certainty": 0.9,
+            "credibility_weight": 1.0,
+            "evidence_class": "cited_probability",
+            "evidence_weight": 4.0,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 4.0,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A13",
+      "name": "a settlement-grade claim keeps its stance despite a retrospective number",
+      "traces": [
+        "M2",
+        "R7"
+      ],
+      "notes": "\"...defying the models that gave him 22%\". A dated, decisive settlement claim is exempt from the qe rewrite, so the retrospective 0.22 cannot flip an accomplished fact to -0.56.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-29",
+              "quantitative_estimate": 0.22,
+              "evidence_class": "cited_probability"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['stance'] - 1.0) < 1e-9",
+        "sources[0]['settled'] is True"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.98,
+        "std": 0.0,
+        "ci_low": 0.98,
+        "ci_high": 0.98,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "cited_probability",
+            "evidence_weight": 4.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 3.28,
+            "settled": true,
+            "settlement_event_date": "2026-07-29",
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A14",
+      "name": "an unclassified claim is weighted by its own certainty",
+      "traces": [
+        "R3"
+      ],
+      "notes": "evidence_class None does not fall through to the 0.6 default — it falls back to the claim's certainty (0.73), so partial classifier coverage doesn't systematically re-rank the pool. The exposed evidence_class stays null.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.5,
+              "certainty": 0.73
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['evidence_weight'] - 0.73) < 1e-9",
+        "sources[0]['evidence_class'] is None"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.5,
+        "std": 0.0,
+        "ci_low": 0.5,
+        "ci_high": 0.5,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.5,
+            "certainty": 0.73,
+            "credibility_weight": 1.0,
+            "evidence_class": null,
+            "evidence_weight": 0.73,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.73,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A15",
+      "name": "a strong anchor's class weight is averaged away by two opinions",
+      "traces": [
+        "F1",
+        "F4"
+      ],
+      "notes": "Three claims: two opinions (0.25) and one cited_probability (4.0). The article's evidence_weight is their flat mean (1.5), not the anchor's 4.0 — an article that cites a named model baseline is weighted as if it were something else entirely, and the mixed-class collapse is invisible downstream except through this number.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.2,
+              "certainty": 0.7,
+              "evidence_class": "opinion"
+            },
+            {
+              "stance": 0.3,
+              "certainty": 0.7,
+              "evidence_class": "opinion"
+            },
+            {
+              "stance": -0.6,
+              "certainty": 0.9,
+              "quantitative_estimate": 0.2,
+              "evidence_class": "cited_probability"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['evidence_weight'] - 1.5) < 1e-9",
+        "sources[0]['evidence_class'] == 'opinion'"
+      ],
+      "known_bad": {
+        "finding": "F1",
+        "expected_behavior": "The cited_probability claim should reach the pool as its own atom at weight 4.0; averaging it with two opinions is the mixed-class credibility drop the D4' trace named."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": -0.0826,
+        "std": 0.0,
+        "ci_low": -0.0826,
+        "ci_high": -0.0826,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": -0.083,
+            "certainty": 0.767,
+            "credibility_weight": 1.0,
+            "evidence_class": "opinion",
+            "evidence_weight": 1.5,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 1.5,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A16",
+      "name": "the representative evidence_class is the most common label, ties to first seen",
+      "traces": [
+        "M1"
+      ],
+      "notes": "SourceSignal.evidence_class is a Counter.most_common(1) collapse over the article's claims. On a 1-1 tie it resolves to the first-seen label — insertion order, i.e. extractor output order. daatan's credibility feedback loop uses this label to exclude opinion articles, so the tie-break is load-bearing, not cosmetic.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.4,
+              "certainty": 0.7,
+              "evidence_class": "opinion"
+            },
+            {
+              "stance": 0.4,
+              "certainty": 0.7,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['evidence_class'] == 'opinion'"
+      ],
+      "known_bad": {
+        "finding": "F1",
+        "expected_behavior": "An article carrying one fact and one opinion has no single representative class; the feedback loop should see the claims, not a coin flip."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.4,
+        "std": 0.0,
+        "ci_low": 0.4,
+        "ci_high": 0.4,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.4,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "opinion",
+            "evidence_weight": 0.625,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.625,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A17",
+      "name": "an undated positive settlement is demoted at extraction",
+      "traces": [
+        "R7"
+      ],
+      "notes": "enforce_settlement_event_date fails CLOSED on a positive settlement with no event_date — the Netanyahu background-history class. The claim keeps stance and certainty and still votes, it just cannot pin.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['settled'] is not True",
+        "abs(sources[0]['stance'] - 1.0) < 1e-9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.98,
+        "std": 0.0,
+        "ci_low": 0.98,
+        "ci_high": 0.98,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.82,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A18",
+      "name": "a settlement dated after its own article is demoted",
+      "traces": [
+        "R7"
+      ],
+      "notes": "An article published 2026-07-20 cannot report an outcome that happened on 2026-07-25 — that is a schedule, not an accomplished fact.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-20",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-25",
+              "evidence_class": "reported_fact"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['settled'] is not True"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.98,
+        "std": 0.3514,
+        "ci_low": 0.6286,
+        "ci_high": 1.0,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.305,
+            "relevance_score": 1.0,
+            "weight": 0.305,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A19",
+      "name": "an undated negative settlement survives extraction",
+      "traces": [
+        "R7",
+        "F12"
+      ],
+      "notes": "The deliberate asymmetry: an impossibility that comes only from time expiring has nothing to date, so a negative settlement keeps its flag here and is re-judged at aggregation time by settlement_vote_validity instead (see group C).",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['settled'] is True",
+        "sources[0]['settlement_event_date'] is None"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": -0.98,
+        "std": 0.0,
+        "ci_low": -0.98,
+        "ci_high": -0.98,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": -1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.82,
+            "settled": true,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "A20",
+      "name": "the fact lane is computed in parallel and moves nothing",
+      "traces": [
+        "F9",
+        "F20"
+      ],
+      "notes": "fact_signal is a claim-weighted mean over the same scored claims as stance, and its qualifying facets (is_occurrence, verified) come from the single dominant claim. Here a precursor fact at +0.8 with is_occurrence=false outweighs a verified occurrence — F9's clamp is what should stop that, and it will move this snapshot's fact_signal without touching mean.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.5,
+              "certainty": 0.9,
+              "evidence_class": "reported_fact",
+              "fact_signal": 0.8,
+              "is_occurrence": false,
+              "verified": false,
+              "event_actors": "ministry",
+              "event_target": "budget"
+            },
+            {
+              "stance": 0.2,
+              "certainty": 0.3,
+              "evidence_class": "reporting",
+              "fact_signal": 0.1,
+              "is_occurrence": true,
+              "verified": true,
+              "event_actors": "parliament",
+              "event_target": "budget"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['fact_signal'] > 0.5",
+        "sources[0]['is_occurrence'] is False",
+        "sources[0]['verified'] is False"
+      ],
+      "known_bad": {
+        "finding": "F9",
+        "expected_behavior": "|fact_signal| from a non-occurrence precursor must be clamped below the occurrence cap, and the dominant-claim facet collapse should not let an unverified precursor speak for a verified occurrence."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.425,
+        "std": 0.0,
+        "ci_low": 0.425,
+        "ci_high": 0.425,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.425,
+            "certainty": 0.6,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 0.8,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.8,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": 0.625,
+            "is_occurrence": false,
+            "verified": false,
+            "author_lean": null
+          }
+        ]
+      }
+    }
+  ]
+}

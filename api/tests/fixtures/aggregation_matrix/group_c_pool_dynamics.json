@@ -1,0 +1,1350 @@
+{
+  "group": "C",
+  "title": "Pool dynamics — many articles to one estimate",
+  "notes": "Group C holds the cross-article boundary: the relevance safety net, the weight formula's three multipliers, logit pooling and its clamp, the CI and its widening, and the settlement override with aggregation-time revalidation. Everything here runs on already-collapsed article signals, so a Group C movement is a pooling change, not an extraction one.",
+  "cases": [
+    {
+      "id": "C1",
+      "name": "an off-topic-only pool abstains instead of estimating",
+      "traces": [
+        "R3"
+      ],
+      "notes": "One article at relevance 0.2 gives relevance_mass 0.04, below relevance_weight_floor (0.05). The pipeline must answer \"couldn't answer\" rather than report a confident stance drawn from tangential coverage.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 0.2,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.9,
+              "certainty": 0.9,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "insufficient_data is True",
+        "reason == 'all_articles_off_topic'"
+      ],
+      "expect": {
+        "insufficient_data": true,
+        "reason": "all_articles_off_topic",
+        "articles_used": 0,
+        "settled": false,
+        "mean": 0.0,
+        "std": 0.0,
+        "ci_low": -0.2,
+        "ci_high": 0.2,
+        "sources": []
+      }
+    },
+    {
+      "id": "C2",
+      "name": "the relevance floor is a sum, so tangential volume buys past it",
+      "traces": [
+        "R3",
+        "F2"
+      ],
+      "notes": "Three articles, each as tangential as C1's single one (relevance 0.2), sum to relevance_mass 0.12 and clear the floor — the safety net is a mass test, not a per-article test. The resulting estimate is thin (evidence_mass 0.072 against a decisiveness_floor of 0.5) and self-reports as such through a widened CI.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 0.2,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.9,
+              "certainty": 0.9,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 0.2,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.9,
+              "certainty": 0.9,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "charlie",
+          "published_date": "2026-08-01",
+          "relevance": 0.2,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.9,
+              "certainty": 0.9,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "insufficient_data is False",
+        "ci_high - ci_low > 0.5"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 3,
+        "settled": false,
+        "mean": 0.9,
+        "std": 0.7704,
+        "ci_low": 0.1296,
+        "ci_high": 1.0,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.9,
+            "certainty": 0.9,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 0.2,
+            "weight": 0.024,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 0.9,
+            "certainty": 0.9,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 0.2,
+            "weight": 0.024,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "charlie",
+            "stance": 0.9,
+            "certainty": 0.9,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 0.2,
+            "weight": 0.024,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C3",
+      "name": "relevance enters squared, so a half-relevant dissenter pulls a quarter as hard",
+      "traces": [
+        "M1"
+      ],
+      "notes": "Two articles identical but for relevance (1.0 vs 0.5) and stance (-0.8 vs +0.8). The convex application means the on-topic negative carries 4× the weight of the tangential positive, and the pool lands clearly negative rather than near zero.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.8,
+              "certainty": 0.8,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 0.5,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.8,
+              "certainty": 0.8,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "mean < -0.4",
+        "abs(sources[0]['weight'] / sources[1]['weight'] - 4.0) < 1e-9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": -0.5778,
+        "std": 0.6474,
+        "ci_low": -0.98,
+        "ci_high": 0.3195,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": -0.8,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 0.8,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 0.5,
+            "weight": 0.15,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C4",
+      "name": "one recency half-life halves an article's weight",
+      "traces": [
+        "M1"
+      ],
+      "notes": "recency_half_life_days is 7. The 2026-07-25 article is exactly one half-life older than the frozen clock's 2026-08-01, so its weight multiplier is 0.5 and the fresh dissenter wins.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-25",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.8,
+              "certainty": 0.8,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.8,
+              "certainty": 0.8,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['recency_weight'] - 0.5) < 1e-9",
+        "sources[1]['recency_weight'] == 1.0",
+        "mean < 0"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": -0.3507,
+        "std": 0.7589,
+        "ci_low": -0.98,
+        "ci_high": 0.7011,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.8,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 0.5,
+            "relevance_score": 1.0,
+            "weight": 0.3,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": -0.8,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C5",
+      "name": "a very old article decays to the recency floor, not to nothing",
+      "traces": [
+        "M1"
+      ],
+      "notes": "An article from 2026-01-01 is ~30 half-lives old; the decay is floored at recency_floor (0.02) so ancient coverage still counts a little instead of dropping out silently.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-01-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.8,
+              "certainty": 0.8,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.8,
+              "certainty": 0.8,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(sources[0]['recency_weight'] - 0.02) < 1e-9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": -0.7839,
+        "std": 0.2224,
+        "ci_low": -0.98,
+        "ci_high": -0.4758,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.8,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.012,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": -0.8,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C6",
+      "name": "an undated article outweighs a dated stale one",
+      "traces": [
+        "R3",
+        "F13"
+      ],
+      "notes": "recency_weight returns a neutral 1.0 when the date is missing, so an article that never said when it was written is weighted like today's news and beats an honest, dated three-week-old report 50-to-1. Missing metadata increases influence — the exact shape R3 forbids.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": null,
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.8,
+              "certainty": 0.8,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-01-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.8,
+              "certainty": 0.8,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "sources[0]['recency_weight'] == 1.0",
+        "mean > 0.5"
+      ],
+      "known_bad": {
+        "finding": "R3",
+        "expected_behavior": "An undated article must not be weighted above a dated one. R3's rule is that absent metadata can only lower influence, never raise it."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": 0.7839,
+        "std": 0.2224,
+        "ci_low": 0.4758,
+        "ci_high": 0.98,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.8,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": -0.8,
+            "certainty": 0.8,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.012,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C7",
+      "name": "thin evidence widens the interval instead of forcing an abstention",
+      "traces": [
+        "M1",
+        "R7"
+      ],
+      "notes": "A single opinion-class source carries weight 0.25, half the decisiveness_floor (0.5), so deficit is 0.5 and up to thin_evidence_ci_inflation (0.45) of probability-space half-width is added symmetrically. defer_on_thin_evidence is off in prod, so the answer is a low-confidence estimate rather than a refusal.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.5,
+              "evidence_class": "opinion"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "insufficient_data is False",
+        "ci_high - ci_low > 0.8",
+        "abs(sources[0]['weight'] - 0.25) < 1e-9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.6,
+        "std": 0.45,
+        "ci_low": 0.15,
+        "ci_high": 1.0,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.6,
+            "certainty": 0.5,
+            "credibility_weight": 1.0,
+            "evidence_class": "opinion",
+            "evidence_weight": 0.25,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.25,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C8",
+      "name": "the logit clamp bounds an absolute stance short of the boundary",
+      "traces": [
+        "R7"
+      ],
+      "notes": "logit_clamp (0.01) keeps log-odds finite, so a lone source at stance +1.0 pools to +0.98, never +1.0. Any change to the clamp shows up here first.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.9,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "abs(mean - 0.98) < 1e-9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 1,
+        "settled": false,
+        "mean": 0.98,
+        "std": 0.0,
+        "ci_low": 0.98,
+        "ci_high": 0.98,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.9,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 1.0,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C9",
+      "name": "four unanimous hedged sources report a zero-width interval",
+      "traces": [
+        "F16"
+      ],
+      "notes": "The CI is computed from disagreement only. Four sources that all say +0.4 at certainty 0.5 disagree by nothing, so the interval collapses to a point — the estimator claims total precision on evidence it has itself classified as hedged. F16's unanimity floor is the fix.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.4,
+              "certainty": 0.5,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.4,
+              "certainty": 0.5,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "charlie",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.4,
+              "certainty": 0.5,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "delta",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.4,
+              "certainty": 0.5,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "ci_high - ci_low == 0.0",
+        "std == 0.0"
+      ],
+      "known_bad": {
+        "finding": "F16",
+        "expected_behavior": "Unanimity is not precision. The interval needs a floor that survives zero observed disagreement, and effective-N (Kish) rather than a raw row count."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 4,
+        "settled": false,
+        "mean": 0.4,
+        "std": 0.0,
+        "ci_low": 0.4,
+        "ci_high": 0.4,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.4,
+            "certainty": 0.5,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 0.4,
+            "certainty": 0.5,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "charlie",
+            "stance": 0.4,
+            "certainty": 0.5,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "delta",
+            "stance": 0.4,
+            "certainty": 0.5,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C10",
+      "name": "six echoing sources buy a tight interval on one story",
+      "traces": [
+        "F16",
+        "F2"
+      ],
+      "notes": "Six articles carrying essentially the same claim (one mild dissenter) shrink the standard error by √n even though there is one underlying story, not six independent observations. This is the √N attack F2 (story clustering) and F16 (effective-N) exist to blunt; the case is here so their PRs can point at the number they moved.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.7,
+              "certainty": 0.7,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.7,
+              "certainty": 0.7,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "charlie",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.7,
+              "certainty": 0.7,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "delta",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.7,
+              "certainty": 0.7,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "echo",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.7,
+              "certainty": 0.7,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "foxtrot",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.2,
+              "certainty": 0.7,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "mean > 0.55",
+        "ci_high - ci_low < 2.0 * std"
+      ],
+      "known_bad": {
+        "finding": "F2",
+        "expected_behavior": "Six copies of one story are one observation. Clustering should collapse them before the CI is computed, so the interval reflects independent evidence rather than syndication volume."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 6,
+        "settled": false,
+        "mean": 0.639,
+        "std": 0.1877,
+        "ci_low": 0.4889,
+        "ci_high": 0.7892,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.7,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 0.7,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "charlie",
+            "stance": 0.7,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "delta",
+            "stance": 0.7,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "echo",
+            "stance": 0.7,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "foxtrot",
+            "stance": 0.2,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C11",
+      "name": "two dated settlements pin the estimate to the boundary",
+      "traces": [
+        "R7",
+        "M1"
+      ],
+      "notes": "settlement_min_sources is 2. Two articles each reporting the outcome as an accomplished fact, dated and settlement-grade, pass aggregation-time revalidation and pin the mean to +settlement_stance (0.94) with a tight asymmetric band — pooling alone could never reach there.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-29",
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-07-31",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-29",
+              "evidence_class": "reported_fact"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "settled is True",
+        "abs(mean - 0.94) < 1e-9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": true,
+        "mean": 0.94,
+        "std": 0.06,
+        "ci_low": 0.82,
+        "ci_high": 0.99,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.82,
+            "settled": true,
+            "settlement_event_date": "2026-07-29",
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.906,
+            "relevance_score": 1.0,
+            "weight": 0.906,
+            "settled": true,
+            "settlement_event_date": "2026-07-29",
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C12",
+      "name": "valid settlements in both directions suppress the pin",
+      "traces": [
+        "R7",
+        "F12"
+      ],
+      "notes": "The deadline has passed, so an undated \"it never happened\" vote is anchored by the closed window while the other article dates the occurrence inside it. Both votes are individually valid and they contradict — one extraction is provably wrong. Facts are not decided by outvoting: no pin, the pooled mean stands, and the conflict is logged for a human.",
+      "request": {
+        "claim_deadline": "2026-07-01"
+      },
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-06-25",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-06-20",
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-07-05",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "settled is False"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": -0.7829,
+        "std": 0.9328,
+        "ci_low": -1.0,
+        "ci_high": 1.0,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.026,
+            "relevance_score": 1.0,
+            "weight": 0.026,
+            "settled": true,
+            "settlement_event_date": "2026-06-20",
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": -1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.069,
+            "relevance_score": 1.0,
+            "weight": 0.069,
+            "settled": true,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C13",
+      "name": "settlements dated after the deadline are demoted at aggregation time",
+      "traces": [
+        "R7",
+        "F12"
+      ],
+      "notes": "Both articles report an occurrence, both are dated — but dated 2026-07-20, three weeks after the claim's 2026-07-01 deadline. An occurrence outside the window contradicts the claim rather than settling it, so both votes are demoted to ordinary evidence and no pin fires. The demotion is invisible on the response beyond settled=false; the per-vote reasons are logged.",
+      "request": {
+        "claim_deadline": "2026-07-01"
+      },
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-21",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-20",
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-07-22",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-20",
+              "evidence_class": "reported_fact"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "settled is False",
+        "mean > 0.9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": 0.98,
+        "std": 0.0,
+        "ci_low": 0.98,
+        "ci_high": 0.98,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.336,
+            "relevance_score": 1.0,
+            "weight": 0.336,
+            "settled": true,
+            "settlement_event_date": "2026-07-20",
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.371,
+            "relevance_score": 1.0,
+            "weight": 0.371,
+            "settled": true,
+            "settlement_event_date": "2026-07-20",
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C14",
+      "name": "undated foreclosures with no known deadline never pin",
+      "traces": [
+        "R7"
+      ],
+      "notes": "The F-35 / Netanyahu background-history class on the negative side: two articles assert the outcome is impossible, neither dates a foreclosing event, and the claim has no deadline whose expiry could serve as the anchor instead. Both votes are demoted; the pool still reads strongly negative, it is just not declared settled.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-07-31",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "settled is False",
+        "mean < -0.9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": -0.98,
+        "std": 0.0,
+        "ci_low": -0.98,
+        "ci_high": -0.98,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": -1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.82,
+            "settled": true,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": -1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.906,
+            "relevance_score": 1.0,
+            "weight": 0.906,
+            "settled": true,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    }
+  ]
+}

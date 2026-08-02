@@ -120,6 +120,47 @@ class ForecastRequest(BaseModel):
     )
 
 
+class ClaimDetail(BaseModel):
+    """One extracted claim, as the claim-level layer the article's fused
+    scalars are reduced FROM (F1/F15, retro#364).
+
+    Every field here is per-claim: an article carrying three claims produces
+    three of these, and `SourceSignal.stance` / `.certainty` /
+    `.evidence_weight` / `.settled` / `.fact_signal` are five different
+    reductions over five different subsets of them (forecaster.py). Before
+    this model existed those subsets were computed and the claims thrown
+    away, so nothing downstream — claim-level weighting, per-claim
+    credibility attribution, correction history, or ANY retroactive
+    backtest — could be fitted on data the system never kept.
+
+    Values are recorded POST-resolution, i.e. after the `enforce_*` chain and
+    `resolve_stance_certainty()`: these are the numbers the fusion actually
+    consumed, so the article-level scalars stay derivable from them. The
+    extractor's pre-resolution output is deliberately not what is persisted —
+    a claims list that cannot reproduce the article's own vote would be a
+    second parallel truth, which is the defect this fixes, not a feature.
+
+    Nothing in aggregation reads this model. It is persistence surface only
+    (daatan#1235 stores it), on the shadow-field pattern already proven twice
+    by author_lean and fact_signal.
+    """
+    claim: str = Field(description="One-sentence neutral summary of the claim, as extracted")
+    quote: Optional[str] = Field(default=None, description="The article's verbatim sentence(s) behind the claim. Kept so a persisted claim stands alone and stays auditable later — decomposition without the surrounding context yields atoms nobody can re-verify (DnDScore, arXiv:2412.13175)")
+    stance: float = Field(ge=-1.0, le=1.0, description="This claim's directional outlook [-1, 1]")
+    certainty: float = Field(ge=0.0, le=1.0, description="Linguistic confidence [0, 1]; the weight in the within-article claim-weighted mean")
+    specificity: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Multiplies certainty in the within-article reduction (claim_weighted_stance); None ⇒ a neutral 1.0. The live extractor does not emit it — recorded so the reduction stays reproducible if it ever does")
+    prediction_type: Optional[str] = Field(default=None, description="The claim's kind: binary | continuous | range | trend. Plain string on the wire so a new kind can't fail an existing caller's validation")
+    evidence_class: Optional[Literal["reported_fact", "cited_probability", "cited_share", "reporting", "opinion"]] = Field(default=None, description="This claim's OWN evidence class — the honest per-claim label, of which SourceSignal.evidence_class is only the article's most common. Mixed-class articles are invisible at the article level; this is where class attribution becomes checkable")
+    quantitative_estimate: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="An explicit modeled/poll/market probability [0,1] cited for the event itself. Already consumed by resolve_stance_certainty() when this claim is not settlement-grade — recorded so that realignment can be re-derived rather than assumed")
+    settled: Optional[bool] = Field(default=None, description="The extractor's settlement flag for this claim. NOT the same bar as SourceSignal.settled, which additionally requires settlement_grade() — a settled claim below the stance/certainty gates is demoted to ordinary evidence and this field is how that demotion stays visible")
+    event_date: Optional[str] = Field(default=None, description="ISO date the article gives for the related event itself (the foreclosing event's date for a negative settlement); feeds settlement_event_date selection")
+    fact_signal: Optional[float] = Field(default=None, ge=-1.0, le=1.0, description="EXPERIMENTAL shadow — what this claim's REPORTED FACTS alone imply [-1, 1], un-fused from author assertion. Already precursor-capped in code (enforce_precursor_cap, retro#367) at the value recorded here. None when the claim rests on opinion with no fact bearing on the event")
+    event_actors: Optional[str] = Field(default=None, description="EXPERIMENTAL shadow — WHO acts in this claim's reported fact. Per-claim, unlike SourceSignal.event_actors, which rides from the single dominant claim only")
+    event_target: Optional[str] = Field(default=None, description="EXPERIMENTAL shadow — the TARGET of the action in this claim's reported fact; with event_actors, the fact's dyad")
+    is_occurrence: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when this claim's fact IS the event itself, False when it is only a precursor/precondition/escalation")
+    verified: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when independently reported, False when only claimed by an interested party. Per-claim: the article-level field is the dominant claim's, so a lone over-cap interested-party claim diluted by in-contract siblings is invisible above this layer (retro#378)")
+
+
 class SourceSignal(BaseModel):
     source_id: str
     source_name: str
@@ -143,6 +184,7 @@ class SourceSignal(BaseModel):
     event_target: Optional[str] = Field(default=None, description="EXPERIMENTAL shadow — the TARGET of the action in the fact behind `fact_signal`, from the dominant claim; with `event_actors` this is the fact's dyad. None when `fact_signal` is None.")
     is_occurrence: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when the dominant fact IS the event itself (or its definitive outcome), False when it is only a precursor/precondition/escalation. From the dominant claim; None when `fact_signal` is None.")
     verified: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when the dominant fact is independently reported, False when only claimed by an interested party. From the dominant claim; None when `fact_signal` is None.")
+    claims_detail: Optional[list[ClaimDetail]] = Field(default=None, description="This article's claims with their per-claim fields intact (F1/F15, retro#364) — the layer every scalar above is a reduction of. Same order and same count as `claims`, except that `claims` drops claims with an empty summary while this does not: a claim that voted in the article's stance must appear here, or the reduction stops being reproducible. Persist it (daatan#1235); nothing in aggregation reads it.")
 
 
 class ArticleDebug(BaseModel):
@@ -246,6 +288,28 @@ class PoolSourceInput(BaseModel):
     published_date: Optional[str] = Field(default=None, description="Article publish date (YYYY-MM-DD); recency is recomputed against now, not a stored value")
     settled: bool = Field(default=False, description="True when this source cleared the settlement grade (SourceSignal.settled)")
     settlement_event_date: Optional[str] = Field(default=None, description="The settlement anchor date this source carried when extracted (SourceSignal.settlement_event_date); consumed by aggregation-time settlement revalidation")
+
+    # ── Identity + per-claim payload (F1/F15, retro#364) ──────────────────
+    # The eight fields above are anonymous: a pool row cannot say which
+    # article it is, which outlet published it, what KIND of evidence it
+    # carries, or what claims produced its numbers. Everything below is
+    # ADDITIVE and read by nothing in run_pool_aggregate() — the estimator
+    # stays firewalled behind the whitelist it already had, and a recompute
+    # must be bit-identical whether or not a caller sends these
+    # (test_claims_detail.py pins that). They exist so the pool a caller
+    # persists is the pool that can later be re-scored, clustered (#355),
+    # attributed per claim, or replayed against an outcome — none of which
+    # is possible from eight anonymous scalars.
+    url: Optional[str] = Field(default=None, description="The article's URL — row identity, and what makes duplicate/echo detection possible over a persisted pool")
+    source_id: Optional[str] = Field(default=None, description="Outlet id as the leaderboard keys it (SourceSignal.source_id); the join key for per-source credibility attribution")
+    outlet: Optional[str] = Field(default=None, description="Human-readable outlet/source name (SourceSignal.source_name)")
+    evidence_class: Optional[Literal["reported_fact", "cited_probability", "cited_share", "reporting", "opinion"]] = Field(default=None, description="This article's representative evidence class. `evidence_weight` alone cannot recover it — an opinion-class article and a low-certainty unclassified one land at similar weights — so a pool that carries only the weight cannot honestly exclude opinion later")
+    fact_signal: Optional[float] = Field(default=None, ge=-1.0, le=1.0, description="EXPERIMENTAL shadow — the article's fact-lane counterpart of `stance`. Carried so the offline fact-lane gate harness can run stance-vs-fact_signal through this endpoint on real persisted pools; read by nothing here")
+    event_actors: Optional[str] = Field(default=None, description="EXPERIMENTAL shadow — dominant fact's actor(s); the dyad check's input")
+    event_target: Optional[str] = Field(default=None, description="EXPERIMENTAL shadow — dominant fact's target; the dyad check's input")
+    is_occurrence: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — whether the dominant fact IS the event or only a precursor")
+    verified: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — whether the dominant fact is independently reported or merely claimed by an interested party")
+    claims_detail: Optional[list[ClaimDetail]] = Field(default=None, description="The per-claim layer behind this row's scalars (SourceSignal.claims_detail). The canonical payload of this widening: with it a pool row can be re-reduced under a different rule; without it the row's numbers are permanently un-auditable")
 
 
 class PoolAggregateRequest(BaseModel):

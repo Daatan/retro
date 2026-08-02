@@ -66,6 +66,7 @@ from .leaderboard import get_credibility_weight
 from .models import (
     ArticleDebug,
     ArticleInput,
+    ClaimDetail,
     DebugInfo,
     ForecastRequest,
     ForecastResponse,
@@ -146,6 +147,42 @@ def _source_id_from_url(url: str) -> str:
         if domain == key or domain.endswith("." + key):
             return sid
     return domain  # fallback: raw domain as id
+
+
+def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDetail]:
+    """Project this article's claims onto the wire's per-claim model (F1/F15,
+    retro#364) — the layer the article's fused scalars are reduced from.
+
+    Takes the POST-resolution claims (after the `enforce_*` chain and
+    `resolve_stance_certainty()`), i.e. exactly the list the fusion below
+    consumes, so `stance`/`certainty`/`evidence_weight`/`fact_signal` remain
+    derivable from what is persisted. Persisting the extractor's raw output
+    instead would create a second parallel truth that cannot reproduce the
+    article's own vote.
+
+    No filtering: unlike `SourceSignal.claims`, a claim with an empty summary
+    is kept, because it still carried weight in the reduction.
+    """
+    return [
+        ClaimDetail(
+            claim=p.claim,
+            quote=p.quote or None,
+            stance=p.stance,
+            certainty=p.certainty,
+            specificity=p.specificity,
+            prediction_type=p.prediction_type.value if p.prediction_type is not None else None,
+            evidence_class=p.evidence_class,
+            quantitative_estimate=p.quantitative_estimate,
+            settled=p.settled,
+            event_date=p.event_date,
+            fact_signal=p.fact_signal,
+            event_actors=p.event_actors,
+            event_target=p.event_target,
+            is_occurrence=p.is_occurrence,
+            verified=p.verified,
+        )
+        for p in predictions
+    ]
 
 
 def derive_settlement_event_date(
@@ -1047,6 +1084,10 @@ async def _run_forecast_inner(
             event_target=fact_event_target,
             is_occurrence=fact_is_occurrence,
             verified=fact_verified,
+            # F1/F15 (retro#364): the claims that produced every scalar above,
+            # kept instead of discarded. Additive — nothing in aggregation
+            # reads it.
+            claims_detail=build_claims_detail(predictions),
         ))
 
     if evidence_class_counts:
@@ -1261,6 +1302,13 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
     settled_flags: list[bool] = []
     settlement_dates: list[Optional[str]] = []
     published_dates: list[Optional[str]] = []
+    # Whitelist, deliberately: only the eight scalars below reach the
+    # estimator. PoolSourceInput also carries identity and per-claim data
+    # (url / source_id / outlet / evidence_class / fact_signal + facets /
+    # claims_detail — F1/F15, retro#364); reading any of them here would be an
+    # estimator behaviour change smuggled in under a persistence PR. Claim-level
+    # weighting (R1) and cluster-aware settlement (#355/#372) are the issues
+    # that get to spend this data, each with its own R8 movement report.
     for s in req.sources:
         rweight = recency_weight(
             s.published_date, ref_date,

@@ -29,6 +29,7 @@ from tm.extractor import (
     extract_predictions,
     enforce_anchor_provenance,
     enforce_deadline_arithmetic,
+    enforce_interested_party_certainty,
     enforce_interested_party_stance_cap,
     enforce_precursor_cap,
     enforce_relative_date_resolution,
@@ -566,6 +567,14 @@ async def _process_article(
         # normalization because a vote's location is stance alone (retro#368).
         # Runs after the demotion above so the log line carries the resolved class.
         extraction.predictions = enforce_interested_party_stance_cap(
+            extraction.predictions,
+        )
+        # ...and the weight side of the same rule: the certainty ceiling the
+        # prompt already promises, which 30.3% of live unverified rows exceed
+        # (retro#378). Separate from the clamp above because stance is a vote's
+        # location and certainty is its weight — different consequences, and the
+        # two must move R8 cases separately attributably.
+        extraction.predictions = enforce_interested_party_certainty(
             extraction.predictions,
         )
     except Exception as exc:

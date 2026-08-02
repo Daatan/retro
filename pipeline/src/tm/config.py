@@ -57,6 +57,23 @@ class Settings(BaseSettings):
     # how far an unverified assertion may push the estimate.
     interested_party_stance_cap: float = 0.3
 
+    # ── interested-party certainty (retro#378, lane-soundness F20 weight half) ─
+    # The other axis of the same rule. The prompt has taught `certainty ≤ 0.5` on
+    # an unverified interested-party claim for months and nothing in code checked
+    # it: measured on prod 2026-08-01/02, 56 of 185 `verified=false` rows — 30.3%
+    # — carry certainty above it, max 0.733, ten sitting at exactly 0.70 with avg
+    # |stance| 0.76. That is a FLOOR on the per-claim rate, not the rate: the
+    # stored value is the article-level reduction while `verified` comes from the
+    # dominant claim, so a lone over-cap claim diluted by in-contract siblings is
+    # invisible to that count.
+    #
+    # Unlike interested_party_stance_cap above, this is NOT a new policy number:
+    # it is the prompt's own literal (0.5), so the two cannot drift — pinned by
+    # test_extractor_prompt.py. Same F9 shape: the prompt keeps teaching the rule
+    # so the model still produces good numbers unaided, and code stops trusting
+    # that it did.
+    interested_party_certainty_cap: float = 0.5
+
     # ── cited_probability provenance (retro#369, lane-soundness F4) ──────────
     # `cited_probability` carries the highest class weight (4.0) and forces
     # certainty, with no check on WHO produced the number: one sentence of "a

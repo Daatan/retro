@@ -21,15 +21,21 @@ One file per event. The pipeline ingests articles and extracts predictions for e
 }
 ```
 
-| Field | Description |
-|---|---|
-| `id` | Unique event ID (letter prefix = category, number = index) |
-| `name` | Human-readable event description |
-| `outcome` | `true` = event happened, `false` = did not happen, `null` = unresolved |
-| `outcome_date` | Date the event resolved (ISO 8601) |
-| `search_keywords` | List of keywords for GNews/DDG/CDX search. Hebrew + English. |
-| `llm_referee_criteria` | Prompt fragment given to the LLM to judge relevance |
-| `predictive_window_days` | (optional) How many days before outcome_date to search. Default: 14 |
+| Field | Required | Description |
+|---|---|---|
+| `id` | ✓ | Unique event ID, letter prefix + zero-padded index (`A01`). Must match the filename. |
+| `name` | ✓ | Human-readable event description |
+| `outcome` | ✓ | `true` = event happened, `false` = did not happen, `null` = unresolved |
+| `outcome_date` | if resolved | Date the event resolved (ISO 8601). Required when `outcome` is not null. |
+| `search_keywords` | ✓ | List of keywords for GNews/DDG/CDX search. Hebrew + English. |
+| `llm_referee_criteria` | ✓ | Prompt fragment given to the LLM to judge relevance |
+| `category` | ✓ | List of display categories (`Israeli Politics`, `Gaza War`, `Energy`, …) |
+| `tags` | ✓ | Free-form string tags |
+| `polymarket` | ✓ (nullable) | `null`, or `{question, url, match_quality}` with optional `invert`. `match_quality` ∈ `exact` \| `close` \| `indirect`. The key is always present — an explicit `null` means "no market", a missing key is a malformed file. |
+| `predictive_window_days` | optional | How many days before `outcome_date` to search. **The fallback differs by ingest path** — 14 in `gnews_ingest`/`site_search`/`crawler`/`orchestrator`, 30 in `gdelt_ingest`/`web_search_ingest` — so every committed event sets it explicitly (all currently 30). |
+| `oracle_question` | optional | Binary question text when the event is also posed to the Oracle |
+| `duel_keywords` | optional | Extra keywords used by the Polymarket duel |
+| `scope` | optional | e.g. `global` |
 
 **Event ID prefixes:**
 - `A` — Israeli politics / elections
@@ -39,6 +45,23 @@ One file per event. The pipeline ingests articles and extracts predictions for e
 - `E` — Global events (Trump, Fed, etc.)
 - `F` — Society / religion
 - `G` — Tech / AI
+- `H` — Israeli tech / economy
+- `I` — Energy / global markets
+
+The prefix is a curation bucket and does **not** have to match `category` — an `A` event can carry `Gaza War`. New letters are expected as the atlas grows.
+
+**Validating these files** — two scripts, run from the repo root:
+
+```bash
+python pipeline/scripts/validate_events.py       # schema: fields, types, ids, dates
+python pipeline/scripts/audit_event_criteria.py  # quality of llm_referee_criteria
+```
+
+`validate_events.py` exits non-zero on any finding and is pinned by
+`pipeline/tests/test_event_validation.py`, which asserts the committed set is
+clean — so a bad hand edit fails CI rather than silently producing a starved or
+mis-keyed case study. Editing anything under `data/events/` triggers that
+workflow.
 
 ---
 

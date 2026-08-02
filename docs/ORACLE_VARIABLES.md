@@ -221,6 +221,7 @@ before enabling in prod.
 | **`weight`** | `credibility × avg_certainty × rweight × relevance² × quant_mult` | pool weight |
 | `fact_signal` (shadow) | claim-weighted **mean** of per-claim `fact_signal` over the **same** scored claims as `avg_stance`; `None` if none carried one | Phase 2 fact-lane counterpart of `avg_stance`, un-fused from author assertion; **read by nothing in aggregation** — surfaced on `SourceSignal`/`sources[]` only for daatan persistence + the offline fact-lane gate harness (`pipeline/scripts/backtest_fact_signal_gate.py`: stance-vs-fact_signal paired Brier through the real `/pool/aggregate`; any estimator cutover is gated on it turning convincingly positive, same evidence standard as the credibility flag). Extraction-side, the FACT_SIGNAL prompt carries a **decider-statement exception** (2026-07-29, A/B-gated): an on-record statement by the actor/authority whose own act would resolve the claim — announcement or denial alike — enters the fact lane as a capped precursor instead of being nulled as opinion; assertions *about* the decider's intent by opponents or analysts stay claimed-and-unverified. A companion **negative-precursor ladder** (2026-07-29, WS5b, A/B-gated) generalizes the negative side beyond decider statements: any contrary reported fact — an obstacle emerging, a preparation reversed, an opposing development, a measured indicator moving against the event — enters the fact lane as a graded negative precursor instead of null, with the extreme negative reserved for established impossibility; this closes the measured null asymmetry (negative-stance rows nulled 33.0% vs 22.6% for positive, fact-era pool) while the mobilization regression keeps deflating (see `test_extractor_prompt.py::test_negative_precursor_ladder_present` for the A/B record). Wording is numeral-free by design (magnitude policy belongs in estimator config); see `test_extractor_prompt.py::test_decider_statements_exception_present` for the A/B evidence and re-run bar. Its facets `event_actors`/`event_target`/`is_occurrence`/`verified` ride from the **dominant** (max \|fact_signal\|) claim so they stay internally coherent. Magnitude for a **precursor** is enforced in code, not by the prompt (retro#367): `enforce_precursor_cap` clamps per-claim \|`fact_signal`\| to `fact_signal_precursor_cap` (`tm/config.py`, **0.3**) whenever the extractor set `is_occurrence=false`, in the `enforce_*` chain immediately before this fusion — so both the mean and the dominant-claim selection see the capped value. |
 | `author_lean`, `author_lean_certainty` (shadow) | passed through from `ExtractionOutput` (retro #308/#309) — the byline author's OWN forecast | author-accuracy scoring lane; **not read by aggregation** |
+| `claims_detail` | no reduction — the article's claims themselves, projected onto `ClaimDetail` (`build_claims_detail()`) | **F1/F15, retro#364.** Every other row in this table is a reduction; this is the layer they reduce *from*, and until it existed the inputs were discarded at the wire, so no reduction here was checkable and no history was re-scorable. Recorded POST-resolution — after the `enforce_*` chain and `resolve_stance_certainty()` — i.e. the values the fusion actually consumed, which is what keeps `avg_stance`/`avg_certainty`/`evidence_weight`/`fact_signal` derivable from it (`test_claims_detail.py` pins each derivation). Per claim: `claim`, `quote`, `stance`, `certainty`, `specificity`, `prediction_type`, `evidence_class`, `quantitative_estimate`, `settled`, `event_date`, `fact_signal` + its four facets. Two collapses become visible only here: `evidence_class` is per-claim (the article carries only the most common one) and the fact facets are per-claim (the article carries only the **dominant** claim's), which is why an over-cap interested-party claim diluted by in-contract siblings is invisible above this layer (retro#378). Unlike `claims`, nothing is filtered — a claim with an empty summary still voted, so it is still kept. **Read by nothing in aggregation**; persistence surface only (daatan#1235), same shadow-field rollout as `author_lean` and `fact_signal`. |
 
 ### 2.4 Pool level (`aggregation.py`, `forecaster.py:799-932`)
 
@@ -726,6 +727,25 @@ Shipped, in the accepted sequencing order (§6):
   unchanged post-refactor — 200/200 — proving the extraction preserved
   behavior exactly). 8 new tests for `aggregate_pool()`, 8 more for the
   endpoint.
+- **The pool wire carries identity and claims** — retro#364 (F1+F15, Phase 1
+  Tier S): the contract above was **eight anonymous scalars**. A pool row
+  could not say which article it was, which outlet published it, what kind of
+  evidence it carried, or which claims produced its numbers — so claim-level
+  weighting (R1), the factored taxonomy (R5), per-claim credibility
+  attribution (F3), the R6 shadow pool and **all** retroactive backtesting
+  were blocked by the wire rather than by their own difficulty. We cannot
+  re-score history we never kept. `PoolSourceInput` is now widened
+  additively with `url` / `source_id` / `outlet` / `evidence_class` /
+  `fact_signal` + its four facets / `claims_detail`, and `SourceSignal`
+  emits `claims_detail` on every `/forecast` (see §2.3). **`run_pool_aggregate()`
+  reads none of them** — the estimator keeps exactly the eight-scalar
+  whitelist it had, deliberately, so that spending this data stays the job of
+  the issues that own each mechanic (R1; #355 clustering; #372's cluster-aware
+  settlement), each with its own R8 movement report. Per R8 this shipped as
+  additive persistence only: the aggregation trace matrix moved **zero** cases,
+  and `test_claims_detail.py` pins the estimate bit-identical (whole response
+  object, ordinary and settlement paths) whether or not a caller sends the new
+  fields. Storage half: daatan#1235.
 
 Open, in suggested order:
 

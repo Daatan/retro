@@ -1069,6 +1069,72 @@ def enforce_interested_party_stance_cap(
     return predictions
 
 
+def enforce_interested_party_certainty(
+    predictions: list[PredictionExtraction],
+) -> list[PredictionExtraction]:
+    """The weight-side half of the interested-party rule (retro#378, F20 family).
+
+    The prompt's VERIFIED vs CLAIMED section says an unverified interested-party
+    claim "carries certainty no higher than 0.5, however declaratively it reads".
+    Nothing checked it. Measured on prod (2026-08-01/02, `evidence_pool_articles`
+    rows carrying the marker): **56 of 185 ``verified=false`` rows — 30.3% —
+    exceed the cap**, max 0.733, with ten sitting at exactly 0.70 carrying an
+    average ``|stance|`` of 0.76. As with :func:`enforce_precursor_cap` (24.4%),
+    a numeric the prompt has taught for months is simply not held by the prompt.
+
+    That 30.3% is a **floor** on the per-claim rate. The stored ``certainty`` is
+    the article-level reduction while ``verified`` is the dominant claim's, so a
+    single over-cap interested-party claim diluted by in-contract siblings never
+    shows up in that count. Per-claim data is persisted as of retro#364, so the
+    real rate becomes measurable going forward.
+
+    Why this is a separate function from
+    :func:`enforce_interested_party_stance_cap` rather than two lines in one:
+    they act on different axes with different consequences and must produce
+    separately attributable R8 movement. Stance is a vote's LOCATION in the pool;
+    certainty is its WEIGHT. The audit separated them on evidence — a
+    weight-only discount fully cancels under normalization in a unanimous pool,
+    which is why the stance half was needed at all, and the unanimous-pool case
+    has zero live instances (0 of 71 multi-article predictions have an entirely
+    unverified pool; 38 are mixed, 33 all-verified). So in current traffic this
+    cap DOES bite, in those 38 mixed pools, where an unverified claim competes
+    against verified ones and its weight decides how far it pulls the mean.
+
+    Unlike the stance cap, the number here is not new policy: it is the prompt's
+    own literal, and ``test_extractor_prompt.py`` pins the two together so they
+    cannot drift.
+
+    Fail-open in the same asymmetry as the rest of the chain: ``verified`` of
+    ``None`` — the extractor did not judge, true of ~87% of live pool rows, since
+    the marker is populated only on extractions since 2026-07-09 and was never
+    backfilled — or ``True`` leaves the claim untouched. This cap is therefore a
+    no-op on historical rows and can only be validated forward, never
+    retrospectively.
+
+    One ordering note: ``resolve_stance_certainty`` runs later, at aggregation,
+    and can re-derive BOTH stance and certainty (flooring it at 0.9) for a
+    provenance-passing ``cited_probability`` claim — so it can override this cap
+    for a claim that is both ``verified=false`` and a checkable cited figure.
+    Zero live instances (all ``cited_probability`` rows in the prod pool are
+    ``verified=true``), and defensible on the same grounds as there: a checkable
+    market figure is not an interested party's assertion, whoever repeated it.
+    """
+    cap = settings.interested_party_certainty_cap
+    for p in predictions:
+        if p.verified is not False:
+            continue
+        if p.certainty <= cap:
+            continue
+        logger.warning(
+            "event=interested_party_certainty_clamped certainty=%.2f -> %.2f "
+            "cap=%.2f stance=%+.2f evidence_class=%s claim=%r",
+            p.certainty, cap, cap, p.stance, p.evidence_class, p.claim[:120],
+        )
+        p.certainty = cap
+
+    return predictions
+
+
 def _names_allowlisted_source(text: str) -> Optional[str]:
     """The allowlisted source named in ``text``, or None. Word-boundary and
     case-insensitive; internal spaces match any run of whitespace so a name

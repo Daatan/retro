@@ -484,7 +484,7 @@
           {
             "source": "alpha",
             "stance": 0.3,
-            "certainty": 0.85,
+            "certainty": 0.5,
             "credibility_weight": 1.0,
             "evidence_class": "reporting",
             "evidence_weight": 0.6,
@@ -501,7 +501,7 @@
           {
             "source": "bravo",
             "stance": 0.3,
-            "certainty": 0.85,
+            "certainty": 0.5,
             "credibility_weight": 1.0,
             "evidence_class": "reporting",
             "evidence_weight": 0.6,
@@ -518,7 +518,7 @@
           {
             "source": "charlie",
             "stance": 0.3,
-            "certainty": 0.85,
+            "certainty": 0.5,
             "credibility_weight": 1.0,
             "evidence_class": "reporting",
             "evidence_weight": 0.6,
@@ -535,7 +535,7 @@
           {
             "source": "delta",
             "stance": 0.3,
-            "certainty": 0.85,
+            "certainty": 0.5,
             "credibility_weight": 1.0,
             "evidence_class": "reporting",
             "evidence_weight": 0.6,
@@ -634,7 +634,7 @@
           {
             "source": "bravo",
             "stance": 0.3,
-            "certainty": 0.9,
+            "certainty": 0.5,
             "credibility_weight": 1.0,
             "evidence_class": "reported_fact",
             "evidence_weight": 1.0,
@@ -953,7 +953,7 @@
           {
             "source": "alpha",
             "stance": 0.3,
-            "certainty": 0.95,
+            "certainty": 0.5,
             "credibility_weight": 0.4,
             "evidence_class": "reported_fact",
             "evidence_weight": 1.0,
@@ -970,7 +970,7 @@
           {
             "source": "bravo",
             "stance": 0.3,
-            "certainty": 0.95,
+            "certainty": 0.5,
             "credibility_weight": 0.4,
             "evidence_class": "reported_fact",
             "evidence_weight": 1.0,
@@ -1064,7 +1064,7 @@
           {
             "source": "alpha",
             "stance": 0.3,
-            "certainty": 0.95,
+            "certainty": 0.5,
             "credibility_weight": 0.4,
             "evidence_class": "reported_fact",
             "evidence_weight": 1.0,
@@ -1081,7 +1081,7 @@
           {
             "source": "bravo",
             "stance": 0.3,
-            "certainty": 0.95,
+            "certainty": 0.5,
             "credibility_weight": 0.4,
             "evidence_class": "reported_fact",
             "evidence_weight": 1.0,

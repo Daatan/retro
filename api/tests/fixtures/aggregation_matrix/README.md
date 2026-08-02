@@ -1,6 +1,6 @@
 # The aggregation trace matrix (R8, retro#370)
 
-57 pinned cases covering the estimator's mechanics end to end, replayed through
+59 pinned cases covering the estimator's mechanics end to end, replayed through
 the real `run_forecast` by [`api/tests/test_aggregation_matrix.py`](../../test_aggregation_matrix.py).
 
 Why it exists: the lane-soundness audit's rule **R8** — no aggregator or
@@ -12,7 +12,7 @@ can be run today.
 | File | Group | Cases | What it holds |
 |---|---|---|---|
 | `group_a_intra_article.json` | A | 20 | The article boundary: claims → one (stance, certainty, evidence_weight, settled, fact_signal) tuple |
-| `group_b_truth_and_fabrication.json` | B | 17 | Adversarial evidence: echoes, fabricated anchors, interested parties, hoax settlements, blocked sources |
+| `group_b_truth_and_fabrication.json` | B | 19 | Adversarial evidence: echoes, fabricated anchors, interested parties, hoax settlements, blocked sources, live settlement incidents |
 | `group_c_pool_dynamics.json` | C | 14 | The pool boundary: relevance floor, weight multipliers, logit clamp, CI and widening, settlement revalidation |
 | `group_d_class_boundaries.json` | D | 6 | The evidence-class table: constants, ratios, the unclassified fallback, mixed-class collapse |
 
@@ -73,8 +73,13 @@ behavioural claim. Invariants are Python expressions evaluated against
 **`known_bad` marks a case that pins behaviour the audit already judged wrong.**
 It changes nothing at runtime — the snapshot is still enforced — but it tells the
 next reader that movement here is probably the fix landing, and it tells the
-Phase-1 author which cases their PR is supposed to touch. 27 of the 57 carry one:
-F1 ×6, R3 ×5, F12 ×4, F2 ×3, F4 ×3, F16 ×3, F9, F20, F23.
+Phase-1 author which cases their PR is supposed to touch. 29 of the 59 carry one:
+F1 ×6, R3 ×5, F12 ×4, F2 ×3, F4 ×3, F16 ×3, F9, F20, F23, #388, #360.
+
+Two of them (`B18`, `B19`) are transcribed from **live prod incidents** rather than
+constructed: their `finding` is the issue number, and their `expected_behavior`
+records what was verified about the incident — including, for `B18`, that the
+fix its issue proposes would not have fired.
 
 ## What is stubbed, and what is not
 

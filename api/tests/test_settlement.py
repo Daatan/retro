@@ -13,6 +13,8 @@ caller-supplied-articles path with the gatekeeper and extractor mocked, so no
 network or LLM is involved.
 """
 
+from datetime import date, timedelta
+
 import pytest
 
 from forecast_api import forecaster
@@ -29,6 +31,17 @@ _TITLES = [
 ]
 
 
+# Settlement is weighted evidence, not just a flag: with
+# settlement_quality_floor enabled (retro#372) the settling votes must carry
+# real mass, and mass includes recency. A fixture with a hard-coded past date
+# decays a little further every day the suite is run, so a test written to
+# check the pin mechanics silently becomes a test of recency decay. These
+# dates are therefore relative — "yesterday's coverage" — which is what every
+# test in this file actually means by a settlement.
+_FRESH = (date.today() - timedelta(days=1)).isoformat()
+_FRESH_EVENT = (date.today() - timedelta(days=2)).isoformat()
+
+
 def _article(i: int) -> ArticleInput:
     # Titles must be genuinely distinct or the syndication dedupe collapses the
     # set to one source (title-token Jaccard >= 0.8 merges near-duplicates).
@@ -37,7 +50,7 @@ def _article(i: int) -> ArticleInput:
         title=_TITLES[i - 1],
         snippet=f"A snippet with enough length to pass the fallback minimum, variant {i}.",
         source=f"source-{i}",
-        published_date="2026-06-16",
+        published_date=_FRESH,
         text="A long enough prefetched article body about the event in question." * 3,
     )
 
@@ -51,10 +64,10 @@ def _gate_ok():
 
 def _prediction(stance: float, certainty: float, settled: bool | None = None) -> PredictionExtraction:
     # Positive settlements must be dated (enforce_settlement_event_date) — on/before
-    # the article date (2026-06-16). Negative ones carry no date by definition.
+    # the article date. Negative ones carry no date by definition.
     return PredictionExtraction(
         quote="quote", claim="claim", stance=stance, certainty=certainty, settled=settled,
-        event_date="2026-06-15" if settled and stance > 0 else None,
+        event_date=_FRESH_EVENT if settled and stance > 0 else None,
     )
 
 

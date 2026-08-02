@@ -296,15 +296,36 @@ class ApiSettings(BaseSettings):
     # the pin is suppressed (suppression_reason="settlement_quality_floor") and
     # the pooled mean stands, same as any other suppressed pin.
     #
-    # Default 0 (disabled): unlike decisiveness_floor/relevance_weight_floor,
-    # there is no audited incident to calibrate this against yet (#279 doesn't
-    # specify a number either) — 0.5 looked like a natural reuse of
-    # decisiveness_floor's scale but broke multiple legitimate-pin tests once
-    # wired through real per-source weights (credibility/recency/relevance
-    # multiplied together lands lower than a single flat floor assumes). Tune
-    # from real pool data (per-source weight distribution of past legitimate
-    # vs. false settlements) before enabling in prod.
-    settlement_quality_floor: float = 0.0
+    # ENABLED at 0.20 (retro#372), calibrated 2026-08-02 against every pin
+    # production has ever published — the "tune from real pool data" this
+    # comment used to defer. Method: the latest pinning snapshot per prediction
+    # (29; 2 excluded as unmeasurable — their rows predate evidence_weight /
+    # relevance_score being stored, so they read as 0 rather than being 0),
+    # winning-direction weight reconstructed as credibility · evidence_weight ·
+    # recency · relevance² with recency recomputed from published_at against
+    # the snapshot's own timestamp (recency_weight is not persisted).
+    #
+    #   min 0.022 · p25 0.28 · median 0.60 · p75 1.65 · max 12.2
+    #
+    # At 0.20 exactly three of the 27 measurable pins are suppressed, and each
+    # is indefensible on its face: one pinned on articles published in **2021**
+    # (decayed to the 0.02 recency floor — fixture B12 in the wild), one on a
+    # single settled vote in a one-row pool, one at 0.171. The next pin up sits
+    # at 0.22, so the cut lands in a real gap rather than mid-cluster.
+    #
+    # Two things this deliberately does NOT buy, stated so the number is not
+    # oversold:
+    #   - It suppresses NONE of the three pins that resolved WRONG (0.432,
+    #     1.727, 2.292). Mass was not what was wrong with them — sign and
+    #     subject were (retro#360, #388). A quality floor is a floor on
+    #     evidence, not on relevance-of-evidence.
+    #   - It suppresses the #388 Patriot pin at the snapshot where it fired
+    #     (0.134) but not indefinitely: by the latest snapshot that pool's
+    #     settled mass has grown to 0.297. A fixed floor delays a wrong pin
+    #     that keeps accumulating corroboration; it does not prevent it.
+    # Reconstruction ignores per-vote validity demotions, so the real winning
+    # weight is <= the measured one and suppression is a lower bound.
+    settlement_quality_floor: float = 0.20
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.

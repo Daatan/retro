@@ -227,7 +227,13 @@ contained. Bare domains (`ynet.co.il`) are deliberately **not** stripped: the pa
 catches them also eats ordinary abbreviations, and over-rejection here silently loses a
 curated journalist's scoop, which is the failure news-indexer's rescue path exists to undo.
 
-### 2.3 Per-source derived (`api/src/forecast_api/forecaster.py:715-794`)
+### 2.3 Per-source derived (`reduce_article()` in `api/src/forecast_api/forecaster.py`)
+
+Every row below is a reduction over the article's `claims_detail` — one pure
+function, so the same reduction can be replayed over a persisted pool row
+(F1 item 3, retro#364). Before that the scalars were computed over the
+in-memory extraction list and the claims were projected onto the wire
+separately: one source, two computations, free to drift.
 
 | variable | formula | notes |
 |---|---|---|
@@ -239,7 +245,7 @@ curated journalist's scoop, which is the failure news-indexer's rescue path exis
 | **`weight`** | `credibility × avg_certainty × rweight × relevance² × quant_mult` | pool weight |
 | `fact_signal` (shadow) | claim-weighted **mean** of per-claim `fact_signal` over the **same** scored claims as `avg_stance`; `None` if none carried one | Phase 2 fact-lane counterpart of `avg_stance`, un-fused from author assertion; **read by nothing in aggregation** — surfaced on `SourceSignal`/`sources[]` only for daatan persistence + the offline fact-lane gate harness (`pipeline/scripts/backtest_fact_signal_gate.py`: stance-vs-fact_signal paired Brier through the real `/pool/aggregate`; any estimator cutover is gated on it turning convincingly positive, same evidence standard as the credibility flag). Extraction-side, the FACT_SIGNAL prompt carries a **decider-statement exception** (2026-07-29, A/B-gated): an on-record statement by the actor/authority whose own act would resolve the claim — announcement or denial alike — enters the fact lane as a capped precursor instead of being nulled as opinion; assertions *about* the decider's intent by opponents or analysts stay claimed-and-unverified. A companion **negative-precursor ladder** (2026-07-29, WS5b, A/B-gated) generalizes the negative side beyond decider statements: any contrary reported fact — an obstacle emerging, a preparation reversed, an opposing development, a measured indicator moving against the event — enters the fact lane as a graded negative precursor instead of null, with the extreme negative reserved for established impossibility; this closes the measured null asymmetry (negative-stance rows nulled 33.0% vs 22.6% for positive, fact-era pool) while the mobilization regression keeps deflating (see `test_extractor_prompt.py::test_negative_precursor_ladder_present` for the A/B record). Wording is numeral-free by design (magnitude policy belongs in estimator config); see `test_extractor_prompt.py::test_decider_statements_exception_present` for the A/B evidence and re-run bar. Its facets `event_actors`/`event_target`/`is_occurrence`/`verified` ride from the **dominant** (max \|fact_signal\|) claim so they stay internally coherent. Magnitude for a **precursor** is enforced in code, not by the prompt (retro#367): `enforce_precursor_cap` clamps per-claim \|`fact_signal`\| to `fact_signal_precursor_cap` (`tm/config.py`, **0.3**) whenever the extractor set `is_occurrence=false`, in the `enforce_*` chain immediately before this fusion — so both the mean and the dominant-claim selection see the capped value. |
 | `author_lean`, `author_lean_certainty` (shadow) | passed through from `ExtractionOutput` (retro #308/#309) — the byline author's OWN forecast | author-accuracy scoring lane; **not read by aggregation** |
-| `claims_detail` | no reduction — the article's claims themselves, projected onto `ClaimDetail` (`build_claims_detail()`) | **F1/F15, retro#364.** Every other row in this table is a reduction; this is the layer they reduce *from*, and until it existed the inputs were discarded at the wire, so no reduction here was checkable and no history was re-scorable. Recorded POST-resolution — after the `enforce_*` chain and `resolve_stance_certainty()` — i.e. the values the fusion actually consumed, which is what keeps `avg_stance`/`avg_certainty`/`evidence_weight`/`fact_signal` derivable from it (`test_claims_detail.py` pins each derivation). Per claim: `claim`, `quote`, `stance`, `certainty`, `specificity`, `prediction_type`, `evidence_class`, `quantitative_estimate`, `settled`, `event_date`, `fact_signal` + its four facets. Two collapses become visible only here: `evidence_class` is per-claim (the article carries only the most common one) and the fact facets are per-claim (the article carries only the **dominant** claim's), which is why an over-cap interested-party claim diluted by in-contract siblings is invisible above this layer (retro#378). Unlike `claims`, nothing is filtered — a claim with an empty summary still voted, so it is still kept. **Read by nothing in aggregation**; persistence surface only (daatan#1235), same shadow-field rollout as `author_lean` and `fact_signal`. |
+| `claims_detail` | no reduction — the article's claims themselves, projected onto `ClaimDetail` (`build_claims_detail()`) | **F1/F15, retro#364.** Every other row in this table is a reduction; this is the layer they reduce *from* — literally: `build_claims_detail()` runs first and `reduce_article()` takes its output as input, so the persisted claims are the reduction's argument rather than a copy taken alongside it. Until this layer existed the inputs were discarded at the wire, so no reduction here was checkable and no history was re-scorable. Recorded POST-resolution — after the `enforce_*` chain and `resolve_stance_certainty()` — i.e. the values the fusion actually consumed. `test_claims_detail.py` pins each derivation individually *and* replays `reduce_article()` over the persisted claims alone, asserting it reproduces every scalar of the signal it produced (ordinary, settlement, and demoted-settlement paths). Per claim: `claim`, `quote`, `stance`, `certainty`, `specificity`, `prediction_type`, `evidence_class`, `quantitative_estimate`, `settled`, `event_date`, `fact_signal` + its four facets. Two collapses become visible only here: `evidence_class` is per-claim (the article carries only the most common one) and the fact facets are per-claim (the article carries only the **dominant** claim's), which is why an over-cap interested-party claim diluted by in-contract siblings is invisible above this layer (retro#378). Unlike `claims`, nothing is filtered — a claim with an empty summary still voted, so it is still kept. **Read by nothing in aggregation**; persistence surface only (daatan#1235), same shadow-field rollout as `author_lean` and `fact_signal`. |
 
 ### 2.4 Pool level (`aggregation.py`, `forecaster.py:799-932`)
 
@@ -764,6 +770,16 @@ Shipped, in the accepted sequencing order (§6):
   and `test_claims_detail.py` pins the estimate bit-identical (whole response
   object, ordinary and settlement paths) whether or not a caller sends the new
   fields. Storage half: daatan#1235.
+  **Item 3 of the fix — the scalars are now *derived*, not parallel** — landed
+  next: `reduce_article()` is the single named reduction from `claims_detail`
+  to the article's stance / certainty / evidence_weight / evidence_class /
+  settlement / fact lane, and the loop calls `build_claims_detail()` first and
+  feeds it in. Same formulas, same order, same floats — a refactor, verified by
+  zero movement across the 57 matrix cases; an implementation of "derived" that
+  moved a number would have quietly imported R1 (claim-level weighting), which
+  is Phase 2 and gated on the shadow pool. Because the function is pure, it is
+  also the replay path: a stored pool row can be re-reduced offline, which is
+  what makes backtesting, R1 fitting and F3 attribution possible on history.
 
 Open, in suggested order:
 

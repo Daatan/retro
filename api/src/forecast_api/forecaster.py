@@ -13,6 +13,7 @@ import logging
 import re
 import time
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 from urllib.parse import urlparse
@@ -186,8 +187,149 @@ def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDe
     ]
 
 
+@dataclass(frozen=True)
+class ArticleReduction:
+    """The article-level scalars, as reduced FROM the per-claim layer.
+
+    Item 3 of F1 (retro#364): the fused scalars are *derived* from
+    ``claims_detail``, not computed beside it. Before this they were computed
+    over the in-memory extraction list and the claims were projected onto the
+    wire separately — two computations from one source, which is a parallel
+    truth waiting to drift the moment either side is edited. Reducing from the
+    persisted layer makes derivability structural: whatever a stored row
+    contains is, by construction, what produced that row's numbers.
+
+    Same formulas, same order of operations, same floats as before — this is a
+    refactor. Any implementation of it that MOVES a number has quietly imported
+    R1 (claim-level weighting), which is Phase 2 and gated on the shadow pool.
+    """
+    stance: float
+    certainty: float
+    evidence_weight: float
+    evidence_class: Optional[str]
+    settled: bool
+    settlement_demoted: int
+    settlement_event_date: Optional[str]
+    quantitative_estimate: Optional[float]
+    claims: list[str]
+    fact_signal: Optional[float]
+    event_actors: Optional[str]
+    event_target: Optional[str]
+    is_occurrence: Optional[bool]
+    verified: Optional[bool]
+
+
+def reduce_article(
+    claims: list[ClaimDetail],
+    *,
+    settlement_min_stance: float,
+    settlement_min_certainty: float,
+    class_weights: dict,
+    class_weight_default: float,
+    class_weight_unclassified_cap: float,
+) -> ArticleReduction:
+    """Collapse one article's claims into the scalars the pool consumes.
+
+    Five reductions over five different subsets, which is exactly why the
+    per-claim layer had to survive:
+
+    - ``stance``   — claim-weighted mean over the SETTLEMENT-GRADE claims if the
+      article has any, else over all of them. A verdict must not be averaged
+      down by the same article's colour quotes.
+    - ``certainty`` / ``evidence_weight`` — means over ALL claims, including the
+      ones the settlement subset excluded.
+    - ``evidence_class`` — the most common non-null per-claim label, i.e. only
+      the article's *representative* class; mixed-class articles are
+      unattributable at this level by construction (which is what the
+      per-claim field now records honestly).
+    - ``fact_signal`` — claim-weighted mean over the same scored subset as
+      ``stance``, but its qualifying facets ride from the single dominant
+      (max |fact_signal|) claim so they stay internally coherent.
+
+    Pure: takes claims and configuration, touches no globals, and is therefore
+    replayable over persisted ``claims_detail`` rows — which is the whole point
+    of keeping them (retroactive backtesting, R1 fitting, F3 attribution).
+    """
+    # Settlement-grade gate: the extractor's own stated rule, enforced in code.
+    # A settled claim that fails it is demoted to ordinary evidence — it still
+    # votes, it just cannot pin the estimate.
+    settled_claims = [
+        c for c in claims
+        if c.settled and settlement_grade(
+            c.stance, c.certainty,
+            min_stance=settlement_min_stance,
+            min_certainty=settlement_min_certainty,
+        )
+    ]
+    demoted = sum(1 for c in claims if c.settled) - len(settled_claims)
+    scored = settled_claims or claims
+
+    stance = claim_weighted_stance(
+        [c.stance for c in scored],
+        [c.certainty for c in scored],
+        [c.specificity for c in scored],
+    )
+    certainty = sum(c.certainty for c in claims) / len(claims)
+    # S2 cutover: evidence-class weight replaces certainty as the linear factor
+    # in the cross-article `weight`. Classified claims look up class_weight;
+    # unclassified ones fall back to their own certainty, capped at the weakest
+    # class (retro#366) — see evidence_class_weight().
+    evidence_weight = sum(
+        evidence_class_weight(
+            c.evidence_class, c.certainty,
+            weights=class_weights,
+            default=class_weight_default,
+            unclassified_cap=class_weight_unclassified_cap,
+        )
+        for c in claims
+    ) / len(claims)
+
+    # The credibility feedback loop (docs/ORACLE_VARIABLES.md §9) needs the
+    # label, not just the resolved weight, to exclude opinion-class articles
+    # from the resolution-outcome signal.
+    labelled = [c.evidence_class for c in claims if c.evidence_class is not None]
+    representative_class = Counter(labelled).most_common(1)[0][0] if labelled else None
+
+    # fact_signal lane — SHADOW, parallel to stance, read by nothing in
+    # aggregation. Mean-to-mean with stance so the offline fact-lane backtest
+    # compares like with like; None when no scored claim carried a fact_signal.
+    fact_claims = [c for c in scored if c.fact_signal is not None]
+    if fact_claims:
+        fact_signal = claim_weighted_stance(
+            [c.fact_signal for c in fact_claims],
+            [c.certainty for c in fact_claims],
+            [c.specificity for c in fact_claims],
+        )
+        dominant = max(fact_claims, key=lambda c: abs(c.fact_signal))
+        event_actors, event_target = dominant.event_actors, dominant.event_target
+        is_occurrence, verified = dominant.is_occurrence, dominant.verified
+    else:
+        fact_signal = None
+        event_actors = event_target = None
+        is_occurrence = verified = None
+
+    return ArticleReduction(
+        stance=stance,
+        certainty=certainty,
+        evidence_weight=evidence_weight,
+        evidence_class=representative_class,
+        settled=bool(settled_claims),
+        settlement_demoted=demoted,
+        settlement_event_date=derive_settlement_event_date(settled_claims, stance),
+        quantitative_estimate=next(
+            (c.quantitative_estimate for c in claims if c.quantitative_estimate is not None), None
+        ),
+        claims=[c.claim for c in claims if c.claim],
+        fact_signal=fact_signal,
+        event_actors=event_actors,
+        event_target=event_target,
+        is_occurrence=is_occurrence,
+        verified=verified,
+    )
+
+
 def derive_settlement_event_date(
-    settled_preds: list[PredictionExtraction],
+    settled_preds: list[ClaimDetail],
     avg_stance: float,
 ) -> Optional[str]:
     """The article-level settlement anchor date, for SourceSignal.
@@ -966,56 +1108,41 @@ async def _run_forecast_inner(
 
         source_id = _source_id_from_url(result.url)
         credibility = get_credibility_weight(source_id)
+        # F1/F15 (retro#364): project the claims onto the wire's per-claim model
+        # FIRST, then reduce the article's scalars from that layer. The claims
+        # are no longer a by-product of the reduction — they are its input, so
+        # what gets persisted is by construction what produced these numbers.
+        #
         # Layer A: certainty-weight the article's claims so a decisive claim
         # dominates tangential hedged ones instead of being washed out.
         # Settlement claims (the outcome reported as an accomplished fact) go
         # further and *replace* the article's mixed claim set: a verdict must
         # not be averaged down by the same article's color quotes.
-        # A settled claim counts as a settlement only when it is settlement-grade
-        # (near-boundary stance, high certainty — the extractor's own stated rule,
-        # now enforced in code). Failing claims are demoted to ordinary evidence:
-        # they still vote in the pool, they just cannot pin the estimate.
-        settled_preds = [
-            p for p in predictions
-            if p.settled and settlement_grade(
-                p.stance, p.certainty,
-                min_stance=settings.settlement_min_claim_stance,
-                min_certainty=settings.settlement_min_claim_certainty,
-            )
-        ]
-        demoted = sum(1 for p in predictions if p.settled) - len(settled_preds)
-        if demoted:
+        # Layer A.5 (S2 cutover): evidence-class weight becomes the linear
+        # factor in the cross-article `weight` below. A pool of only weak/hedged
+        # sources still ends up below decisiveness_floor and surfaces as a
+        # wide-CI low-confidence estimate (see the thin-evidence widening after
+        # pooling), rather than being deleted and forcing an abstention on
+        # on-topic coverage.
+        claims_detail = build_claims_detail(predictions)
+        reduction = reduce_article(
+            claims_detail,
+            settlement_min_stance=settings.settlement_min_claim_stance,
+            settlement_min_certainty=settings.settlement_min_claim_certainty,
+            class_weights=settings.evidence_class_weight,
+            class_weight_default=settings.evidence_class_weight_default,
+            class_weight_unclassified_cap=settings.evidence_class_weight_unclassified_cap,
+        )
+        if reduction.settlement_demoted:
             logger.info(
                 "event=settlement_demoted url=%s demoted=%d (below stance/certainty gates)",
-                result.url, demoted,
+                result.url, reduction.settlement_demoted,
             )
-        scored_preds = settled_preds or predictions
-        avg_stance = claim_weighted_stance(
-            [p.stance for p in scored_preds],
-            [p.certainty for p in scored_preds],
-            [p.specificity for p in scored_preds],
-        )
-        all_settled.append(bool(settled_preds))
-        settlement_event_date = derive_settlement_event_date(settled_preds, avg_stance)
-        all_settlement_dates.append(settlement_event_date)
-        avg_certainty = sum(p.certainty for p in predictions) / len(predictions)
-        # Layer A.5 (S2 cutover): evidence-class-weight the article's claims for
-        # the cross-article `weight` below, replacing avg_certainty as that
-        # term's linear factor. Classified claims (evidence_class set) look up
-        # class_weight; unclassified claims fall back to their own certainty —
-        # see evidence_class_weight(). A pool of only weak/hedged sources still
-        # ends up below decisiveness_floor and surfaces as a wide-CI
-        # low-confidence estimate (see the thin-evidence widening after pooling),
-        # rather than being deleted and forcing an abstention on on-topic coverage.
-        avg_evidence_weight = sum(
-            evidence_class_weight(
-                p.evidence_class, p.certainty,
-                weights=settings.evidence_class_weight,
-                default=settings.evidence_class_weight_default,
-                unclassified_cap=settings.evidence_class_weight_unclassified_cap,
-            )
-            for p in predictions
-        ) / len(predictions)
+        avg_stance = reduction.stance
+        avg_certainty = reduction.certainty
+        avg_evidence_weight = reduction.evidence_weight
+        all_settled.append(reduction.settled)
+        all_settlement_dates.append(reduction.settlement_event_date)
         # Layer B: down-weight older articles via exponential recency decay.
         article_date = result.published_date or None
         rweight = recency_weight(
@@ -1027,43 +1154,7 @@ async def _run_forecast_inner(
         # Layer C: down-weight off-topic articles by the gatekeeper's graded
         # relevance, applied convexly (squared) so a confident-but-tangential
         # article (relevance ~0.5 → 0.25× pull) can't drag the pooled mean.
-        quantitative_estimates = [p.quantitative_estimate for p in predictions]
         weight = credibility * avg_evidence_weight * rweight * (relevance ** 2)
-        # Credibility feedback loop (docs/ORACLE_VARIABLES.md §9) needs the
-        # actual evidence_class label, not just its resolved weight, to
-        # exclude opinion-class articles from the resolution-outcome signal.
-        # evidence_class is a per-claim field; an article can carry several
-        # claims, so expose the most common non-null label among them as this
-        # article's representative class (None if every claim was
-        # unclassified) — same collapse-to-article-level shape as
-        # avg_evidence_weight itself.
-        article_evidence_classes = [p.evidence_class for p in predictions if p.evidence_class is not None]
-        representative_evidence_class = (
-            Counter(article_evidence_classes).most_common(1)[0][0] if article_evidence_classes else None
-        )
-
-        # fact_signal lane (Phase 2, author-scoring redesign) — SHADOW, parallel to avg_stance,
-        # read by nothing in aggregation. Option-1 reduction: fact_signal is the claim-weighted
-        # MEAN over the SAME scored_preds that drive avg_stance (so the offline fact-lane backtest
-        # compares mean-to-mean), while the qualifying facets come from the single DOMINANT
-        # (max |fact_signal|) claim so they stay internally coherent. None when no scored claim
-        # carried a fact_signal (e.g. a pure-opinion article).
-        fact_preds = [p for p in scored_preds if p.fact_signal is not None]
-        if fact_preds:
-            article_fact_signal = claim_weighted_stance(
-                [p.fact_signal for p in fact_preds],
-                [p.certainty for p in fact_preds],
-                [p.specificity for p in fact_preds],
-            )
-            dominant_fact = max(fact_preds, key=lambda p: abs(p.fact_signal))
-            fact_event_actors = dominant_fact.event_actors
-            fact_event_target = dominant_fact.event_target
-            fact_is_occurrence = dominant_fact.is_occurrence
-            fact_verified = dominant_fact.verified
-        else:
-            article_fact_signal = None
-            fact_event_actors = fact_event_target = None
-            fact_is_occurrence = fact_verified = None
 
         all_stances.append(avg_stance)
         all_weights.append(weight)
@@ -1077,26 +1168,26 @@ async def _run_forecast_inner(
             stance=round(avg_stance, 3),
             certainty=round(avg_certainty, 3),
             credibility_weight=round(credibility, 3),
-            claims=[p.claim for p in predictions if p.claim],
+            claims=reduction.claims,
             published_date=article_date,
             recency_weight=round(rweight, 3),
             relevance_score=round(relevance, 3),
-            settled=bool(settled_preds) or None,
-            quantitative_estimate=next((q for q in quantitative_estimates if q is not None), None),
+            settled=reduction.settled or None,
+            quantitative_estimate=reduction.quantitative_estimate,
             evidence_weight=round(avg_evidence_weight, 3),
-            evidence_class=representative_evidence_class,
-            settlement_event_date=settlement_event_date,
+            evidence_class=reduction.evidence_class,
+            settlement_event_date=reduction.settlement_event_date,
             author_lean=author_lean,
             author_lean_certainty=author_lean_certainty,
-            fact_signal=round(article_fact_signal, 3) if article_fact_signal is not None else None,
-            event_actors=fact_event_actors,
-            event_target=fact_event_target,
-            is_occurrence=fact_is_occurrence,
-            verified=fact_verified,
-            # F1/F15 (retro#364): the claims that produced every scalar above,
-            # kept instead of discarded. Additive — nothing in aggregation
-            # reads it.
-            claims_detail=build_claims_detail(predictions),
+            fact_signal=round(reduction.fact_signal, 3) if reduction.fact_signal is not None else None,
+            event_actors=reduction.event_actors,
+            event_target=reduction.event_target,
+            is_occurrence=reduction.is_occurrence,
+            verified=reduction.verified,
+            # F1/F15 (retro#364): the claims every scalar above was reduced
+            # FROM, kept instead of discarded. Additive — nothing in
+            # aggregation reads it.
+            claims_detail=claims_detail,
         ))
 
     if evidence_class_counts:

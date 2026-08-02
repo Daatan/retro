@@ -2246,6 +2246,418 @@
           }
         ]
       }
+    },
+    {
+      "id": "B18",
+      "name": "a decider's announcement of a future act pins the estimate as an accomplished fact",
+      "traces": [
+        "#388",
+        "F12"
+      ],
+      "question": "Will the grantor issue the licence by the deadline?",
+      "request": {
+        "claim_direction": "arrival",
+        "claim_deadline": "2026-10-31"
+      },
+      "notes": "Transcribed from the live Patriot-licence incident (retro#388, prod 2026-08-02): published 97% settled=true on a pool whose own mean is 44%. Both settling rows are dated, verified, settlement-grade and in-window, so every temporal check in settlement_vote_validity passes legitimately — there is nothing in code that asks whether the settling fact IS the claim's proposition. What the per-claim data (F1, retro#364) shows is that both rows rest on the SAME underlying fact: a statement by the decider that the act WILL happen (\"Trump said the US will grant Ukraine a licence to produce Patriot missiles\"), extracted as is_occurrence=true, settled=true, stance 1.0. An announced future act is a precursor — the fact lane already caps it (F9/retro#367 clamps |fact_signal| when is_occurrence=false) — but the settlement path has no aspect check at all, and the extractor called it an occurrence, so no cap applied. Note the negative rows here are ordinary evidence, not settlement votes, so unanimity holds trivially: only another SETTLED vote could suppress the pin, and disagreement of any volume cannot.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-14",
+          "relevance": 0.7,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.9,
+              "evidence_class": "reported_fact",
+              "settled": true,
+              "event_date": "2026-07-13",
+              "fact_signal": 1.0,
+              "is_occurrence": true,
+              "verified": true
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-07-09",
+          "relevance": 0.9,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.9,
+              "evidence_class": "reported_fact",
+              "settled": true,
+              "event_date": "2026-07-08",
+              "fact_signal": 1.0,
+              "is_occurrence": true,
+              "verified": true
+            },
+            {
+              "stance": 0.95,
+              "certainty": 0.85,
+              "evidence_class": "reporting",
+              "settled": false,
+              "fact_signal": 0.9,
+              "is_occurrence": true,
+              "verified": true
+            }
+          ]
+        },
+        {
+          "source": "charlie",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.6,
+              "certainty": 0.7,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "delta",
+          "published_date": "2026-07-29",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.46,
+              "certainty": 0.7,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "echo",
+          "published_date": "2026-07-31",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.44,
+              "certainty": 0.65,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "foxtrot",
+          "published_date": "2026-08-01",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.33,
+              "certainty": 0.6,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "settled is True",
+        "abs(mean - 0.94) < 1e-9",
+        "sum(1 for s in sources if s['settled']) == 2",
+        "sum(1 for s in sources if s['stance'] < 0) == 4"
+      ],
+      "known_bad": {
+        "finding": "#388",
+        "expected_behavior": "An announced future act must not settle the claim it announces. The settlement path needs the aspect check the fact lane already has: 'the decider said it will happen' is a precursor, not the occurrence, no matter how definitively it is reported or how precisely it is dated. Note for whoever implements this: the gate #388 proposes — demote settlement votes whose event_actors/event_target do not intersect the claim's — would NOT fire here. Both prod rows carry event_actors='United States' and event_target='Ukraine', which are exactly the claim's own entities; the mismatch is on the ACTION and its ASPECT, which a two-slot dyad cannot express. Enabling settlement_quality_floor (#372) would suppress this particular instance by accident of the settling rows' age, not by identifying what is wrong with them."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 6,
+        "settled": true,
+        "mean": 0.94,
+        "std": 0.06,
+        "ci_low": 0.82,
+        "ci_high": 0.99,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.9,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.168,
+            "relevance_score": 0.7,
+            "weight": 0.08232,
+            "settled": true,
+            "settlement_event_date": "2026-07-13",
+            "fact_signal": 1.0,
+            "is_occurrence": true,
+            "verified": true,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 1.0,
+            "certainty": 0.875,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 0.8,
+            "recency_weight": 0.103,
+            "relevance_score": 0.9,
+            "weight": 0.066744,
+            "settled": true,
+            "settlement_event_date": "2026-07-08",
+            "fact_signal": 1.0,
+            "is_occurrence": true,
+            "verified": true,
+            "author_lean": null
+          },
+          {
+            "source": "charlie",
+            "stance": -0.6,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.492,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "delta",
+            "stance": -0.46,
+            "certainty": 0.7,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 0.743,
+            "relevance_score": 1.0,
+            "weight": 0.4458,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "echo",
+            "stance": -0.44,
+            "certainty": 0.65,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 0.906,
+            "relevance_score": 1.0,
+            "weight": 0.5436,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "foxtrot",
+            "stance": -0.33,
+            "certainty": 0.6,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 1.0,
+            "relevance_score": 1.0,
+            "weight": 0.6,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "B19",
+      "name": "sign-flipped settlement votes pin while the one correctly-signed vote is demoted",
+      "traces": [
+        "#360",
+        "F12"
+      ],
+      "question": "Will the named team win their semi-final?",
+      "request": {
+        "claim_direction": "arrival",
+        "claim_deadline": "2026-08-15"
+      },
+      "notes": "The England–Argentina incident (retro#360, prod 2026-07-15): four articles plainly reporting that the OTHER team won were extracted as stance +1.0 for 'England wins', and the pin fired at 97 on garbage-signed inputs. Resolved wrong; Brier 0.94, one of the two worst misses in the resolved corpus. The second half of the incident is the one worth pinning here: the only correctly-signed settlement vote carried no settlement_event_date, so the fail-closed date gate demoted it — the safety rule silenced the right answer while the wrong ones voted. Exact incident metadata is not reconstructable (pool rows are overwritten in place on re-extraction — the F1 append-only gap, as retro#360 itself records), so this case pins the MECHANISM with an open window rather than transcribed dates: an undated foreclosure vote before the deadline is demoted by design, which is correct in isolation and catastrophic in combination with an extractor sign flip. Aggregation is not at fault for the sign — it is at fault for having no way to notice that its settling votes all point one way while a credible vote points the other.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "evidence_class": "reported_fact",
+              "settled": true,
+              "event_date": "2026-07-30",
+              "fact_signal": 1.0,
+              "is_occurrence": true,
+              "verified": true
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "evidence_class": "reported_fact",
+              "settled": true,
+              "event_date": "2026-07-30",
+              "fact_signal": 1.0,
+              "is_occurrence": true,
+              "verified": true
+            }
+          ]
+        },
+        {
+          "source": "charlie",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.8,
+              "certainty": 0.9,
+              "evidence_class": "reported_fact",
+              "fact_signal": 0.8,
+              "is_occurrence": true,
+              "verified": true
+            }
+          ]
+        },
+        {
+          "source": "delta",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 2.0,
+          "claims": [
+            {
+              "stance": -1.0,
+              "certainty": 0.95,
+              "evidence_class": "reported_fact",
+              "settled": true,
+              "fact_signal": -1.0,
+              "is_occurrence": true,
+              "verified": true
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "settled is True",
+        "abs(mean - 0.94) < 1e-9",
+        "sources[3]['stance'] == -1.0",
+        "sources[3]['settlement_event_date'] is None"
+      ],
+      "known_bad": {
+        "finding": "#360",
+        "expected_behavior": "Two things, and they are separable. (1) Extraction: a two-named-actor question needs the stance taken relative to the question's SUBJECT, not to 'the anticipated event happened' — an article reporting that the other team won is stance −1. (2) Aggregation: an undated foreclosure vote is demoted for good reason, but demoting the only dissenting settlement vote and then pinning on the survivors is the worst available combination. A dissenting settlement-grade vote from a high-credibility source should at minimum suppress the pin (the unanimity rule already does this for VALID votes — the gap is that validity is judged per vote, before anyone asks whether the surviving set is unanimous because it agrees or because the disagreement was filtered out)."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 4,
+        "settled": true,
+        "mean": 0.94,
+        "std": 0.06,
+        "ci_low": 0.82,
+        "ci_high": 0.99,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.82,
+            "settled": true,
+            "settlement_event_date": "2026-07-30",
+            "fact_signal": 1.0,
+            "is_occurrence": true,
+            "verified": true,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.82,
+            "settled": true,
+            "settlement_event_date": "2026-07-30",
+            "fact_signal": 1.0,
+            "is_occurrence": true,
+            "verified": true,
+            "author_lean": null
+          },
+          {
+            "source": "charlie",
+            "stance": 0.8,
+            "certainty": 0.9,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.82,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": 0.8,
+            "is_occurrence": true,
+            "verified": true,
+            "author_lean": null
+          },
+          {
+            "source": "delta",
+            "stance": -1.0,
+            "certainty": 0.95,
+            "credibility_weight": 2.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 1.64,
+            "settled": true,
+            "settlement_event_date": null,
+            "fact_signal": -1.0,
+            "is_occurrence": true,
+            "verified": true,
+            "author_lean": null
+          }
+        ]
+      }
     }
   ]
 }

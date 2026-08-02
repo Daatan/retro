@@ -176,6 +176,12 @@ Progress: 3/250 (1.2%) | done: 2 | no_pred: 1 | failed: 0
 
 ## Pipeline stages
 
+> These are the **batch/backfill** lane's stages. The live `/forecast` lane runs the same
+> gatekeeper and extractor but a different orchestration, a different extractor model, and a
+> different set of per-article outcome labels. Both lanes, plus everything upstream of them
+> (discovery, cosine retrieval, the two rescue paths) and the complete drop taxonomy, are
+> documented in [funnel.md](https://github.com/Daatan/docs/blob/main/funnel.md).
+
 | Stage | File | Model | Purpose |
 |---|---|---|---|
 | 1 | `gatekeeper.py` | `bedrock/amazon.nova-micro-v1:0` | graded topic/evidence-relevance gate (emits relevance_score; passes indirect evidence, not just explicit predictions) |

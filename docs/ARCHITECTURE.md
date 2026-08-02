@@ -197,6 +197,10 @@ as a rule. See "Known limitations" below.
 
 ## Pipeline Flow
 
+> For the **live** lane and for what happens before an article reaches this pipeline —
+> discovery, retrieval, the gatekeeper rescue paths, and the per-stage drop taxonomy across
+> news-indexer / retro / daatan — see [funnel.md](https://github.com/Daatan/docs/blob/main/funnel.md).
+
 ```
 Ingest (choose one):
   gnews_ingest.py  — GNews RSS → URL resolution (Brave/SerpAPI/Serper/DDG) → trafilatura

@@ -315,9 +315,13 @@ class ApiSettings(BaseSettings):
     #
     # Two things this deliberately does NOT buy, stated so the number is not
     # oversold:
-    #   - It suppresses NONE of the three pins that resolved WRONG (0.432,
-    #     1.727, 2.292). Mass was not what was wrong with them — sign and
-    #     subject were (retro#360, #388). A quality floor is a floor on
+    #   - It suppresses NONE of the three pins the ORACLE got wrong (0.432,
+    #     2.292, 12.245 — France WC, England-Argentina, and a NO pin on "will
+    #     the USA bomb Iran in 2025" whose ground truth was YES). Note that is
+    #     not the same set as "predictions that resolved WRONG": a NO pin on a
+    #     claim that resolved wrong was a pin the Oracle got RIGHT. Mass was
+    #     not what was wrong with any of the three — sign, subject and
+    #     timeframe were (retro#360, #388). A quality floor is a floor on
     #     evidence, not on relevance-of-evidence.
     #   - It suppresses the #388 Patriot pin at the snapshot where it fired
     #     (0.134) but not indefinitely: by the latest snapshot that pool's
@@ -326,6 +330,28 @@ class ApiSettings(BaseSettings):
     # Reconstruction ignores per-vote validity demotions, so the real winning
     # weight is <= the measured one and suppression is a lower bound.
     settlement_quality_floor: float = 0.20
+
+    # The settlement match gate (retro#388/#360) — see settlement_verifier.py.
+    # Before a pin publishes, one LLM call asks whether the settling facts ARE
+    # the claim's own outcome: right party, right action, actually carried out
+    # rather than announced. It fires only when a pin is about to fire, which
+    # production has done 29 times in its whole history, so the cost is
+    # structurally negligible.
+    #
+    # Two flags, deliberately: `enabled` runs it and LOGS the verdict,
+    # `enforce` lets that verdict suppress a pin. Shipping with enforce off
+    # buys the measurement the enforcement decision needs — replay against the
+    # pins we already have ground truth for — without an LLM silently changing
+    # published numbers first. Every failure path is fail-OPEN (see Verdict):
+    # an unreachable model must never suppress a pin by itself.
+    settlement_verifier_enabled: bool = True
+    settlement_verifier_enforce: bool = False
+    settlement_verifier_timeout_seconds: int = 12
+    # The extractor's model, not the gatekeeper's: this is a semantic judgment
+    # about aspect and role, which is exactly the class Nova Lite failed on in
+    # the adjacent-event A/B (see docs/ORACLE_VARIABLES.md). Prod's oracle-api
+    # drop-in overrides extractor_model to Claude Haiku 4.5, so this follows it.
+    settlement_verifier_model: Optional[str] = None
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.

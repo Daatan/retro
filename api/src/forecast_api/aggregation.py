@@ -605,6 +605,12 @@ class PoolAggregateResult(NamedTuple):
     # was NOT counted (settlement_vote_validity) — the row still voted as
     # ordinary evidence. Callers log these; aggregation stays log-free.
     settlement_demotions: tuple = ()
+    # Source indices of the votes that actually carried the pin: settled, not
+    # demoted, pointing the winning way. Empty when nothing pinned. Exposed so a
+    # caller can name the evidence a pin rests on without re-deriving the
+    # validity rules (retro#388's match gate reads exactly these rows) —
+    # aggregation itself neither logs nor judges them.
+    settlement_vote_indices: tuple = ()
 
 
 def aggregate_pool(
@@ -723,6 +729,7 @@ def aggregate_pool(
     settlement_suppressed = False
     suppression_reason: Optional[str] = None
     settlement_demotions: tuple = ()
+    settlement_vote_indices: tuple = ()
 
     def _apply_pin(direction: float) -> tuple[float, float, float, float]:
         # The pin uses _SETTLEMENT_CI_MIN_P/_MAX_P, NOT logit_clamp, and F16
@@ -760,6 +767,8 @@ def aggregate_pool(
         neg = 0
         pos_weight = 0.0
         neg_weight = 0.0
+        pos_indices: list[int] = []
+        neg_indices: list[int] = []
         for i, (s, is_settled) in enumerate(zip(stances, settled_flags)):
             if not is_settled:
                 continue
@@ -775,9 +784,11 @@ def aggregate_pool(
             elif s >= 0:
                 pos += 1
                 pos_weight += weights[i]
+                pos_indices.append(i)
             else:
                 neg += 1
                 neg_weight += weights[i]
+                neg_indices.append(i)
         settlement_demotions = tuple(demotions)
         if pos > 0 and neg > 0:
             settlement_suppressed = True
@@ -794,6 +805,7 @@ def aggregate_pool(
             else:
                 settled = True
                 settled_sources = max(pos, neg)
+                settlement_vote_indices = tuple(pos_indices if pos > 0 else neg_indices)
                 mean, ci_low, ci_high, std = _apply_pin(1.0 if pos > 0 else -1.0)
     elif settlement_min_sources > 0:
         # Legacy path (kill switch off): trust the flags, majority vote,
@@ -822,6 +834,10 @@ def aggregate_pool(
             if direction != 0.0 and max(pos, neg) >= settlement_min_sources:
                 settled = True
                 settled_sources = max(pos, neg)
+                settlement_vote_indices = tuple(
+                    i for i, (s, is_settled) in enumerate(zip(stances, settled_flags))
+                    if is_settled and ((s >= 0) == (direction > 0))
+                )
                 mean, ci_low, ci_high, std = _apply_pin(direction)
 
     return PoolAggregateResult(
@@ -831,4 +847,5 @@ def aggregate_pool(
         settlement_suppressed=settlement_suppressed,
         suppression_reason=suppression_reason,
         settlement_demotions=settlement_demotions,
+        settlement_vote_indices=settlement_vote_indices,
     )

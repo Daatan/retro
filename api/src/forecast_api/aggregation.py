@@ -3,7 +3,10 @@
 These functions are dependency-free and side-effect-free so they are trivially
 unit-testable. The forecaster converts each source's stance to a probability and
 pools the sources in **log-odds (logit) space**, weighting by
-``credibility × certainty × recency``.
+``credibility × evidence_class_weight × recency × relevance²``. (Certainty is
+*not* in that product for a classified claim — :func:`evidence_class_weight`
+reads it only on the ``unclassified`` fallback. It shapes the within-article
+stance instead, via :func:`claim_weighted_stance`.)
 
 Why logit pooling instead of an arithmetic mean of stance?
   An arithmetic mean is easily dragged toward the middle by a few off-topic or
@@ -22,6 +25,18 @@ from __future__ import annotations
 import math
 from datetime import date, datetime, timedelta
 from typing import NamedTuple, Optional, Sequence
+
+
+# Two-sided 95% normal quantile. Hoisted so the pooled standard error and the
+# dispersion floor provably use the same one.
+_Z95 = 1.96
+
+# Saturation bounds on the settlement pin's own band — the module's THIRD set of
+# probability bounds, after logit_clamp (per-source + pooled CI + thin widening)
+# and the [0,1] validity bound F16 removed. Named rather than unified; see
+# _apply_pin for why.
+_SETTLEMENT_CI_MIN_P = 0.005
+_SETTLEMENT_CI_MAX_P = 0.995
 
 
 def clamp(x: float, lo: float, hi: float) -> float:
@@ -377,6 +392,30 @@ def evidence_class_weight(
     return weights.get(evidence_class, default)
 
 
+def effective_sample_size(weights: Sequence[float]) -> float:
+    """Kish's effective sample size, ``(Σ w)² / Σ w²``.
+
+    Equal weights give exactly ``n``; a pool one row dominates gives ``1``.
+    Mirrors :func:`pool_sources`' zero-total fallback (flat weights ⇒ ``n``) so
+    the two can never disagree about how many sources a pool really has.
+
+    A row count is not a sample size when the rows carry unequal weight (F16,
+    retro#365). Measured over the 118 live pools on 2026-08-02 the median
+    ``n_eff / n`` is 0.50 and 79.7% of pools sit below 0.8 — driven by recency
+    decay across a weeks-long pool, not by near-zero weights.
+    """
+    n = len(weights)
+    if n == 0:
+        return 0.0
+    total_w = sum(weights)
+    if total_w <= 0:
+        return float(n)
+    sum_w2 = sum(w * w for w in weights)
+    if sum_w2 <= 0:
+        return float(n)
+    return clamp((total_w * total_w) / sum_w2, 1.0, float(n))
+
+
 def pool_sources(
     stances: Sequence[float],
     weights: Sequence[float],
@@ -392,6 +431,15 @@ def pool_sources(
 
     All four returned values are on the stance scale [-1, 1], matching
     :class:`forecast_api.models.ForecastResponse`.
+
+    The standard error divides by Kish's **effective** sample size,
+    :func:`effective_sample_size` — exactly ``n`` for equal weights, exactly
+    ``1`` for a single source or a pool one row dominates (F16, retro#365).
+
+    Note this function reports *observed* dispersion, so a unanimous pool still
+    returns a zero-width interval. The published minimum width is policy and
+    lives in :func:`widen_ci_for_unresolved_dispersion`, which
+    :func:`aggregate_pool` always applies.
     """
     n = len(stances)
     if n == 0:
@@ -409,9 +457,12 @@ def pool_sources(
 
     var_p = sum(wi * (p - pooled_p) ** 2 for p, wi in zip(probs, w)) / total_w
     std_p = math.sqrt(var_p)
-    sem_p = std_p / math.sqrt(n) if n > 1 else std_p
-    ci_low_p = clamp(pooled_p - 1.96 * sem_p, clamp_eps, 1.0 - clamp_eps)
-    ci_high_p = clamp(pooled_p + 1.96 * sem_p, clamp_eps, 1.0 - clamp_eps)
+    # The old divisor was the raw row count, with an `if n > 1 else std_p`
+    # special case. n_eff subsumes both exactly: it is 1.0 for a single source,
+    # so sqrt(n_eff) is a no-op there.
+    sem_p = std_p / math.sqrt(effective_sample_size(w))
+    ci_low_p = clamp(pooled_p - _Z95 * sem_p, clamp_eps, 1.0 - clamp_eps)
+    ci_high_p = clamp(pooled_p + _Z95 * sem_p, clamp_eps, 1.0 - clamp_eps)
 
     # stance = 2·p − 1 is linear, so a probability-scale std maps to 2× on the
     # stance scale.
@@ -430,6 +481,7 @@ def widen_ci_for_thin_evidence(
     *,
     deficit: float,
     max_inflation: float,
+    clamp_eps: float,
 ) -> tuple[float, float, float]:
     """Widen a pooled CI to reflect *thin* evidence.
 
@@ -448,12 +500,73 @@ def widen_ci_for_thin_evidence(
         return ci_low, ci_high, std
     extra_p = clamp(deficit, 0.0, 1.0) * max_inflation
     p = stance_to_prob(mean)
-    lo_p = clamp(min(stance_to_prob(ci_low), p) - extra_p, 0.0, 1.0)
-    hi_p = clamp(max(stance_to_prob(ci_high), p) + extra_p, 0.0, 1.0)
+    # F16(c): one endpoint convention for the module. ``[0.0, 1.0]`` was a type
+    # constraint standing where a policy bound belongs — it made the widening
+    # term, whose whole purpose is to express LESS confidence, the only path by
+    # which the Oracle could publish "0%–100%": endpoints its own clamp declares
+    # unreachable. pool_sources cannot relax to match; its clamp is logit()'s
+    # domain requirement.
+    lo_p = clamp(min(stance_to_prob(ci_low), p) - extra_p, clamp_eps, 1.0 - clamp_eps)
+    hi_p = clamp(max(stance_to_prob(ci_high), p) + extra_p, clamp_eps, 1.0 - clamp_eps)
     # std is secondary (the CI is what callers display); bump it monotonically so
     # it can't claim more precision than the widened band.
     new_std = max(std, 2.0 * extra_p)
     return prob_to_stance(lo_p), prob_to_stance(hi_p), new_std
+
+
+def widen_ci_for_unresolved_dispersion(
+    mean: float,
+    ci_low: float,
+    ci_high: float,
+    std: float,
+    *,
+    min_dispersion: float,
+    n_eff: float,
+    clamp_eps: float,
+) -> tuple[float, float, float]:
+    """Enforce a minimum published interval width (F16, retro#365).
+
+    :func:`pool_sources` measures between-source *disagreement*. When there is
+    none — a unanimous pool, or a pool of one — the measurement is exactly zero
+    and the 95% band collapses onto the point estimate: maximum confidence from
+    one article, with no gate in the way, because a single source that clears
+    ``decisiveness_floor`` on its own never reaches
+    :func:`widen_ci_for_thin_evidence`. Zero observed disagreement is a property
+    of the sample, not of the world.
+
+    So the band is floored as if the sources had scattered with a standard
+    deviation of ``min_dispersion``, run through the same ``z / √n_eff``
+    shrinkage :func:`pool_sources` applies. It therefore *decays with
+    corroboration*: unanimity among twenty effective sources still buys
+    precision, unanimity among one buys none. Because both the observed and the
+    floored half-width divide by the same ``√n_eff``, the floor binds exactly
+    when ``std_p < min_dispersion`` — a condition on dispersion alone,
+    independent of pool size.
+
+    Keyed on multiplicity, not mass, and that is deliberate: in prod the two
+    populations are *anti*-correlated. Single-article pools already carry the
+    widest median interval of any bucket (56pp) because thin-evidence widening
+    dominates them; the zero-width cases are precisely the subset strong enough
+    to escape it. A mass-keyed floor would fire on the pools that are already
+    wide and miss the ones that are not.
+
+    A floor, not an addition: ``min``/``max`` against whatever the band already
+    is, so a pool with real dispersion — or one already widened for thin
+    evidence — comes back untouched. Adding instead would charge a thin *and*
+    unanimous pool twice for one deficiency.
+
+    Returns ``(ci_low, ci_high, std)`` on the stance scale; a no-op when
+    ``min_dispersion`` ≤ 0 (the kill switch).
+    """
+    if min_dispersion <= 0.0:
+        return ci_low, ci_high, std
+    half_p = _Z95 * min_dispersion / math.sqrt(max(n_eff, 1.0))
+    p = stance_to_prob(mean)
+    lo_p = clamp(min(stance_to_prob(ci_low), p - half_p), clamp_eps, 1.0 - clamp_eps)
+    hi_p = clamp(max(stance_to_prob(ci_high), p + half_p), clamp_eps, 1.0 - clamp_eps)
+    # std is a dispersion and does not shrink with count; only the standard
+    # error does. So it is floored at min_dispersion itself, not at half_p.
+    return prob_to_stance(lo_p), prob_to_stance(hi_p), max(std, 2.0 * min_dispersion)
 
 
 class PoolAggregateResult(NamedTuple):
@@ -507,6 +620,7 @@ def aggregate_pool(
     settlement_min_sources: int,
     settlement_stance: float,
     logit_clamp: float,
+    pool_dispersion_floor: float,
     claim_direction: Optional[str] = None,
     claim_deadline: Optional[str] = None,
     settlement_event_dates: Optional[Sequence[Optional[str]]] = None,
@@ -584,7 +698,18 @@ def aggregate_pool(
             mean, ci_low, ci_high, std,
             deficit=deficit,
             max_inflation=thin_evidence_ci_inflation,
+            clamp_eps=logit_clamp,
         )
+
+    # F16: last, so it composes as a floor on whatever the pooled + thin path
+    # produced, and BEFORE the settlement pin, which replaces the interval
+    # outright with its own policy band.
+    ci_low, ci_high, std = widen_ci_for_unresolved_dispersion(
+        mean, ci_low, ci_high, std,
+        min_dispersion=pool_dispersion_floor,
+        n_eff=effective_sample_size(weights),
+        clamp_eps=logit_clamp,
+    )
 
     # Settlement override: pooling is bounded by its most confident member, so
     # a decided event can never read as decided from averaging alone (the
@@ -600,12 +725,22 @@ def aggregate_pool(
     settlement_demotions: tuple = ()
 
     def _apply_pin(direction: float) -> tuple[float, float, float, float]:
+        # The pin uses _SETTLEMENT_CI_MIN_P/_MAX_P, NOT logit_clamp, and F16
+        # (retro#365) deliberately left it that way while unifying the other two
+        # conventions. Being allowed past the pooling clamp is the override's
+        # whole point (aggregation is bounded by its most confident member, so a
+        # decided event can never read as decided from averaging alone). Pulling
+        # the pin down to logit_clamp would move ci_high on every settled
+        # forecast in prod — 85.4% of them sit exactly on this bound — for no
+        # epistemic gain, since the pinned mean is already inside the pool clamp.
+        # The dispersion floor is applied BEFORE this, so a pinned interval is
+        # not subject to it either; that inconsistency is tracked, not hidden.
         pinned_mean = settlement_stance * direction
         pinned_p = stance_to_prob(pinned_mean)
         if direction > 0:
-            lo_p, hi_p = pinned_p - 0.06, min(0.995, pinned_p + 0.025)
+            lo_p, hi_p = pinned_p - 0.06, min(_SETTLEMENT_CI_MAX_P, pinned_p + 0.025)
         else:
-            lo_p, hi_p = max(0.005, pinned_p - 0.025), pinned_p + 0.06
+            lo_p, hi_p = max(_SETTLEMENT_CI_MIN_P, pinned_p - 0.025), pinned_p + 0.06
         return pinned_mean, prob_to_stance(lo_p), prob_to_stance(hi_p), 0.06
 
     if settlement_revalidate and settlement_min_sources > 0:

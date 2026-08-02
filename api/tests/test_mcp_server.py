@@ -335,3 +335,71 @@ class TestEndpointAuth:
             )
             assert r.status_code == 401
             assert "resource_metadata" in r.headers.get("www-authenticate", "")
+
+
+# ── the confidence bucket (F16, retro#365) ──────────────────────────────────
+# _confidence is the only place in the repo where the CI *width* drives a
+# decision rather than a display, and it is what the two Polymarket-facing
+# tools report. F16 widens intervals, so the bucket boundaries need pinning:
+# an untested threshold that quietly demotes every forecast is the failure
+# mode this class exists to catch.
+
+class TestConfidenceBucket:
+    def test_settled_is_always_high_regardless_of_width(self):
+        resp = _forecast_response(0.9, settled=True, ci_low=-0.9, ci_high=0.9)
+        assert mcp_server._confidence(resp) == "high"
+
+    def test_high_needs_both_five_articles_and_a_tight_band(self):
+        # width 0.20 in probability space, 6 articles
+        assert mcp_server._confidence(
+            _forecast_response(0.5, ci_low=0.3, ci_high=0.7, articles_used=6)
+        ) == "high"
+        # same band, too few articles
+        assert mcp_server._confidence(
+            _forecast_response(0.5, ci_low=0.3, ci_high=0.7, articles_used=4)
+        ) == "medium"
+
+    def test_bucket_boundaries(self):
+        assert mcp_server._confidence(
+            _forecast_response(0.0, ci_low=-0.29, ci_high=0.29, articles_used=9)
+        ) == "high"
+        assert mcp_server._confidence(
+            _forecast_response(0.0, ci_low=-0.31, ci_high=0.31, articles_used=9)
+        ) == "medium"
+        assert mcp_server._confidence(
+            _forecast_response(0.0, ci_low=-0.49, ci_high=0.49, articles_used=9)
+        ) == "medium"
+        assert mcp_server._confidence(
+            _forecast_response(0.0, ci_low=-0.51, ci_high=0.51, articles_used=9)
+        ) == "low"
+
+    def test_the_high_boundary_is_float_fragile(self):
+        """Documented, not fixed — out of F16's scope, but a reader deserves to
+        know. A stance CI of ±0.3 is a probability width of exactly 0.30 by
+        arithmetic, but ``_prob_ci`` returns 0.35/0.65 and 0.65 - 0.35 evaluates
+        to 0.30000000000000004, so the ``<= 0.30`` test fails and the forecast
+        is bucketed *medium*. The 0.50 boundary is exact (0.75 - 0.25) and does
+        not have this problem. Worth an epsilon if the buckets are ever retuned.
+        """
+        assert mcp_server._confidence(
+            _forecast_response(0.0, ci_low=-0.3, ci_high=0.3, articles_used=9)
+        ) == "medium"
+        assert mcp_server._confidence(
+            _forecast_response(0.0, ci_low=-0.5, ci_high=0.5, articles_used=9)
+        ) == "medium"
+
+    def test_the_dispersion_floor_alone_can_never_demote_a_bucket(self):
+        """pool_dispersion_floor's widest possible contribution is 2·1.96·σ in
+        probability space. At σ = 0.05 that is 0.196, comfortably inside the
+        0.30 high/medium boundary — so a unanimous pool cannot be demoted by
+        the floor. This test is the tripwire on raising σ: anything above
+        0.0765 silently downgrades every unanimous pool for every trader."""
+        widest_prob = 2.0 * 1.96 * settings.pool_dispersion_floor
+        assert widest_prob < 0.30
+        resp = _forecast_response(
+            0.0,
+            ci_low=-widest_prob,      # stance width 2× the prob width…
+            ci_high=widest_prob,      # …i.e. the floor at its very widest
+            articles_used=6,
+        )
+        assert mcp_server._confidence(resp) == "high"

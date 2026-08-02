@@ -105,8 +105,10 @@ class ApiSettings(BaseSettings):
     max_article_chars: int = 4000
 
     # ── Aggregation (logit pooling + recency) ──────────────────────────────
-    # Sources are pooled in log-odds space, weighted by credibility × certainty
-    # × recency. Recency uses exponential decay with this half-life (days): an
+    # Sources are pooled in log-odds space, weighted by credibility ×
+    # evidence_class_weight × recency × relevance². (Certainty is not a factor
+    # for a classified claim — see evidence_class_weight.) Recency uses
+    # exponential decay with this half-life (days): an
     # article this many days old counts half as much as one published today.
     # Aggressive (7d) by design — the latest reporting should dominate as an
     # event resolves, so stale pre-resolution coverage stops diluting a decided
@@ -182,7 +184,7 @@ class ApiSettings(BaseSettings):
     # collapse to one source. 0.0 disables title clustering (URL-dedupe still runs).
     syndication_title_similarity: float = 0.8
     # Decisiveness floor: the certainty-weighted evidence mass
-    # (Σ credibility·certainty·recency·relevance² over surviving articles) at or
+    # (Σ credibility·evidence_class_weight·recency·relevance² over surviving articles) at or
     # above which the pooled CI is trusted as-is. BELOW it the pool is thin/hedged,
     # so rather than abstain (which surfaced as "no AI estimate" even for on-topic
     # coverage) we *widen the CI* toward maximal uncertainty in proportion to the
@@ -204,6 +206,43 @@ class ApiSettings(BaseSettings):
     # decisiveness_floor returns insufficient_data (reason="no_decisive_signal")
     # instead of emitting a wide-CI estimate. Default False (widen, don't defer).
     defer_on_thin_evidence: bool = False
+    # F16 (retro#365) — minimum published interval width, expressed as a
+    # between-source standard deviation on the PROBABILITY scale (the same scale
+    # as pool_sources' std_p; the stance-scale equivalent is 2×, so 0.05 → 0.10).
+    #
+    # pool_sources derives its interval from observed DISAGREEMENT alone, so a
+    # unanimous pool — or a single strong source that clears decisiveness_floor
+    # on its own, so widen_ci_for_thin_evidence never fires — publishes std=0 and
+    # a zero-width 95% band. widen_ci_for_unresolved_dispersion floors the band at
+    # 1.96·σ/√n_eff, so the floor decays with corroboration and binds exactly when
+    # std_p < σ, independent of pool size.
+    #
+    # THIS IS A POLICY NUMBER, NOT A MEASUREMENT — the same status as
+    # interested_party_stance_cap = 0.3 (F20, retro#368). Nobody has measured the
+    # quantity it stands for (the extractor's run-to-run stance variance). What IS
+    # derived, all measured on prod 2026-08-02:
+    #   • Hard ceiling 0.0765. The widest band the floor can produce is 2·1.96·σ;
+    #     mcp_server._confidence buckets high/medium at width 0.30, so any
+    #     σ > 0.0765 would silently demote every unanimous pool for every
+    #     Polymarket trader, on a path no test covered. 0.05 → 0.196, a 35%
+    #     margin, and provably cannot move a bucket on its own.
+    #   • Visibility floor. daatan persists the CI as integer percent
+    #     (oracle-snapshot.ts stanceToPercent) and its Telegram panel needs ≥2pp.
+    #     At σ=0.05 the floored band stays ≥2pp out to n_eff≈96; at σ=0.02 it goes
+    #     invisible by n_eff≈16, i.e. on the median prod pool.
+    #   • Binding rate 5.2%. Over the 97 live pools with n≥3, measured
+    #     between-source dispersion has min 0.0308 and p05 0.1015 (stance scale),
+    #     and not one is at zero. σ=0.05 (= 0.10 stance) binds on 5 of them, plus
+    #     the degenerate single-source pools it exists for. That calibration is
+    #     circular — it floors a distribution at its own percentile — and its only
+    #     honest content is the 5.2%.
+    # To replace it with a measurement: run the extractor A/B kit (≥3 runs per
+    # side) over a ~20-article sample, take the median per-article run-to-run
+    # stance sd and halve it for probability space. Retune against empirical
+    # interval coverage at the n≈40 calibration milestone (system-model §11).
+    # 0.0 disables the floor entirely — a clean kill switch that leaves the
+    # effective-N and clamp-unification halves of F16 in place.
+    pool_dispersion_floor: float = 0.05
     # ── Settlement override ─────────────────────────────────────────────────
     # When at least this many independent sources carry a settlement claim (the
     # extractor's `settled` flag: the outcome is reported as an accomplished

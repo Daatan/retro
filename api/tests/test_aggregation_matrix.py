@@ -360,3 +360,21 @@ def test_every_case_declares_what_it_traces():
         if not case.get("traces") or not case.get("name")
     ]
     assert not undocumented, f"cases missing name/traces: {undocumented}"
+
+
+def test_no_unsettled_case_publishes_a_zero_width_interval():
+    """F16 (retro#365). An interval derived from between-source disagreement
+    alone collapses to a point whenever a pool happens to agree — 28 of these
+    cases did exactly that before the dispersion floor landed. Settled cases
+    are exempt: ``_apply_pin`` replaces the interval with its own policy band.
+    """
+    offenders = [
+        case["id"]
+        for _, data in _FILES
+        for case in data["cases"]
+        if not case["expect"].get("insufficient_data")
+        and not case["expect"].get("settled")
+        and case["expect"].get("ci_high") is not None
+        and case["expect"]["ci_high"] - case["expect"]["ci_low"] < 1e-9
+    ]
+    assert not offenders, f"zero-width published interval on: {offenders}"

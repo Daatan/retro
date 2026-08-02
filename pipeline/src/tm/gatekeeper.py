@@ -1,6 +1,11 @@
+import logging
+import re
+
 from .models import GatekeeperOutput
 from .config import settings
 from .llm import complete_structured
+
+logger = logging.getLogger(__name__)
 
 # Split into a fixed, cacheable PROMPT_PREFIX (identical on every call, no .format()
 # placeholders) and a PROMPT_SUFFIX carrying the article + per-call variable fields —
@@ -104,7 +109,66 @@ would judge a long article, and score its relevance on the same bands.
 
 Still reject it if it is genuinely empty (an image or video with no caption), or if it is about a
 different matter. Brevity alone is not a reason.
+
+**No content, no judgment.** If the post carries no assertable proposition of its own — it is only
+a link, a bare @handle, a hashtag, an emoji, or a headline-free teaser pointing elsewhere — set
+is_prediction=false and relevance_score=0.0. A URL is not content: do NOT infer what the linked
+page says from its domain, its slug, or its numeric id, and do NOT treat the act of a journalist
+sharing a link as evidence about the claim. Judge only what the post itself asserts. If that is
+nothing, say so — "the post links out without stating anything" is the correct reason, and an
+invented summary of the unseen page is the failure this rule exists to prevent.
 """
+
+
+# Everything that is a POINTER rather than a proposition. Stripped before asking "is there any
+# content here at all?" — deliberately only the forms actually observed in the corpus (scheme-ful
+# URLs, t.me paths, @handles, #hashtags). Bare domains ("ynet.co.il") are NOT stripped: the pattern
+# that catches them also eats ordinary abbreviations, and over-stripping fails in the dangerous
+# direction here — a wrongly-rejected post is a curated journalist's scoop lost silently, which is
+# the exact failure news-indexer's rescue path exists to undo.
+_POINTER_RE = re.compile(r"https?://\S+|www\.\S+|t\.me/\S+|[@#]\w+", re.IGNORECASE)
+# A run of two or more Unicode letters. `[^\W\d_]` is "word character that is neither digit nor
+# underscore", i.e. a letter in ANY script — Hebrew, Cyrillic, Arabic and CJK all count, which
+# matters because most of this corpus is not English. Emoji and digits are not letters, so "🔴"
+# and "97%" carry no proposition by this test, correctly.
+_LETTER_RUN_RE = re.compile(r"[^\W\d_]{2,}")
+
+
+def carries_proposition(article_text: str) -> bool:
+    """Does this text assert anything of its own, or is it purely a pointer elsewhere?
+
+    The gatekeeper is a language model, and a model handed a bare URL does not answer "there is
+    nothing here" — it CONFABULATES. Measured in prod (2026-07-31): a t.me post whose entire text
+    was `https://www.c14.co.il/article/1641278` (37 chars) was judged against 127 open forecasts and
+    endorsed for 76 of them at relevance 0.7–1.0, with invented justifications — "provides a direct
+    statement about Elon Musk tweeting about Daatan by December 31, 2028" for an article that is one
+    URL. Five such articles have cost 644 judgments and 247 downstream Oracle runs.
+
+    So the prompt rule above teaches it, and this enforces it: prompt rules are advisory, and this
+    verdict gets PERSISTED by news-indexer and can be reused downstream in place of a fresh judgment
+    (`reuse_supplied_relevance`), so a confabulated 1.0 does not stay contained. Deterministic and
+    free — it also skips the LLM call entirely, which is the cheapest possible way to be right.
+
+    The bar is deliberately the floor and not a length heuristic: ANY two consecutive letters that
+    survive pointer-stripping count as content. "מבזק" (4 chars, "newsflash") passes. Deciding
+    whether a short-but-real post is substantive enough is the judge's job, not this function's —
+    the only question here is whether there is anything at all for it to judge.
+    """
+    return bool(_LETTER_RUN_RE.search(_POINTER_RE.sub(" ", article_text)))
+
+
+# What the gate returns instead of asking the model. relevance 0.0 (not the model's 1.0 default) so
+# that a caller squaring it for aggregation weight lands on zero either way.
+_NO_CONTENT_VERDICT = GatekeeperOutput(
+    is_prediction=False,
+    reason=(
+        "Content-free input: the text carries no assertable proposition of its own (only "
+        "links/handles/emoji), so there is nothing to judge against the claim."
+    ),
+    prediction_count_estimate=0,
+    relevance_score=0.0,
+)
+_NO_USAGE = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
 
 async def check_is_prediction(
@@ -119,7 +183,20 @@ async def check_is_prediction(
     `short_form` opts into judging a social-media post on its content rather than its length. It
     defaults to False and only ever APPENDS to the prompt, so the text every existing caller sends —
     the entire /forecast path — is byte-for-byte unchanged.
+
+    Input that carries no proposition is rejected here without an LLM call — see
+    `carries_proposition`. That guard sits in front of BOTH callers on purpose: /relevance is the
+    path that produced the measured incident, but /forecast judges articles from search providers
+    with the same model and has the same failure mode.
     """
+    if not carries_proposition(article_text):
+        logger.info(
+            "gatekeeper: content-free input rejected without an LLM call "
+            "(source=%.40s len=%d) — %.80s",
+            source_name, len(article_text), article_text.replace("\n", " "),
+        )
+        return _NO_CONTENT_VERDICT.model_copy(), _NO_USAGE.copy()
+
     prompt = PROMPT_SUFFIX.format(
         article_text=article_text,
         source_name=source_name,

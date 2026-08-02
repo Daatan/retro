@@ -566,7 +566,7 @@ with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
 2. Per article: trafilatura full-text fetch (falls back to title+snippet)
 
 **Stage 2 — Gatekeeper + Extractor** (parallel per article)
-1. `gatekeeper.check_is_prediction()` — LLM topic-relevance screen (graded `relevance_score`); the legacy method name predates the softening to a relevance filter.
+1. `gatekeeper.check_is_prediction()` — LLM topic-relevance screen (graded `relevance_score`); the legacy method name predates the softening to a relevance filter. Content-free input never reaches the model: `gatekeeper.carries_proposition()` strips URLs/handles/hashtags and rejects text with no letters left (`is_prediction=false`, `relevance_score=0.0`, zero usage) — a model handed a bare URL confabulates rather than abstaining (retro#359).
 2. `extractor.extract_predictions()` — LLM extraction: `stance`, `certainty`, `claim`, etc.
 
 **Stage 3 — Weight by Source Credibility**

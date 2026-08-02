@@ -209,6 +209,24 @@ before enabling in prod.
 | `relevance_score` | 0..1, default **1.0** | graded "how much would a forecaster update" | fail-open default; squared downstream |
 | `prediction_count_estimate` | int | debug only | — |
 
+**Content-free input is rejected before the model is called** (retro#359, 2026-08-02).
+`carries_proposition()` strips URLs, `t.me/` paths, `@handles` and `#hashtags`, then
+requires a run of ≥2 Unicode letters to survive; if none does, `check_is_prediction`
+returns `is_prediction=false`, `relevance_score=0.0`, zero token usage, no LLM call.
+This is a **floor, not a filter** — the bar is "is there anything to judge", not "is it
+substantive"; a 4-character Hebrew newsflash passes and is judged normally. It is the
+one gatekeeper rule enforced in code rather than taught by the prompt, because the
+failure it prevents is the model *inventing* content: measured 2026-07-31, a t.me post
+whose entire text was `https://www.c14.co.il/article/1641278` was endorsed for 76 of 127
+open forecasts at relevance 0.7–1.0 with fabricated justifications. Five articles of that
+shape cost 644 judgments and 247 downstream Oracle runs. The guard sits inside
+`check_is_prediction`, so it covers `/forecast` and `POST /relevance` alike — the latter
+matters because news-indexer persists that verdict and it can be reused in place of a
+fresh judgment (`reuse_supplied_relevance`), so a confabulated 1.0 does not stay
+contained. Bare domains (`ynet.co.il`) are deliberately **not** stripped: the pattern that
+catches them also eats ordinary abbreviations, and over-rejection here silently loses a
+curated journalist's scoop, which is the failure news-indexer's rescue path exists to undo.
+
 ### 2.3 Per-source derived (`api/src/forecast_api/forecaster.py:715-794`)
 
 | variable | formula | notes |

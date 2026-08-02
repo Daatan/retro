@@ -113,3 +113,50 @@ def test_short_form_is_passed_through_when_requested():
         r = client.post("/relevance", json={**BODY, "short_form": True}, headers=HEADERS)
     assert r.status_code == 200
     assert gk.await_args.kwargs["short_form"] is True
+
+
+# ── Content-free input fails closed (retro#359) ────────────────────────────────────────────────
+# These deliberately do NOT mock check_is_prediction: the guard lives inside it, and the property
+# under test is that the endpoint as a whole never reaches the model for input carrying no
+# proposition. Mocking the screener would test the mock. Only the LLM leg is stubbed.
+
+URL_ONLY = {**BODY, "article_text": "https://www.c14.co.il/article/1641278", "short_form": True}
+
+
+def test_url_only_article_is_rejected_without_reaching_the_model():
+    """The measured incident: this exact 37-char body was endorsed for 76 of 127 forecasts at
+    relevance 0.7-1.0 with invented justifications. /relevance is a public-ish surface and its
+    verdict gets persisted and reused downstream (reuse_supplied_relevance), so the judge itself
+    has to be the layer that fails closed — a caller-side guard in news-indexer is not enough."""
+    with patch("tm.gatekeeper.complete_structured", new=AsyncMock()) as llm:
+        r = client.post("/relevance", json=URL_ONLY, headers=HEADERS)
+    llm.assert_not_awaited()
+    assert r.status_code == 200
+    body = r.json()
+    assert body["is_prediction"] is False
+    assert body["relevance_score"] == 0.0
+    assert body["prediction_count_estimate"] == 0
+
+
+def test_rejection_is_a_verdict_not_an_error():
+    """200 with is_prediction=false, never 502. The caller distinguishes "judged irrelevant" from
+    "never got judged" and retries the latter — a content-free post must land in the first bucket
+    permanently, or news-indexer re-asks about the same bare URL forever."""
+    with patch("tm.gatekeeper.complete_structured", new=AsyncMock()):
+        r = client.post("/relevance", json=URL_ONLY, headers=HEADERS)
+    assert r.status_code == 200
+    assert r.json()["reason"]
+
+
+def test_a_real_short_post_still_reaches_the_model():
+    """The guard is a floor, not a filter — terse posts from curated journalists are the entire
+    reason this endpoint exists, and must be judged on content exactly as before."""
+    real = {**BODY, "article_text": "שרן השכל התפטרה מתפקידה כסגנית שר החוץ", "short_form": True}
+    with patch(
+        "tm.gatekeeper.complete_structured",
+        new=AsyncMock(return_value=(_verdict(), {})),
+    ) as llm:
+        r = client.post("/relevance", json=real, headers=HEADERS)
+    llm.assert_awaited_once()
+    assert r.status_code == 200
+    assert r.json()["is_prediction"] is True

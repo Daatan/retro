@@ -388,9 +388,10 @@ async def _apply_settlement_match_gate(
 ):
     """Ask whether the settling facts ARE this claim's outcome (retro#388/#360).
 
-    Shadow by default: the verdict is logged and ``agg`` is returned unchanged
-    unless ``settlement_verifier_enforce`` is set. See ``settlement_verifier``
-    for why the check is semantic rather than a field comparison.
+    The verdict is logged either way; it acts only when
+    ``settlement_verifier_enforce`` is set, which it has been since 2026-08-03
+    (see ``settlement_verifier`` for the evidence, and for why the check is
+    semantic rather than a field comparison).
 
     Enforcement re-runs the *same* ``aggregate_pool`` with the vetoed votes'
     ``settled`` flags cleared, rather than editing the pinned result in place.

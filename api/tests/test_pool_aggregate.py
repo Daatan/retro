@@ -10,6 +10,8 @@ test_settlement_hardening.py) rather than through TestClient.
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 import pytest
 
 from forecast_api import forecaster
@@ -21,6 +23,10 @@ def _prob(stance: float) -> float:
     return (stance + 1.0) / 2.0
 
 
+# Relative, not hard-coded: see the note in test_settlement.py.
+_FRESH = (date.today() - timedelta(days=1)).isoformat()
+
+
 def _source(**over) -> PoolSourceInput:
     return PoolSourceInput(**{
         "stance": 0.5,
@@ -28,7 +34,7 @@ def _source(**over) -> PoolSourceInput:
         "credibility_weight": 1.0,
         "relevance_score": 1.0,
         "evidence_weight": 0.6,
-        "published_date": "2026-07-10",
+        "published_date": _FRESH,
         "settled": False,
         **over,
     })

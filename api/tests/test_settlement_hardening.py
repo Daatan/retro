@@ -12,6 +12,8 @@ Three code-enforced rules on top of the base settlement override:
    survival → NO) until the claim deadline passes. Fail-open without metadata.
 """
 
+from datetime import date, timedelta
+
 import pytest
 
 from forecast_api import forecaster
@@ -29,13 +31,26 @@ _TITLES = [
 ]
 
 
+# Relative, not hard-coded: see the note in test_settlement.py. A settlement
+# fixture dated in the fixed past drifts toward the recency floor as the suite
+# ages, and with settlement_quality_floor on (retro#372) it eventually stops
+# being able to pin at all — testing decay instead of the rule under test.
+_FRESH = (date.today() - timedelta(days=1)).isoformat()
+_FRESH_EVENT = (date.today() - timedelta(days=2)).isoformat()
+# A deadline that has just passed, kept the same 11 days behind _FRESH that the
+# old fixed pair (2026-07-01 article / 2026-06-20 deadline) used — inside the
+# 14-day post_deadline_grace_days window, so the staleness guard stays out of
+# the way of the direction-guard tests.
+_JUST_PASSED_DEADLINE = (date.today() - timedelta(days=12)).isoformat()
+
+
 def _article(i: int) -> ArticleInput:
     return ArticleInput(
         url=f"https://source-{i}.example.com/story-{i}",
         title=_TITLES[i - 1],
         snippet=f"A snippet with enough length to pass the fallback minimum, variant {i}.",
         source=f"source-{i}",
-        published_date="2026-07-01",
+        published_date=_FRESH,
         text="A long enough prefetched article body about the event in question." * 3,
     )
 
@@ -163,11 +178,11 @@ class TestDirectionGuard:
             question="settlement hardening — direction guard E",
             articles=[_article(1), _article(2)],
             claim_direction="arrival",
-            # Just past _article()'s fixed 2026-07-01 published_date, not years
-            # past it — this test is about settlement_direction_allowed, not
-            # the stale_undated_foreclosure staleness guard (retro#295); an
+            # Just past _article()'s published date, not years past it — this
+            # test is about settlement_direction_allowed, not the
+            # stale_undated_foreclosure staleness guard (retro#295); an
             # arbitrarily-old deadline would trip that unrelated check too.
-            claim_deadline="2026-06-20",
+            claim_deadline=_JUST_PASSED_DEADLINE,
         ))
 
         assert resp.settled is True

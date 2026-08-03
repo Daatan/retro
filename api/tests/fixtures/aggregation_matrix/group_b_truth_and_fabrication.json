@@ -1421,22 +1421,22 @@
         }
       ],
       "invariants": [
-        "settled is True",
+        "settled is False",
         "sources[0]['recency_weight'] == 0.02"
       ],
       "known_bad": {
         "finding": "F12",
-        "expected_behavior": "retro#279's settlement_quality_floor exists for this and is disabled by default; a pin should require settling votes that carry real weight, not merely a count."
+        "expected_behavior": "FIXED (retro#372): settlement_quality_floor is enabled at 0.20, and these two rows carry a combined winning weight of about 0.024 — decayed to the 0.02 recency floor — so the pin is now suppressed with suppression_reason='settlement_quality_floor' and the pooled mean stands. This shape is not hypothetical: prod's lowest live pin (0.022) was settled on articles published in 2021. The original text of this finding: a pin should require settling votes that carry real weight, not merely a count."
       },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 2,
-        "settled": true,
-        "mean": 0.94,
-        "std": 0.06,
-        "ci_low": 0.82,
-        "ci_high": 0.99,
+        "settled": false,
+        "mean": 0.98,
+        "std": 0.828,
+        "ci_low": 0.152,
+        "ci_high": 0.98,
         "sources": [
           {
             "source": "alpha",
@@ -1515,23 +1515,23 @@
         }
       ],
       "invariants": [
-        "settled is True",
+        "settled is False",
         "abs(sources[0]['relevance_score'] - 0.3) < 1e-9",
         "sources[0]['weight'] < 0.1"
       ],
       "known_bad": {
         "finding": "F12",
-        "expected_behavior": "Settlement should inherit the same relevance and quality gates the pooled mean obeys; a pin from relevance-0.3 coverage is the strongest possible claim made on the weakest possible evidence."
+        "expected_behavior": "FIXED for this instance (retro#372) but not as a class: the 0.20 quality floor suppresses these two relevance-0.3 rows because 2 x 0.074 = 0.148 falls under it. The issue's own caveat still stands — a mass floor is not a relevance gate, and two relevance-0.3 rows that are fresh and high-certainty enough would clear 0.20 and pin again. Settlement inheriting the pooled mean's relevance gating is the durable fix."
       },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 2,
-        "settled": true,
-        "mean": 0.94,
-        "std": 0.06,
-        "ci_low": 0.82,
-        "ci_high": 0.99,
+        "settled": false,
+        "mean": 0.98,
+        "std": 0.6342,
+        "ci_low": 0.3458,
+        "ci_high": 0.98,
         "sources": [
           {
             "source": "alpha",
@@ -2360,24 +2360,23 @@
         }
       ],
       "invariants": [
-        "settled is True",
-        "abs(mean - 0.94) < 1e-9",
+        "settled is False",
         "sum(1 for s in sources if s['settled']) == 2",
         "sum(1 for s in sources if s['stance'] < 0) == 4"
       ],
       "known_bad": {
         "finding": "#388",
-        "expected_behavior": "An announced future act must not settle the claim it announces. The settlement path needs the aspect check the fact lane already has: 'the decider said it will happen' is a precursor, not the occurrence, no matter how definitively it is reported or how precisely it is dated. Note for whoever implements this: the gate #388 proposes — demote settlement votes whose event_actors/event_target do not intersect the claim's — would NOT fire here. Both prod rows carry event_actors='United States' and event_target='Ukraine', which are exactly the claim's own entities; the mismatch is on the ACTION and its ASPECT, which a two-slot dyad cannot express. Enabling settlement_quality_floor (#372) would suppress this particular instance by accident of the settling rows' age, not by identifying what is wrong with them."
+        "expected_behavior": "SUPPRESSED, NOT FIXED. retro#372's 0.20 quality floor stops this pin — the two settling rows are ~3 weeks old and carry a combined 0.149 — and that is exactly the accident the floor's own calibration note warns about: prod's real pin was suppressed at the snapshot where it fired (0.134) and the same pool's settled mass had already grown to 0.297 by the latest snapshot. A fixed floor delays a wrong pin that keeps accumulating corroboration; it does not prevent it. The defect this case is about is untouched: an announced future act must not settle the claim it announces, and the settlement path still has no aspect check where the fact lane has one (F9). Note for whoever implements the gate: #388's proposal — demote settlement votes whose event_actors/event_target do not intersect the claim's — would NOT fire here. Both prod rows carry event_actors='United States' and event_target='Ukraine', the claim's own entities; the mismatch is on the ACTION and its ASPECT, which a two-slot dyad cannot express."
       },
       "expect": {
         "insufficient_data": false,
         "reason": null,
         "articles_used": 6,
-        "settled": true,
-        "mean": 0.94,
-        "std": 0.06,
-        "ci_low": 0.82,
-        "ci_high": 0.99,
+        "settled": false,
+        "mean": -0.2971,
+        "std": 0.3738,
+        "ci_low": -0.6427,
+        "ci_high": 0.0486,
         "sources": [
           {
             "source": "alpha",

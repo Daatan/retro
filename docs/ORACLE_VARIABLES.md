@@ -185,16 +185,37 @@ canonical case). The pin then requires `settlement_min_sources` **unanimous** va
 Clearing `settlement_min_sources` is a **count**, not a quality check — a pool of uniformly
 weak sources (low credibility, thin relevance, recency-decayed) that each barely clear
 settlement grade could still out-count its way to a pin. `settlement_quality_floor`
-(retro#279, default **0 = disabled**) additionally requires the winning direction's votes to
-carry at least this much *combined weight* (`credibility × evidence_weight × recency ×
+(retro#279/#372, **0.20 — enabled 2026-08-02**) additionally requires the winning direction's
+votes to carry at least this much *combined weight* (`credibility × evidence_weight × recency ×
 relevance²` — the same per-source `weight` term the pool itself uses, summed over the
 winning direction's valid votes only) before the pin is honored; below it the pin is
 suppressed too (`suppression_reason="settlement_quality_floor"`) and the pooled mean stands,
-same as any other suppressed pin. Left at 0 because there is no audited incident to calibrate
-it against yet — 0.5 (reusing `decisiveness_floor`'s scale) broke multiple legitimate-pin
-tests once wired through real per-source weights, since credibility/recency/relevance
-multiplied together lands lower than a single flat floor assumes; tune from real pool data
-before enabling in prod.
+same as any other suppressed pin.
+
+**Where 0.20 comes from.** Every pin production has ever published (the latest pinning snapshot
+per prediction, 29 of them; 2 excluded as unmeasurable because their stored rows predate
+`evidence_weight`/`relevance_score` persistence), with the winning-direction weight
+reconstructed from the stored snapshot and recency recomputed from `published_at` against the
+snapshot's own timestamp:
+
+| min | p25 | median | p75 | max |
+|---|---|---|---|---|
+| 0.022 | 0.28 | 0.60 | 1.65 | 12.2 |
+
+0.20 suppresses **3 of the 27 measurable pins**, and the cut lands in a real gap (next pin up:
+0.22). Each suppressed pin is indefensible on its face: one settled on articles published in
+**2021**, one on a single settled vote in a one-row pool, one at 0.171. What it does **not**
+buy, stated so the number isn't oversold: it suppresses none of the three pins that resolved
+**wrong** (0.432, 1.727, 2.292) — mass was not what was wrong with them, sign and subject were
+(retro#360, #388) — and it suppresses retro#388's live pin at the snapshot where it fired
+(0.134) but not permanently, since that pool's settled mass had grown to 0.297 by the latest
+snapshot. A fixed floor delays a wrong pin that keeps accumulating corroboration.
+
+The earlier note here said 0.5 "broke multiple legitimate-pin tests". That turned out to be a
+fixture artifact, not a property of the floor: those tests hard-coded article dates in the
+fixed past, so they decayed further toward the recency floor every day the suite aged and were
+by then asserting that month-old coverage may pin. Their dates are now relative to the run
+(`_FRESH` in `test_settlement*.py`, `test_pool_aggregate.py`), which is what they always meant.
 
 `PoolAggregateResponse` exposes `settlement_suppressed`/`settlement_suppression_reason`/
 `settlement_votes_demoted` for callers. Regression fixtures from the audit:

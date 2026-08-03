@@ -1,4 +1,4 @@
-"""The settlement match gate (retro#388, retro#360) — shadow first.
+"""The settlement match gate (retro#388, retro#360) — shadow first, now enforcing.
 
 Three things are under test, and the third is the one that matters.
 
@@ -14,9 +14,15 @@ must never suppress a pin — an LLM outage silently changing published numbers
 is a worse failure than the one being fixed.
 
 **Shadow means shadow.** With ``settlement_verifier_enforce`` off, a NO verdict
-changes nothing at all. That is what makes it safe to enable in prod and
-measure against the pins we already have ground truth for, before it is allowed
-to act.
+changes nothing at all. That is what made it safe to enable in prod and measure
+against the pins we already have ground truth for, before it was allowed to
+act. The measurement is in, ``enforce`` now defaults **on** (2026-08-03,
+``docs/ORACLE_VARIABLES.md`` §2.1), and the shadow path stays under test because
+it is still one env var away and is what a rollback returns to.
+
+Both flag defaults are pinned below: they are the whole safety contract, and a
+silent flip either way is exactly the change that should never pass review
+unnoticed.
 """
 from __future__ import annotations
 
@@ -280,3 +286,27 @@ class TestItSkipsRatherThanGuesses:
         ))
         assert resp.settled is True
         assert called == []
+
+
+class TestShippedDefaults:
+    """The flag defaults ARE the safety contract — pin them explicitly.
+
+    Read off the model fields rather than the live ``settings`` object: the
+    suite's ``conftest.py`` sets ``SETTLEMENT_VERIFIER_ENABLED=false`` so no
+    test run depends on Bedrock, so the instantiated value deliberately does
+    not reflect what production ships.
+    """
+
+    def test_gate_ships_enabled(self):
+        from forecast_api.config import ApiSettings
+        assert ApiSettings.model_fields["settlement_verifier_enabled"].default is True
+
+    def test_gate_ships_enforcing(self):
+        """Flipped 2026-08-03 on the replay over all 33 published pins.
+
+        5/5 on the pins with a known outcome, and all 11 vetoes on active pins
+        reviewed by hand (docs/ORACLE_VARIABLES.md §2.1). Turning this back off
+        is a rollback to shadow, not a config tidy-up.
+        """
+        from forecast_api.config import ApiSettings
+        assert ApiSettings.model_fields["settlement_verifier_enforce"].default is True

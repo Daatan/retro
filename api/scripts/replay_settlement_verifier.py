@@ -63,7 +63,15 @@ async def _one(case: dict, model: str, timeout_s: int, sem: asyncio.Semaphore) -
 async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("cases", type=Path)
-    ap.add_argument("--model", default="bedrock/eu.anthropic.claude-haiku-4-5-20251001-v1:0")
+    # Must match what the live gate resolves to, or the replay measures a
+    # different model than production runs: settlement_verifier_model is unset,
+    # so the gate follows extractor_model, which prod's committed systemd
+    # drop-in (infra/oracle-api.service.d/extractor-model.conf) pins to this.
+    # The `eu.` inference profile this defaulted to does not exist in the
+    # account — every call returned "The provided model identifier is invalid",
+    # and because the gate fails open that surfaced as a clean all-`errored`
+    # table rather than as a failure. Hence the guard at the end of main().
+    ap.add_argument("--model", default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--timeout", type=int, default=30)
     ap.add_argument("--json-out", type=Path)
@@ -92,6 +100,20 @@ async def main() -> int:
 
     if args.json_out:
         args.json_out.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # The gate fails open by design, so a totally broken run — bad model id, no
+    # credentials, no network — prints a well-formed table of zeros that reads
+    # like "the gate vetoes nothing". It is not a replay result; it is the
+    # absence of one, and it must not be quotable as evidence.
+    errored = sum(1 for r in results if r["errored"])
+    if results and errored == len(results):
+        print(f"\nEVERY call errored ({errored}/{len(results)}) — this is NOT a replay result. "
+              f"Check the model id and Bedrock credentials; the gate fails open, so the "
+              f"table above shows no vetoes for the same reason it shows no keeps.",
+              file=sys.stderr)
+        return 1
+    if errored:
+        print(f"\nwarning: {errored}/{len(results)} calls errored and fell open.", file=sys.stderr)
     return 0
 
 

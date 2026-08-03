@@ -222,6 +222,85 @@ by then asserting that month-old coverage may pin. Their dates are now relative 
 `api/tests/test_settlement_revalidation.py`; quality-floor fixtures:
 `TestQualityFloor` in the same file.
 
+**The settlement match gate** (retro#388/#360, `api/src/forecast_api/settlement_verifier.py`,
+applied in `_apply_settlement_match_gate`). Everything above is arithmetic and temporal: it
+counts votes, re-proves anchors, weighs mass. None of it can ask the one question that both
+documented pin failures turned on — *are these facts this claim's own outcome?* The gate is one
+LLM call, made only when a pin is about to fire, that decomposes the question into who acts,
+what action, and within what scope, and answers NO when the facts settle it the other way, when
+a different party acts or the action lands on a different target, when the action was announced
+or agreed but not carried out, or when the fact belongs to a different instance or timeframe of
+a recurring event. Where a claim's summary and its quoted sentence disagree it believes the
+**quote** — the summary is a paraphrase by the same extraction step that may have misread the
+sentence. The pin's **direction** is part of what is asked, because facts that decide a question
+*against* the answer about to be published are not proof of it however clearly they decide it.
+
+Why semantic rather than a field comparison: the check #388 originally proposed — demote a
+settlement vote whose `event_actors`/`event_target` miss the claim's — would have fired on
+**neither** incident. Both Patriot rows carry `event_actors="United States"`,
+`event_target="Ukraine"`, the claim's own entities; the England–Argentina rows name both teams
+correctly. The question has four slots (who, what action, what **aspect**, what scope) and the
+extractor emits two. The deterministic end state — per-claim aspect and role as extractor shadow
+fields, enforced in code the way `enforce_precursor_cap` enforces F9 — is unchanged and still the
+target; this is the net that can be measured against known ground truth today.
+
+Two flags: `settlement_verifier_enabled` runs it and logs the verdict,
+`settlement_verifier_enforce` lets that verdict act. It shipped enabled-but-shadow on
+2026-08-03 so the enforcement decision could be made on measurement rather than on the design
+argument, and **`enforce` was turned on the same day** on this evidence
+(`scripts/replay_settlement_verifier.py`, every pin production has ever published — 33 at the
+time, 0 errored):
+
+| | pins | gate keeps | gate vetoes |
+|---|---|---|---|
+| known outcome | 5 | 2 | 3 |
+| still active | 27 | 16 | 11 |
+
+On the five with ground truth it is **5 for 5**, scoring against whether the *Oracle's pin* was
+right rather than whether the prediction resolved true — a NO pin on a claim that resolved wrong
+is a pin the Oracle got right. It vetoes all three the Oracle got wrong (France winning the World
+Cup and England winning their semi-final, both settled by reports of the **loss**; "Will USA bomb
+Iran in 2025?", settled by bombing in **2026**) and keeps both it got right (Messi, the Knesset
+dissolution).
+
+All 11 vetoes on active pins were reviewed individually and each is defensible; they fall into
+four groups. **Wrong instance or timeframe** — a pin about the *next* Israeli government settled
+on a 2021 coalition agreement, one about the *next* general election settled on the 2022 one.
+**Wrong actor or scope** — nine European countries and Ukraine announcing an initiative read as
+*the European Union* announcing it; an earthquake that struck Egypt, and a second report of the
+same tremor whose Hebrew quote says only "the Dead Sea region", read as an earthquake inside
+Israel's internationally recognized borders (the quote rule doing exactly its job: that row's
+summary asserts the border claim its own quote does not); a settlement in the West Bank read as
+one in Lebanon. **Announced, not carried out** — the F-35 sale to Turkey, settled on "plans,
+reviews, openness and hints"; the formal end of the US–Iran conflict, settled on a memorandum
+while strikes continued. **Present tenure read as a future outcome** — three pins (Netanyahu on
+31 Dec 2026, Burnham until 2028, Putin through May 2027) settled on facts establishing only that
+the incumbent holds office *now*. The last group is where the gate is strictest, and it is also
+where being wrong costs least.
+
+That asymmetry is what makes enforcement the safer setting, not the riskier one. **A veto is a
+demotion, not a deletion**: enforcement re-runs the *same* `aggregate_pool` with the vetoed rows'
+`settled` flags cleared, so those rows keep voting as ordinary evidence and the published number
+is still one the pooling code produced (a recompute over the stored pool reproduces it). A false
+**pin** publishes a confidently wrong 97% over a pool reading 44% — the documented harm. A false
+**veto** publishes the pooled estimate instead: less confident, not wrong. Every failure path is
+fail-**open** — unreachable model, timeout, unparseable reply → `errored`, never a veto — so an
+LLM outage cannot silently change published numbers. Because of that, a totally broken replay
+(bad model id, no credentials) prints a well-formed table of zeros that reads like "the gate
+vetoes nothing"; the script now exits non-zero and says so rather than letting the absence of a
+result be quoted as one.
+
+**Coverage caveat.** The gate needs the claim text and per-claim `claims_detail`. On `/forecast`
+it has both (`question` is required; `claims_detail` comes from the in-process extraction), and
+that is the path that publishes pins. On `/pool/aggregate` both fields are optional and daatan
+sends **neither**, so the gate skips explicitly (`outcome=skipped reason=no_question`) rather
+than guessing from the rows — every live firing since deploy has been such a skip. That path is
+shadow-compare and publishes nothing today, so enforcement is unaffected; it must be closed
+before the recompute-over-pool cutover in §6/§8, or enforcement will be silently half-covered
+exactly when the recompute becomes a writer. Fixtures: `api/tests/test_settlement_verifier.py`
+(prompt payload, parsing, shadow, enforcement, the three skip paths). Note the suite sets
+`SETTLEMENT_VERIFIER_ENABLED=false` in `conftest.py` so no test run depends on Bedrock.
+
 ### 2.2 Per-article (gatekeeper LLM — `pipeline/src/tm/gatekeeper.py`)
 
 | variable | scale | role | notes |

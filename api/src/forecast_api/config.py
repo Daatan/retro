@@ -335,17 +335,33 @@ class ApiSettings(BaseSettings):
     # Before a pin publishes, one LLM call asks whether the settling facts ARE
     # the claim's own outcome: right party, right action, actually carried out
     # rather than announced. It fires only when a pin is about to fire, which
-    # production has done 29 times in its whole history, so the cost is
+    # production has done 33 times in its whole history, so the cost is
     # structurally negligible.
     #
     # Two flags, deliberately: `enabled` runs it and LOGS the verdict,
-    # `enforce` lets that verdict suppress a pin. Shipping with enforce off
-    # buys the measurement the enforcement decision needs — replay against the
-    # pins we already have ground truth for — without an LLM silently changing
-    # published numbers first. Every failure path is fail-OPEN (see Verdict):
-    # an unreachable model must never suppress a pin by itself.
+    # `enforce` lets that verdict suppress a pin. It shipped with enforce off to
+    # buy the measurement this decision needed — replay against the pins we
+    # already have ground truth for — without an LLM silently changing published
+    # numbers first. Every failure path is fail-OPEN (see Verdict): an
+    # unreachable model must never suppress a pin by itself.
+    #
+    # `enforce` is ON as of 2026-08-03. The replay (scripts/replay_settlement_
+    # verifier.py, all 33 pins production has ever published, 0 errors) reproduced
+    # 5/5 on every pin with a known outcome — vetoing all three the Oracle got
+    # WRONG and keeping both it got right — and every one of the 11 vetoes it
+    # casts on the 27 still-active pins was reviewed individually and is
+    # defensible: settled on 2021 articles, on a 2022 election, on an earthquake
+    # in Egypt, on nine countries mistaken for the EU, or on an action announced
+    # but not carried out. See docs/ORACLE_VARIABLES.md §2.1.
+    #
+    # What tips the risk calculation is the asymmetry: a veto is a DEMOTION, not
+    # a deletion. Enforcement re-runs the same aggregate_pool with the vetoed
+    # rows' settled flags cleared, so those rows keep voting as ordinary
+    # evidence. A false pin publishes a confidently wrong 97% over a pool reading
+    # 44%; a false veto merely publishes the pooled estimate — less confident,
+    # not wrong.
     settlement_verifier_enabled: bool = True
-    settlement_verifier_enforce: bool = False
+    settlement_verifier_enforce: bool = True
     settlement_verifier_timeout_seconds: int = 12
     # The extractor's model, not the gatekeeper's: this is a semantic judgment
     # about aspect and role, which is exactly the class Nova Lite failed on in

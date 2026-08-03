@@ -1,7 +1,12 @@
 """The settlement match gate — does the settling fact ARE the claim's event?
 
-**Shadow by default.** This module runs, logs its verdict, and changes nothing
-until ``settlement_verifier_enforce`` is turned on.
+**Enforcing since 2026-08-03.** ``settlement_verifier_enabled`` runs it and logs
+the verdict; ``settlement_verifier_enforce`` — now on — lets that verdict demote
+the settlement. It shipped shadow-first and was flipped once the replay over
+every pin production had ever published scored 5/5 on the pins with a known
+outcome and every veto on an active pin had been reviewed by hand
+(``docs/ORACLE_VARIABLES.md`` §2.1). A veto is a **demotion, not a deletion**:
+the vetoed rows keep voting as ordinary evidence.
 
 Why it exists (retro#388, retro#360). Before publishing a ±0.94 pin the system
 has to answer one question: *is the reported fact this claim's own event?* That
@@ -39,7 +44,7 @@ shipped, which is what the shadow-first rollout is for:
   **will** grant"*. The summary is a paraphrase produced by the same extraction
   step that may have misread the sentence; the quote is what the source said.
 
-Cost is not a concern at the rate this fires: production has published **29**
+Cost is not a concern at the rate this fires: production has published **33**
 pins in its entire history, so the call happens on a path that is rare by
 construction, and never on the ordinary pooling path.
 

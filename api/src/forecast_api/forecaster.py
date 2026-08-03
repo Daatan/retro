@@ -15,7 +15,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Sequence
 from urllib.parse import urlparse
 
 import httpx
@@ -77,6 +77,7 @@ from .models import (
     SourceSignal,
 )
 from .config import settings
+from .settlement_verifier import SettlementVote, verify_settlement
 
 logger = logging.getLogger(__name__)
 
@@ -351,6 +352,89 @@ def derive_settlement_event_date(
         return None
     best = min(dated, key=lambda p: (-p.certainty, p.event_date))
     return best.event_date
+
+
+def _settlement_votes(
+    outlet: Optional[str], claims_detail: Optional[list[ClaimDetail]],
+) -> list[SettlementVote]:
+    """The settling claims of one article, as the match gate sees them.
+
+    Only claims the extractor marked ``settled`` — an article's other claims are
+    ordinary evidence and are not what the pin rests on. The verbatim ``quote``
+    rides along because the whole failure class this gate exists for is visible
+    in the quote and invisible in the numbers: on retro#388 the claim summaries
+    read as the outcome while the quotes said the decider had *announced* it.
+
+    Empty when ``claims_detail`` is absent — a legacy row, or a caller that
+    hasn't been widened yet (F1/retro#364). The gate treats that as "cannot
+    check" rather than "does not settle".
+    """
+    return [
+        SettlementVote(
+            outlet=outlet, claim=c.claim, quote=c.quote, event_date=c.event_date,
+        )
+        for c in (claims_detail or [])
+        if c.settled
+    ]
+
+
+async def _apply_settlement_match_gate(
+    agg,
+    *,
+    question: Optional[str],
+    votes_for_index,
+    rerun,
+    settled_flags: Sequence[Optional[bool]],
+):
+    """Ask whether the settling facts ARE this claim's outcome (retro#388/#360).
+
+    Shadow by default: the verdict is logged and ``agg`` is returned unchanged
+    unless ``settlement_verifier_enforce`` is set. See ``settlement_verifier``
+    for why the check is semantic rather than a field comparison.
+
+    Enforcement re-runs the *same* ``aggregate_pool`` with the vetoed votes'
+    ``settled`` flags cleared, rather than editing the pinned result in place.
+    Those rows keep voting as ordinary evidence — a vetoed settlement is a
+    demotion, not a deletion — and the published number is one the pooling code
+    actually produced, so a recompute over the stored pool still reproduces it.
+    """
+    if agg is None or not agg.settled or not settings.settlement_verifier_enabled:
+        return agg
+    if not question:
+        logger.info("event=settlement_verifier outcome=skipped reason=no_question")
+        return agg
+
+    votes: list[SettlementVote] = []
+    for i in agg.settlement_vote_indices:
+        votes.extend(votes_for_index(i))
+    if not votes:
+        logger.info("event=settlement_verifier outcome=skipped reason=no_claim_detail")
+        return agg
+
+    # The direction matters as much as the match: facts that decide the question
+    # the OTHER way are not proof of the answer about to be published (the
+    # France-World-Cup pin, found by replaying this gate over past pins).
+    verdict = await verify_settlement(
+        question, votes,
+        model=settings.settlement_verifier_model or _pipeline_settings.extractor_model,
+        timeout_s=settings.settlement_verifier_timeout_seconds,
+        answer="YES" if agg.mean >= 0 else "NO",
+    )
+    logger.warning(
+        "event=settlement_verifier settles=%s errored=%s enforced=%s votes=%d "
+        "question=%s reason=%r",
+        verdict.settles, verdict.errored,
+        settings.settlement_verifier_enforce and not verdict.settles and not verdict.errored,
+        len(votes), _question_hash(question), verdict.reason[:200],
+    )
+    if verdict.settles or verdict.errored or not settings.settlement_verifier_enforce:
+        return agg
+
+    vetoed = set(agg.settlement_vote_indices)
+    cleared = [
+        (False if i in vetoed else flag) for i, flag in enumerate(settled_flags)
+    ]
+    return rerun(cleared) or agg
 
 
 # Minimum extracted length before we trust the body over title+snippet.
@@ -1198,8 +1282,7 @@ async def _run_forecast_inner(
     # aggregate_pool() (see aggregation.py) so a future recompute over an
     # accumulated evidence pool can never silently drift from what a fresh
     # run produces here.
-    agg = aggregate_pool(
-        all_stances, all_weights, relevances, all_settled,
+    _pool_kwargs = dict(
         relevance_weight_floor=settings.relevance_weight_floor,
         decisiveness_floor=settings.decisiveness_floor,
         thin_evidence_ci_inflation=settings.thin_evidence_ci_inflation,
@@ -1218,6 +1301,7 @@ async def _run_forecast_inner(
         settlement_post_deadline_grace_days=settings.settlement_post_deadline_grace_days,
         settlement_quality_floor=settings.settlement_quality_floor,
     )
+    agg = aggregate_pool(all_stances, all_weights, relevances, all_settled, **_pool_kwargs)
     if agg is not None:
         for idx, demotion_reason in agg.settlement_demotions:
             logger.warning(
@@ -1230,6 +1314,21 @@ async def _run_forecast_inner(
                 "event=settlement_suppressed reason=%s question=%s",
                 agg.suppression_reason, _question_hash(req.question),
             )
+        # The match gate (retro#388/#360) — shadow unless enforce is on. It runs
+        # here rather than inside aggregate_pool because aggregation is a pure,
+        # log-free, synchronous function and this is an LLM call; keeping the
+        # split is what lets a recompute reproduce a live run exactly.
+        agg = await _apply_settlement_match_gate(
+            agg,
+            question=req.question,
+            votes_for_index=lambda i: _settlement_votes(
+                source_signals[i].source_name, source_signals[i].claims_detail,
+            ),
+            rerun=lambda flags: aggregate_pool(
+                all_stances, all_weights, relevances, flags, **_pool_kwargs,
+            ),
+            settled_flags=all_settled,
+        )
 
     if agg is None or agg.insufficient_reason is not None:
         # Outcome histogram tells us *why* we got nothing — were articles
@@ -1431,8 +1530,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         settlement_dates.append(s.settlement_event_date)
         published_dates.append(s.published_date)
 
-    agg = aggregate_pool(
-        stances, weights, relevances, settled_flags,
+    _pool_kwargs = dict(
         relevance_weight_floor=settings.relevance_weight_floor,
         decisiveness_floor=settings.decisiveness_floor,
         thin_evidence_ci_inflation=settings.thin_evidence_ci_inflation,
@@ -1451,6 +1549,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         settlement_post_deadline_grace_days=settings.settlement_post_deadline_grace_days,
         settlement_quality_floor=settings.settlement_quality_floor,
     )
+    agg = aggregate_pool(stances, weights, relevances, settled_flags, **_pool_kwargs)
     if agg is not None:
         for idx, demotion_reason in agg.settlement_demotions:
             logger.warning(
@@ -1459,6 +1558,19 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             )
         if agg.settlement_suppressed:
             logger.warning("event=settlement_suppressed reason=%s sources=%d", agg.suppression_reason, agg.n)
+        # Same match gate as the live path. `question` is optional on this
+        # request precisely because the recompute path historically had no need
+        # for the claim text; without it the gate cannot run and says so, rather
+        # than guessing from the rows.
+        agg = await _apply_settlement_match_gate(
+            agg,
+            question=req.question,
+            votes_for_index=lambda i: _settlement_votes(
+                req.sources[i].outlet or req.sources[i].url, req.sources[i].claims_detail,
+            ),
+            rerun=lambda flags: aggregate_pool(stances, weights, relevances, flags, **_pool_kwargs),
+            settled_flags=settled_flags,
+        )
 
     if agg is None:
         return PoolAggregateResponse(

@@ -205,9 +205,9 @@ snapshot's own timestamp:
 0.20 suppresses **3 of the 27 measurable pins**, and the cut lands in a real gap (next pin up:
 0.22). Each suppressed pin is indefensible on its face: one settled on articles published in
 **2021**, one on a single settled vote in a one-row pool, one at 0.171. What it does **not**
-buy, stated so the number isn't oversold: it suppresses none of the three pins that resolved
-**wrong** (0.432, 1.727, 2.292) — mass was not what was wrong with them, sign and subject were
-(retro#360, #388) — and it suppresses retro#388's live pin at the snapshot where it fired
+buy, stated so the number isn't oversold: it suppresses none of the three pins the **Oracle**
+got wrong (0.432, 2.292, 12.245) — mass was not what was wrong with them; sign, subject and
+timeframe were (retro#360, #388) — and it suppresses retro#388's live pin at the snapshot where it fired
 (0.134) but not permanently, since that pool's settled mass had grown to 0.297 by the latest
 snapshot. A fixed floor delays a wrong pin that keeps accumulating corroboration.
 

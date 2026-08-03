@@ -317,6 +317,10 @@ class PoolAggregateRequest(BaseModel):
     no search, no LLM calls. Same claim_direction/claim_deadline/claim_created_at/
     claim_archetype semantics as ForecastRequest (gates settlement votes)."""
     sources: list[PoolSourceInput] = Field(default_factory=list)
+    question: Optional[str] = Field(
+        default=None,
+        description="The claim being recomputed, verbatim. Optional and additive: the recompute path never needed the claim text, since every rule it applies is arithmetic or temporal. The settlement match gate (retro#388) is the first rule that is neither — it asks whether the settling facts ARE this claim's outcome — so without this field a recompute cannot run it and skips it explicitly rather than guessing from the rows.",
+    )
     claim_direction: Optional[Literal["arrival", "survival"]] = Field(default=None)
     claim_deadline: Optional[str] = Field(default=None)
     claim_created_at: Optional[str] = Field(default=None, description="See ForecastRequest.claim_created_at")

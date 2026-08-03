@@ -237,6 +237,108 @@ class TestFacetsAreClaimLevel:
         assert [c.event_actors for c in s.claims_detail] == ["Alpha", "Beta"]
 
 
+class TestTheReductionReplaysFromPersistedClaims:
+    """Item 3 of F1: the scalars are DERIVED from the per-claim layer.
+
+    The tests above check individual scalars by re-deriving them by hand. These
+    check the stronger property that makes derivability structural rather than
+    incidental: ``reduce_article()`` — the exact function the pipeline uses —
+    replayed over nothing but the persisted ``claims_detail``, reproduces
+    *every* field of the signal it produced.
+
+    That is the contract a stored pool row has to satisfy for retroactive
+    backtesting, R1 fitting and F3 attribution to be possible at all. It fails
+    the moment a scalar starts reading something the claim layer does not keep,
+    or ``build_claims_detail`` drops a field the reduction consumes — neither
+    of which any per-scalar test would catch.
+    """
+
+    @staticmethod
+    def _replay(claims_detail):
+        from forecast_api.config import settings
+
+        return forecaster.reduce_article(
+            claims_detail,
+            settlement_min_stance=settings.settlement_min_claim_stance,
+            settlement_min_certainty=settings.settlement_min_claim_certainty,
+            class_weights=settings.evidence_class_weight,
+            class_weight_default=settings.evidence_class_weight_default,
+            class_weight_unclassified_cap=settings.evidence_class_weight_unclassified_cap,
+        )
+
+    @staticmethod
+    def _assert_replays(signal, replayed) -> None:
+        assert round(replayed.stance, 3) == signal.stance
+        assert round(replayed.certainty, 3) == signal.certainty
+        assert round(replayed.evidence_weight, 3) == signal.evidence_weight
+        assert replayed.evidence_class == signal.evidence_class
+        assert (replayed.settled or None) == signal.settled
+        assert replayed.settlement_event_date == signal.settlement_event_date
+        assert replayed.quantitative_estimate == signal.quantitative_estimate
+        assert replayed.claims == signal.claims
+        assert (
+            round(replayed.fact_signal, 3) if replayed.fact_signal is not None else None
+        ) == signal.fact_signal
+        assert replayed.event_actors == signal.event_actors
+        assert replayed.event_target == signal.event_target
+        assert replayed.is_occurrence == signal.is_occurrence
+        assert replayed.verified == signal.verified
+
+    async def test_every_scalar_replays_on_the_ordinary_path(self, monkeypatch):
+        """Mixed classes, mixed fact-bearing, one anchor — the five reductions
+        run over four different subsets here, so a replay that agrees on all of
+        them is not agreeing by coincidence."""
+        s = await _one_source(monkeypatch, [
+            _claim(claim="Reported fact.", stance=0.7, certainty=0.8,
+                   evidence_class="reported_fact", fact_signal=0.2, is_occurrence=True,
+                   verified=True, event_actors="Alpha", event_target="Beta"),
+            _claim(claim="Columnist's view.", stance=-0.4, certainty=0.3,
+                   evidence_class="opinion"),
+            _claim(quote="Polymarket prices this at 85%.", claim="Cited market price.",
+                   stance=0.2, certainty=0.3, quantitative_estimate=0.85,
+                   evidence_class="cited_probability", fact_signal=0.55,
+                   is_occurrence=True, verified=False, event_actors="Gamma"),
+            _claim(claim="", stance=0.1, certainty=0.5),
+        ], "[F1-replay] Will the event occur?")
+
+        assert len(s.claims_detail) == 4
+        self._assert_replays(s, self._replay(s.claims_detail))
+
+    async def test_every_scalar_replays_on_the_settlement_path(self, monkeypatch):
+        """The settlement subset is where the reductions diverge most: stance
+        comes from the settled claim alone while certainty and evidence_weight
+        still average the colour quotes it displaced. The replay has to
+        reconstruct that split from ``settled`` + the gates, not be told it."""
+        s = await _one_source(monkeypatch, [
+            _claim(claim="The result was declared.", stance=1.0, certainty=0.95,
+                   settled=True, event_date="2026-07-20",
+                   evidence_class="reported_fact", fact_signal=0.9, is_occurrence=True,
+                   verified=True),
+            _claim(claim="Colour quote from the losing camp.", stance=-0.6,
+                   certainty=0.4, evidence_class="opinion"),
+        ], "[F1-replay-settled] Will the event occur?")
+
+        assert s.settled is True, "fixture must clear the settlement gates"
+        assert s.stance == 1.0, "settlement claim replaces the claim set for stance"
+        assert s.certainty < 0.95, "certainty still averages the displaced claim"
+        self._assert_replays(s, self._replay(s.claims_detail))
+
+    async def test_a_demoted_settlement_replays_as_ordinary_evidence(self, monkeypatch):
+        """A ``settled`` claim below the gates votes as ordinary evidence. The
+        persisted claim keeps ``settled=True``, so the replay must re-apply
+        settlement_grade() rather than trust the flag — otherwise a stored row
+        would reconstruct a pin the pipeline never published."""
+        s = await _one_source(monkeypatch, [
+            _claim(claim="Hedged 'it is over' claim.", stance=0.5, certainty=0.5,
+                   settled=True, event_date="2026-07-20"),
+            _claim(claim="Ordinary reporting.", stance=0.2, certainty=0.6),
+        ], "[F1-replay-demoted] Will the event occur?")
+
+        assert s.settled is None, "below-gate settlement must not pin"
+        assert s.claims_detail[0].settled is True, "the demotion stays visible per-claim"
+        self._assert_replays(s, self._replay(s.claims_detail))
+
+
 class TestPoolWireIsAdditive:
     """R8: additive persistence only — the estimate must not move."""
 

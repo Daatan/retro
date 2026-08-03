@@ -13,12 +13,18 @@ import pytest
 from forecast_api import forecaster
 from forecast_api.config import settings as api_settings
 from forecast_api.forecaster import derive_settlement_event_date
-from forecast_api.models import ArticleInput, ForecastRequest
+from forecast_api.models import ArticleInput, ClaimDetail, ForecastRequest
 from tm.models import ExtractionOutput, GatekeeperOutput, PredictionExtraction
 
 
-def pred(stance: float, certainty: float = 0.95, event_date: str | None = None) -> PredictionExtraction:
-    return PredictionExtraction(
+def pred(stance: float, certainty: float = 0.95, event_date: str | None = None) -> ClaimDetail:
+    """One settlement-grade claim, on the per-claim wire model.
+
+    ``derive_settlement_event_date`` now reduces over ``claims_detail`` (F1
+    item 3, retro#364), so its unit tests feed it the same type the pipeline
+    does rather than the extractor's pre-wire object.
+    """
+    return ClaimDetail(
         quote="q", claim="c", stance=stance, certainty=certainty,
         settled=True, event_date=event_date,
     )

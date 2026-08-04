@@ -663,6 +663,35 @@ def relevance_weight(relevance: float) -> float:
     return RELEVANCE_BAND_WEIGHTS.get(round(relevance, 2), relevance ** 2)
 
 
+def cluster_downweight_factors(
+    cluster_ids: Optional[Sequence[int]], exponent: float,
+) -> Optional[list[float]]:
+    """Per-row weight multipliers that discount correlated evidence (retro#355).
+
+    A cluster of ``k`` rows echoing one development contributes ``k ** (1 -
+    exponent)`` times a single row's weight instead of ``k``. At
+    ``exponent = 0`` this is all-ones — the identity, and the shipped default —
+    so the seam costs nothing until someone chooses to spend it. At ``0.5`` a
+    cluster of 4 carries the weight of 2; at ``1.0`` a cluster carries exactly
+    one row's worth however loudly it is repeated.
+
+    Deliberately a smooth exponent rather than a hard cap: the honest amount of
+    independence in k reports of one story is unknown and certainly not 0, so a
+    cap at one row would overcorrect — twenty outlets independently confirming a
+    development *is* worth more than one, just not twenty times more.
+
+    Returns ``None`` when the discount cannot apply (no ids, or a no-op
+    exponent), which callers treat as "leave the weights alone" rather than
+    multiplying by ones.
+    """
+    if not cluster_ids or exponent <= 0.0:
+        return None
+    sizes: dict[int, int] = {}
+    for cid in cluster_ids:
+        sizes[cid] = sizes.get(cid, 0) + 1
+    return [sizes[cid] ** -exponent for cid in cluster_ids]
+
+
 def aggregate_pool(
     stances: Sequence[float],
     weights: Sequence[float],
@@ -686,6 +715,8 @@ def aggregate_pool(
     settlement_revalidate: bool = False,
     settlement_post_deadline_grace_days: int = 14,
     settlement_quality_floor: float = 0.0,
+    cluster_ids: Optional[Sequence[int]] = None,
+    cluster_downweight_exponent: float = 0.0,
 ) -> Optional[PoolAggregateResult]:
     """Pool a set of already-extracted, already-weighted per-source signals
     into a final estimate: the relevance off-topic safety net, logit
@@ -718,6 +749,24 @@ def aggregate_pool(
     if not stances:
         return None
 
+    # Correlated-evidence discount (retro#355), applied FIRST so that every
+    # downstream consumer — evidence_mass, the decisiveness floor, pool_sources,
+    # effective_sample_size, the settlement vote weighting — sees one consistent
+    # set of weights. Discounting later would let the thin-evidence test pass on
+    # inflated mass and only then shrink it, which is how a pool of twenty
+    # echoes would keep reading as decisive.
+    #
+    # Inert at the shipped default (exponent 0.0 ⇒ factors is None). No caller
+    # can turn it on by accident: it takes both a cluster assignment AND a
+    # non-zero exponent.
+    factors = cluster_downweight_factors(cluster_ids, cluster_downweight_exponent)
+    if factors is not None and len(factors) == len(weights):
+        weights = [w * f for w, f in zip(weights, factors)]
+
+    # NOT discounted, deliberately — same reasoning as retro#404 kept it on the
+    # raw square: this answers "is the whole set off-topic", a question about
+    # topicality that echo does not bear on, and relevance_weight_floor was
+    # tuned against the undiscounted sum.
     relevance_mass = sum(r * r for r in relevances)
     all_off_topic = relevance_mass < relevance_weight_floor
 

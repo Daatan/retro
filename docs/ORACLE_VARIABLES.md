@@ -355,10 +355,13 @@ separately: one source, two computations, free to drift.
 | `evidence_mass = Σ weight` | thin-evidence CI widening (floor 0.5, inflation 0.45) |
 | `relevance_mass = Σ relevance²` | off-topic abstention (floor 0.05). **Deliberately still the raw square, not `relevance_weight`** (retro#394): this asks a different question — *is the whole set off-topic* — and its 0.05 floor was tuned against Σ`relevance²`. Routing it through the band table would silently retune the floor the moment those weights are changed. If the band weights are ever retuned, revisit this floor in the same commit. |
 | `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — **revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at (scheduled), claim_deadline]` and ≤ its article's date; a non-occurrence vote needs a closed window (dated anchors at most `settlement_post_deadline_grace_days` past it, or an undated vote from an article published within that grace — else `stale_undated_foreclosure`) or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Count alone isn't enough either: `settlement_quality_floor` (default 0 = off) additionally requires the winning direction's combined per-source weight to clear a bar, else the pin is suppressed (`settlement_quality_floor`). Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
+| `cluster_ids → weight × k^-exponent` | correlated-evidence discount (retro#355). Pool rows echoing one development are grouped by shingle-Jaccard over their `claims_detail` text (`clustering.py`), and each member of a cluster of size `k` is scaled by `k^-exponent`, so the cluster carries `k^(1-exponent)` rows' worth instead of `k`. **`cluster_downweight_exponent=0.0` ships it inert** — the identity — so nothing has moved. Applied FIRST, before `evidence_mass`, so the decisiveness floor is judged on independent mass rather than on echo. `relevance_mass` is deliberately NOT discounted (same reasoning as the band table above). |
 | `insufficient_data, reason, placeholder, articles_used/found` | abstention encoding |
 
-Config constants (13): `recency_half_life_days=7`, `recency_floor=0.02`,
+Config constants (16): `recency_half_life_days=7`, `recency_floor=0.02`,
 `logit_clamp=0.01`, `relevance_weight_floor=0.05`, `forecast_relevance_bar=0.0`,
+`cluster_downweight_exponent=0.0`, `cluster_jaccard_threshold=0.5`,
+`cluster_shingle_size=3`,
 `syndication_title_similarity=0.8`,
 `decisiveness_floor=0.5`, `thin_evidence_ci_inflation=0.45`,
 `defer_on_thin_evidence=False`, `pool_dispersion_floor=0.05`,
@@ -388,6 +391,34 @@ corpus and is **deliberately not done here**: the backtest that would justify it
 powered — as of 2026-08-04 only **6** resolved BINARY forecasts have a usable evidence pool.
 Note also that the score has zero mass in (0.60, 0.70], so every bar in that interval is the
 identical filter (retro#394).
+`cluster_downweight_exponent=0.0` **means correlated evidence is not discounted, which is
+what pooling has always done** — `aggregate_pool` treats every row as independent, so twenty
+outlets writing up one wire report read as twenty facts. Per-article classification quality
+cannot fix that: however good the extractor gets, N echoes of one development are still one
+development. The mobilization pool (`cmrazsvhd000701nsyiyzm2i7`) is 20/22 positive-stance
+largely on a single *"sources say the Kremlin is considering a new wave"* reporting wave.
+
+Clustering is **lexical, not semantic, and deliberately so.** retro#355 sketched reusing
+news-indexer's pgvector near-dup machinery, but that lives in another service: retro has no
+embedding dependency, and adding one buys a per-row API call on every recompute plus a model
+whose drift would silently re-cluster history. The gate harness (#350) measures this change by
+*replaying past pools*, which a non-deterministic clusterer cannot support. Shingle Jaccard
+(`cluster_jaccard_threshold=0.5`, `cluster_shingle_size=3`) is free, exact and reproducible.
+Single-linkage, so A~B and B~C puts all three together. A row with no usable text is always
+its own singleton — missing text can never *cost* a source its vote.
+
+**Both weight sites derive the cluster text through the same `cluster_text_for_claims`**, or a
+recompute would re-cluster rows `/forecast` already clustered — the same failure mode the band
+table above guards against. This is the first estimator use of `claims_detail`, which
+`run_pool_aggregate`'s whitelist comment reserved for exactly this issue; the recompute path
+receives it via daatan#1264.
+
+**Deliberately not enabled**, for the reason `forecast_relevance_bar` is not raised: the
+verification path (#350 — Brier with vs without) needs resolved forecasts with a usable
+evidence pool, and as of 2026-08-04 there are **6**. What ships instead is the *measurement* —
+`event=evidence_clusters` logs the echo structure (`rows`, `clusters`, `largest`,
+`echoed_rows`) of every live pool, so the decision to enable rests on observed redundancy
+rather than on the sketch's intuition. The threshold is untuned: tune it against those logs.
 `pool_dispersion_floor` is the minimum published interval width, as a
 between-source standard deviation in probability space — **a policy number, not
 a measurement**, in the same class as `interested_party_stance_cap`; see the

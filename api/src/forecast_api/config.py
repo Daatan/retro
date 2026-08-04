@@ -151,6 +151,29 @@ class ApiSettings(BaseSettings):
     # comparison, not before. Note also (retro#394) that the score has zero mass in
     # (0.60, 0.70], so every bar in that interval is the identical filter.
     forecast_relevance_bar: float = 0.0
+    # ── Correlated-evidence clustering (retro#355) ──────────────────────────────
+    # Pooling counts N articles echoing ONE development as N independent facts. These
+    # two settings are the seam that fixes it; both ship INERT.
+    #
+    # `cluster_downweight_exponent` = 0.0 is the identity: a cluster of k rows carries
+    # k ** (1 - exponent) = k times a single row, exactly as today. At 0.5 it carries
+    # sqrt(k). Nothing moves until this is non-zero, and a test pins that property.
+    #
+    # Deliberately NOT enabled here, for the same reason retro#404 did not raise the
+    # relevance bar: the verification path (#350 — Brier with vs without) needs resolved
+    # forecasts that have a usable evidence pool, and as of 2026-08-04 there are 6. A
+    # Brier comparison over 6 outcomes returns a number and that number is noise. What
+    # this PR ships instead is the measurement: `event=evidence_clusters` logs the echo
+    # structure of every live pool, so the decision to enable is made on observed
+    # redundancy rather than on the sketch's intuition.
+    #
+    # `cluster_jaccard_threshold` is the shingle-overlap bar for "same story". 0.5 is a
+    # deliberately loose starting point — near-dup detection uses ~0.95, but the target
+    # here is not a duplicate, it is two outlets writing up one wire report. Untuned:
+    # tune it against the logged cluster structure, not by intuition.
+    cluster_downweight_exponent: float = 0.0
+    cluster_jaccard_threshold: float = 0.5
+    cluster_shingle_size: int = 3
     # When a caller supplies a gatekeeper verdict on an ArticleInput (relevance +
     # is_prediction — news-indexer's POST /relevance result, threaded through daatan),
     # reuse it instead of re-running check_is_prediction. The SAME claim-aware judge already

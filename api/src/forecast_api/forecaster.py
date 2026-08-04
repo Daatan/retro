@@ -64,6 +64,7 @@ from .aggregation import (
     settlement_grade,
 )
 from .cache import forecast_cache, search_cache
+from .clustering import cluster_text_for_claims, cluster_texts
 from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight
 from .models import (
@@ -353,6 +354,44 @@ def derive_settlement_event_date(
         return None
     best = min(dated, key=lambda p: (-p.certainty, p.event_date))
     return best.event_date
+
+
+def _cluster_text_of(s) -> Optional[str]:
+    """The text one row is clustered on, from either a live ``SourceSignal`` or a
+    caller-supplied ``PoolSourceInput`` — both carry ``claims_detail`` and a title-ish
+    fallback, and both MUST resolve identically or a recompute would re-cluster what the
+    live path already clustered (retro#404's band-table argument, applied to text)."""
+    return cluster_text_for_claims(
+        getattr(s, "claims_detail", None), getattr(s, "title", None),
+    )
+
+
+def _cluster_ids(texts: list[Optional[str]], question_hash: str) -> Optional[tuple[int, ...]]:
+    """Cluster a pool's rows and log the echo structure (retro#355).
+
+    Runs even when the discount is inert — that is the point. The decision to enable it
+    has to rest on how much correlated evidence live pools actually carry, and nothing
+    was measuring that. Logging it costs one pass over already-in-memory text.
+    """
+    if len(texts) < 2:
+        return None
+    ids = cluster_texts(
+        texts,
+        threshold=settings.cluster_jaccard_threshold,
+        shingle_size=settings.cluster_shingle_size,
+    )
+    sizes: dict[int, int] = {}
+    for cid in ids:
+        sizes[cid] = sizes.get(cid, 0) + 1
+    echoed = {c: k for c, k in sizes.items() if k > 1}
+    if echoed:
+        logger.info(
+            "event=evidence_clusters question=%s rows=%d clusters=%d largest=%d "
+            "echoed_rows=%d exponent=%.2f",
+            question_hash, len(ids), len(sizes), max(sizes.values()),
+            sum(echoed.values()), settings.cluster_downweight_exponent,
+        )
+    return ids
 
 
 def _settlement_votes(
@@ -1332,6 +1371,10 @@ async def _run_forecast_inner(
         settlement_revalidate=settings.settlement_revalidate,
         settlement_post_deadline_grace_days=settings.settlement_post_deadline_grace_days,
         settlement_quality_floor=settings.settlement_quality_floor,
+        cluster_ids=_cluster_ids(
+            [_cluster_text_of(s) for s in source_signals], _question_hash(req.question),
+        ),
+        cluster_downweight_exponent=settings.cluster_downweight_exponent,
     )
     agg = aggregate_pool(all_stances, all_weights, relevances, all_settled, **_pool_kwargs)
     if agg is not None:
@@ -1587,6 +1630,14 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         settlement_revalidate=settings.settlement_revalidate,
         settlement_post_deadline_grace_days=settings.settlement_post_deadline_grace_days,
         settlement_quality_floor=settings.settlement_quality_floor,
+        # Same clusterer, same text derivation as the live path above — the two must
+        # never disagree, or a recompute would re-weight rows /forecast already weighted.
+        # This is the first estimator use of claims_detail, which run_pool_aggregate's
+        # whitelist comment reserved for exactly this issue (retro#355).
+        cluster_ids=_cluster_ids(
+            [_cluster_text_of(s) for s in req.sources], _question_hash(req.question or ""),
+        ),
+        cluster_downweight_exponent=settings.cluster_downweight_exponent,
     )
     agg = aggregate_pool(stances, weights, relevances, settled_flags, **_pool_kwargs)
     if agg is not None:

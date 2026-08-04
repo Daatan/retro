@@ -127,6 +127,30 @@ class ApiSettings(BaseSettings):
     # 0.05 ≈ one article at relevance ~0.22. Tune down using daatan's logged
     # relevance_score / all_articles_off_topic data.
     relevance_weight_floor: float = 0.05
+    # Per-article relevance bar for /forecast (retro#393). **0.0 = no bar, which is exactly
+    # what /forecast has always done** — an article was dropped only on `not is_prediction`,
+    # and its graded score then went straight into the weight.
+    #
+    # The bar was an entry-path property, not a verdict property: news-indexer's rescue path
+    # requires `relevance_score >= 0.7` before delivering, so an article the SAME judge, same
+    # model, same prompt scores 0.30 was retired permanently if it arrived via rescue and
+    # VOTED if it arrived via a cosine push, a retry, or on-demand search. Measured on daatan
+    # prod voting rows: 1,186 of 5,827 (20.4%) below 0.7, 220 at <=0.40; by origin
+    # news-indexer 18.1%, retry 45.5%, analyze 42.1%. The gatekeeper prompt even delegates
+    # explicitly — "When in doubt, PASS — the graded relevance_score below handles weak or
+    # loose signal" — to a threshold that only existed in the other repo.
+    #
+    # Making it a setting that DEFAULTS TO THE CURRENT BEHAVIOUR does three things without
+    # changing a single forecast: the number now lives in one repo instead of none, raising
+    # it is a config change rather than a code change, and the effective bar is recorded per
+    # response so a caller can persist which regime admitted each row.
+    #
+    # Deliberately NOT raised to 0.7 here. That cut is 20.4% of the voting corpus and the
+    # backtest that would justify it is not powered — as of 2026-08-04 only 6 resolved BINARY
+    # forecasts have a usable evidence pool. Raise it when that sample can carry a Brier
+    # comparison, not before. Note also (retro#394) that the score has zero mass in
+    # (0.60, 0.70], so every bar in that interval is the identical filter.
+    forecast_relevance_bar: float = 0.0
     # When a caller supplies a gatekeeper verdict on an ArticleInput (relevance +
     # is_prediction — news-indexer's POST /relevance result, threaded through daatan),
     # reuse it instead of re-running check_is_prediction. The SAME claim-aware judge already

@@ -613,6 +613,56 @@ class PoolAggregateResult(NamedTuple):
     settlement_vote_indices: tuple = ()
 
 
+# Layer C's weight, per relevance band (retro#394).
+#
+# The gatekeeper does not emit a graded score. Across 84,254 gate-passing judgments the
+# value takes 13 discrete 0.1-grained values with **exactly zero mass in the open interval
+# (0.60, 0.70)** — and none in 0.71-0.79 or 0.81-0.84 either:
+#
+#   1.00->112  0.90->291  0.85->5  0.80->2,374  0.70->5,859  0.60->6,760
+#   0.50->28,557  0.40->29,234  0.30->9,736  0.20->267  0.10->414  0.05->104  0.00->541
+#
+# Those are the edge labels of the prompt's own bands. So ``relevance ** 2`` was arithmetic
+# applied to a categorical label: in the live daatan pool 51.9% of voting rows sit at exactly
+# 0.70 and 25.2% at 0.80, making the "how much does this article count" dial a three-position
+# switch whose positions nobody chose — 0.49 and 0.64 are simply what squaring produces, a
+# ratio of 1.31x between "just passed" and "clearly relevant".
+#
+# **These values are deliberately initialised to exactly ``band ** 2``, so this table is a
+# no-op today.** That is the point: the numbers become one named place to tune, instead of
+# being implicit in an exponent. Retuning them needs outcome data, and there is not enough
+# yet — as of 2026-08-04 only 6 resolved BINARY forecasts have a usable evidence pool (see
+# retro#393), which cannot carry a Brier comparison. Change them when that sample grows, and
+# say why in the commit.
+RELEVANCE_BAND_WEIGHTS: dict[float, float] = {
+    0.00: 0.0000,
+    0.05: 0.0025,
+    0.10: 0.0100,
+    0.20: 0.0400,
+    0.30: 0.0900,
+    0.40: 0.1600,
+    0.50: 0.2500,
+    0.60: 0.3600,
+    0.70: 0.4900,
+    0.80: 0.6400,
+    0.85: 0.7225,
+    0.90: 0.8100,
+    1.00: 1.0000,
+}
+
+
+def relevance_weight(relevance: float) -> float:
+    """Layer C's contribution for one article's relevance score.
+
+    Falls back to ``relevance ** 2`` for any value not in {@link RELEVANCE_BAND_WEIGHTS} —
+    the table covers every band the gatekeeper has ever emitted, but a model change (or a
+    caller-supplied verdict from another judge) could produce an off-band value, and
+    silently rounding it to a neighbouring band would be a quiet re-weighting. The fallback
+    is also what keeps this function identical to the old expression everywhere.
+    """
+    return RELEVANCE_BAND_WEIGHTS.get(round(relevance, 2), relevance ** 2)
+
+
 def aggregate_pool(
     stances: Sequence[float],
     weights: Sequence[float],

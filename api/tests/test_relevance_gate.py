@@ -218,3 +218,34 @@ def test_pipeline_settings_unaffected():
     # Guard: the gatekeeper/extractor model fields still live on pipeline settings.
     assert pipeline_settings.gatekeeper_model
     assert pipeline_settings.extractor_model
+
+
+class TestForecastRelevanceBarIsInert:
+    """retro#393, the /forecast half. The 0.7 bar was an ENTRY-PATH property, not a verdict
+    property: news-indexer's rescue path retired an article the same judge scored 0.30 while
+    /forecast let it vote. The bar now exists on this side too — shipped at 0.0, i.e. off."""
+
+    async def test_a_low_relevance_article_still_votes_at_the_shipped_default(self, monkeypatch):
+        # The default MUST reproduce today's behaviour exactly. 20.4% of live voting rows sit
+        # below 0.7 and the backtest that would justify cutting them is not powered (only 6
+        # resolved BINARY forecasts have a usable pool, retro#393), so shipping a real bar
+        # would be an unmeasured change to every forecast.
+        assert api_settings.forecast_relevance_bar == 0.0
+        _wire(monkeypatch, [
+            ("http://news.com/on", 0.9, 0.9),
+            ("http://blog.com/weak", 0.3, 0.9),
+        ])
+        resp = await forecaster.run_forecast(ForecastRequest(question="inert bar probe 1f?"))
+
+        assert resp.articles_used == 2  # the 0.3 article still votes
+        assert resp.relevance_bar == 0.0
+
+    async def test_the_effective_bar_is_reported_so_a_caller_can_record_the_regime(self, monkeypatch):
+        # This is the whole of option (b): a caller persisting these sources can record WHICH
+        # admission regime produced each row and filter the pool retroactively, instead of
+        # re-deriving which entry path admitted what.
+        monkeypatch.setattr(api_settings, "forecast_relevance_bar", 0.5)
+        _wire(monkeypatch, [("http://news.com/on", 0.9, 0.9)])
+        resp = await forecaster.run_forecast(ForecastRequest(question="regime probe 3f?"))
+
+        assert resp.relevance_bar == 0.5

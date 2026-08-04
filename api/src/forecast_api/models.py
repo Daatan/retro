@@ -271,6 +271,7 @@ class ForecastResponse(BaseModel):
     provider_chain: list[str] = Field(default_factory=list, description="Full search fallback chain attempted, in order")
     distilled_query: Optional[str] = Field(default=None, description="Keywords the question was distilled to before searching; null when no distillation was applied")
     settled: bool = Field(default=False, description="True when enough independent sources report the event's outcome as an accomplished fact (see settlement_min_sources). mean/ci are pinned near the boundary; the forecast is a candidate for resolution, not further updates.")
+    relevance_bar: float = Field(default=0.0, description="The per-article relevance bar in force for THIS run (`forecast_relevance_bar`); 0.0 means no bar was applied, which is /forecast's historical behaviour. Recorded per response so a caller persisting these sources can tell which admission regime produced each row — news-indexer's rescue path enforces 0.7 while this path enforced nothing, so the same article could be retired on one entry path and vote on another (retro#393). Persist it alongside the sources if you intend to filter the pool retroactively.")
     debug: Optional[DebugInfo] = Field(default=None, description="Debug telemetry — only present when request includes debug=true")
 
 

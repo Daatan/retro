@@ -111,3 +111,51 @@ class TestReuseSuppliedVerdict:
             "outcome=gate_reused" in r.message and "prediction_id=cmrm4byby02nw01qtvnoqenc3" in r.message
             for r in caplog.records
         )
+
+
+class TestForecastRelevanceBar:
+    """The bar itself, tested where it LIVES — inside ``_process_article``. The
+    ``test_relevance_gate`` harness mocks ``_process_article_bounded``, one level above,
+    so a bar asserted there would pass no matter what this branch did."""
+
+    async def test_off_by_default_a_weak_article_is_still_extracted(self, monkeypatch):
+        monkeypatch.setattr(api_settings, "forecast_relevance_bar", 0.0)
+        out = await _process(
+            monkeypatch, _sr(), flag=False, gk=_gk_spy(is_prediction=True, relevance=0.3),
+        )
+        assert out is not None
+        assert out[1] == 0.3
+
+    async def test_raised_bar_drops_the_article_and_never_calls_the_extractor(self, monkeypatch):
+        # Position matters: the gatekeeper call is already paid for by this point, so the
+        # only thing dropping here saves is the EXTRACTOR — which is the expensive one.
+        # Asserting the extractor is untouched is the difference between a real cost guard
+        # and a filter that merely discards work it already paid for.
+        extractor = AsyncMock(side_effect=AssertionError("extractor must not run"))
+        monkeypatch.setattr(api_settings, "forecast_relevance_bar", 0.7)
+        monkeypatch.setattr(api_settings, "reuse_supplied_relevance", False)
+        monkeypatch.setattr(forecaster, "check_is_prediction", _gk_spy(is_prediction=True, relevance=0.3))
+        monkeypatch.setattr(forecaster, "extract_predictions", extractor)
+        debugs: list = []
+        timings: list = []
+
+        out = await forecaster._process_article(
+            _sr(), "Will the event happen by 2026-12-31?",
+            max_article_chars=4000, timings=timings, article_debugs=debugs,
+        )
+
+        assert out is None
+        extractor.assert_not_awaited()
+        assert [d.outcome for d in debugs] == ["low_relevance"]
+        assert [t["outcome"] for t in timings] == ["low_relevance"]
+
+    async def test_an_article_at_the_bar_is_kept(self, monkeypatch):
+        # `<` not `<=`: the bar is the lowest ACCEPTABLE score, matching news-indexer's
+        # `relevance_score >= 0.7`. An off-by-one here would silently discard the single
+        # most populated band — 51.9% of live voting rows sit at exactly 0.70.
+        monkeypatch.setattr(api_settings, "forecast_relevance_bar", 0.7)
+        out = await _process(
+            monkeypatch, _sr(), flag=False, gk=_gk_spy(is_prediction=True, relevance=0.7),
+        )
+        assert out is not None
+        assert out[1] == 0.7

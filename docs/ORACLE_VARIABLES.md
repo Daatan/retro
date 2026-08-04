@@ -407,6 +407,14 @@ whose drift would silently re-cluster history. The gate harness (#350) measures 
 Single-linkage, so A~B and B~C puts all three together. A row with no usable text is always
 its own singleton — missing text can never *cost* a source its vote.
 
+**Coverage is bounded by `claims_detail` today.** Neither `SourceSignal` nor
+`PoolSourceInput` carries a title, so that field is the only cluster text either caller can
+supply: a row without it is unclusterable and contributes nothing to
+`event=evidence_clusters`. Coverage therefore grows only as the pool re-extracts, and the
+measurement currently under-reports how much echo the corpus really holds — read early
+cluster counts as a **lower bound**, not a rate. Adding a title to those two models is the
+one change that would make legacy rows clusterable.
+
 **Both weight sites derive the cluster text through the same `cluster_text_for_claims`**, or a
 recompute would re-cluster rows `/forecast` already clustered — the same failure mode the band
 table above guards against. This is the first estimator use of `claims_detail`, which

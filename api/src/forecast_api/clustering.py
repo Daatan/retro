@@ -137,8 +137,19 @@ def cluster_text_for_claims(
 
     Uses each claim's summary plus its verbatim quote: the summary is what the
     extractor thought the article said, the quote is what it actually said, and
-    echo is visible in both. ``fallback`` (a title) covers rows extracted before
-    ``claims_detail`` existed — those still cluster, just on thinner text.
+    echo is visible in both.
+
+    **``claims_detail`` is the only text either caller can supply today.** Neither
+    ``SourceSignal`` nor ``PoolSourceInput`` carries a title, so both call sites pass
+    ``fallback=None`` and a row without ``claims_detail`` is unclusterable — it stays a
+    singleton at full weight. That is the safe direction (missing text can never *cost* a
+    source its vote), but it does bound what ``event=evidence_clusters`` can currently
+    observe: rows extracted before ``claims_detail`` existed contribute nothing to the
+    measurement, and coverage grows only as the pool re-extracts.
+
+    ``fallback`` is kept as the seam for that fix — adding a title to those models is the
+    one change that would make legacy rows clusterable — but it is inert until something
+    actually supplies one.
     """
     if not claims_detail:
         return fallback

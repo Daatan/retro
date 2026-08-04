@@ -108,6 +108,17 @@ class TestClusterTextForClaims:
         assert cluster_text_for_claims(None, "A Headline") == "A Headline"
         assert cluster_text_for_claims([], "A Headline") == "A Headline"
 
+    def test_no_caller_can_supply_a_title_today(self):
+        # Pins the documented coverage bound: claims_detail is the ONLY cluster text
+        # either weight site can supply, so rows without it are unclusterable and
+        # event=evidence_clusters under-reports real echo (read counts as a lower bound).
+        # If this fails someone added a title — pass it as `fallback` at BOTH call sites
+        # and update ORACLE_VARIABLES.md, which states this bound explicitly.
+        from forecast_api.models import PoolSourceInput, SourceSignal
+
+        assert "title" not in SourceSignal.model_fields
+        assert "title" not in PoolSourceInput.model_fields
+
     def test_reads_objects_and_dicts_identically(self):
         # /forecast passes ClaimDetail objects, /pool/aggregate passes parsed models —
         # both weight sites MUST derive the same text.

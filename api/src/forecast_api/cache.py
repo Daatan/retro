@@ -1,11 +1,33 @@
 """
 In-process TTL cache for ForecastResponse.
 
-Scope: the Oracle API runs with a single uvicorn worker on one EC2 instance, so
-a process-local dict is a correct cache. If we ever go multi-worker or
-multi-instance, swap the backend to Redis/diskcache; the public surface here
-(``get`` / ``set`` / ``stats`` / ``clear``) is intentionally small so that
-migration is mechanical.
+Scope: this is a **process-local** dict, and the Oracle API runs
+``gunicorn --workers 2`` (``infra/oracle-api.service``). This module used to claim a
+single worker and call the process-local design "correct" on that basis — the
+precondition stopped holding when the worker count went to 2, and the doc kept
+asserting it (retro#405). What that costs:
+
+  * **Each worker has its own cache and its own ``_inflight`` map.** Two identical
+    simultaneous ``/forecast`` calls landing on different workers both run the full
+    pipeline; ordinary repeat-question hits are roughly halved.
+  * **``stats()`` is per-worker and since-last-reload.** ``/health`` round-robins
+    between workers, and a SIGHUP reload constructs a fresh cache, so the counters
+    reset on every deploy. Measured 2026-08-04: ``{hits:0, misses:22, stores:5}``
+    before a deploy, ``{hits:0, misses:0, stores:0}`` immediately after. **Do not
+    read them as cumulative** — compare within one deploy window, and sample more
+    than once because two workers answer.
+  * **It caps daatan#1262.** That fix re-asks with the identical article set 120 s
+    after a client timeout, so retro's completed-but-abandoned run is served from
+    here instead of expiring unread — recovering a paid extraction. With two workers
+    the re-ask finds the entry roughly half the time (a miss still returns a real
+    forecast, so the recovered-*estimate* rate is ~100%; the *free*-recovery rate is
+    ~50%, and ~0% across a deploy).
+
+The fix is to swap the backend — ``diskcache`` shares between workers on one box
+with no new infrastructure; Redis only if this ever goes multi-instance. The public
+surface here (``get`` / ``set`` / ``stats`` / ``clear``) is intentionally small so
+that migration stays mechanical. Tracked in retro#405; ``test_cache.py`` pins the
+worker count against this docstring so the two cannot silently diverge again.
 
 Design choices:
   * Key = sha256(normalized_question | max_articles). Normalization is

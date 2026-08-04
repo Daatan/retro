@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import pathlib
+import re
 import time
 
 import pytest
 
+from forecast_api import cache as cache_module
 from forecast_api.cache import ForecastCache
 from forecast_api.models import ForecastResponse, SourceSignal
 
@@ -130,3 +133,41 @@ class TestClear:
         cache.clear()
         assert cache.stats().size == 0
         assert cache.get("a") is None
+
+
+class TestProcessLocalityMatchesTheDeployment:
+    """The cache is a process-local dict, so its correctness depends on how many
+    processes there are. That premise lived only in a docstring, and it went stale
+    silently when the service moved to two workers (retro#405). Pin it here."""
+
+    @staticmethod
+    def _deployed_worker_count() -> int:
+        # Read from the unit file that actually starts the API, not from a constant
+        # we would have to remember to update — the point is to catch a change made
+        # in infra/ by someone not looking at this module.
+        unit = (
+            pathlib.Path(__file__).resolve().parents[2] / "infra" / "oracle-api.service"
+        )
+        text = unit.read_text()
+        m = re.search(r"--workers\s+(\d+)", text)
+        assert m, f"no --workers flag found in {unit}"
+        return int(m.group(1))
+
+    def test_the_docstring_states_the_real_worker_count(self):
+        # A docstring that says "single worker" while the box runs two is worse than
+        # no docstring: it is the reason nobody noticed the cache had become ~50%
+        # effective, and it is what daatan#1262's re-ask is capped by.
+        workers = self._deployed_worker_count()
+        doc = cache_module.__doc__ or ""
+        assert f"--workers {workers}" in doc, (
+            f"infra/oracle-api.service runs --workers {workers}; the cache module "
+            "docstring must state that count and its consequences. If the count "
+            "changed, revisit retro#405 — a process-local cache is only 'correct' "
+            "at one worker."
+        )
+
+    def test_a_single_worker_deployment_would_invalidate_this_whole_discussion(self):
+        # Deliberately asserts the CURRENT state rather than a range: if someone
+        # drops back to one worker, the docstring's warnings become false in the
+        # other direction and this test should make them re-read it.
+        assert self._deployed_worker_count() == 2

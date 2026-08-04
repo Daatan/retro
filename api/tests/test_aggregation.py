@@ -738,3 +738,48 @@ class TestDispersionFloor:
         assert r is not None
         assert r.ci_low >= -0.98 - 1e-9
         assert r.ci_high <= 0.98 + 1e-9
+
+
+# --- Relevance band weights (retro#394) -------------------------------------
+
+class TestRelevanceBandWeights:
+    """The gatekeeper emits four band EDGE LABELS, not a gradient — zero mass in
+    (0.60, 0.70) across 84,254 judgments — so ``relevance ** 2`` was arithmetic on a
+    categorical value. The table replaces the exponent; it must not move any number yet."""
+
+    def test_is_a_strict_no_op_against_the_old_expression(self):
+        # THE load-bearing property of this change. Every band the gatekeeper has ever
+        # emitted must weigh exactly what squaring produced, or this "refactor" silently
+        # re-weighted the live pool. Chosen weights need outcome data (retro#393: n=6),
+        # so today the only defensible values are the current ones.
+        from forecast_api.aggregation import RELEVANCE_BAND_WEIGHTS, relevance_weight
+
+        for band, weight in RELEVANCE_BAND_WEIGHTS.items():
+            assert weight == pytest.approx(band ** 2), f"band {band} would be re-weighted"
+            assert relevance_weight(band) == pytest.approx(band ** 2)
+
+    def test_covers_every_band_the_gatekeeper_actually_emits(self):
+        # The 13 observed values, from the 84,254-judgment histogram in retro#394. A band
+        # missing here falls through to the square — correct, but it would mean the table
+        # is not actually the tuning surface it claims to be.
+        from forecast_api.aggregation import RELEVANCE_BAND_WEIGHTS
+
+        observed = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 1.0]
+        assert sorted(RELEVANCE_BAND_WEIGHTS) == observed
+
+    def test_off_band_values_fall_back_to_squaring_rather_than_rounding(self):
+        # A model change (or a caller-supplied verdict from a different judge) can produce
+        # a value the table has never seen. Snapping it to a neighbouring band would be a
+        # quiet re-weighting; squaring is the documented, unchanged behaviour.
+        from forecast_api.aggregation import relevance_weight
+
+        assert relevance_weight(0.63) == pytest.approx(0.63 ** 2)
+        assert relevance_weight(0.777) == pytest.approx(0.777 ** 2)
+
+    def test_weights_are_monotone_in_the_band(self):
+        # Whatever the numbers become, a more relevant article must never count less.
+        from forecast_api.aggregation import RELEVANCE_BAND_WEIGHTS
+
+        bands = sorted(RELEVANCE_BAND_WEIGHTS)
+        weights = [RELEVANCE_BAND_WEIGHTS[b] for b in bands]
+        assert weights == sorted(weights)

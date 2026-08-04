@@ -342,7 +342,7 @@ separately: one source, two computations, free to drift.
 | `rweight` | `0.5^(age/7d)`, floor 0.02; missing date ⇒ 1.0 | fail-open |
 | `credibility` | leaderboard lookup | **1.0 for every source observed in prod** — layer currently inert |
 | `quantitative_multiplier` | 4.0 if any claim carries an estimate, else 1.0 | stacks with the certainty-0.9 floor |
-| **`weight`** | `credibility × avg_certainty × rweight × relevance² × quant_mult` | pool weight |
+| **`weight`** | `credibility × avg_certainty × rweight × relevance_weight(relevance) × quant_mult` | pool weight. **`relevance_weight` is a lookup table, not an exponent (retro#394).** The gatekeeper does not emit a graded score — across 84,254 judgments it emits the edge labels of the prompt's own bands, with **exactly zero mass in (0.60, 0.70)**, so `relevance²` was arithmetic on a categorical value. In the live daatan pool 51.9% of voting rows sit at exactly 0.70 and 25.2% at 0.80, making this a **three-position switch, not a continuous dial** — and the 1.31× ratio between them was whatever squaring produced, not a choice. `RELEVANCE_BAND_WEIGHTS` (`aggregation.py`) is initialised to exactly `band²`, so nothing has moved yet; it exists so the numbers can be *chosen* once there is outcome data to choose them with (as of 2026-08-04 only 6 resolved BINARY forecasts have a usable pool — see retro#393). Off-band values still fall back to squaring. |
 | `fact_signal` (shadow) | claim-weighted **mean** of per-claim `fact_signal` over the **same** scored claims as `avg_stance`; `None` if none carried one | Phase 2 fact-lane counterpart of `avg_stance`, un-fused from author assertion; **read by nothing in aggregation** — surfaced on `SourceSignal`/`sources[]` only for daatan persistence + the offline fact-lane gate harness (`pipeline/scripts/backtest_fact_signal_gate.py`: stance-vs-fact_signal paired Brier through the real `/pool/aggregate`; any estimator cutover is gated on it turning convincingly positive, same evidence standard as the credibility flag). Extraction-side, the FACT_SIGNAL prompt carries a **decider-statement exception** (2026-07-29, A/B-gated): an on-record statement by the actor/authority whose own act would resolve the claim — announcement or denial alike — enters the fact lane as a capped precursor instead of being nulled as opinion; assertions *about* the decider's intent by opponents or analysts stay claimed-and-unverified. A companion **negative-precursor ladder** (2026-07-29, WS5b, A/B-gated) generalizes the negative side beyond decider statements: any contrary reported fact — an obstacle emerging, a preparation reversed, an opposing development, a measured indicator moving against the event — enters the fact lane as a graded negative precursor instead of null, with the extreme negative reserved for established impossibility; this closes the measured null asymmetry (negative-stance rows nulled 33.0% vs 22.6% for positive, fact-era pool) while the mobilization regression keeps deflating (see `test_extractor_prompt.py::test_negative_precursor_ladder_present` for the A/B record). Wording is numeral-free by design (magnitude policy belongs in estimator config); see `test_extractor_prompt.py::test_decider_statements_exception_present` for the A/B evidence and re-run bar. Its facets `event_actors`/`event_target`/`is_occurrence`/`verified` ride from the **dominant** (max \|fact_signal\|) claim so they stay internally coherent. Magnitude for a **precursor** is enforced in code, not by the prompt (retro#367): `enforce_precursor_cap` clamps per-claim \|`fact_signal`\| to `fact_signal_precursor_cap` (`tm/config.py`, **0.3**) whenever the extractor set `is_occurrence=false`, in the `enforce_*` chain immediately before this fusion — so both the mean and the dominant-claim selection see the capped value. |
 | `author_lean`, `author_lean_certainty` (shadow) | passed through from `ExtractionOutput` (retro #308/#309) — the byline author's OWN forecast | author-accuracy scoring lane; **not read by aggregation** |
 | `claims_detail` | no reduction — the article's claims themselves, projected onto `ClaimDetail` (`build_claims_detail()`) | **F1/F15, retro#364.** Every other row in this table is a reduction; this is the layer they reduce *from* — literally: `build_claims_detail()` runs first and `reduce_article()` takes its output as input, so the persisted claims are the reduction's argument rather than a copy taken alongside it. Until this layer existed the inputs were discarded at the wire, so no reduction here was checkable and no history was re-scorable. Recorded POST-resolution — after the `enforce_*` chain and `resolve_stance_certainty()` — i.e. the values the fusion actually consumed. `test_claims_detail.py` pins each derivation individually *and* replays `reduce_article()` over the persisted claims alone, asserting it reproduces every scalar of the signal it produced (ordinary, settlement, and demoted-settlement paths). Per claim: `claim`, `quote`, `stance`, `certainty`, `specificity`, `prediction_type`, `evidence_class`, `quantitative_estimate`, `settled`, `event_date`, `fact_signal` + its four facets. Two collapses become visible only here: `evidence_class` is per-claim (the article carries only the most common one) and the fact facets are per-claim (the article carries only the **dominant** claim's), which is why an over-cap interested-party claim diluted by in-contract siblings is invisible above this layer (retro#378). Unlike `claims`, nothing is filtered — a claim with an empty summary still voted, so it is still kept. **Read by nothing in aggregation**; persistence surface only (daatan#1235), same shadow-field rollout as `author_lean` and `fact_signal`. |
@@ -353,12 +353,12 @@ separately: one source, two computations, free to drift.
 |---|---|
 | `mean, std, ci_low, ci_high` | weighted-mean logit pool + dispersion, stance scale; SEM divides by Kish `n_eff = (Σw)²/Σw²`, and the width is floored at `1.96·pool_dispersion_floor/√n_eff` so a unanimous pool cannot publish a point (F16) |
 | `evidence_mass = Σ weight` | thin-evidence CI widening (floor 0.5, inflation 0.45) |
-| `relevance_mass = Σ relevance²` | off-topic abstention (floor 0.05) |
+| `relevance_mass = Σ relevance²` | off-topic abstention (floor 0.05). **Deliberately still the raw square, not `relevance_weight`** (retro#394): this asks a different question — *is the whole set off-topic* — and its 0.05 floor was tuned against Σ`relevance²`. Routing it through the band table would silently retune the floor the moment those weights are changed. If the band weights are ever retuned, revisit this floor in the same commit. |
 | `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — **revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at (scheduled), claim_deadline]` and ≤ its article's date; a non-occurrence vote needs a closed window (dated anchors at most `settlement_post_deadline_grace_days` past it, or an undated vote from an article published within that grace — else `stale_undated_foreclosure`) or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Count alone isn't enough either: `settlement_quality_floor` (default 0 = off) additionally requires the winning direction's combined per-source weight to clear a bar, else the pin is suppressed (`settlement_quality_floor`). Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
 | `insufficient_data, reason, placeholder, articles_used/found` | abstention encoding |
 
-Config constants (12): `recency_half_life_days=7`, `recency_floor=0.02`,
-`logit_clamp=0.01`, `relevance_weight_floor=0.05`,
+Config constants (13): `recency_half_life_days=7`, `recency_floor=0.02`,
+`logit_clamp=0.01`, `relevance_weight_floor=0.05`, `forecast_relevance_bar=0.0`,
 `syndication_title_similarity=0.8`,
 `decisiveness_floor=0.5`, `thin_evidence_ci_inflation=0.45`,
 `defer_on_thin_evidence=False`, `pool_dispersion_floor=0.05`,
@@ -366,6 +366,28 @@ Config constants (12): `recency_half_life_days=7`, `recency_floor=0.02`,
 `settlement_stance=0.94`, `min_certainty=0.9`.
 `logit_clamp` is not only the per-source log-odds guard: it also bounds the
 pooled CI endpoints and (since F16) the thin-evidence widening term.
+
+`forecast_relevance_bar=0.0` **means no per-article relevance bar on `/forecast`, which is
+exactly what this path has always done** — an article was dropped only on `not is_prediction`,
+and its graded score then went straight into `weight`. That made the bar an *entry-path*
+property rather than a verdict property: news-indexer's rescue path requires
+`relevance_score >= 0.7` before delivering, so an article the **same judge, same model, same
+prompt** scores 0.30 was retired permanently if it arrived via rescue and **voted** if it
+arrived via a cosine push, a retry, or on-demand search. Measured on daatan prod voting rows:
+**1,186 of 5,827 (20.4%) below 0.7**, 220 at ≤0.40; by origin news-indexer 18.1%, retry
+**45.5%**, analyze 42.1%. The gatekeeper prompt even delegates explicitly — *"When in doubt,
+PASS — the graded relevance_score below handles weak or loose signal"* — to a threshold that
+existed only in the other repo.
+
+Making it a setting **defaulted to current behaviour** changes no forecast, and buys three
+things: the number lives in one repo instead of none, raising it is a config change rather
+than a code change, and the effective bar is returned as `relevance_bar` on every response so
+a caller persisting the sources can record which admission regime produced each row and filter
+its pool retroactively (retro#393 option (b)). Raising it to 0.7 would cut 20.4% of the voting
+corpus and is **deliberately not done here**: the backtest that would justify it is not
+powered — as of 2026-08-04 only **6** resolved BINARY forecasts have a usable evidence pool.
+Note also that the score has zero mass in (0.60, 0.70], so every bar in that interval is the
+identical filter (retro#394).
 `pool_dispersion_floor` is the minimum published interval width, as a
 between-source standard deviation in probability space — **a policy number, not
 a measurement**, in the same class as `interested_party_stance_cap`; see the

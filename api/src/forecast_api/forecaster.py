@@ -59,6 +59,7 @@ from .aggregation import (
     claim_weighted_stance,
     evidence_class_weight,
     recency_weight,
+    relevance_weight,
     resolve_stance_certainty,
     settlement_grade,
 )
@@ -743,6 +744,33 @@ async def _process_article(
         ))
         return None
 
+    # The per-article relevance bar (retro#393). INERT at the shipped default of 0.0 — this
+    # branch cannot be taken unless someone raises `forecast_relevance_bar`, because a
+    # relevance of 0.0 is not < 0.0. It exists so that raising the bar is a config change,
+    # and so the `low_relevance` counter below stops being decorative when it is raised.
+    #
+    # Placed AFTER the is_prediction check and BEFORE the extractor, which is the only
+    # position that saves anything: the gatekeeper call is already paid for by here, and the
+    # extractor is the expensive one.
+    if settings.forecast_relevance_bar > 0 and (gate.relevance_score or 0.0) < settings.forecast_relevance_bar:
+        logger.info(
+            "event=article_outcome outcome=low_relevance url=%s relevance=%.2f bar=%.2f",
+            result.url, gate.relevance_score or 0.0, settings.forecast_relevance_bar,
+        )
+        timings.append({
+            "url": result.url, "fetch_ms": fetch_ms, "gate_ms": gate_ms,
+            "outcome": "low_relevance",
+        })
+        article_debugs.append(ArticleDebug(
+            url=result.url, outcome="low_relevance",
+            gate_passed=True,
+            gate_reason=gate.reason,
+            gate_prediction_count_estimate=gate.prediction_count_estimate,
+            gate_tokens=gate_usage.get("total_tokens"),
+            fetch_ms=round(fetch_ms, 1), gate_ms=round(gate_ms, 1),
+        ))
+        return None
+
     extract_start = time.perf_counter()
     try:
         extraction, extract_usage = await extract_predictions(
@@ -1236,10 +1264,13 @@ async def _run_forecast_inner(
             settings.recency_half_life_days,
             floor=settings.recency_floor,
         )
-        # Layer C: down-weight off-topic articles by the gatekeeper's graded
-        # relevance, applied convexly (squared) so a confident-but-tangential
-        # article (relevance ~0.5 → 0.25× pull) can't drag the pooled mean.
-        weight = credibility * avg_evidence_weight * rweight * (relevance ** 2)
+        # Layer C: down-weight off-topic articles by the gatekeeper's relevance, so a
+        # confident-but-tangential article (relevance ~0.5 → 0.25× pull) can't drag the
+        # pooled mean. Read off RELEVANCE_BAND_WEIGHTS rather than squared inline: the
+        # score is four band labels, not a gradient, so squaring it was arithmetic on a
+        # categorical value (retro#394). The table is initialised to the squares, so this
+        # is a no-op — it only moves the numbers somewhere they can be chosen.
+        weight = credibility * avg_evidence_weight * rweight * relevance_weight(relevance)
 
         all_stances.append(avg_stance)
         all_weights.append(weight)
@@ -1465,6 +1496,10 @@ async def _run_forecast_inner(
         provider_chain=provider_chain,
         distilled_query=distilled_query,
         settled=settled,
+        # Which admission regime produced these sources (retro#393). 0.0 = no bar, this
+        # path's historical behaviour; a caller persisting the rows can record it and
+        # filter the pool retroactively instead of re-deriving which path admitted what.
+        relevance_bar=settings.forecast_relevance_bar,
         debug=debug_info,
     )
 
@@ -1523,7 +1558,10 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             s.evidence_weight if s.evidence_weight is not None
             else min(s.certainty, settings.evidence_class_weight_unclassified_cap)
         )
-        weight = s.credibility_weight * evidence_weight * rweight * (s.relevance_score ** 2)
+        # Same band-weight table as the /forecast path above (retro#394) — the two must not
+        # disagree about what a relevance score is worth, or a pool recompute would silently
+        # re-weight the very rows the live path already weighted.
+        weight = s.credibility_weight * evidence_weight * rweight * relevance_weight(s.relevance_score)
         stances.append(s.stance)
         weights.append(weight)
         relevances.append(s.relevance_score)

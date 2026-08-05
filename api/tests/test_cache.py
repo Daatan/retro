@@ -6,8 +6,6 @@ import pathlib
 import re
 import time
 
-import pytest
-
 from forecast_api import cache as cache_module
 from forecast_api.cache import ForecastCache
 from forecast_api.models import ForecastResponse, SourceSignal
@@ -36,6 +34,10 @@ def _resp(*, placeholder: bool = False, question: str = "q", articles: int = 3) 
     )
 
 
+def _cache(tmp_path, *, ttl_seconds: int = 60) -> ForecastCache:
+    return ForecastCache(ttl_seconds=ttl_seconds, directory=str(tmp_path / "cache"))
+
+
 class TestKeyDerivation:
     def test_same_question_different_casing_and_whitespace_collapse(self):
         k1 = ForecastCache.make_key(" Will X happen? ", 5)
@@ -50,19 +52,20 @@ class TestKeyDerivation:
 
 
 class TestHitMissPersistence:
-    def test_store_then_get_returns_same_object(self):
-        cache = ForecastCache(ttl_seconds=60, max_entries=8)
+    def test_store_then_get_returns_equal_response(self, tmp_path):
+        # Equality, not identity: the response pickles through the disk backend.
+        cache = _cache(tmp_path)
         key = ForecastCache.make_key("q", 5)
         response = _resp()
         cache.set(key, response)
-        assert cache.get(key) is response
+        assert cache.get(key) == response
 
-    def test_miss_when_empty(self):
-        cache = ForecastCache(ttl_seconds=60, max_entries=8)
+    def test_miss_when_empty(self, tmp_path):
+        cache = _cache(tmp_path)
         assert cache.get("missing") is None
 
-    def test_stats_counters_track_operations(self):
-        cache = ForecastCache(ttl_seconds=60, max_entries=8)
+    def test_stats_counters_track_operations(self, tmp_path):
+        cache = _cache(tmp_path)
         key = ForecastCache.make_key("q", 5)
         cache.get(key)  # miss
         cache.set(key, _resp())  # store
@@ -74,71 +77,86 @@ class TestHitMissPersistence:
         assert stats.size == 1
 
 
+class TestSharedAcrossWorkers:
+    """The point of retro#405: two gunicorn workers must see one cache, and the
+    counters must survive a SIGHUP reload instead of resetting per deploy."""
+
+    def test_second_instance_sees_first_instances_entry(self, tmp_path):
+        # Two ForecastCache objects on one directory = two workers on one box.
+        worker_a = _cache(tmp_path)
+        worker_b = _cache(tmp_path)
+        key = ForecastCache.make_key("q", 5)
+        response = _resp()
+        worker_a.set(key, response)
+        assert worker_b.get(key) == response
+
+    def test_stats_are_shared_and_survive_reconstruction(self, tmp_path):
+        worker_a = _cache(tmp_path)
+        worker_b = _cache(tmp_path)
+        key = ForecastCache.make_key("q", 5)
+        worker_a.get(key)  # miss, counted once for the whole box
+        worker_a.set(key, _resp())
+        assert worker_b.get(key) is not None  # hit from the other worker
+
+        # A SIGHUP reload constructs fresh objects over the same directory —
+        # under the dict backend this zeroed every counter and dropped every entry.
+        reloaded = _cache(tmp_path)
+        assert reloaded.get(key) is not None
+        stats = reloaded.stats()
+        assert stats.hits >= 2  # worker_b's hit + reloaded's own
+        assert stats.misses == 1
+        assert stats.stores == 1
+        assert stats.size == 1
+
+
 class TestTTL:
-    def test_expired_entry_is_dropped_on_read(self):
-        cache = ForecastCache(ttl_seconds=1, max_entries=8)
+    def test_expired_entry_is_dropped_on_read(self, tmp_path):
+        cache = _cache(tmp_path, ttl_seconds=1)
         key = ForecastCache.make_key("q", 5)
         cache.set(key, _resp())
         time.sleep(1.05)
         assert cache.get(key) is None
         assert cache.stats().size == 0
 
-    def test_ttl_zero_disables_cache(self):
-        cache = ForecastCache(ttl_seconds=0, max_entries=8)
+    def test_ttl_zero_disables_cache(self, tmp_path):
+        cache = _cache(tmp_path, ttl_seconds=0)
         assert cache.enabled is False
         cache.set("k", _resp())
         assert cache.get("k") is None
         assert cache.stats().stores == 0
+        # Disabled means disabled: not even the cache directory is created.
+        assert not (tmp_path / "cache").exists()
 
 
 class TestPlaceholderRule:
-    def test_placeholder_response_is_not_stored(self):
+    def test_placeholder_response_is_not_stored(self, tmp_path):
         """A placeholder (no articles) must not poison the cache for an hour."""
-        cache = ForecastCache(ttl_seconds=60, max_entries=8)
+        cache = _cache(tmp_path)
         cache.set("k", _resp(placeholder=True))
         assert cache.get("k") is None
         assert cache.stats().stores == 0
 
 
-class TestEviction:
-    def test_oldest_entry_evicted_when_capacity_exceeded(self):
-        cache = ForecastCache(ttl_seconds=60, max_entries=2)
-        cache.set("a", _resp(question="a"))
-        cache.set("b", _resp(question="b"))
-        cache.set("c", _resp(question="c"))
-        # "a" should be evicted, "b" and "c" remain.
-        assert cache.get("a") is None
-        assert cache.get("b") is not None
-        assert cache.get("c") is not None
-        assert cache.stats().evictions >= 1
-
-    def test_get_refreshes_lru_position(self):
-        cache = ForecastCache(ttl_seconds=60, max_entries=2)
-        cache.set("a", _resp(question="a"))
-        cache.set("b", _resp(question="b"))
-        # Reading "a" bumps it to most-recently-used.
-        assert cache.get("a") is not None
-        # Inserting "c" should now evict "b" (oldest), not "a".
-        cache.set("c", _resp(question="c"))
-        assert cache.get("a") is not None
-        assert cache.get("b") is None
-        assert cache.get("c") is not None
-
-
 class TestClear:
-    def test_clear_drops_all_entries(self):
-        cache = ForecastCache(ttl_seconds=60, max_entries=8)
+    def test_clear_drops_all_entries_and_resets_counters(self, tmp_path):
+        cache = _cache(tmp_path)
         cache.set("a", _resp(question="a"))
         cache.set("b", _resp(question="b"))
+        cache.get("a")
         cache.clear()
-        assert cache.stats().size == 0
+        stats = cache.stats()
+        assert stats.size == 0
+        assert stats.hits == 0
+        assert stats.stores == 0
         assert cache.get("a") is None
 
 
-class TestProcessLocalityMatchesTheDeployment:
-    """The cache is a process-local dict, so its correctness depends on how many
-    processes there are. That premise lived only in a docstring, and it went stale
-    silently when the service moved to two workers (retro#405). Pin it here."""
+class TestWorkerCountMatchesTheDocstring:
+    """The cache design references the deployed worker count: the docstring
+    explains what is shared between the 2 workers and what stays per-process
+    (``_inflight``). That premise went stale silently once before — the old
+    process-local dict documented a single worker while the box ran two
+    (retro#405). Pin doc against deployment so they cannot diverge again."""
 
     @staticmethod
     def _deployed_worker_count() -> int:
@@ -154,20 +172,19 @@ class TestProcessLocalityMatchesTheDeployment:
         return int(m.group(1))
 
     def test_the_docstring_states_the_real_worker_count(self):
-        # A docstring that says "single worker" while the box runs two is worse than
-        # no docstring: it is the reason nobody noticed the cache had become ~50%
-        # effective, and it is what daatan#1262's re-ask is capped by.
         workers = self._deployed_worker_count()
         doc = cache_module.__doc__ or ""
         assert f"--workers {workers}" in doc, (
             f"infra/oracle-api.service runs --workers {workers}; the cache module "
             "docstring must state that count and its consequences. If the count "
-            "changed, revisit retro#405 — a process-local cache is only 'correct' "
-            "at one worker."
+            "changed, re-read the docstring's shared/per-worker breakdown — "
+            "_inflight coalescing and the stats semantics are described against "
+            "the current deployment."
         )
 
-    def test_a_single_worker_deployment_would_invalidate_this_whole_discussion(self):
-        # Deliberately asserts the CURRENT state rather than a range: if someone
-        # drops back to one worker, the docstring's warnings become false in the
-        # other direction and this test should make them re-read it.
+    def test_a_worker_count_change_should_force_a_reread(self):
+        # Deliberately asserts the CURRENT state rather than a range: at one
+        # worker the shared backend is merely unnecessary, at three+ the
+        # _inflight duplicate-pipeline note understates the cost. Either way,
+        # whoever changes the count should re-read cache.py's docstring.
         assert self._deployed_worker_count() == 2

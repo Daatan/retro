@@ -64,7 +64,7 @@ from .aggregation import (
     settlement_grade,
 )
 from .cache import forecast_cache, search_cache
-from .clustering import cluster_text_for_claims, cluster_texts
+from .clustering import cluster_text_for_claims, cluster_texts_with_stats
 from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight
 from .models import (
@@ -376,10 +376,23 @@ def _cluster_ids(texts: list[Optional[str]], question_hash: str) -> Optional[tup
     Runs even when the discount is inert — that is the point. The decision to enable it
     has to rest on how much correlated evidence live pools actually carry, and nothing
     was measuring that. Logging it costs one pass over already-in-memory text.
+
+    **The line is emitted for EVERY pool, including pools with no echo at all.** It
+    previously fired only when some cluster reached size ≥2, which made a zero
+    unreadable: a pool too small to compare, a pool of text-less legacy rows, and a pool
+    of genuinely independent reporting all wrote the same nothing. Measured 2026-08-05,
+    that produced exactly one line — a synthetic probe — across 180 ``/pool/aggregate``
+    and 374 ``/forecast`` requests, so "no echo observed" could not be told apart from
+    "nothing was ever observable". ``echoed_rows=0`` is now the discriminator, and
+    ``textful``/``pairs``/``max_jaccard``/``hist`` carry the denominators and the
+    near-misses needed to tune ``cluster_jaccard_threshold`` downward if the echo is
+    sitting just under it.
+
+    Unlike the clusters themselves, this measurement accrues at TRAFFIC rate rather than
+    at resolution rate — it observes pool structure, not forecast accuracy — so it does
+    not wait on the resolved-forecast backlog that gates enabling the discount (#403).
     """
-    if len(texts) < 2:
-        return None
-    ids = cluster_texts(
+    ids, stats = cluster_texts_with_stats(
         texts,
         threshold=settings.cluster_jaccard_threshold,
         shingle_size=settings.cluster_shingle_size,
@@ -388,13 +401,19 @@ def _cluster_ids(texts: list[Optional[str]], question_hash: str) -> Optional[tup
     for cid in ids:
         sizes[cid] = sizes.get(cid, 0) + 1
     echoed = {c: k for c, k in sizes.items() if k > 1}
-    if echoed:
-        logger.info(
-            "event=evidence_clusters question=%s rows=%d clusters=%d largest=%d "
-            "echoed_rows=%d exponent=%.2f",
-            question_hash, len(ids), len(sizes), max(sizes.values()),
-            sum(echoed.values()), settings.cluster_downweight_exponent,
-        )
+    logger.info(
+        "event=evidence_clusters question=%s rows=%d textful=%d pairs=%d clusters=%d "
+        "largest=%d echoed_rows=%d max_jaccard=%.3f threshold=%.2f exponent=%.2f hist=%s",
+        question_hash, stats.rows, stats.textful, stats.pairs, len(sizes),
+        max(sizes.values()) if sizes else 0, sum(echoed.values()),
+        stats.max_jaccard, settings.cluster_jaccard_threshold,
+        settings.cluster_downweight_exponent,
+        ",".join(str(c) for c in stats.histogram),
+    )
+    # Below two rows there is nothing to group; returning None keeps the discount path
+    # untouched, exactly as before — only the logging above is new.
+    if len(texts) < 2:
+        return None
     return ids
 
 

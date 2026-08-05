@@ -5,12 +5,16 @@ retuned, but a "refactor" that quietly moved a live estimate would be the worst
 possible outcome, so the no-op property is pinned directly rather than assumed.
 """
 
+import logging
+
 import pytest
 
 from forecast_api.aggregation import aggregate_pool, cluster_downweight_factors
 from forecast_api.clustering import (
+    SIMILARITY_BANDS,
     cluster_text_for_claims,
     cluster_texts,
+    cluster_texts_with_stats,
     jaccard,
     shingles,
 )
@@ -96,6 +100,137 @@ class TestClusterTexts:
     def test_fewer_than_two_rows_is_trivially_one_cluster(self):
         assert cluster_texts(["only one"], threshold=0.5) == (0,)
         assert cluster_texts([], threshold=0.5) == ()
+
+
+class TestClusterStats:
+    """The near-miss record — what the pass saw BELOW the threshold.
+
+    The load-bearing test here is ``test_reports_a_near_miss_that_produced_no_cluster``:
+    without it the instrument can only ever report echo it already found, and
+    ``cluster_jaccard_threshold`` cannot be tuned downward from its own logs.
+    """
+
+    def test_reports_a_near_miss_that_produced_no_cluster(self):
+        # Two clearly related write-ups that do NOT clear a 0.9 bar. The grouping is
+        # silent about this; the stats are not, and that difference is the point.
+        texts = [
+            "the kremlin is considering a new mobilization wave this autumn",
+            "the kremlin is considering a new mobilization wave, officials said",
+        ]
+        ids, stats = cluster_texts_with_stats(texts, threshold=0.9)
+        assert len(set(ids)) == 2, "no cluster formed — the old log would say nothing"
+        assert 0.0 < stats.max_jaccard < 0.9
+        assert stats.pairs == 1
+
+    def test_textful_is_the_real_denominator(self):
+        # Three rows, one clusterable pair: legacy text-less rows are never compared,
+        # so `rows` overstates what the pass could observe (retro#408's lower bound).
+        ids, stats = cluster_texts_with_stats(
+            [None, "alpha beta gamma delta", "alpha beta gamma delta", ""], threshold=0.5,
+        )
+        assert stats.rows == 4
+        assert stats.textful == 2
+        assert stats.pairs == 1
+        assert ids[1] == ids[2]
+
+    def test_pairs_is_the_textful_pair_count_and_histogram_sums_to_it(self):
+        texts = ["alpha beta gamma", "delta epsilon zeta", "eta theta iota", None]
+        _, stats = cluster_texts_with_stats(texts, threshold=0.5)
+        assert stats.textful == 3
+        assert stats.pairs == 3  # C(3, 2)
+        assert sum(stats.histogram) == stats.pairs
+
+    def test_no_comparable_pair_reports_zero_not_a_false_signal(self):
+        # A pool that could never echo must not look like a pool that chose not to.
+        for texts in ([], ["only one"], [None, None]):
+            _, stats = cluster_texts_with_stats(texts, threshold=0.5)
+            assert stats.pairs == 0
+            assert stats.max_jaccard == 0.0
+            assert sum(stats.histogram) == 0
+
+    def test_identical_texts_land_in_the_top_band_not_off_the_end(self):
+        # score == 1.0 would index one past the last band without the clamp.
+        _, stats = cluster_texts_with_stats(
+            ["alpha beta gamma delta", "alpha beta gamma delta"], threshold=0.5,
+        )
+        assert stats.max_jaccard == 1.0
+        assert stats.histogram[-1] == 1
+        assert len(stats.histogram) == SIMILARITY_BANDS
+
+    def test_bands_are_lower_inclusive(self):
+        # Exactly 0.5 belongs to band 5 ([0.5, 0.6)), not band 4. Constructed rather
+        # than approximated: {(a,b,g)} vs {(a,b,g), (b,g,d)} is 1 shared of 2 total.
+        texts = ["alpha beta gamma", "alpha beta gamma delta"]
+        _, stats = cluster_texts_with_stats(texts, threshold=0.9)
+        assert stats.max_jaccard == 0.5
+        assert stats.histogram[5] == 1
+        assert stats.histogram[4] == 0
+
+    def test_stats_are_deterministic_like_the_ids(self):
+        # Same purity contract as the grouping — the replay harness reads both.
+        texts = ["alpha beta gamma", "alpha beta gamma delta", "zeta eta theta"]
+        first = cluster_texts_with_stats(texts, threshold=0.5)
+        for _ in range(5):
+            assert cluster_texts_with_stats(texts, threshold=0.5) == first
+
+    def test_grouping_is_byte_identical_to_the_stats_free_wrapper(self):
+        # This change must move no estimate: cluster_texts is the old entry point and
+        # has to keep returning exactly what it always did.
+        texts = ["alpha beta gamma delta", "alpha beta gamma delta", "zeta eta theta iota", None]
+        for threshold in (0.0, 0.3, 0.5, 0.9, 1.0):
+            ids, _ = cluster_texts_with_stats(texts, threshold=threshold)
+            assert cluster_texts(texts, threshold=threshold) == ids
+
+
+class TestClusterLogIsUnconditional:
+    """The defect this fixes: three different silences used to look identical."""
+
+    def _log_line(self, caplog, texts):
+        from forecast_api.forecaster import _cluster_ids
+
+        caplog.clear()
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            _cluster_ids(texts, "q-hash")
+        lines = [r.getMessage() for r in caplog.records if "evidence_clusters" in r.getMessage()]
+        assert len(lines) == 1, f"expected exactly one line, got {lines}"
+        return lines[0]
+
+    def test_a_pool_with_no_echo_still_logs(self, caplog):
+        # Previously silent. A zero that is never written cannot be counted, which is
+        # how 180 aggregates produced no observation at all.
+        line = self._log_line(caplog, ["alpha beta gamma", "zeta eta theta"])
+        assert "echoed_rows=0" in line
+        assert "pairs=1" in line
+
+    def test_a_pool_of_textless_legacy_rows_is_distinguishable_from_no_echo(self, caplog):
+        # Same zero echo, opposite meaning: nothing was observable here.
+        line = self._log_line(caplog, [None, None])
+        assert "textful=0" in line
+        assert "pairs=0" in line
+
+    def test_a_pool_too_small_to_compare_still_logs(self, caplog):
+        line = self._log_line(caplog, ["only one row"])
+        assert "rows=1" in line
+        assert "pairs=0" in line
+
+    def test_the_near_miss_reaches_the_log(self, caplog):
+        line = self._log_line(
+            caplog,
+            [
+                "the kremlin is considering a new mobilization wave this autumn",
+                "the kremlin is considering a new mobilization wave, officials said",
+            ],
+        )
+        assert "max_jaccard=0." in line
+        assert "max_jaccard=0.000" not in line, "a real near miss must not read as zero"
+        assert "threshold=" in line, "a line must be self-describing after a retune"
+
+    def test_a_short_pool_still_returns_none_so_the_discount_path_is_untouched(self):
+        from forecast_api.forecaster import _cluster_ids
+
+        assert _cluster_ids(["only one row"], "q") is None
+        assert _cluster_ids([], "q") is None
+        assert _cluster_ids(["alpha beta gamma", "zeta eta theta"], "q") == (0, 1)
 
 
 class TestClusterTextForClaims:

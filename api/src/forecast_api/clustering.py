@@ -26,6 +26,7 @@ miss the pairwise bar.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Optional, Sequence
 
 #: Words carry the signal; punctuation and case do not. Digits are kept — dates,
@@ -71,6 +72,47 @@ def jaccard(a: frozenset, b: frozenset) -> float:
     return inter / len(a | b)
 
 
+#: Number of equal-width bands the pairwise-similarity histogram is bucketed into.
+#: Band ``b`` covers ``[b/10, (b+1)/10)``, with an exact 1.0 clamped into the last.
+SIMILARITY_BANDS = 10
+
+
+@dataclass(frozen=True)
+class ClusterStats:
+    """What one clustering pass observed, including everything BELOW the threshold.
+
+    The cluster ids alone cannot distinguish the three ways a pool produces no
+    echo, and those three mean opposite things:
+
+    1. fewer than two rows — nothing to compare;
+    2. rows present but text-less — structurally unclusterable, so the pass says
+       nothing about the world, only about ``claims_detail`` coverage;
+    3. genuinely comparable text that no pair matched — a real observation that
+       live pools carry little lexical echo.
+
+    Only (3) is evidence. Reporting just the clusters collapses all three to an
+    identical silence, which is what made ``event=evidence_clusters`` produce a
+    single line in a month of traffic and left the number uninterpretable.
+
+    ``max_jaccard`` and ``histogram`` are the near-miss record. ``config.py`` says
+    to tune ``cluster_jaccard_threshold`` "against the logged cluster structure" —
+    but the log only ever fired ABOVE the threshold, so there was no data below it
+    to lower the bar onto. That instruction was uncloseable until these fields
+    existed.
+    """
+
+    #: Rows handed to the clusterer.
+    rows: int
+    #: Rows with a non-empty shingle set — the denominator that actually matters.
+    textful: int
+    #: Pairwise comparisons performed, i.e. ``C(textful, 2)``.
+    pairs: int
+    #: Highest similarity seen, threshold notwithstanding. 0.0 when no pairs.
+    max_jaccard: float
+    #: Counts per similarity band; sums to ``pairs``. See ``SIMILARITY_BANDS``.
+    histogram: tuple[int, ...]
+
+
 def cluster_texts(
     texts: Sequence[Optional[str]],
     *,
@@ -87,6 +129,33 @@ def cluster_texts(
     conservative reading: an unclusterable row keeps its full weight, so missing
     text can never *cost* a source its vote. Legacy pool rows written before
     ``claims_detail`` existed all land here.
+
+    Thin wrapper over :func:`cluster_texts_with_stats` for callers that only want
+    the grouping. The stats cost nothing extra to produce — see that function.
+    """
+    ids, _ = cluster_texts_with_stats(
+        texts, threshold=threshold, shingle_size=shingle_size,
+    )
+    return ids
+
+
+def cluster_texts_with_stats(
+    texts: Sequence[Optional[str]],
+    *,
+    threshold: float,
+    shingle_size: int = 3,
+) -> tuple[tuple[int, ...], ClusterStats]:
+    """:func:`cluster_texts`, plus what the pass saw below the threshold.
+
+    **The statistics are free.** The pairwise loop already computes every
+    ``jaccard(...)`` and today discards each score the instant it fails the
+    ``>= threshold`` test. Recording the max and a band count adds no pass, no
+    allocation beyond one fixed-size counter list, and no comparison — it keeps a
+    number that was being thrown away.
+
+    Deliberately returns the stats rather than logging them. This module is the
+    documented swap seam and the replay harness depends on it being pure and
+    deterministic; the caller owns the log line, where the question hash lives.
     """
     n = len(texts)
     sets = [shingles(t, shingle_size) if t else frozenset() for t in texts]
@@ -105,13 +174,23 @@ def cluster_texts(
             # Lower index wins, so root identity never depends on visit order.
             parent[max(rx, ry)] = min(rx, ry)
 
+    max_jaccard = 0.0
+    pairs = 0
+    histogram = [0] * SIMILARITY_BANDS
+
     for i in range(n):
         if not sets[i]:
             continue
         for j in range(i + 1, n):
             if not sets[j]:
                 continue
-            if jaccard(sets[i], sets[j]) >= threshold:
+            score = jaccard(sets[i], sets[j])
+            pairs += 1
+            if score > max_jaccard:
+                max_jaccard = score
+            # An exact 1.0 would index one past the end; it belongs in the top band.
+            histogram[min(int(score * SIMILARITY_BANDS), SIMILARITY_BANDS - 1)] += 1
+            if score >= threshold:
                 union(i, j)
 
     ids: dict[int, int] = {}
@@ -121,7 +200,15 @@ def cluster_texts(
         if root not in ids:
             ids[root] = len(ids)
         out.append(ids[root])
-    return tuple(out)
+
+    stats = ClusterStats(
+        rows=n,
+        textful=sum(1 for s in sets if s),
+        pairs=pairs,
+        max_jaccard=max_jaccard,
+        histogram=tuple(histogram),
+    )
+    return tuple(out), stats
 
 
 def cluster_text_for_claims(

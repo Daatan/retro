@@ -23,6 +23,7 @@ fusion and pooling all run as production code.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -339,6 +340,20 @@ class TestTheReductionReplaysFromPersistedClaims:
         self._assert_replays(s, self._replay(s.claims_detail))
 
 
+#: Article age for fixtures that must stay settlement-grade, kept RELATIVE to today.
+#:
+#: `settlement_quality_floor` (0.20) gates the pin on the winning direction's combined
+#: WEIGHT, and weight carries a recency term — so a hardcoded date silently ages a pin
+#: fixture under the floor with no code change of any kind. This suite pinned
+#: "2026-07-20" and went red on 2026-08-05, the day those rows turned 16 days old:
+#: combined weight 0.209 -> 0.189, straight through the 0.20 floor overnight.
+#:
+#: Three days keeps recency ~0.74 and the combined weight ~0.68 — far enough clear that
+#: no plausible floor retune re-arms the bomb. Fixtures that deliberately test an OLD row
+#: still pass an absolute date explicitly.
+_RECENT = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+
+
 class TestPoolWireIsAdditive:
     """R8: additive persistence only — the estimate must not move."""
 
@@ -350,7 +365,7 @@ class TestPoolWireIsAdditive:
             "credibility_weight": 1.0,
             "relevance_score": 0.9,
             "evidence_weight": 0.6,
-            "published_date": "2026-07-20",
+            "published_date": _RECENT,
             "settled": False,
             **over,
         }

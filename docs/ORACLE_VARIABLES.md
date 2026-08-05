@@ -423,10 +423,31 @@ receives it via daatan#1264.
 
 **Deliberately not enabled**, for the reason `forecast_relevance_bar` is not raised: the
 verification path (#350 — Brier with vs without) needs resolved forecasts with a usable
-evidence pool, and as of 2026-08-04 there are **6**. What ships instead is the *measurement* —
-`event=evidence_clusters` logs the echo structure (`rows`, `clusters`, `largest`,
-`echoed_rows`) of every live pool, so the decision to enable rests on observed redundancy
-rather than on the sketch's intuition. The threshold is untuned: tune it against those logs.
+evidence pool, and as of 2026-08-05 there are **6** — of which **0 carry a claim layer at
+all**, so the backtest corpus and the resolved set do not yet intersect (#403). What ships
+instead is the *measurement* — `event=evidence_clusters`, one line per pool:
+
+| field | meaning |
+|---|---|
+| `rows` | pool rows handed to the clusterer |
+| `textful` | rows with usable cluster text — **the real denominator** |
+| `pairs` | comparisons performed, `C(textful, 2)` |
+| `clusters` / `largest` / `echoed_rows` | the grouping that resulted; `echoed_rows=0` means no echo |
+| `max_jaccard` | highest similarity seen, **threshold notwithstanding** |
+| `hist` | comma-separated counts per 0.1-wide similarity band, summing to `pairs` |
+| `threshold` / `exponent` | the settings in force, so a line stays readable after a retune |
+
+**The line is emitted for every pool, including pools with no echo.** It originally fired
+only when some cluster reached size ≥2, which made a zero unreadable — a pool too small to
+compare, a pool of text-less legacy rows, and a pool of genuinely independent reporting all
+wrote the same nothing. Measured 2026-08-05, that produced exactly **one** line (a synthetic
+probe) across 180 `/pool/aggregate` and 374 `/forecast` requests.
+
+The threshold is untuned: tune it against `max_jaccard`/`hist`, which is the only reason
+those two fields exist — the conditional log could only ever show echo that *already* cleared
+the bar, so there was no data below it to lower the bar onto. Note this measurement accrues at
+**traffic rate**, not at resolution rate: it observes pool structure rather than forecast
+accuracy, so unlike enabling the discount it is not gated on the resolved-forecast backlog.
 `pool_dispersion_floor` is the minimum published interval width, as a
 between-source standard deviation in probability space — **a policy number, not
 a measurement**, in the same class as `interested_party_stance_cap`; see the

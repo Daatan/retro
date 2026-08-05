@@ -419,7 +419,12 @@ class ApiSettings(BaseSettings):
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.
     cache_ttl_seconds: int = 3600
-    cache_max_entries: int = 512
+    # diskcache directory shared by both gunicorn workers (retro#405). The unit
+    # sets no PrivateTmp, so this survives reloads and restarts, clearing only
+    # on reboot — all fine at a 1 h TTL. The byte bound replaces the old
+    # cache_max_entries count bound; eviction is LRU.
+    cache_dir: str = "/tmp/oracle-forecast-cache"
+    cache_size_limit_mb: int = 128
 
     # Search-result cache keyed by sha256(question, limit). Longer TTL than
     # forecast cache — article lists for a given query are stable for hours.

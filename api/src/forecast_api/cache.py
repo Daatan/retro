@@ -1,46 +1,46 @@
 """
-In-process TTL cache for ForecastResponse.
+Disk-backed TTL cache for ForecastResponse, shared across workers.
 
-Scope: this is a **process-local** dict, and the Oracle API runs
-``gunicorn --workers 2`` (``infra/oracle-api.service``). This module used to claim a
-single worker and call the process-local design "correct" on that basis — the
-precondition stopped holding when the worker count went to 2, and the doc kept
-asserting it (retro#405). What that costs:
+The Oracle API runs ``gunicorn --workers 2`` (``infra/oracle-api.service``). The
+first backend here was a process-local dict whose docstring called the design
+"correct" on a single-worker premise the deployment had already broken
+(retro#405): each worker had its own entries and counters, repeat-question hits
+were roughly halved, ``_inflight`` could not coalesce across processes, and a
+SIGHUP reload emptied everything — which also capped daatan#1262's re-ask (the
+120 s retry found the completed run only when it landed on the worker that held
+it). The backend is now ``diskcache``: one SQLite-backed directory shared by
+both workers on the box, surviving reloads, no new infrastructure — exactly the
+migration the old module prescribed for itself. Redis becomes the answer only
+if the API ever goes multi-instance.
 
-  * **Each worker has its own cache and its own ``_inflight`` map.** Two identical
-    simultaneous ``/forecast`` calls landing on different workers both run the full
-    pipeline; ordinary repeat-question hits are roughly halved.
-  * **``stats()`` is per-worker and since-last-reload.** ``/health`` round-robins
-    between workers, and a SIGHUP reload constructs a fresh cache, so the counters
-    reset on every deploy. Measured 2026-08-04: ``{hits:0, misses:22, stores:5}``
-    before a deploy, ``{hits:0, misses:0, stores:0}`` immediately after. **Do not
-    read them as cumulative** — compare within one deploy window, and sample more
-    than once because two workers answer.
-  * **It caps daatan#1262.** That fix re-asks with the identical article set 120 s
-    after a client timeout, so retro's completed-but-abandoned run is served from
-    here instead of expiring unread — recovering a paid extraction. With two workers
-    the re-ask finds the entry roughly half the time (a miss still returns a real
-    forecast, so the recovered-*estimate* rate is ~100%; the *free*-recovery rate is
-    ~50%, and ~0% across a deploy).
+What is and is not shared now:
+  * **Entries and hit/miss/store counters: shared and cumulative.** They live in
+    ``settings.cache_dir`` (under ``/tmp`` — the unit sets no ``PrivateTmp``, so
+    this survives SIGHUP reloads and full service restarts, clearing only on
+    reboot). ``/health`` no longer round-robins between two disjoint counter sets.
+  * **``_inflight`` (forecaster.py): still per-worker.** Two identical
+    simultaneous requests on different workers still both run the pipeline; the
+    loser's result now at least lands in the shared cache for the next caller.
+  * **``stats().evictions`` is always 0.** diskcache culls internally by byte
+    volume (``cache_size_limit_mb``, least-recently-used) and does not expose a
+    cull count. The old entry-count bound (``max_entries``) went with it.
 
-The fix is to swap the backend — ``diskcache`` shares between workers on one box
-with no new infrastructure; Redis only if this ever goes multi-instance. The public
-surface here (``get`` / ``set`` / ``stats`` / ``clear``) is intentionally small so
-that migration stays mechanical. Tracked in retro#405; ``test_cache.py`` pins the
-worker count against this docstring so the two cannot silently diverge again.
+Design choices kept from the first backend:
+  * Key = sha256(normalized_question | max_articles | articles_hash |
+    claim_meta). Normalization is ``question.strip().casefold()``.
+  * ``placeholder=True`` responses are **not** cached — caching a "no articles
+    found" response would turn a transient upstream failure into a 1-hour
+    outage for that question.
+  * ``cache_ttl_seconds=0`` disables the cache entirely (no directory is even
+    opened).
 
-Design choices:
-  * Key = sha256(normalized_question | max_articles). Normalization is
-    ``question.strip().casefold()``, so trivial whitespace/casing variants
-    collapse to the same entry.
-  * TTL check happens on read — we do not have a background sweeper. With
-    ``cache_max_entries`` entries max the memory footprint is bounded even if
-    nothing is ever read.
-  * Lazy LRU eviction: when we exceed ``max_entries`` on insert we drop the
-    oldest entry by insertion order (``OrderedDict.popitem(last=False)``).
-  * ``placeholder=True`` responses are **not cached**. They represent "no
-    articles found" situations and caching them would turn a transient
-    upstream failure into a 1-hour outage for that question.
+New failure mode, handled: values pickle through diskcache, and a deploy can
+change ``ForecastResponse``'s shape so an entry written by the previous code
+no longer unpickles. An unreadable entry is deleted and treated as a miss,
+never an error — entries only live an hour.
+
+``test_cache.py`` pins the deployed worker count against this docstring so the
+two cannot silently diverge again (that drift is how retro#405 happened).
 """
 
 from __future__ import annotations
@@ -52,13 +52,9 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import Optional
 
+import diskcache
+
 from .models import ForecastResponse
-
-
-@dataclass
-class _Entry:
-    response: ForecastResponse
-    expires_at: float
 
 
 @dataclass
@@ -86,14 +82,23 @@ class CacheStats:
 
 
 class ForecastCache:
-    """Bounded TTL cache for ``ForecastResponse`` objects."""
+    """TTL cache for ``ForecastResponse`` objects, shared across workers via diskcache."""
 
-    def __init__(self, *, ttl_seconds: int, max_entries: int) -> None:
+    def __init__(self, *, ttl_seconds: int, directory: str, size_limit_bytes: int = 128 * 1024 * 1024) -> None:
         self._ttl = max(0, ttl_seconds)
-        self._max = max(1, max_entries)
-        self._data: "OrderedDict[str, _Entry]" = OrderedDict()
-        self._lock = Lock()
-        self._stats = CacheStats()
+        self._cache: Optional[diskcache.Cache] = None
+        self._meta: Optional[diskcache.Cache] = None
+        if self._ttl > 0:
+            self._cache = diskcache.Cache(
+                directory,
+                statistics=1,
+                eviction_policy="least-recently-used",
+                size_limit=size_limit_bytes,
+            )
+            # The stores counter lives in a sidecar cache (statistics disabled):
+            # reading it from the main cache would count a hit/miss of its own
+            # every time /health asks for stats.
+            self._meta = diskcache.Cache(f"{directory}/meta", statistics=0)
 
     @property
     def enabled(self) -> bool:
@@ -115,56 +120,49 @@ class ForecastCache:
         return hashlib.sha256(payload).hexdigest()
 
     def get(self, key: str) -> Optional[ForecastResponse]:
-        if not self.enabled:
+        if self._cache is None:
             return None
-        now = time.time()
-        with self._lock:
-            entry = self._data.get(key)
-            if entry is None:
-                self._stats.misses += 1
-                return None
-            if entry.expires_at <= now:
-                # Expired — drop and miss.
-                del self._data[key]
-                self._stats.misses += 1
-                self._stats.size = len(self._data)
-                return None
-            # Refresh LRU position on hit.
-            self._data.move_to_end(key)
-            self._stats.hits += 1
-            return entry.response
+        try:
+            return self._cache.get(key, default=None)
+        except Exception:
+            # Unreadable pickle from an older deploy's model shape — miss, not error.
+            try:
+                self._cache.delete(key)
+            except Exception:
+                pass
+            return None
 
     def set(self, key: str, response: ForecastResponse) -> None:
-        if not self.enabled:
+        if self._cache is None or self._meta is None:
             return
         # Never cache placeholder/empty responses; see module docstring.
         if response.placeholder:
             return
-        now = time.time()
-        with self._lock:
-            self._data[key] = _Entry(response=response, expires_at=now + self._ttl)
-            self._data.move_to_end(key)
-            self._stats.stores += 1
-            while len(self._data) > self._max:
-                self._data.popitem(last=False)
-                self._stats.evictions += 1
-            self._stats.size = len(self._data)
+        self._cache.set(key, response, expire=self._ttl)
+        self._meta.incr("stores", default=0)
 
     def clear(self) -> None:
-        with self._lock:
-            self._data.clear()
-            self._stats.size = 0
+        """Drop all entries AND reset every counter — hits/misses/stores start over."""
+        if self._cache is None or self._meta is None:
+            return
+        self._cache.clear()
+        self._cache.stats(reset=True)
+        self._meta.clear()
 
     def stats(self) -> CacheStats:
-        with self._lock:
-            # Return a snapshot so callers can't mutate internal state.
-            return CacheStats(
-                hits=self._stats.hits,
-                misses=self._stats.misses,
-                stores=self._stats.stores,
-                evictions=self._stats.evictions,
-                size=len(self._data),
-            )
+        if self._cache is None or self._meta is None:
+            return CacheStats()
+        # Cull expired rows first so `size` counts live entries, not corpses —
+        # diskcache's len() would otherwise include expired-but-unculled rows.
+        self._cache.expire()
+        hits, misses = self._cache.stats()
+        return CacheStats(
+            hits=int(hits),
+            misses=int(misses),
+            stores=int(self._meta.get("stores", default=0) or 0),
+            evictions=0,
+            size=len(self._cache),
+        )
 
 
 class SearchCache:
@@ -174,6 +172,11 @@ class SearchCache:
     so the same article set can be reused across multiple forecast calls for
     the same question even after the 1-hour forecast TTL expires. Default TTL
     is 4 hours — news search results are stable within that window.
+
+    Still process-local (per-worker), unlike ForecastCache: a duplicated search
+    costs one provider round-trip, not a paid LLM extraction, so the shared
+    backend wasn't worth the pickle churn here. Revisit if provider spend says
+    otherwise.
 
     Empty result lists are never cached; a failed search should retry rather
     than returning a stale empty list for hours.
@@ -220,11 +223,12 @@ class SearchCache:
 
 
 def build_cache_from_settings() -> ForecastCache:
-    """Construct the process-wide forecast cache from :mod:`.config` settings."""
+    """Construct the shared (cross-worker) forecast cache from :mod:`.config` settings."""
     from .config import settings
     return ForecastCache(
         ttl_seconds=settings.cache_ttl_seconds,
-        max_entries=settings.cache_max_entries,
+        directory=settings.cache_dir,
+        size_limit_bytes=settings.cache_size_limit_mb * 1024 * 1024,
     )
 
 
@@ -237,6 +241,8 @@ def build_search_cache_from_settings() -> SearchCache:
     )
 
 
-# Process-wide singletons. Imported by forecaster and exposed via /health.
+# Singletons. forecast_cache is one shared store: each worker process builds its
+# own diskcache handle, but they all point at settings.cache_dir. Imported by
+# forecaster and exposed via /health.
 forecast_cache: ForecastCache = build_cache_from_settings()
 search_cache: SearchCache = build_search_cache_from_settings()

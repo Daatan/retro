@@ -86,6 +86,10 @@ logger = logging.getLogger(__name__)
 # In-flight deduplication: cache_key → asyncio.Event.
 # When a second request arrives for a key that's already being processed,
 # it waits on this event instead of launching a duplicate pipeline.
+# Per-worker on purpose (unlike forecast_cache, which is shared — retro#405):
+# coalescing across processes needs real distributed locking, and the shared
+# cache already catches the expensive half — the duplicate's result is stored
+# for every later caller on either worker.
 _inflight: dict[str, asyncio.Event] = {}
 
 

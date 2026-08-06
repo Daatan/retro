@@ -5,7 +5,9 @@ written for paywall stubs and 404 pages. It misfires on a source we ingest ON PU
 indexed Telegram posts run under 70 words, including 154 of Ben Caspit's 169. So the pipeline
 deliberately collects terse posts from serious journalists and the gatekeeper throws every one away.
 
-These tests pin the fix AND, more importantly, that it cannot leak into /forecast.
+These tests pin the fix AND, more importantly, that it cannot leak into the default
+long-form path (regular /forecast articles pass no short_form; since retro#417 t.me-host
+articles do — deliberately).
 """
 
 from unittest.mock import AsyncMock, patch
@@ -36,8 +38,9 @@ async def _capture_prompt(**kwargs) -> str:
 
 @pytest.mark.asyncio
 async def test_default_prompt_is_unchanged_byte_for_byte():
-    """THE safety property. /forecast calls this with no short_form, and its prompt must be exactly
-    what it was — the override may only ever append, never edit the base text."""
+    """THE safety property. Callers that pass neither short_form nor language (every regular
+    article on /forecast) must get exactly the prompt they always got — overrides and hints may
+    only ever append, never edit the base text."""
     default = await _capture_prompt()
     expected = (gatekeeper.PROMPT_PREFIX + gatekeeper.PROMPT_SUFFIX).format(
         article_text="Elections are now final for Oct 27.",
@@ -67,3 +70,32 @@ async def test_short_form_still_rejects_empty_and_off_topic_posts():
     assert "genuinely empty" in short
     assert "different matter" in short
     assert "Brevity alone is not a reason" in short
+
+
+# ── Language hint (retro#417) — same append-only contract as short_form ─────────────────
+
+
+@pytest.mark.asyncio
+async def test_language_hint_appends_and_keeps_the_base_intact():
+    hinted = await _capture_prompt(language="Hebrew")
+    default = await _capture_prompt()
+
+    assert hinted.startswith(default)                   # append-only: base text survives verbatim
+    assert "The article text is in Hebrew" in hinted
+
+
+@pytest.mark.asyncio
+async def test_no_language_leaves_the_prompt_without_a_hint():
+    default = await _capture_prompt()
+    assert "The article text is in" not in default
+
+
+@pytest.mark.asyncio
+async def test_short_form_and_language_stack():
+    # A terse Hebrew Telegram post — the retro#417 motivating case — gets both appends.
+    both = await _capture_prompt(short_form=True, language="Hebrew")
+    short = await _capture_prompt(short_form=True)
+
+    assert both.startswith(short)
+    assert "Short-form source" in both
+    assert "The article text is in Hebrew" in both

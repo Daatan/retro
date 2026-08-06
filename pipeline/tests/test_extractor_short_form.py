@@ -61,3 +61,25 @@ async def test_short_form_appends_the_override_and_keeps_the_base_intact():
     # the override must scope to the post's own topic, not contradict Buried facts for articles
     assert "own primary topic" in short
     assert "extract nothing" in short
+
+
+# ── Language hint (retro#417) — same append-only contract as short_form ─────────────────
+
+
+@pytest.mark.asyncio
+async def test_language_hint_appends_and_keeps_the_base_intact():
+    hinted = await _capture_prompt(language="Hebrew")
+    default = await _capture_prompt()
+
+    assert hinted.startswith(default)                   # append-only: base text survives verbatim
+    assert "The article text is in Hebrew" in hinted
+    assert "The article text is in" not in default
+
+
+@pytest.mark.asyncio
+async def test_short_form_and_language_stack():
+    both = await _capture_prompt(short_form=True, language="Hebrew")
+    short = await _capture_prompt(short_form=True)
+
+    assert both.startswith(short)
+    assert "The article text is in Hebrew" in both

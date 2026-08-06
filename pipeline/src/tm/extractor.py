@@ -701,6 +701,17 @@ than stretch a phrase into a claim.
 """
 
 
+# Appended when the caller knows the article's language (retro#417) — same rationale and
+# append-only contract as gatekeeper._LANGUAGE_HINT. The quote field already asks for the
+# original language; this only tells the model up front what that language IS.
+_LANGUAGE_HINT = """
+
+**Language.** The article text is in {language}. Extract from it directly: `quote` stays \
+verbatim in the original language, `claim` is your English rendering, exactly as specified \
+above.
+"""
+
+
 async def extract_predictions(
     article_text: str,
     source_name: str,
@@ -710,6 +721,7 @@ async def extract_predictions(
     journalist: str = "unknown",
     claim_deadline: Optional[str] = None,
     short_form: bool = False,
+    language: Optional[str] = None,
 ) -> tuple["ExtractionOutput", dict]:
     """Returns (ExtractionOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
 
@@ -721,6 +733,10 @@ async def extract_predictions(
     ``short_form`` opts into scoping a social-media post to its own primary topic instead of
     the whole-article buried-facts scan (retro#297). It defaults to False and only ever
     APPENDS to the prompt, so the text every existing caller sends is byte-for-byte unchanged.
+
+    ``language`` (retro#417) is an optional caller-supplied hint ("Hebrew", "ru", …) appended
+    to the prompt so the model is told the text is non-English instead of having to notice.
+    Also append-only; None keeps the prompt unchanged.
     """
     prompt = PROMPT_SUFFIX.format(
         article_text=article_text,
@@ -733,6 +749,8 @@ async def extract_predictions(
     )
     if short_form:
         prompt += _SHORT_FORM_OVERRIDE
+    if language:
+        prompt += _LANGUAGE_HINT.format(language=language)
     return await complete_structured(
         settings.extractor_model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
         cached_prefix=PROMPT_PREFIX,

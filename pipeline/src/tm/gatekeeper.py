@@ -120,6 +120,18 @@ invented summary of the unseen page is the failure this rule exists to prevent.
 """
 
 
+# Appended when the caller knows the article's language (retro#417). The gatekeeper and
+# extractor prompts are written in English, but most of this corpus is not — Hebrew, Russian
+# and Arabic posts were judged with no signal that the text is non-English. Append-only, so
+# callers that don't send a language keep a byte-for-byte identical prompt.
+_LANGUAGE_HINT = """
+
+**Language.** The article text is in {language}. Judge it in that language, exactly as you \
+would an English article — being non-English is never, by itself, a reason to reject or \
+down-score it.
+"""
+
+
 # Everything that is a POINTER rather than a proposition. Stripped before asking "is there any
 # content here at all?" — deliberately only the forms actually observed in the corpus (scheme-ful
 # URLs, t.me paths, @handles, #hashtags). Bare domains ("ynet.co.il") are NOT stripped: the pattern
@@ -177,12 +189,18 @@ async def check_is_prediction(
     article_date: str,
     event_name: str,
     short_form: bool = False,
+    language: str | None = None,
 ) -> tuple["GatekeeperOutput", dict]:
     """Returns (GatekeeperOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
 
     `short_form` opts into judging a social-media post on its content rather than its length. It
-    defaults to False and only ever APPENDS to the prompt, so the text every existing caller sends —
-    the entire /forecast path — is byte-for-byte unchanged.
+    defaults to False and only ever APPENDS to the prompt, so the text every existing caller sends
+    is byte-for-byte unchanged. Since retro#417 the /forecast path sets it for t.me-host articles,
+    matching the /relevance rescue path.
+
+    `language` (retro#417) is an optional caller-supplied hint ("Hebrew", "ru", …) appended to the
+    prompt so the model is told the text is non-English instead of having to notice. Also
+    append-only; None keeps the prompt unchanged.
 
     Input that carries no proposition is rejected here without an LLM call — see
     `carries_proposition`. That guard sits in front of BOTH callers on purpose: /relevance is the
@@ -205,6 +223,8 @@ async def check_is_prediction(
     )
     if short_form:
         prompt += _SHORT_FORM_OVERRIDE
+    if language:
+        prompt += _LANGUAGE_HINT.format(language=language)
     return await complete_structured(
         settings.gatekeeper_model, GatekeeperOutput, prompt, max_tokens=200, timeout=90,
         cached_prefix=PROMPT_PREFIX,

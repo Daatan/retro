@@ -717,10 +717,23 @@ async def _process_article(
     Fetches full article text via trafilatura; falls back to title+snippet.
     Appends per-phase durations to ``timings`` and an ArticleDebug to ``article_debugs``.
     """
+    # A t.me post is short-form (retro#297): mirrors news-indexer's rematch.py:_is_short_form,
+    # which feeds the same hint to the gatekeeper on its /relevance rescue path — one line
+    # duplicated on purpose rather than threading a flag through three repos.
+    short_form = urlparse(result.url or "").netloc.lower().removeprefix("www.") == "t.me"
+    # Caller-supplied language hint, threaded to the gatekeeper/extractor prompts (retro#417).
+    language = getattr(result, "_language", None)
+
     # Fallback text = title + snippet
     parts = [p for p in [result.title, result.snippet] if p and p.strip()]
     fallback = " — ".join(parts)
-    if not fallback or len(fallback) < 20:
+    # Short-form posts are exempt from the 20-char floor (retro#417): the floor exists for
+    # content-free search-result stubs, but a terse Telegram post IS the article — dropping
+    # it here silently bypassed the _SHORT_FORM_OVERRIDE built for exactly that class. The
+    # gatekeeper still rejects content-free posts without an LLM call (carries_proposition),
+    # so only a truly-empty floor remains for them.
+    min_fallback_chars = 5 if short_form else 20
+    if not fallback or len(fallback) < min_fallback_chars:
         return None
 
     # Use caller-supplied text if available; otherwise fetch via trafilatura.
@@ -728,6 +741,13 @@ async def _process_article(
     if result._prefetched_text:
         text = result._prefetched_text
         logger.info("event=article_fetch outcome=prefetched url=%s", result.url)
+    elif short_form:
+        # Never origin-fetch t.me (retro#417): t.me serves a web preview that extracts to
+        # near-nothing, so the fetch always lost the `extracted_len <= len(fallback)`
+        # comparison in _fetch_article_text anyway — a wasted request plus a wasted
+        # per-host throttle slot. news-indexer's rematch.py documents the same fact.
+        text = fallback
+        logger.info("event=article_fetch outcome=short_form_no_fetch url=%s", result.url)
     else:
         text = await asyncio.to_thread(_fetch_article_text, result.url, fallback)
     fetch_ms = (time.perf_counter() - fetch_start) * 1000
@@ -740,10 +760,6 @@ async def _process_article(
 
     source_name = result.source or _source_id_from_url(result.url)
     article_date = result.published_date or datetime.now().strftime("%Y-%m-%d")
-    # A t.me post is short-form (retro#297): mirrors news-indexer's rematch.py:_is_short_form,
-    # which feeds the same hint to the gatekeeper on its /relevance rescue path — one line
-    # duplicated on purpose rather than threading a flag through three repos.
-    short_form = urlparse(result.url or "").netloc.lower().removeprefix("www.") == "t.me"
 
     gate_start = time.perf_counter()
     supplied = _supplied_verdict(result) if settings.reuse_supplied_relevance else None
@@ -771,6 +787,11 @@ async def _process_article(
                 source_name=source_name,
                 article_date=article_date,
                 event_name=question,
+                # The override the floor exemption above exists for (retro#417): without it a
+                # short t.me post survives the floor only to be rejected by the base prompt's
+                # "under ~200 meaningful words" rule. Matches the /relevance rescue path.
+                short_form=short_form,
+                language=language,
             )
         except Exception as exc:
             logger.warning("Gatekeeper failed for %s: %s", result.url, exc)
@@ -843,6 +864,7 @@ async def _process_article(
             event_description=question,
             claim_deadline=claim_deadline,
             short_form=short_form,
+            language=language,
         )
         # Observability only (retro#298) — logs claim/stance sign mismatches on the
         # model's raw output, before any of the deterministic corrections below can
@@ -1062,6 +1084,7 @@ async def _run_forecast_inner(
                 _prefetched_text=a.text,
                 _supplied_relevance=a.relevance,
                 _supplied_is_prediction=a.is_prediction,
+                _language=a.language,
             )
             for a in req.articles
         ]

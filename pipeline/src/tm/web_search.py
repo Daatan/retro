@@ -496,6 +496,10 @@ class SearchResult:
     # present to count as a verdict. Unused by the pipeline's own search providers.
     _supplied_relevance: Optional[float] = field(default=None)
     _supplied_is_prediction: Optional[bool] = field(default=None)
+    # Caller-supplied language of the article text ("Hebrew", "ru", …), threaded to the
+    # gatekeeper/extractor prompts as a hint (retro#417). Unused by the pipeline's own
+    # search providers.
+    _language: Optional[str] = field(default=None)
 
 
 # ──────────────────────────────────────────────

@@ -567,7 +567,7 @@ with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
 
 **Stage 1 — Search & Fetch**
 1. `web_search.search_articles(question, limit)` — news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → ScrapingBee → DataForSEO → DDG fallback chain (news-indexer is first-in-chain: the local pgvector index is queried before any paid provider)
-2. Per article: trafilatura full-text fetch (falls back to title+snippet)
+2. Per article: trafilatura full-text fetch (falls back to title+snippet). Caller-supplied articles (`POST /forecast` with `articles[]`) skip the fetch when they carry `text`; **t.me URLs are never fetched at all** (retro#417 — the t.me web preview extracts to nothing, so Telegram evidence uses supplied `text` or title+snippet). t.me-host articles are also exempt from the 20-char fallback floor (a 5-char truly-empty floor remains) and are judged/extracted with the short-form prompt overrides; an optional per-article `language` field is appended to both prompts as a hint.
 
 **Stage 2 — Gatekeeper + Extractor** (parallel per article)
 1. `gatekeeper.check_is_prediction()` — LLM topic-relevance screen (graded `relevance_score`); the legacy method name predates the softening to a relevance filter. Content-free input never reaches the model: `gatekeeper.carries_proposition()` strips URLs/handles/hashtags and rejects text with no letters left (`is_prediction=false`, `relevance_score=0.0`, zero usage) — a model handed a bare URL confabulates rather than abstaining (retro#359).

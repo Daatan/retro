@@ -66,7 +66,20 @@ class ArticleInput(BaseModel):
     published_date: str = ""
     text: Optional[str] = Field(
         default=None,
-        description="Pre-fetched article body. If omitted, oracle fetches via trafilatura.",
+        description=(
+            "Pre-fetched article body. If omitted, oracle fetches via trafilatura — except for "
+            "t.me URLs, which are never fetched (the t.me web preview extracts to nothing); "
+            "those fall back to title+snippet, so Telegram callers should always send text."
+        ),
+    )
+    language: Optional[str] = Field(
+        default=None, max_length=64,
+        description=(
+            "Language of the article text, human-readable name or ISO code ('Hebrew', 'he', 'ru'). "
+            "Appended to the gatekeeper/extractor prompts as a hint so English prompts aren't run "
+            "blind over non-English text (retro#417). Optional; omitting it keeps the prompts "
+            "byte-for-byte unchanged."
+        ),
     )
     # Caller-supplied gatekeeper verdict (news-indexer's POST /relevance, threaded through
     # daatan). When BOTH are set and settings.reuse_supplied_relevance is on, the Oracle
@@ -406,7 +419,15 @@ class RelevanceRequest(BaseModel):
             "The item is a social-media / messaging post (e.g. a journalist's Telegram channel), "
             "not a news article. Judge it on content rather than length: the gatekeeper's default "
             "'under ~200 words is insubstantial' rule targets paywall stubs, and misfires on terse "
-            "posts that carry real evidence. Off by default; /forecast never sets it."
+            "posts that carry real evidence. Off by default; since retro#417 /forecast sets it "
+            "itself for t.me-host articles."
+        ),
+    )
+    language: Optional[str] = Field(
+        default=None, max_length=64,
+        description=(
+            "Language of the article text ('Hebrew', 'he', 'ru'). Appended to the gatekeeper "
+            "prompt as a hint when present (retro#417); omitting it keeps the prompt unchanged."
         ),
     )
 

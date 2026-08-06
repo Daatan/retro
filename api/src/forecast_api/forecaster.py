@@ -1231,6 +1231,7 @@ async def _run_forecast_inner(
     source_signals: list[SourceSignal] = []
     all_stances: list[float] = []
     all_weights: list[float] = []
+    all_valve_weights: list[float] = []
     relevances: list[float] = []
     all_settled: list[bool] = []
     all_settlement_dates: list[Optional[str]] = []
@@ -1333,9 +1334,20 @@ async def _run_forecast_inner(
         # categorical value (retro#394). The table is initialised to the squares, so this
         # is a no-op — it only moves the numbers somewhere they can be chosen.
         weight = credibility * avg_evidence_weight * rweight * relevance_weight(relevance)
+        # The same product with recency UN-floored (retro#397, system-model §6.1).
+        # recency_floor exists so an old row's voting influence never reaches
+        # exactly zero; reusing it to decide whether we still know anything is
+        # what stops an aging pool from ever fading out. Voting reads `weight`,
+        # the abstention/CI valves read this.
+        valve_weight = (
+            credibility * avg_evidence_weight
+            * recency_weight(article_date, ref_date, settings.recency_half_life_days, floor=0.0)
+            * relevance_weight(relevance)
+        )
 
         all_stances.append(avg_stance)
         all_weights.append(weight)
+        all_valve_weights.append(valve_weight)
         relevances.append(relevance)
         all_published_dates.append(article_date)
 
@@ -1398,6 +1410,7 @@ async def _run_forecast_inner(
             [_cluster_text_of(s) for s in source_signals], _question_hash(req.question),
         ),
         cluster_downweight_exponent=settings.cluster_downweight_exponent,
+        valve_weights=all_valve_weights,
     )
     agg = aggregate_pool(all_stances, all_weights, relevances, all_settled, **_pool_kwargs)
     if agg is not None:
@@ -1507,8 +1520,8 @@ async def _run_forecast_inner(
         )
 
     logger.info(
-        "Forecast: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d mass=%.3f settled=%s (logit-pool)",
-        mean, std, ci_low, ci_high, n, evidence_mass, settled,
+        "Forecast: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d mass=%.3f valve_mass=%.4f settled=%s (logit-pool)",
+        mean, std, ci_low, ci_high, n, evidence_mass, agg.valve_mass, settled,
     )
 
     # Per-article outcome histogram on the success path too, plus a low_relevance
@@ -1599,6 +1612,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
     ref_date = datetime.now().strftime("%Y-%m-%d")
     stances: list[float] = []
     weights: list[float] = []
+    valve_weights: list[float] = []
     relevances: list[float] = []
     settled_flags: list[bool] = []
     settlement_dates: list[Optional[str]] = []
@@ -1628,8 +1642,15 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         # disagree about what a relevance score is worth, or a pool recompute would silently
         # re-weight the very rows the live path already weighted.
         weight = s.credibility_weight * evidence_weight * rweight * relevance_weight(s.relevance_score)
+        # Un-floored twin of the same product — see the /forecast path (retro#397).
+        valve_weight = (
+            s.credibility_weight * evidence_weight
+            * recency_weight(s.published_date, ref_date, settings.recency_half_life_days, floor=0.0)
+            * relevance_weight(s.relevance_score)
+        )
         stances.append(s.stance)
         weights.append(weight)
+        valve_weights.append(valve_weight)
         relevances.append(s.relevance_score)
         settled_flags.append(s.settled)
         settlement_dates.append(s.settlement_event_date)
@@ -1661,6 +1682,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             [_cluster_text_of(s) for s in req.sources], _question_hash(req.question or ""),
         ),
         cluster_downweight_exponent=settings.cluster_downweight_exponent,
+        valve_weights=valve_weights,
     )
     agg = aggregate_pool(stances, weights, relevances, settled_flags, **_pool_kwargs)
     if agg is not None:
@@ -1697,8 +1719,8 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         )
 
     logger.info(
-        "Pool aggregate: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d mass=%.3f settled=%s",
-        agg.mean, agg.std, agg.ci_low, agg.ci_high, agg.n, agg.evidence_mass, agg.settled,
+        "Pool aggregate: mean=%.3f std=%.3f ci=[%.3f,%.3f] articles=%d mass=%.3f valve_mass=%.4f settled=%s",
+        agg.mean, agg.std, agg.ci_low, agg.ci_high, agg.n, agg.evidence_mass, agg.valve_mass, agg.settled,
     )
     return PoolAggregateResponse(
         mean=round(agg.mean, 4), std=round(agg.std, 4),

@@ -1434,8 +1434,8 @@
         "articles_used": 2,
         "settled": false,
         "mean": 0.98,
-        "std": 0.828,
-        "ci_low": 0.152,
+        "std": 0.9,
+        "ci_low": 0.08,
         "ci_high": 0.98,
         "sources": [
           {

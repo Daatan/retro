@@ -423,7 +423,7 @@
         "R3",
         "F13"
       ],
-      "notes": "Fixed by the R3 bundle (retro#366): recency_weight used to return a neutral 1.0 when the date was missing, so an article that never said when it was written beat an honest dated three-week-old report 50-to-1 and the pool read +0.784 toward it. An undated article now decays straight to recency_floor, which is where the dated 2026-01-01 article already sat: both weigh 0.012, they cancel, and the mean is 0.0. Missing metadata can no longer raise influence — the invariant below states that directly.",
+      "notes": "Fixed by the R3 bundle (retro#366): recency_weight used to return a neutral 1.0 when the date was missing, so an article that never said when it was written beat an honest dated three-week-old report 50-to-1 and the pool read +0.784 toward it. An undated article now decays straight to recency_floor, which is where the dated 2026-01-01 article already sat: both weigh 0.012, they cancel, and the mean is 0.0. Missing metadata can no longer raise influence — the invariant below states that directly. MOVED by retro#397 (std 0.8568 -> 0.9): the undated row's recency is the floor (0.02) for VOTING, which is what this case is about and is unchanged — but the valves now read un-floored recency, where an undated row contributes exactly 0.0. That is the same R3 reading one step further: a row that will not say when it was written cannot testify that the pool is fresh, so it widens the interval instead of propping it up. The dated row still outweighs it, which is the invariant this case exists to hold.",
       "articles": [
         {
           "source": "alpha",
@@ -463,7 +463,7 @@
         "articles_used": 2,
         "settled": false,
         "mean": 0.0,
-        "std": 0.8568,
+        "std": 0.9,
         "ci_low": -0.98,
         "ci_high": 0.98,
         "sources": [
@@ -1967,6 +1967,395 @@
         "ci_low": -0.2,
         "ci_high": 0.2,
         "sources": []
+      }
+    },
+    {
+      "id": "C18",
+      "name": "a large seven-month-old pool no longer clears the decisiveness floor on floor-propped mass",
+      "traces": [
+        "#397",
+        "F13"
+      ],
+      "notes": "retro#397, system-model §6.1. Twelve articles from 2026-01-05, ~208 days before FIXTURE_NOW. Their real recency is 0.5^(208/7) = 1.1e-9, but recency_floor (0.02) lifts each to 0.02, so the VOTING mass is 12 x 3.0 x 1.0 x 0.02 x 1.0 = 0.72 — comfortably over decisiveness_floor (0.5). That is the defect §6.1 names: the floor exists so an old row's influence never reaches exactly zero, and reusing it to decide whether we still know anything meant a large enough pool cleared the floor forever, so an abandoned question kept publishing a normal-width interval sourced entirely from seven-month-old coverage. The valves now read the un-floored mass (~4e-8 here), so the pool reads as maximally thin and the interval opens to the thin_evidence_ci_inflation cap. The mean is untouched — voting weights still carry the floor, and this case deliberately holds no settlement votes so nothing else can move it. defer_on_thin_evidence is off at the shipped config, so this widens rather than abstains; flipping that flag is what would turn this case into an insufficient_data answer.",
+      "articles": [
+        {
+          "source": "src00",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "src01",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "src02",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "src03",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "src04",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "src05",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "src06",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "src07",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "src08",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "src09",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "src10",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        },
+        {
+          "source": "src11",
+          "published_date": "2026-01-05",
+          "relevance": 1.0,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 0.6,
+              "certainty": 0.8,
+              "evidence_class": "reported_fact"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "insufficient_data is False",
+        "settled is False",
+        "ci_high - ci_low > 1.2",
+        "abs(mean - 0.6) < 1e-9"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 12,
+        "settled": false,
+        "mean": 0.6,
+        "std": 0.9,
+        "ci_low": -0.3,
+        "ci_high": 0.98,
+        "sources": [
+          {
+            "source": "src00",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "src01",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "src02",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "src03",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "src04",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "src05",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "src06",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "src07",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "src08",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "src09",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "src10",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "src11",
+            "stance": 0.6,
+            "certainty": 0.8,
+            "credibility_weight": 3.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.02,
+            "relevance_score": 1.0,
+            "weight": 0.06,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
       }
     }
   ]

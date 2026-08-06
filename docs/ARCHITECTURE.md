@@ -631,7 +631,9 @@ Aggregation enforces three safety floors (`api/src/forecast_api/config.py`):
   (Σ `relevance_score²` over surviving articles) is below this, the whole set is
   treated as off-topic → `insufficient_data=true`, `reason="all_articles_off_topic"`.
 - **`decisiveness_floor` (0.5)** — minimum total certainty-weighted evidence mass
-  (Σ `credibility·certainty·recency·relevance²`) below which the pool is "thin."
+  below which the pool is "thin." Measured on the **valve mass**
+  (Σ `credibility·evidence_weight·recency·relevance²` with recency **un-floored**),
+  not on the voting mass — see "Voting mass vs valve mass" below.
   By default (`defer_on_thin_evidence=False`) a thin-but-on-topic pool does **not**
   defer: it still returns a forecast, with the CI **widened** toward maximal
   uncertainty in proportion to the shortfall (`widen_ci_for_thin_evidence`,
@@ -646,6 +648,31 @@ Aggregation enforces three safety floors (`api/src/forecast_api/config.py`):
   weights with a flat 1.0 each — the answer would then come, unweighted, from
   exactly the rows the weighting judged worthless (lane-soundness F14, design
   rule R3). A pool with no weight at all is not thin evidence, it is no evidence.
+
+**Voting mass vs valve mass** (retro#397, system-model §6.1). `recency_floor` (0.02)
+exists so an old row's *voting* influence never reaches exactly zero. Reusing that
+floored mass to decide whether we still know anything made the intended fade-out
+impossible: 50 fully-decayed rows still sum to 1.0, so a large enough pool cleared
+`decisiveness_floor` forever and an abandoned question kept publishing a
+normal-width interval sourced entirely from stale coverage. The two masses are now
+separate — `aggregate_pool` takes `valve_weights` (the same product with recency
+un-floored) alongside the voting `weights`, and reports both as `evidence_mass`
+(voting) and `valve_mass` (valves) — and `thin_evidence`, the CI widening deficit
+and `no_decisive_signal` all read the valve mass. Voting, pooling, `n_eff` and the
+settlement quality floor are untouched, so **the mean does not move**; only the
+interval does. An **undated** row contributes `recency_floor` to voting and exactly
+`0.0` to the valve mass: a row that will not say when it was written cannot testify
+that the pool is fresh (the same R3 reading as F13, one step further). Omitting
+`valve_weights` falls back to the voting mass, i.e. the pre-#397 behavior.
+
+At the shipped `defer_on_thin_evidence=False` this **widens intervals rather than
+abstaining** — §6.1's "eventually declares ignorance" end state additionally
+requires that flag, which is a separate decision. One carve-out is already in
+place for it: on a **glide-eligible** question (a `claim_deadline` that has not
+passed) decayed mass widens the CI but never aborts an active glide into
+abstention, because the glide is the deadline clock pricing the silence. Abstention
+outranks a glide only in its §6.2 sense — relevance mass ≈ 0 — which is
+`all_articles_off_topic` and is deliberately not suppressed.
 
 **A valid settlement pin outranks all three** (retro#396). The publish-time
 precedence is `settlement pin > impossibility pin > abstention > glide > pooled

@@ -596,6 +596,13 @@ class PoolAggregateResult(NamedTuple):
     n: int
     evidence_mass: float
     thin_evidence: bool
+    # The mass the VALVES actually read (retro#397): recency-weighted and
+    # UN-floored, where ``evidence_mass`` is the floored voting mass. Equal to
+    # ``evidence_mass`` when the caller supplies no ``valve_weights``. Both are
+    # kept because they answer different questions — "how much did each row get
+    # to say" vs "do we still know anything" — and collapsing them is exactly
+    # the defect §6.1 records.
+    valve_mass: float
     insufficient_reason: Optional[str]
     # Settlement diagnostics for callers that want to log the outcome without
     # re-deriving settled_directions themselves. settlement_suppressed is True
@@ -899,6 +906,7 @@ def aggregate_pool(
     settlement_quality_floor: float = 0.0,
     cluster_ids: Optional[Sequence[int]] = None,
     cluster_downweight_exponent: float = 0.0,
+    valve_weights: Optional[Sequence[float]] = None,
 ) -> Optional[PoolAggregateResult]:
     """Pool a set of already-extracted, already-weighted per-source signals
     into a final estimate: the relevance off-topic safety net, logit
@@ -955,6 +963,26 @@ def aggregate_pool(
     all_off_topic = relevance_mass < relevance_weight_floor
 
     evidence_mass = sum(weights)
+    # The VALVE mass (retro#397, system-model §6.1). `weights` carry recency
+    # floored at `recency_floor` (0.02), which exists so an old row's *voting*
+    # influence never goes to exactly zero. Reusing that floored mass to decide
+    # whether we still know anything makes the fade-out impossible: 50
+    # fully-decayed rows still sum to 1.0, so a large enough pool clears
+    # decisiveness_floor forever and an abandoned question keeps publishing a
+    # confident-ish number sourced entirely from stale coverage. The valves
+    # therefore read an UN-floored, recency-weighted mass, supplied by the
+    # caller alongside the voting weights.
+    #
+    # Absent (None) it falls back to the voting mass, which is exactly today's
+    # behaviour — so a caller that has not been taught to compute it is
+    # unchanged rather than silently switched to a stricter rule.
+    valve_mass = sum(valve_weights) if valve_weights is not None else evidence_mass
+    # Glide-eligible AND still running: a deadline-shaped question whose
+    # deadline has not passed. After it passes there is no glide left to
+    # protect, so the carve-out below stops applying and a stale pool may
+    # abstain like any other.
+    _deadline = _parse_date(claim_deadline)
+    glide_active = _deadline is not None and _deadline >= datetime.now().date()
     # F14 (design rule R3): every source weighs exactly nothing — every one of
     # them was blocked by credibility, or zeroed by relevance, or both. Pooling
     # anyway means falling through pool_sources' zero-total guard, which
@@ -962,9 +990,25 @@ def aggregate_pool(
     # from precisely the rows the weighting judged worthless, and it would come
     # out unweighted. Abstain instead — "we have nothing usable" is the honest
     # reading, and the caller already knows how to render it.
+    #
+    # Deliberately still the VOTING mass: this asks "did the weighting judge
+    # every row worthless", a question about credibility and relevance that age
+    # does not bear on. An ancient pool's un-floored mass is tiny but never
+    # exactly zero, so routing F14 through the valve mass would not add an
+    # abstention — it would only make F14's reason misdescribe why.
     no_usable_weight = not all_off_topic and evidence_mass <= 0.0
-    thin_evidence = not all_off_topic and evidence_mass < decisiveness_floor
+    thin_evidence = not all_off_topic and valve_mass < decisiveness_floor
     no_decisive_signal = thin_evidence and defer_on_thin_evidence and not no_usable_weight
+    if no_decisive_signal and glide_active:
+        # §6.1's one carve-out, load-bearing against §6.2: on a glide-eligible
+        # question decayed mass widens the CI but never aborts an ACTIVE glide
+        # into abstention. The glide is the deadline clock pricing the silence,
+        # not the pool whispering its last headline, and it converges on the
+        # very boundary the impossibility pin will declare from metadata alone.
+        # Abstention outranks a glide only in its §6.2 sense — relevance mass
+        # ≈ 0, i.e. no valid anchor ever existed or the pool was killed — which
+        # is `all_off_topic` above and is deliberately NOT suppressed here.
+        no_decisive_signal = False
 
     # The settlement decision is taken BEFORE the abstention gate, because
     # §6.2's publish-time precedence is
@@ -1010,6 +1054,7 @@ def aggregate_pool(
             return PoolAggregateResult(
                 mean=pinned_mean, std=pinned_std, ci_low=pinned_lo, ci_high=pinned_hi,
                 settled=True, n=len(stances), evidence_mass=evidence_mass,
+                valve_mass=valve_mass,
                 thin_evidence=thin_evidence, insufficient_reason=None,
                 settled_sources=decision.settled_sources,
                 settlement_suppressed=False,
@@ -1027,7 +1072,8 @@ def aggregate_pool(
         # this result needs to be able to tell apart from "no votes at all".
         return PoolAggregateResult(
             mean=0.0, std=0.0, ci_low=0.0, ci_high=0.0, settled=False,
-            n=len(stances), evidence_mass=evidence_mass, thin_evidence=thin_evidence,
+            n=len(stances), evidence_mass=evidence_mass, valve_mass=valve_mass,
+            thin_evidence=thin_evidence,
             insufficient_reason=reason, settled_sources=0,
             settlement_suppressed=decision.suppressed,
             suppression_reason=decision.suppression_reason,
@@ -1038,8 +1084,12 @@ def aggregate_pool(
     n = len(stances)
     mean, std, ci_low, ci_high = pool_sources(stances, weights, clamp_eps=logit_clamp)
 
-    if decisiveness_floor > 0 and evidence_mass < decisiveness_floor:
-        deficit = (decisiveness_floor - evidence_mass) / decisiveness_floor
+    # Reads the valve mass for the same reason `thin_evidence` does: §6.1's
+    # intended consequence is that an aging pool's CI widens toward "we barely
+    # know", and a deficit computed off the floored mass asymptotes to a
+    # constant instead of continuing to open.
+    if decisiveness_floor > 0 and valve_mass < decisiveness_floor:
+        deficit = (decisiveness_floor - valve_mass) / decisiveness_floor
         ci_low, ci_high, std = widen_ci_for_thin_evidence(
             mean, ci_low, ci_high, std,
             deficit=deficit,
@@ -1076,7 +1126,8 @@ def aggregate_pool(
 
     return PoolAggregateResult(
         mean=mean, std=std, ci_low=ci_low, ci_high=ci_high, settled=settled,
-        n=n, evidence_mass=evidence_mass, thin_evidence=thin_evidence,
+        n=n, evidence_mass=evidence_mass, valve_mass=valve_mass,
+        thin_evidence=thin_evidence,
         insufficient_reason=None, settled_sources=decision.settled_sources,
         settlement_suppressed=decision.suppressed,
         suppression_reason=decision.suppression_reason,

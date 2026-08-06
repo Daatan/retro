@@ -647,6 +647,21 @@ Aggregation enforces three safety floors (`api/src/forecast_api/config.py`):
   exactly the rows the weighting judged worthless (lane-soundness F14, design
   rule R3). A pool with no weight at all is not thin evidence, it is no evidence.
 
+**A valid settlement pin outranks all three** (retro#396). The publish-time
+precedence is `settlement pin > impossibility pin > abstention > glide > pooled
+estimate` (`Daatan/docs` system-model §6.2), so `aggregate_pool` takes the
+settlement decision *before* these floors: a pool that trips one of them but
+carries settling votes that pass revalidation, unanimity **and**
+`settlement_quality_floor` publishes the pin, with `insufficient_data=false`.
+A settled fact does not need a topically-dense pool to be true. Nothing is
+pooled on that path — the pinned interval is a function of `settlement_stance`
+and a sign — so F14's flat-weight hazard is not reintroduced, and
+`settlement_quality_floor` (0.20) remains the check on whether the *votes* are
+worth anything. In practice the two floors nest at the shipped config: clearing
+0.20 from a pool whose whole relevance mass is under 0.05 needs the settling
+rows to carry the ×4 `cited_probability` premium, which is why the inverted
+ordering never produced an incident.
+
 Design rule **R3 — missing data never increases influence** — governs the two
 absences that feed those floors, so neither can buy influence:
 

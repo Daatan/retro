@@ -34,7 +34,7 @@ _Z95 = 1.96
 # Saturation bounds on the settlement pin's own band — the module's THIRD set of
 # probability bounds, after logit_clamp (per-source + pooled CI + thin widening)
 # and the [0,1] validity bound F16 removed. Named rather than unified; see
-# _apply_pin for why.
+# _settlement_pin for why.
 _SETTLEMENT_CI_MIN_P = 0.005
 _SETTLEMENT_CI_MAX_P = 0.995
 
@@ -580,6 +580,13 @@ class PoolAggregateResult(NamedTuple):
     live pipeline's early-return) and carry placeholder zeros — callers must
     check ``insufficient_reason`` first, the same way the live pipeline checks
     it before touching those fields.
+
+    A pool that would abstain but carries a valid settlement pin is **not** one
+    of those results: per §6.2's publish-time precedence the pin outranks
+    abstention, so ``insufficient_reason`` is ``None``, ``settled`` is True and
+    the fields carry the pin (retro#396). ``thin_evidence`` and
+    ``evidence_mass`` still describe the pool the pin overrode, so a caller
+    logging them sees the abstention that was outranked.
     """
     mean: float
     std: float
@@ -692,6 +699,181 @@ def cluster_downweight_factors(
     return [sizes[cid] ** -exponent for cid in cluster_ids]
 
 
+def _settlement_pin(
+    settlement_stance: float, direction: float,
+) -> tuple[float, float, float, float]:
+    """The pinned ``(mean, ci_low, ci_high, std)`` for a settled direction.
+
+    The pin uses _SETTLEMENT_CI_MIN_P/_MAX_P, NOT logit_clamp, and F16
+    (retro#365) deliberately left it that way while unifying the other two
+    conventions. Being allowed past the pooling clamp is the override's whole
+    point (aggregation is bounded by its most confident member, so a decided
+    event can never read as decided from averaging alone). Pulling the pin down
+    to logit_clamp would move ci_high on every settled forecast in prod — 85.4%
+    of them sit exactly on this bound — for no epistemic gain, since the pinned
+    mean is already inside the pool clamp. The dispersion floor is applied
+    BEFORE this on the pooled path, so a pinned interval is not subject to it
+    either; that inconsistency is tracked, not hidden.
+
+    Note that nothing here reads the pooled estimate: the pin is a function of
+    ``settlement_stance`` and a sign alone. That is what makes it applicable to
+    a pool that never got pooled (retro#396).
+    """
+    pinned_mean = settlement_stance * direction
+    pinned_p = stance_to_prob(pinned_mean)
+    if direction > 0:
+        lo_p, hi_p = pinned_p - 0.06, min(_SETTLEMENT_CI_MAX_P, pinned_p + 0.025)
+    else:
+        lo_p, hi_p = max(_SETTLEMENT_CI_MIN_P, pinned_p - 0.025), pinned_p + 0.06
+    return pinned_mean, prob_to_stance(lo_p), prob_to_stance(hi_p), 0.06
+
+
+class SettlementDecision(NamedTuple):
+    """Whether the settlement votes carry a pin, and the diagnostics of why not.
+
+    ``direction`` is ``+1.0``/``-1.0`` when a pin is owed and ``None`` when it
+    is not — either because no votes qualified or because a guard suppressed
+    them (``suppressed`` says which). Deliberately decides nothing about the
+    interval: :func:`_settlement_pin` owns that. Splitting the *decision* from
+    its *application* is what lets the decision run before the abstention gate
+    (retro#396) without pooling a set the gate has already judged unusable.
+    """
+    direction: Optional[float]
+    settled_sources: int
+    suppressed: bool
+    suppression_reason: Optional[str]
+    demotions: tuple
+    vote_indices: tuple
+
+
+def settlement_decision(
+    stances: Sequence[float],
+    weights: Sequence[float],
+    settled_flags: Sequence[bool],
+    *,
+    settlement_min_sources: int,
+    claim_direction: Optional[str] = None,
+    claim_deadline: Optional[str] = None,
+    settlement_event_dates: Optional[Sequence[Optional[str]]] = None,
+    published_dates: Optional[Sequence[Optional[str]]] = None,
+    claim_created_at: Optional[str] = None,
+    claim_archetype: Optional[str] = None,
+    settlement_revalidate: bool = False,
+    settlement_post_deadline_grace_days: int = 14,
+    settlement_quality_floor: float = 0.0,
+) -> SettlementDecision:
+    """Count the settlement votes and decide whether they pin the estimate.
+
+    Pure and pooling-free: it reads the same per-source ``weights``
+    :func:`aggregate_pool` pools, but only to score the winning direction
+    against ``settlement_quality_floor`` — it never averages anything.
+    """
+    if settlement_revalidate and settlement_min_sources > 0:
+        # Revalidation path (SETTLEMENT_REVALIDATE, default on): every settled
+        # flag must re-prove its anchor on every aggregation — see
+        # settlement_vote_validity. Replaces settlement_direction_allowed
+        # (the per-vote rules strictly subsume the pin-level guard: an
+        # early non-occurrence pin is exactly an undated_foreclosure unless
+        # it carries a dated in-window foreclosing event, which is the case
+        # the old guard wrongly suppressed). Majority vote is replaced by
+        # unanimity: valid votes in BOTH directions mean one extraction is
+        # provably wrong, and facts are not decided by outvoting — suppress
+        # the pin, keep the pooled mean, and let the conflict log line drive
+        # a human (or the admin `excluded` flag) to resolve it.
+        demotions: list[tuple[int, str]] = []
+        pos = 0
+        neg = 0
+        pos_weight = 0.0
+        neg_weight = 0.0
+        pos_indices: list[int] = []
+        neg_indices: list[int] = []
+        for i, (s, is_settled) in enumerate(zip(stances, settled_flags)):
+            if not is_settled:
+                continue
+            reason = settlement_vote_validity(
+                s,
+                settlement_event_dates[i] if settlement_event_dates else None,
+                published_dates[i] if published_dates else None,
+                claim_direction, claim_deadline, claim_created_at, claim_archetype,
+                post_deadline_grace_days=settlement_post_deadline_grace_days,
+            )
+            if reason is not None:
+                demotions.append((i, reason))
+            elif s >= 0:
+                pos += 1
+                pos_weight += weights[i]
+                pos_indices.append(i)
+            else:
+                neg += 1
+                neg_weight += weights[i]
+                neg_indices.append(i)
+        demoted = tuple(demotions)
+        if pos > 0 and neg > 0:
+            return SettlementDecision(None, 0, True, "settlement_conflict", demoted, ())
+        if max(pos, neg) >= settlement_min_sources:
+            winning_weight = pos_weight if pos > neg else neg_weight
+            if settlement_quality_floor > 0 and winning_weight < settlement_quality_floor:
+                # Count clears the bar, but the settling votes are uniformly
+                # weak evidence (low credibility, thin relevance, decayed
+                # recency) — out-counting quality is not the same as agreeing
+                # decisively (retro#279). The pooled mean stands, unpinned.
+                #
+                # This floor is also the guard that keeps retro#396's
+                # pin-beats-abstention ordering honest: the votes that survive
+                # an unusable pool are exactly the ones carrying real weight,
+                # so "the pool is worthless" and "the pin is worthless" stay
+                # two separate questions, each answered by its own threshold.
+                return SettlementDecision(
+                    None, 0, True, "settlement_quality_floor", demoted, (),
+                )
+            return SettlementDecision(
+                1.0 if pos > 0 else -1.0,
+                max(pos, neg),
+                False,
+                None,
+                demoted,
+                tuple(pos_indices if pos > 0 else neg_indices),
+            )
+        return SettlementDecision(None, 0, False, None, demoted, ())
+
+    if settlement_min_sources > 0:
+        # Legacy path (kill switch off): trust the flags, majority vote,
+        # pin-level direction guard — byte-for-byte the pre-revalidation
+        # behavior.
+        settled_directions = [
+            1.0 if s >= 0 else -1.0
+            for s, is_settled in zip(stances, settled_flags)
+            if is_settled
+        ]
+        if settled_directions:
+            pos = sum(1 for d in settled_directions if d > 0)
+            neg = len(settled_directions) - pos
+            direction = 1.0 if pos > neg else -1.0 if neg > pos else 0.0
+            if (
+                direction != 0.0
+                and max(pos, neg) >= settlement_min_sources
+                and not settlement_direction_allowed(direction, claim_direction, claim_deadline)
+            ):
+                # Temporally incoherent early settlement (e.g. "won't happen"
+                # pinned months before an arrival claim's deadline — the F-35
+                # false pin): suppress the pin, keep the pooled estimate.
+                return SettlementDecision(None, 0, True, "settlement_direction", (), ())
+            if direction != 0.0 and max(pos, neg) >= settlement_min_sources:
+                return SettlementDecision(
+                    direction,
+                    max(pos, neg),
+                    False,
+                    None,
+                    (),
+                    tuple(
+                        i for i, (s, is_settled) in enumerate(zip(stances, settled_flags))
+                        if is_settled and ((s >= 0) == (direction > 0))
+                    ),
+                )
+
+    return SettlementDecision(None, 0, False, None, (), ())
+
+
 def aggregate_pool(
     stances: Sequence[float],
     weights: Sequence[float],
@@ -744,7 +926,9 @@ def aggregate_pool(
     ``"no_decisive_signal"``) — each caller builds its own
     insufficient-data response around that reason (the live pipeline adds
     request-specific fetch/gate/extract diagnostics a pool recompute has no
-    equivalent of).
+    equivalent of). The one exception is a pool that also carries a valid
+    settlement pin: the pin outranks abstention (retro#396), so that result is
+    returned settled and usable rather than insufficient.
     """
     if not stances:
         return None
@@ -782,16 +966,73 @@ def aggregate_pool(
     thin_evidence = not all_off_topic and evidence_mass < decisiveness_floor
     no_decisive_signal = thin_evidence and defer_on_thin_evidence and not no_usable_weight
 
+    # The settlement decision is taken BEFORE the abstention gate, because
+    # §6.2's publish-time precedence is
+    #   settlement pin > impossibility pin > abstention > glide > pooled estimate
+    # and evaluating it after the gate's early return inverted the top of that
+    # list: a pool tripping any abstention reason could never publish a pin,
+    # however well-founded (retro#396). A settled fact does not need a
+    # topically-dense pool to be true — the clearest shape is a question whose
+    # evidence is mostly off-topic noise but which carries two valid settling
+    # votes reporting the outcome. The vote's own guards (revalidation, the
+    # unanimity rule and settlement_quality_floor) decide whether those votes
+    # are worth anything; the pool's usability is a different question and no
+    # longer answers this one.
+    #
+    # It is also cheap to compute here: the decision reads no pooled quantity,
+    # so hoisting it costs one pass over the settled flags on every pool.
+    decision = settlement_decision(
+        stances, weights, settled_flags,
+        settlement_min_sources=settlement_min_sources,
+        claim_direction=claim_direction,
+        claim_deadline=claim_deadline,
+        settlement_event_dates=settlement_event_dates,
+        published_dates=published_dates,
+        claim_created_at=claim_created_at,
+        claim_archetype=claim_archetype,
+        settlement_revalidate=settlement_revalidate,
+        settlement_post_deadline_grace_days=settlement_post_deadline_grace_days,
+        settlement_quality_floor=settlement_quality_floor,
+    )
+
     if all_off_topic or no_usable_weight or no_decisive_signal:
+        if decision.direction is not None:
+            # The pin outranks the abstention. Nothing is pooled: the interval
+            # is a function of settlement_stance and a sign, so there is no
+            # pooled estimate for it to replace, and pooling a zero-weight set
+            # here would fall through pool_sources' flat-weight fallback — the
+            # very thing F14 abstains to avoid. insufficient_reason is None
+            # because this result IS publishable; thin_evidence/evidence_mass
+            # still report the pool honestly for anyone logging it.
+            pinned_mean, pinned_lo, pinned_hi, pinned_std = _settlement_pin(
+                settlement_stance, decision.direction,
+            )
+            return PoolAggregateResult(
+                mean=pinned_mean, std=pinned_std, ci_low=pinned_lo, ci_high=pinned_hi,
+                settled=True, n=len(stances), evidence_mass=evidence_mass,
+                thin_evidence=thin_evidence, insufficient_reason=None,
+                settled_sources=decision.settled_sources,
+                settlement_suppressed=False,
+                suppression_reason=None,
+                settlement_demotions=decision.demotions,
+                settlement_vote_indices=decision.vote_indices,
+            )
         reason = (
             "all_articles_off_topic" if all_off_topic
             else "no_usable_weight" if no_usable_weight
             else "no_decisive_signal"
         )
+        # The settlement diagnostics ride along even though nothing pinned: a
+        # pin suppressed on an abstaining pool is exactly the case a reader of
+        # this result needs to be able to tell apart from "no votes at all".
         return PoolAggregateResult(
             mean=0.0, std=0.0, ci_low=0.0, ci_high=0.0, settled=False,
             n=len(stances), evidence_mass=evidence_mass, thin_evidence=thin_evidence,
-            insufficient_reason=reason, settled_sources=0, settlement_suppressed=False,
+            insufficient_reason=reason, settled_sources=0,
+            settlement_suppressed=decision.suppressed,
+            suppression_reason=decision.suppression_reason,
+            settlement_demotions=decision.demotions,
+            settlement_vote_indices=(),
         )
 
     n = len(stances)
@@ -823,128 +1064,22 @@ def aggregate_pool(
     # loop) — its direction is simply the sign of that same source's stance,
     # which the live loop also already computed preferentially from
     # settled_preds when present.
-    settled = False
-    settled_sources = 0
-    settlement_suppressed = False
-    suppression_reason: Optional[str] = None
-    settlement_demotions: tuple = ()
-    settlement_vote_indices: tuple = ()
-
-    def _apply_pin(direction: float) -> tuple[float, float, float, float]:
-        # The pin uses _SETTLEMENT_CI_MIN_P/_MAX_P, NOT logit_clamp, and F16
-        # (retro#365) deliberately left it that way while unifying the other two
-        # conventions. Being allowed past the pooling clamp is the override's
-        # whole point (aggregation is bounded by its most confident member, so a
-        # decided event can never read as decided from averaging alone). Pulling
-        # the pin down to logit_clamp would move ci_high on every settled
-        # forecast in prod — 85.4% of them sit exactly on this bound — for no
-        # epistemic gain, since the pinned mean is already inside the pool clamp.
-        # The dispersion floor is applied BEFORE this, so a pinned interval is
-        # not subject to it either; that inconsistency is tracked, not hidden.
-        pinned_mean = settlement_stance * direction
-        pinned_p = stance_to_prob(pinned_mean)
-        if direction > 0:
-            lo_p, hi_p = pinned_p - 0.06, min(_SETTLEMENT_CI_MAX_P, pinned_p + 0.025)
-        else:
-            lo_p, hi_p = max(_SETTLEMENT_CI_MIN_P, pinned_p - 0.025), pinned_p + 0.06
-        return pinned_mean, prob_to_stance(lo_p), prob_to_stance(hi_p), 0.06
-
-    if settlement_revalidate and settlement_min_sources > 0:
-        # Revalidation path (SETTLEMENT_REVALIDATE, default on): every settled
-        # flag must re-prove its anchor on every aggregation — see
-        # settlement_vote_validity. Replaces settlement_direction_allowed
-        # (the per-vote rules strictly subsume the pin-level guard: an
-        # early non-occurrence pin is exactly an undated_foreclosure unless
-        # it carries a dated in-window foreclosing event, which is the case
-        # the old guard wrongly suppressed). Majority vote is replaced by
-        # unanimity: valid votes in BOTH directions mean one extraction is
-        # provably wrong, and facts are not decided by outvoting — suppress
-        # the pin, keep the pooled mean, and let the conflict log line drive
-        # a human (or the admin `excluded` flag) to resolve it.
-        demotions: list[tuple[int, str]] = []
-        pos = 0
-        neg = 0
-        pos_weight = 0.0
-        neg_weight = 0.0
-        pos_indices: list[int] = []
-        neg_indices: list[int] = []
-        for i, (s, is_settled) in enumerate(zip(stances, settled_flags)):
-            if not is_settled:
-                continue
-            reason = settlement_vote_validity(
-                s,
-                settlement_event_dates[i] if settlement_event_dates else None,
-                published_dates[i] if published_dates else None,
-                claim_direction, claim_deadline, claim_created_at, claim_archetype,
-                post_deadline_grace_days=settlement_post_deadline_grace_days,
-            )
-            if reason is not None:
-                demotions.append((i, reason))
-            elif s >= 0:
-                pos += 1
-                pos_weight += weights[i]
-                pos_indices.append(i)
-            else:
-                neg += 1
-                neg_weight += weights[i]
-                neg_indices.append(i)
-        settlement_demotions = tuple(demotions)
-        if pos > 0 and neg > 0:
-            settlement_suppressed = True
-            suppression_reason = "settlement_conflict"
-        elif max(pos, neg) >= settlement_min_sources:
-            winning_weight = pos_weight if pos > neg else neg_weight
-            if settlement_quality_floor > 0 and winning_weight < settlement_quality_floor:
-                # Count clears the bar, but the settling votes are uniformly
-                # weak evidence (low credibility, thin relevance, decayed
-                # recency) — out-counting quality is not the same as agreeing
-                # decisively (retro#279). The pooled mean stands, unpinned.
-                settlement_suppressed = True
-                suppression_reason = "settlement_quality_floor"
-            else:
-                settled = True
-                settled_sources = max(pos, neg)
-                settlement_vote_indices = tuple(pos_indices if pos > 0 else neg_indices)
-                mean, ci_low, ci_high, std = _apply_pin(1.0 if pos > 0 else -1.0)
-    elif settlement_min_sources > 0:
-        # Legacy path (kill switch off): trust the flags, majority vote,
-        # pin-level direction guard — byte-for-byte the pre-revalidation
-        # behavior.
-        settled_directions = [
-            1.0 if s >= 0 else -1.0
-            for s, is_settled in zip(stances, settled_flags)
-            if is_settled
-        ]
-        if settled_directions:
-            pos = sum(1 for d in settled_directions if d > 0)
-            neg = len(settled_directions) - pos
-            direction = 1.0 if pos > neg else -1.0 if neg > pos else 0.0
-            if (
-                direction != 0.0
-                and max(pos, neg) >= settlement_min_sources
-                and not settlement_direction_allowed(direction, claim_direction, claim_deadline)
-            ):
-                # Temporally incoherent early settlement (e.g. "won't happen"
-                # pinned months before an arrival claim's deadline — the F-35
-                # false pin): suppress the pin, keep the pooled estimate.
-                settlement_suppressed = True
-                suppression_reason = "settlement_direction"
-                direction = 0.0
-            if direction != 0.0 and max(pos, neg) >= settlement_min_sources:
-                settled = True
-                settled_sources = max(pos, neg)
-                settlement_vote_indices = tuple(
-                    i for i, (s, is_settled) in enumerate(zip(stances, settled_flags))
-                    if is_settled and ((s >= 0) == (direction > 0))
-                )
-                mean, ci_low, ci_high, std = _apply_pin(direction)
+    # settled_flags[i] is already the settlement-grade-filtered value
+    # (bool(settled_preds) in the live loop) — its direction is simply the sign
+    # of that same source's stance, which the live loop also already computed
+    # preferentially from settled_preds when present. The decision itself was
+    # taken above, before the abstention gate (retro#396); all that is left
+    # here is applying it on top of the pooled interval it replaces.
+    settled = decision.direction is not None
+    if settled:
+        mean, ci_low, ci_high, std = _settlement_pin(settlement_stance, decision.direction)
 
     return PoolAggregateResult(
         mean=mean, std=std, ci_low=ci_low, ci_high=ci_high, settled=settled,
         n=n, evidence_mass=evidence_mass, thin_evidence=thin_evidence,
-        insufficient_reason=None, settled_sources=settled_sources,
-        settlement_suppressed=settlement_suppressed,
-        suppression_reason=suppression_reason,
-        settlement_demotions=settlement_demotions,
-        settlement_vote_indices=settlement_vote_indices,
+        insufficient_reason=None, settled_sources=decision.settled_sources,
+        settlement_suppressed=decision.suppressed,
+        suppression_reason=decision.suppression_reason,
+        settlement_demotions=decision.demotions,
+        settlement_vote_indices=decision.vote_indices,
     )

@@ -469,3 +469,97 @@ class TestKillSwitch:
         assert agg.settled is False
         assert agg.settlement_suppressed is True
         assert agg.suppression_reason == "settlement_direction"
+
+
+class TestPinOutranksAbstention:
+    """retro#396: system-model §6.2 orders publish-time precedence
+
+        settlement pin > impossibility pin > abstention > glide > pooled estimate
+
+    but ``aggregate_pool`` computed the three abstention reasons first and
+    returned early, so a pool tripping ANY of them could never publish a pin.
+    The safe direction of the inversion (abstaining is quieter than pinning),
+    which is why no incident traces to it — but not the contract, and the
+    daatan-side twin of the same §6.2 link (daatan#1265) was the unsafe one.
+
+    The R8 matrix pins the ``all_articles_off_topic`` half (cases C16/C17). The
+    other two reasons are unreachable from a fixture — ``no_usable_weight``
+    needs every weight at exactly zero and ``no_decisive_signal`` needs
+    ``defer_on_thin_evidence``, which ships off — so they are pinned here,
+    against ``aggregate_pool`` directly.
+    """
+
+    def test_off_topic_pool_still_publishes_its_pin(self):
+        # relevance_mass 3 * 0.1^2 = 0.03 < relevance_weight_floor (0.05).
+        agg = aggregate_pool(
+            [1.0, 1.0, -0.4], [0.4, 0.4, 0.4], [0.1, 0.1, 0.1], [True, True, False],
+            settlement_event_dates=["2026-07-01", "2026-07-01", None],
+            published_dates=["2026-07-01", "2026-07-01", "2026-07-01"],
+            **_kwargs(settlement_quality_floor=0.5),
+        )
+        assert agg.insufficient_reason is None
+        assert agg.settled is True
+        assert agg.mean == pytest.approx(api_settings.settlement_stance)
+        # The pool's own thinness stays visible rather than being laundered by
+        # the pin: a caller logging evidence_mass sees what was outranked.
+        assert agg.evidence_mass == pytest.approx(1.2)
+        assert agg.settlement_vote_indices == (0, 1)
+
+    def test_thin_evidence_deferral_still_publishes_its_pin(self):
+        # defer_on_thin_evidence + evidence_mass (0.6) under decisiveness_floor
+        # (10.0) is "no_decisive_signal" — a deferral, not an emptiness.
+        agg = aggregate_pool(
+            [1.0, 1.0], [0.3, 0.3], [1.0, 1.0], [True, True],
+            settlement_event_dates=["2026-07-01", "2026-07-01"],
+            published_dates=["2026-07-01", "2026-07-01"],
+            **_kwargs(
+                defer_on_thin_evidence=True, decisiveness_floor=10.0,
+                settlement_quality_floor=0.5,
+            ),
+        )
+        assert agg.insufficient_reason is None
+        assert agg.settled is True
+        assert agg.thin_evidence is True
+
+    def test_zero_weight_pool_cannot_pin_because_the_quality_floor_catches_it(self):
+        # F14's "no_usable_weight" and the quality floor nest: every weight is
+        # zero, so the winning direction's weight is zero too and the pin is
+        # suppressed on its own merits. The abstention stands — reordering the
+        # two checks did not make a worthless pin publishable.
+        agg = aggregate_pool(
+            [1.0, 1.0], [0.0, 0.0], [1.0, 1.0], [True, True],
+            settlement_event_dates=["2026-07-01", "2026-07-01"],
+            published_dates=["2026-07-01", "2026-07-01"],
+            **_kwargs(settlement_quality_floor=0.5),
+        )
+        assert agg.insufficient_reason == "no_usable_weight"
+        assert agg.settled is False
+        assert agg.suppression_reason == "settlement_quality_floor"
+
+    def test_abstention_stands_when_the_pin_is_suppressed(self):
+        # Valid votes in both directions: unanimity fails, so there is no pin
+        # to outrank the abstention, and the reason the caller sees is still
+        # the abstention's.
+        agg = aggregate_pool(
+            [1.0, -1.0, 1.0, -1.0], [0.4] * 4, [0.1] * 4, [True, True, True, True],
+            settlement_event_dates=["2026-07-01"] * 4,
+            published_dates=["2026-07-01"] * 4,
+            **_kwargs(),
+        )
+        assert agg.insufficient_reason == "all_articles_off_topic"
+        assert agg.settled is False
+        # Newly carried on the abstaining result (retro#396): without it a
+        # reader cannot tell a suppressed pin from no settlement votes at all.
+        assert agg.settlement_suppressed is True
+        assert agg.suppression_reason == "settlement_conflict"
+
+    def test_abstention_with_no_settlement_votes_reports_no_suppression(self):
+        agg = aggregate_pool(
+            [0.5, 0.3], [0.4, 0.4], [0.1, 0.1], [False, False],
+            settlement_event_dates=[None, None],
+            published_dates=["2026-07-01", "2026-07-01"],
+            **_kwargs(),
+        )
+        assert agg.insufficient_reason == "all_articles_off_topic"
+        assert agg.settlement_suppressed is False
+        assert agg.suppression_reason is None

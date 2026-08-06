@@ -1728,6 +1728,246 @@
           }
         ]
       }
+    },
+    {
+      "id": "C16",
+      "name": "an off-topic pool still publishes the settlement pin it carries",
+      "traces": [
+        "#396",
+        "R7"
+      ],
+      "notes": "retro#396. system-model §6.2 fixes one publish-time precedence — settlement pin > impossibility pin > abstention > glide > pooled estimate — but aggregate_pool evaluated the three abstention reasons first and returned early, so a pool tripping any of them could never publish a pin however well-founded. Four articles at relevance 0.1 give relevance_mass 0.04, under relevance_weight_floor (0.05): off-topic by the safety net's own measure. Two of them are dated, settlement-grade accomplished-fact reports attributed to Polymarket, so they keep the cited_probability premium (4.0) through enforce_anchor_provenance and carry 0.12 each — 0.24 combined, clear of settlement_quality_floor (0.20). A settled fact does not need a topically-dense pool to be true. Before the fix this answered all_articles_off_topic with articles_used 0 and discarded the settlement; it now publishes the pin, and the pool's thinness stays visible in evidence_mass rather than in the estimate. That the settling rows need the x4 anchor premium to get here is the point, not a contrivance: with any ordinary class the quality floor already nests inside the relevance floor, which is why the inversion never produced an incident.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 0.1,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-30",
+              "evidence_class": "cited_probability",
+              "quote": "Polymarket resolved the market to YES on the official result."
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 0.1,
+          "credibility": 3.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-30",
+              "evidence_class": "cited_probability",
+              "quote": "Polymarket resolved the market to YES on the official result."
+            }
+          ]
+        },
+        {
+          "source": "charlie",
+          "published_date": "2026-07-28",
+          "relevance": 0.1,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.4,
+              "certainty": 0.6,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "delta",
+          "published_date": "2026-07-28",
+          "relevance": 0.1,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.3,
+              "certainty": 0.6,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "insufficient_data is False",
+        "settled is True",
+        "abs(mean - 0.94) < 1e-9",
+        "n == 4"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 4,
+        "settled": true,
+        "mean": 0.94,
+        "std": 0.06,
+        "ci_low": 0.82,
+        "ci_high": 0.99,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 3.0,
+            "evidence_class": "cited_probability",
+            "evidence_weight": 4.0,
+            "recency_weight": 1.0,
+            "relevance_score": 0.1,
+            "weight": 0.12,
+            "settled": true,
+            "settlement_event_date": "2026-07-30",
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 3.0,
+            "evidence_class": "cited_probability",
+            "evidence_weight": 4.0,
+            "recency_weight": 1.0,
+            "relevance_score": 0.1,
+            "weight": 0.12,
+            "settled": true,
+            "settlement_event_date": "2026-07-30",
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "charlie",
+            "stance": -0.4,
+            "certainty": 0.6,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 0.673,
+            "relevance_score": 0.1,
+            "weight": 0.004038,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "delta",
+            "stance": 0.3,
+            "certainty": 0.6,
+            "credibility_weight": 1.0,
+            "evidence_class": "reporting",
+            "evidence_weight": 0.6,
+            "recency_weight": 0.673,
+            "relevance_score": 0.1,
+            "weight": 0.004038,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C17",
+      "name": "the same off-topic pool abstains when its settling votes are too weak to pin",
+      "traces": [
+        "#396",
+        "#279"
+      ],
+      "notes": "The guard that keeps C16's ordering honest, and the reason hoisting the settlement decision above the abstention gate is not a loosening. Identical to C16 except the two settling sources carry neutral credibility, so the winning direction's combined weight is 0.08 against settlement_quality_floor's 0.20 (retro#279): the pin is suppressed and the abstention stands. 'This pool is unusable' and 'this pin is unusable' are two questions with two thresholds — retro#396 reordered them, it did not merge them.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-08-01",
+          "relevance": 0.1,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-30",
+              "evidence_class": "cited_probability",
+              "quote": "Polymarket resolved the market to YES on the official result."
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-08-01",
+          "relevance": 0.1,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-30",
+              "evidence_class": "cited_probability",
+              "quote": "Polymarket resolved the market to YES on the official result."
+            }
+          ]
+        },
+        {
+          "source": "charlie",
+          "published_date": "2026-07-28",
+          "relevance": 0.1,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": -0.4,
+              "certainty": 0.6,
+              "evidence_class": "reporting"
+            }
+          ]
+        },
+        {
+          "source": "delta",
+          "published_date": "2026-07-28",
+          "relevance": 0.1,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.3,
+              "certainty": 0.6,
+              "evidence_class": "reporting"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "insufficient_data is True",
+        "reason == 'all_articles_off_topic'",
+        "settled is False"
+      ],
+      "expect": {
+        "insufficient_data": true,
+        "reason": "all_articles_off_topic",
+        "articles_used": 0,
+        "settled": false,
+        "mean": 0.0,
+        "std": 0.0,
+        "ci_low": -0.2,
+        "ci_high": 0.2,
+        "sources": []
+      }
     }
   ]
 }

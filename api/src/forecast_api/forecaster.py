@@ -54,6 +54,7 @@ from tm.net_guard import UnsafeURLError, safe_get
 GATEKEEPER_PROMPT = _GATEKEEPER_PROMPT_PREFIX + _GATEKEEPER_PROMPT_SUFFIX
 EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 
+from .auth import ApiKeyClient
 from .aggregation import (
     aggregate_pool,
     claim_weighted_stance,
@@ -992,8 +993,28 @@ async def _process_article(
     )
 
 
-async def run_forecast(req: ForecastRequest) -> ForecastResponse:
+async def run_forecast(
+    req: ForecastRequest,
+    client: Optional[ApiKeyClient] = None,
+) -> ForecastResponse:
     limit = req.max_articles or settings.max_articles
+    # Per-key ceiling (docs#57 item 1): clamps the search/extract limit AND the
+    # caller-supplied articles list, which used to bypass every cap. Applied
+    # before hashing/caching so the cache reflects the effective inputs.
+    cap = client.max_articles if client else None
+    if cap is not None:
+        if limit > cap:
+            logger.info(
+                "event=per_key_cap client=%s limit=%d capped_to=%d",
+                client.name, limit, cap,
+            )
+            limit = cap
+        if req.articles and len(req.articles) > cap:
+            logger.info(
+                "event=per_key_cap client=%s supplied_articles=%d capped_to=%d",
+                client.name, len(req.articles), cap,
+            )
+            req.articles = req.articles[:cap]
     total_start = time.perf_counter()
 
     # Step 0a: forecast cache lookup.
@@ -1005,7 +1026,9 @@ async def run_forecast(req: ForecastRequest) -> ForecastResponse:
             "|".join(sorted(a.url for a in req.articles)).encode()
         ).hexdigest()[:12]
     claim_meta = f"{req.claim_direction or ''}|{req.claim_deadline or ''}" if (req.claim_direction or req.claim_deadline) else None
-    cache_key = forecast_cache.make_key(req.question, req.max_articles, articles_hash, claim_meta)
+    # Keyed on the EFFECTIVE limit, not the raw request value — two keys with
+    # different caps must not alias to the same cached response.
+    cache_key = forecast_cache.make_key(req.question, limit, articles_hash, claim_meta)
     cached = forecast_cache.get(cache_key)
     if cached is not None:
         _log_phase(

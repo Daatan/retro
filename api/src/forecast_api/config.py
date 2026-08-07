@@ -7,6 +7,14 @@ class ApiSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     oracle_api_key: str  # required — startup fails with clear error if missing
+    # Additional named API keys with per-key limits (docs#57 item 1) — JSON map:
+    #   ORACLE_API_KEYS='{"staging": {"key": "…", "max_articles": 3}}'
+    # Auth accepts these alongside oracle_api_key; a key's max_articles hard-caps
+    # how many articles its forecasts may fetch AND how many caller-supplied
+    # articles are accepted (the supplied-articles path bypassed every cap).
+    # Empty/absent = single-key behavior, byte-for-byte unchanged. Malformed
+    # JSON fails closed: named keys 401, the primary key keeps working.
+    oracle_api_keys: str = ""
     openrouter_api_key: Optional[str] = None  # DEAD: /llm now routes to Bedrock via tm.llm. Kept to avoid breaking env wiring; safe to remove later.
 
     data_dir: Path = Path("/home/ubuntu/truthmachine/data")

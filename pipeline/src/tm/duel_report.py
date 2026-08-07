@@ -35,6 +35,7 @@ from typing import Optional
 import httpx
 from rich.console import Console
 
+from .models import is_negative_marker
 from .scorer import brier_decomposition, brier_score, stance_to_prob
 
 console = Console()
@@ -134,6 +135,13 @@ def _load_vault2_articles(data_dir: Path, eid: str, cutoff_str: str) -> list[dic
     for path in extractions_dir.glob(f"*_{eid}_v*.json"):
         article_hash = path.stem.split("_")[0]
         if article_hash in seen_hashes:
+            continue
+        # Negative markers (docs#57 item 2) record gate-rejected / no-prediction
+        # articles — those must not be fed to the Oracle as forecast input.
+        try:
+            if is_negative_marker(json.loads(path.read_text())):
+                continue
+        except Exception:
             continue
         seen_hashes.add(article_hash)
         n_total += 1

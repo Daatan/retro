@@ -163,6 +163,7 @@ Used to compute per-category source accuracy scores for the forecasting model.
 ### Vault Extraction (`data/vault2/extractions/{hash}_{event}_v1.json`)
 ```json
 {
+  "status": "done",
   "extraction": { "predictions": [...] },
   "prompt_version": "v1",
   "extractor_model": "bedrock/amazon.nova-lite-v1:0",
@@ -171,6 +172,19 @@ Used to compute per-category source accuracy scores for the forecasting model.
   "run_date": "2026-04-14T12:00:00"
 }
 ```
+
+A **negative-result marker** (Daatan/docs#57 item 2) has the same shape with
+`"status": "gate_rejected"` or `"status": "no_predictions"` and `"extraction": null`.
+It records that the article was already judged (gatekeeper rejected it, or the gate
+passed but nothing was extracted) so the 5-minute batch loop — which runs with
+`--retry-empty` — doesn't re-run the LLM on the same article every cycle. A marker
+only suppresses re-extraction while `prompt_version`, `extractor_model`, and
+`gatekeeper_model` all still match the current settings; a prompt or model change
+invalidates it. Infra errors write no marker and stay retryable. Files written
+before markers existed have no `status` field — they are positive extractions.
+Consumers globbing `vault2/extractions/` must filter markers via
+`tm.models.is_negative_marker` (orchestrator atlas-linking, `poc_report`,
+`duel_report` already do).
 
 ### Prediction (extracted by LLM)
 Each prediction has: `quote`, `claim`, `stance` (−1 to +1, event probability), `certainty`, `settled` (bool — true when the source reports the outcome as an accomplished fact, not a prediction; the prompt explicitly excludes historical background such as a past removal/ban, see #244), and `quantitative_estimate` (optional [0,1] — an explicit modeled probability, poll number, or market price the source cites for the event itself; carries the quantitative-anchor weight premium).
@@ -217,7 +231,7 @@ orchestrator.py  (local_file mode)
   │                aggregator.aggregate_article_predictions
   │                              (LLM: collapse to one signal if stance spread > 0.4)
   │    aggregator.aggregate_predictions → cell_signal.json (no LLM, weighted mean)
-  │    Save extraction to vault2/extractions/{hash}_{event}_v1.json
+  │    Save extraction (or negative marker) to vault2/extractions/{hash}_{event}_v1.json
   │    Save atlas link to atlas/{event}/{source}/entry_{hash[:8]}.json
   │    Update progress.json → status: done | no_predictions | failed
   ▼

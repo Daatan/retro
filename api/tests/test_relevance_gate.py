@@ -65,7 +65,7 @@ def _wire(monkeypatch, articles, certainty: float = 0.8, evidence_class=None):
     monkeypatch.setattr(forecaster, "search_articles", lambda q, limit: list(results))
 
     async def _no_distill(question):
-        return question
+        return question, {}
     monkeypatch.setattr(forecaster, "_distill_query", _no_distill)
     # Neutralise credibility so the test isolates the relevance term.
     monkeypatch.setattr(forecaster, "get_credibility_weight", lambda sid: 1.0)
@@ -74,7 +74,7 @@ def _wire(monkeypatch, articles, certainty: float = 0.8, evidence_class=None):
 
     async def _bounded(
         result, question, *, max_article_chars, timings, article_debugs, timeout_s,
-        claim_deadline=None, claim_direction=None, prediction_id=None,
+        claim_deadline=None, claim_direction=None, prediction_id=None, usage_events=None,
     ):
         rel, stance = by_url[result.url]
         timings.append({"url": result.url, "outcome": "ok"})

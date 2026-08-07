@@ -39,7 +39,7 @@ class TestForecastResponseProvider:
                             lambda: ["gdelt", "brightdata", "dataforseo", "ddg", "gdelt_bq"])
 
         async def _no_distill(q):
-            return q
+            return q, {}
         monkeypatch.setattr(forecaster, "_distill_query", _no_distill)
 
         resp = asyncio.run(run_forecast(ForecastRequest(question="Empty-probe 7x — will Z happen?")))
@@ -54,7 +54,7 @@ class TestForecastResponseProvider:
         monkeypatch.setattr(forecaster, "get_last_search_provider_chain", lambda: [])
 
         async def _distill(q):
-            return "russia ukraine ceasefire"
+            return "russia ukraine ceasefire", {}
         monkeypatch.setattr(forecaster, "_distill_query", _distill)
 
         resp = asyncio.run(run_forecast(ForecastRequest(question="Distill-probe 4q2 — ceasefire soon?")))

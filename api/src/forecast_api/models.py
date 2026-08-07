@@ -200,6 +200,36 @@ class SourceSignal(BaseModel):
     claims_detail: Optional[list[ClaimDetail]] = Field(default=None, description="This article's claims with their per-claim fields intact (F1/F15, retro#364) — the layer every scalar above is a reduction of. Same order and same count as `claims`, except that `claims` drops claims with an empty summary while this does not: a claim that voted in the article's stance must appear here, or the reduction stops being reproducible. Persist it (daatan#1235); nothing in aggregation reads it.")
 
 
+class TokenUsage(BaseModel):
+    """LLM token spend behind one API response (docs#57 item 3).
+
+    Summed over every LLM call the request actually made; the whole object is
+    null/omitted when no call carried usage data. Unlike DebugInfo this is NOT
+    gated on debug=true — spend must be visible on the production path, where
+    today it is only discoverable via Cost Explorer."""
+    prompt_tokens: int = Field(default=0, ge=0)
+    completion_tokens: int = Field(default=0, ge=0)
+    total_tokens: int = Field(default=0, ge=0)
+    cache_read_tokens: int = Field(default=0, ge=0, description="Prompt tokens served from the Bedrock/Anthropic prompt cache (billed at the cache-read rate)")
+    cache_write_tokens: int = Field(default=0, ge=0, description="Prompt tokens written to the prompt cache (cache_creation_input_tokens)")
+
+    @classmethod
+    def from_usages(cls, usages: list[dict]) -> Optional["TokenUsage"]:
+        """Sum tm.llm.extract_usage() dicts into one TokenUsage; None when every
+        dict is empty (no call reported usage), so the wire field stays null
+        rather than a misleading all-zeros object."""
+        vals = [u for u in usages if u]
+        if not vals:
+            return None
+        return cls(
+            prompt_tokens=sum(int(u.get("prompt_tokens") or 0) for u in vals),
+            completion_tokens=sum(int(u.get("completion_tokens") or 0) for u in vals),
+            total_tokens=sum(int(u.get("total_tokens") or 0) for u in vals),
+            cache_read_tokens=sum(int(u.get("cache_read_input_tokens") or 0) for u in vals),
+            cache_write_tokens=sum(int(u.get("cache_creation_input_tokens") or 0) for u in vals),
+        )
+
+
 class ArticleDebug(BaseModel):
     url: str
     outcome: str = Field(description="ok | gate_rejected | no_predictions | fetch_error | gate_error | extract_error | empty_text")
@@ -250,6 +280,7 @@ class LlmRequest(BaseModel):
 class LlmResponse(BaseModel):
     content: str
     model: str
+    token_usage: Optional[TokenUsage] = Field(default=None, description="Token spend of this call; null when the backend reported no usage")
 
 
 # ── Article fetch ─────────────────────────────────────────────────────────────
@@ -285,6 +316,7 @@ class ForecastResponse(BaseModel):
     distilled_query: Optional[str] = Field(default=None, description="Keywords the question was distilled to before searching; null when no distillation was applied")
     settled: bool = Field(default=False, description="True when enough independent sources report the event's outcome as an accomplished fact (see settlement_min_sources). mean/ci are pinned near the boundary; the forecast is a candidate for resolution, not further updates.")
     relevance_bar: float = Field(default=0.0, description="The per-article relevance bar in force for THIS run (`forecast_relevance_bar`); 0.0 means no bar was applied, which is /forecast's historical behaviour. Recorded per response so a caller persisting these sources can tell which admission regime produced each row — news-indexer's rescue path enforces 0.7 while this path enforced nothing, so the same article could be retired on one entry path and vote on another (retro#393). Persist it alongside the sources if you intend to filter the pool retroactively.")
+    token_usage: Optional[TokenUsage] = Field(default=None, description="Total LLM token spend of this run — keyword distillation + gatekeeper + extractor across all articles, including rejected ones (their calls were still paid for). Always populated when any call reported usage, NOT gated on debug=true; null when no LLM call ran (e.g. cache/no-search paths). A forecast-cache hit returns the cached response verbatim, i.e. the usage of the run that produced it — no new tokens were spent.")
     debug: Optional[DebugInfo] = Field(default=None, description="Debug telemetry — only present when request includes debug=true")
 
 
@@ -440,3 +472,4 @@ class RelevanceResponse(BaseModel):
     reason: str
     prediction_count_estimate: int = Field(ge=0)
     model: str = Field(description="litellm model ID that produced this verdict")
+    token_usage: Optional[TokenUsage] = Field(default=None, description="Token spend of this gatekeeper call; null when the backend reported no usage")

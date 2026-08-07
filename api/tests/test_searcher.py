@@ -47,7 +47,7 @@ class TestRunSearchDistillRetry:
             return [SearchResult(title="t", url="http://x", snippet="s")]
 
         async def fake_distill(q):
-            return "arab minister israel elections"
+            return "arab minister israel elections", {}
 
         monkeypatch.setattr(searcher._ws, "search_articles", fake_search)
         monkeypatch.setattr(searcher, "_distill_query", fake_distill)
@@ -69,7 +69,7 @@ class TestRunSearchDistillRetry:
 
         async def fake_distill(q):
             distill_calls["n"] += 1
-            return "x"
+            return "x", {}
 
         monkeypatch.setattr(searcher._ws, "search_articles", fake_search)
         monkeypatch.setattr(searcher, "_distill_query", fake_distill)
@@ -88,7 +88,7 @@ class TestRunSearchDistillRetry:
 
         async def fake_distill(q):
             distill_calls["n"] += 1
-            return "x"
+            return "x", {}
 
         monkeypatch.setattr(searcher._ws, "search_articles", fake_search)
         monkeypatch.setattr(searcher, "_distill_query", fake_distill)

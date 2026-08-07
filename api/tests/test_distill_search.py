@@ -20,7 +20,7 @@ def test_distilled_keywords_are_searched_first(monkeypatch):
         return []  # force the no-results path; we only assert the query used
 
     async def fake_distill(_q):
-        return "russia ukraine ceasefire"
+        return "russia ukraine ceasefire", {}
 
     monkeypatch.setattr(forecaster, "search_articles", fake_search)
     monkeypatch.setattr(forecaster, "_distill_query", fake_distill)
@@ -43,7 +43,7 @@ def test_no_verbatim_retry_when_distill_is_noop(monkeypatch):
         return []
 
     async def fake_distill(q):
-        return q  # distillation no-op (e.g. error fallback)
+        return q, {}  # distillation no-op (e.g. error fallback)
 
     monkeypatch.setattr(forecaster, "search_articles", fake_search)
     monkeypatch.setattr(forecaster, "_distill_query", fake_distill)

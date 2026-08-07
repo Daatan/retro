@@ -192,6 +192,24 @@ class TestCompleteText:
         assert acompletion.await_count == 1  # no retry
         llm.asyncio.sleep.assert_not_awaited()
 
+    async def test_with_usage_returns_text_and_usage(self, monkeypatch):
+        # The Oracle API's token_usage response field (docs#57 item 3) rides on
+        # this sibling: same call, but the usage is returned instead of dropped.
+        resp = self._resp("hello")
+        resp.usage = SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+        monkeypatch.setattr(llm.litellm, "acompletion", AsyncMock(return_value=resp))
+
+        text, usage = await llm.complete_text_once_with_usage("bedrock/x", "p", max_tokens=5)
+        assert text == "hello"
+        assert usage["prompt_tokens"] == 10
+        assert usage["completion_tokens"] == 5
+        assert usage["total_tokens"] == 15
+
+    async def test_with_usage_reports_empty_dict_when_backend_has_none(self, monkeypatch):
+        monkeypatch.setattr(llm.litellm, "acompletion", AsyncMock(return_value=self._resp("x")))
+        _text, usage = await llm.complete_text_once_with_usage("bedrock/x", "p", max_tokens=5)
+        assert usage == {}
+
     async def test_complete_text_retries_on_rate_limit(self, monkeypatch):
         calls = {"n": 0}
         async def flaky(**_kw):

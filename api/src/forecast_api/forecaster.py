@@ -42,7 +42,7 @@ from tm.extractor import (
 from tm.models import GatekeeperOutput, PredictionExtraction
 from tm.web_search import search_articles, SearchResult, get_last_search_provider, get_last_search_provider_chain
 from tm.config import settings as _pipeline_settings
-from tm.llm import complete_text_once
+from tm.llm import complete_text_once_with_usage
 from tm.net_guard import UnsafeURLError, safe_get
 
 # gatekeeper.py/extractor.py each split their PROMPT into a cacheable PROMPT_PREFIX
@@ -77,6 +77,7 @@ from .models import (
     PoolAggregateRequest,
     PoolAggregateResponse,
     SourceSignal,
+    TokenUsage,
 )
 from .config import settings
 from .settlement_verifier import SettlementVote, verify_settlement
@@ -533,12 +534,14 @@ def _looks_like_paywall(text: str) -> bool:
     return any(marker in low for marker in _PAYWALL_MARKERS)
 
 
-async def _distill_query(question: str) -> str:
+async def _distill_query(question: str) -> tuple[str, dict]:
     """Convert a long resolution-criterion question into 4-6 search keywords.
 
     Called only when verbatim search returns 0 results — adds ~200ms latency
     and a cheap Nova Micro call to unlock niche/Polymarket-style questions.
-    Returns the original question on any error (preserves existing behaviour).
+    Returns ``(keywords, usage)``; the original question (and whatever usage the
+    failed call reported, usually ``{}``) on any error — preserves existing
+    behaviour, and the usage feeds the response's ``token_usage`` total.
     """
     prompt = (
         "Extract 4-6 concise search keywords from this forecasting question. "
@@ -549,18 +552,20 @@ async def _distill_query(question: str) -> str:
     try:
         # Non-retrying variant: this runs inside the latency-bounded /forecast
         # path, so it must not inherit complete_text's [30,60,120] backoff.
-        keywords = (await complete_text_once(
+        text, usage = await complete_text_once_with_usage(
             _pipeline_settings.gatekeeper_model,
             prompt,
             max_tokens=40,
             timeout=20,
-        )).strip()
+        )
+        keywords = text.strip()
         if keywords:
             logger.info("query_distilled original=%r distilled=%r", question[:60], keywords)
-            return keywords
+            return keywords, usage
+        return question, usage
     except Exception as exc:
         logger.warning("query distillation failed: %s", exc)
-    return question
+    return question, {}
 
 
 def _search_capturing(query: str, limit: int) -> tuple[list, str, list[str]]:
@@ -662,6 +667,7 @@ async def _process_article_bounded(
     claim_deadline: str | None = None,
     claim_direction: str | None = None,
     prediction_id: str | None = None,
+    usage_events: list[dict] | None = None,
 ) -> tuple[SearchResult, float, list, float | None, float | None] | None:
     """Run _process_article under a per-article wall-clock ceiling.
 
@@ -680,6 +686,7 @@ async def _process_article_bounded(
                 claim_deadline=claim_deadline,
                 claim_direction=claim_direction,
                 prediction_id=prediction_id,
+                usage_events=usage_events,
             ),
             timeout=timeout_s,
         )
@@ -711,11 +718,15 @@ async def _process_article(
     claim_deadline: str | None = None,
     claim_direction: str | None = None,
     prediction_id: str | None = None,
+    usage_events: list[dict] | None = None,
 ) -> tuple[SearchResult, float, list, float | None, float | None] | None:
     """
     Run gatekeeper + extractor for one article.
     Fetches full article text via trafilatura; falls back to title+snippet.
     Appends per-phase durations to ``timings`` and an ArticleDebug to ``article_debugs``.
+    Non-empty gate/extract usage dicts are appended to ``usage_events`` (when given)
+    as soon as each call returns — including for articles later rejected, whose
+    tokens were still spent — feeding ForecastResponse.token_usage.
     """
     # A t.me post is short-form (retro#297): mirrors news-indexer's rematch.py:_is_short_form,
     # which feeds the same hint to the gatekeeper on its /relevance rescue path — one line
@@ -805,6 +816,8 @@ async def _process_article(
                 fetch_ms=round(fetch_ms, 1), gate_ms=round(gate_ms, 1),
             ))
             return None
+        if usage_events is not None and gate_usage:
+            usage_events.append(gate_usage)
     gate_ms = (time.perf_counter() - gate_start) * 1000
 
     if not gate.is_prediction:
@@ -866,6 +879,8 @@ async def _process_article(
             short_form=short_form,
             language=language,
         )
+        if usage_events is not None and extract_usage:
+            usage_events.append(extract_usage)
         # Observability only (retro#298) — logs claim/stance sign mismatches on the
         # model's raw output, before any of the deterministic corrections below can
         # touch stance or settled. Never mutates.
@@ -1067,6 +1082,11 @@ async def _run_forecast_inner(
     search_provider: str
     provider_chain: list[str]
     distilled_query: Optional[str] = None
+    # LLM token spend of this run (docs#57 item 3): every usage dict the run's
+    # LLM calls report lands here — distillation, gatekeeper, extractor —
+    # summed into ForecastResponse.token_usage on EVERY exit path below,
+    # debug or not.
+    usage_events: list[dict] = []
     # Strip leading emoji/markers the frontend may prepend (e.g. "🤖 Question…")
     # before any provider sees the query; supplementary-plane chars (U+10000+) cover
     # virtually all emoji while leaving ordinary punctuation and non-ASCII text intact.
@@ -1119,7 +1139,9 @@ async def _run_forecast_inner(
             # 2027?"; distilling to e.g. "Russia Ukraine ceasefire" restores
             # relevance. _distill_query returns the original on any error.
             verbatim = search_query
-            search_query = await _distill_query(verbatim)
+            search_query, distill_usage = await _distill_query(verbatim)
+            if distill_usage:
+                usage_events.append(distill_usage)
             distilled = search_query != verbatim
             # Capture the distilled keywords now, before the verbatim fallback
             # below can overwrite search_query.
@@ -1167,6 +1189,8 @@ async def _run_forecast_inner(
             provider_chain=provider_chain,
             distilled_query=distilled_query,
         )
+        # Only the distillation call (if any) ran by this point — still spend.
+        resp.token_usage = TokenUsage.from_usages(usage_events)
         if req.debug:
             resp.debug = DebugInfo(
                 search_query=search_query,
@@ -1231,6 +1255,7 @@ async def _run_forecast_inner(
                 claim_deadline=req.claim_deadline,
                 claim_direction=req.claim_direction,
                 prediction_id=req.prediction_id,
+                usage_events=usage_events,
             )
             for r in search_results
         ],
@@ -1516,7 +1541,7 @@ async def _run_forecast_inner(
                 gatekeeper_prompt=GATEKEEPER_PROMPT,
                 extractor_prompt=EXTRACTOR_PROMPT,
             )
-        return _empty_response(
+        resp = _empty_response(
             req.question,
             reason=reason,
             articles_found=len(search_results),
@@ -1526,6 +1551,10 @@ async def _run_forecast_inner(
             distilled_query=distilled_query,
             debug=empty_debug,
         )
+        # The gate/extract calls were made and paid for even though no usable
+        # forecast came out — an empty answer still reports its spend.
+        resp.token_usage = TokenUsage.from_usages(usage_events)
+        return resp
 
     n, mean, std, ci_low, ci_high, settled, evidence_mass, thin_evidence = (
         agg.n, agg.mean, agg.std, agg.ci_low, agg.ci_high, agg.settled,
@@ -1602,6 +1631,7 @@ async def _run_forecast_inner(
         # path's historical behaviour; a caller persisting the rows can record it and
         # filter the pool retroactively instead of re-deriving which path admitted what.
         relevance_bar=settings.forecast_relevance_bar,
+        token_usage=TokenUsage.from_usages(usage_events),
         debug=debug_info,
     )
 

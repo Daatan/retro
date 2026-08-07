@@ -103,7 +103,8 @@ class ForecastRequest(BaseModel):
         default=None,
         description=(
             "Pre-fetched articles. If provided, oracle skips its internal search and analyzes "
-            "these directly. max_articles is ignored when this field is set."
+            "these directly. max_articles is ignored when this field is set — but a per-key "
+            "max_articles cap (ORACLE_API_KEYS) still truncates this list."
         ),
     )
     debug: bool = Field(default=False, description="Include debug telemetry in response (token counts, gatekeeper scores, prompts)")

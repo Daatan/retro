@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from slowapi.errors import RateLimitExceeded
 
 from ._build import build_info
-from .auth import verify_api_key
+from .auth import ApiKeyClient, verify_api_key
 from .bayesoracle import compute_nodes
 from .cache import forecast_cache
 from .config import settings
@@ -137,7 +137,7 @@ async def bayes_nodes(
             "Overrides are clamped to [0, 1]. Unlisted nodes are computed from the DAG."
         ),
     ),
-    _: None = Depends(verify_api_key),
+    _: ApiKeyClient = Depends(verify_api_key),
 ):
     """
     Return BayesOracle probabilities for the Israeli-politics DAG.
@@ -163,7 +163,7 @@ async def bayes_nodes(
 
 
 @app.get("/leaderboard", tags=["Meta"])
-async def leaderboard(_: None = Depends(verify_api_key)):
+async def leaderboard(_: ApiKeyClient = Depends(verify_api_key)):
     """
     Return the source credibility leaderboard, sorted by skill conservative score (μ − 3σ).
 
@@ -184,7 +184,7 @@ async def leaderboard(_: None = Depends(verify_api_key)):
 async def leaderboard_ingest(
     request: Request,  # required by slowapi
     body: IngestResolutionRequest,
-    _: None = Depends(verify_api_key),
+    _: ApiKeyClient = Depends(verify_api_key),
 ):
     """
     Credibility feedback loop, steps 1+3 (docs/ORACLE_VARIABLES.md §9).
@@ -224,7 +224,7 @@ async def leaderboard_ingest(
 
 
 @app.get("/leaderboard/resolution-shadow", tags=["Meta"])
-async def leaderboard_resolution_shadow(_: None = Depends(verify_api_key)):
+async def leaderboard_resolution_shadow(_: ApiKeyClient = Depends(verify_api_key)):
     """
     Credibility feedback loop, step 3 (docs/ORACLE_VARIABLES.md §9) — the
     resolution-informed shadow score, recomputed from scratch on every
@@ -237,7 +237,7 @@ async def leaderboard_resolution_shadow(_: None = Depends(verify_api_key)):
 
 
 @app.get("/leaderboard/author-shadow", tags=["Meta"])
-async def leaderboard_author_shadow(_: None = Depends(verify_api_key)):
+async def leaderboard_author_shadow(_: ApiKeyClient = Depends(verify_api_key)):
     """
     Author-scoring lane shadow board (author-scoring redesign, Phase 1 step
     3): per-(byline author, outlet) resolution-time Brier + OpenSkill over
@@ -279,7 +279,7 @@ async def version():
 async def forecast(
     request: Request,  # required by slowapi
     body: ForecastRequest,
-    _: None = Depends(verify_api_key),
+    client: ApiKeyClient = Depends(verify_api_key),
 ):
     """
     Given a binary question, return a calibrated probability distribution.
@@ -287,7 +287,7 @@ async def forecast(
     The `mean` field is in stance space [-1, 1].
     Convert to probability [0, 1] with: `p = (mean + 1) / 2`
     """
-    return await run_forecast(body)
+    return await run_forecast(body, client=client)
 
 
 @app.post("/pool/aggregate", response_model=PoolAggregateResponse, tags=["Forecast"])
@@ -295,7 +295,7 @@ async def forecast(
 async def pool_aggregate(
     request: Request,  # required by slowapi
     body: PoolAggregateRequest,
-    _: None = Depends(verify_api_key),
+    _: ApiKeyClient = Depends(verify_api_key),
 ):
     """
     Recompute a pooled estimate over an already-extracted evidence pool —
@@ -313,7 +313,7 @@ async def pool_aggregate(
 async def relevance(
     request: Request,  # required by slowapi
     body: RelevanceRequest,
-    _: None = Depends(verify_api_key),
+    _: ApiKeyClient = Depends(verify_api_key),
 ):
     """
     Judge one (claim, article) pair with the gatekeeper — the same claim-aware
@@ -356,7 +356,7 @@ async def relevance(
 async def search(
     request: Request,  # required by slowapi
     body: SearchRequest,
-    _: None = Depends(verify_api_key),
+    _: ApiKeyClient = Depends(verify_api_key),
 ):
     """
     Search for news articles using the full provider fallback chain.
@@ -368,7 +368,7 @@ async def search(
 
 
 @app.get("/search/health", response_model=SearchHealthResponse, tags=["Search"])
-async def search_health(_: None = Depends(verify_api_key)):
+async def search_health(_: ApiKeyClient = Depends(verify_api_key)):
     """
     Per-provider search health: key configured, in-process quota flag, and live credit
     count where the provider exposes a credit API (Serper, SerpAPI, ScrapingBee).
@@ -381,7 +381,7 @@ async def search_health(_: None = Depends(verify_api_key)):
 async def llm_proxy(
     request: Request,
     body: LlmRequest,
-    _: None = Depends(verify_api_key),
+    _: ApiKeyClient = Depends(verify_api_key),
 ):
     """
     Proxy LLM calls to Bedrock (via tm.llm → litellm) using the server's AWS creds.

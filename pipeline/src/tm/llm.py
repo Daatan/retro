@@ -148,6 +148,40 @@ async def complete_structured(
     return output, extract_usage(completion)
 
 
+async def complete_text_once_with_usage(
+    model: str,
+    prompt: str | None = None,
+    *,
+    messages: list[dict] | None = None,
+    system: str | None = None,
+    max_tokens: int,
+    temperature: float | None = None,
+    response_format: dict | None = None,
+    timeout: int | None = None,
+) -> tuple[str, dict]:
+    """Make one plain-text LLM call and return ``(text, usage)``.
+
+    Same call as :func:`complete_text_once`, but also returns the token usage
+    (:func:`extract_usage`; ``{}`` when the backend reports none) — for callers
+    that surface spend, e.g. the Oracle API's ``token_usage`` response field
+    (docs#57 item 3).
+    """
+    if messages is None:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+    kwargs = apply_routing(dict(model=model, messages=messages, max_tokens=max_tokens))
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    if response_format is not None:
+        kwargs["response_format"] = response_format
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    resp = await litellm.acompletion(**kwargs)
+    return resp.choices[0].message.content, extract_usage(resp)
+
+
 async def complete_text_once(
     model: str,
     prompt: str | None = None,
@@ -165,25 +199,24 @@ async def complete_text_once(
     across retro — keyword extraction, edge calibration, the /llm proxy. It
     routes through litellm to Bedrock (via :func:`apply_routing`). Pass either a
     ``prompt`` (optionally with ``system``) or a pre-built ``messages`` list.
+    Callers that need the token usage too use
+    :func:`complete_text_once_with_usage`, which this delegates to.
 
     No retry: use this on latency-bounded paths (the /forecast keyword distill,
     the interactive /llm endpoint). For batch/offline callers that should ride
     out Bedrock throttling, use :func:`complete_text`.
     """
-    if messages is None:
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-    kwargs = apply_routing(dict(model=model, messages=messages, max_tokens=max_tokens))
-    if temperature is not None:
-        kwargs["temperature"] = temperature
-    if response_format is not None:
-        kwargs["response_format"] = response_format
-    if timeout is not None:
-        kwargs["timeout"] = timeout
-    resp = await litellm.acompletion(**kwargs)
-    return resp.choices[0].message.content
+    text, _usage = await complete_text_once_with_usage(
+        model,
+        prompt,
+        messages=messages,
+        system=system,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        response_format=response_format,
+        timeout=timeout,
+    )
+    return text
 
 
 # Retrying variant for batch/offline callers (keyword scripts, calibration).

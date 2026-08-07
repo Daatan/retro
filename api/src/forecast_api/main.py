@@ -28,12 +28,12 @@ from .resolution_feedback import ingest_resolution
 from .resolution_scorer import load_shadow_leaderboard, rescore_authors_from_disk, rescore_from_disk
 from tm.config import settings as _pipeline_settings
 from tm.gatekeeper import check_is_prediction
-from tm.llm import complete_text_once
+from tm.llm import complete_text_once_with_usage
 from .article_fetch import ArticleFetchError, fetch_and_extract
 from .limiter import limiter
 from .mcp_auth import SCOPE_FORECAST, SCOPE_READ
 from .mcp_server import build_mcp
-from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, IngestResolutionRequest, IngestResolutionResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, RelevanceRequest, RelevanceResponse, SearchRequest, SearchResponse, SearchHealthResponse, VersionResponse
+from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, IngestResolutionRequest, IngestResolutionResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, RelevanceRequest, RelevanceResponse, SearchRequest, SearchResponse, SearchHealthResponse, TokenUsage, VersionResponse
 from .searcher import run_search, run_search_health
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
@@ -331,7 +331,7 @@ async def relevance(
     touch the leaderboard, and does not affect `/forecast`'s behaviour.
     """
     try:
-        out, _usage = await check_is_prediction(
+        out, usage = await check_is_prediction(
             article_text=body.article_text,
             source_name=body.source_name,
             article_date=body.article_date,
@@ -348,6 +348,7 @@ async def relevance(
         reason=out.reason,
         prediction_count_estimate=out.prediction_count_estimate,
         model=_pipeline_settings.gatekeeper_model,
+        token_usage=TokenUsage.from_usages([usage]),
     )
 
 
@@ -389,13 +390,14 @@ async def llm_proxy(
     litellm ID and defaults to the server's configured Bedrock model; callers may
     override it (e.g. bedrock/amazon.nova-micro-v1:0).
 
-    Uses the non-retrying complete_text_once: this is an interactive endpoint and
-    daatan's caller times out at 60s, so we don't want the [30,60,120] backoff.
+    Uses the non-retrying complete_text_once_with_usage: this is an interactive
+    endpoint and daatan's caller times out at 60s, so we don't want the
+    [30,60,120] backoff.
     """
     model = body.model or _pipeline_settings.extractor_model
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
     try:
-        content = await complete_text_once(
+        content, usage = await complete_text_once_with_usage(
             model,
             messages=messages,
             max_tokens=1024,
@@ -405,7 +407,7 @@ async def llm_proxy(
     except Exception as exc:
         logger.warning("llm proxy failed model=%s err=%s", model, exc)
         return JSONResponse({"detail": f"LLM call failed: {exc}"}, status_code=502)
-    return LlmResponse(content=content, model=model)
+    return LlmResponse(content=content, model=model, token_usage=TokenUsage.from_usages([usage]))
 
 
 @app.post("/fetch-url", response_model=FetchUrlResponse, tags=["IBI"])

@@ -51,7 +51,7 @@ class TestNoSearchResultsReason:
         monkeypatch.setattr(forecaster, "search_articles", lambda q, limit: [])
 
         async def _no_distill(question):
-            return question
+            return question, {}
         monkeypatch.setattr(forecaster, "_distill_query", _no_distill)
 
         req = ForecastRequest(question="Totally unique probe question 9f3a2b — will X?")

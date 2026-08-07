@@ -53,7 +53,7 @@ async def run_search(req: SearchRequest) -> SearchResponse:
     # the added cost is bounded to ~one LLM call + one more search.
     distilled_query: Optional[str] = None
     if not results and req.distill:
-        distilled = await _distill_query(req.query)
+        distilled, _distill_usage = await _distill_query(req.query)
         if distilled and distilled != req.query:
             distilled_query = distilled
             results, provider, chain = await asyncio.to_thread(_search_capturing, distilled)

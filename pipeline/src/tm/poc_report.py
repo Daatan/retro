@@ -24,6 +24,7 @@ from pathlib import Path
 
 from rich.console import Console
 
+from .models import is_negative_marker
 from .scorer import brier_score, compute_calibration_bins, stance_to_prob
 
 console = Console()
@@ -68,7 +69,10 @@ def load_tm_predictions(data_dir: Path) -> dict[str, float]:
         event_id = m.group(1)
         try:
             data = json.loads(path.read_text())
-            for pred in data.get("extraction", {}).get("predictions", []):
+            if is_negative_marker(data):
+                # docs#57 item 2: gate-rejected / no-prediction marker, not an extraction
+                continue
+            for pred in (data.get("extraction") or {}).get("predictions", []):
                 stance = pred.get("stance")
                 if isinstance(stance, (int, float)):
                     event_stances[event_id].append(float(stance))

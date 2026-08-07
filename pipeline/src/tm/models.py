@@ -287,3 +287,26 @@ class MatrixState(BaseModel):
         for cell in self.cells.values():
             counts[cell.status.value] += 1
         return counts
+
+
+# --- Negative-result extraction markers (Daatan/docs#57 item 2) ---
+#
+# vault2/extractions/{hash}_{event}_{v}.json historically only existed for
+# articles that PASSED the gatekeeper — a gate-rejected article left no trace,
+# so the batch loop (which runs with --retry-empty every 5 minutes) re-ran the
+# gatekeeper LLM on the same rejected articles every cycle. The orchestrator now
+# writes a marker file for those negative outcomes, same shape as a positive
+# extraction but with `"status"` set and `"extraction": null`. Every consumer
+# that globs the extractions dir must filter markers out via is_negative_marker.
+# Positive files written after this change carry `"status": "done"`; positive
+# files written before it have no `status` field at all — both are non-markers.
+
+NEGATIVE_MARKER_STATUSES = frozenset({"gate_rejected", "no_predictions"})
+
+
+def is_negative_marker(ext_data: Any) -> bool:
+    """True when a vault2/extractions JSON payload is a negative-result marker
+    (gatekeeper rejected the article, or extraction yielded nothing) rather
+    than a real extraction. Old positive files without a `status` field and
+    new ones with `"status": "done"` both return False."""
+    return isinstance(ext_data, dict) and ext_data.get("status") in NEGATIVE_MARKER_STATUSES

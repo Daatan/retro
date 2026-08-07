@@ -10,7 +10,7 @@ from enum import Enum
 from rich.console import Console
 from .config import settings
 from .dedup import SimhashIndex
-from .models import CellStatus, ExtractionOutput, PredictionExtraction
+from .models import CellStatus, ExtractionOutput, PredictionExtraction, is_negative_marker
 from .aggregator import aggregate_predictions, needs_aggregation, aggregate_article_predictions
 from .runner import run_article, ArticleInput, PipelineResult
 from .progress import update_cell, load_state
@@ -25,6 +25,13 @@ class SearchMode(str, Enum):
     mock = "mock"
     local_file = "local_file"
     api = "api"
+
+
+# Version tag baked into extraction filenames ({hash}_{event}_{v}.json) and
+# stored as `prompt_version` inside them. Bump when the extractor prompt
+# changes materially — negative markers written under an older version are
+# invalidated automatically (see _negative_marker_is_current).
+EXTRACTION_PROMPT_VERSION = "v1"
 
 class Orchestrator:
     def __init__(self, data_dir: Path, mode: SearchMode = SearchMode.mock, force_reextract: bool = False, retry_empty: bool = False):
@@ -49,6 +56,29 @@ class Orchestrator:
 
     def get_article_hash(self, text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _load_extraction_file(path: Path) -> Optional[dict]:
+        """Parse a vault2/extractions JSON file; None when unreadable/corrupt
+        (the caller then falls through to a fresh extraction, self-healing the
+        cache instead of crashing on it)."""
+        try:
+            with open(path, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            console.print(f"    [dim red]Unreadable extraction cache {path.name}: {e}[/dim red]")
+            return None
+
+    @staticmethod
+    def _negative_marker_is_current(ext_data: dict) -> bool:
+        """A negative marker only suppresses re-extraction while the models and
+        prompt version that produced it are still the ones configured — the
+        'unless the prompt or model changed' invalidation of docs#57 item 2."""
+        return (
+            ext_data.get("prompt_version") == EXTRACTION_PROMPT_VERSION
+            and ext_data.get("extractor_model") == settings.extractor_model
+            and ext_data.get("gatekeeper_model") == settings.gatekeeper_model
+        )
 
     async def get_full_text(self, url: str) -> str:
         console.print(f"    [dim]Scraping full text from: {url}[/dim]")
@@ -291,12 +321,22 @@ class Orchestrator:
         # processed, reuse its extraction rather than calling the LLM again.
         canonical_hash = self._simhash_idx.find_near_duplicate(text)
         if canonical_hash and canonical_hash != art_hash:
-            console.print(f"    [dim]Near-duplicate of {canonical_hash[:8]} — reusing extraction[/dim]")
-            canonical_extract = self.vault_dir / "extractions" / f"{canonical_hash}_{event['id']}_v1.json"
+            canonical_extract = self.vault_dir / "extractions" / f"{canonical_hash}_{event['id']}_{EXTRACTION_PROMPT_VERSION}.json"
             if canonical_extract.exists():
-                self.create_atlas_link(event["id"], source["id"], canonical_hash, canonical_extract, raw_art, event.get("outcome_date", ""))
-                return None
-            # Canonical extraction doesn't exist yet for this event — fall through to normal processing
+                canonical_data = self._load_extraction_file(canonical_extract)
+                if canonical_data is not None and is_negative_marker(canonical_data):
+                    if self._negative_marker_is_current(canonical_data):
+                        # Near-duplicate of an article the gatekeeper rejected (or that
+                        # yielded nothing) under the current models — same verdict applies.
+                        console.print(f"    [dim]Near-duplicate of {canonical_hash[:8]} — negative marker, skipping[/dim]")
+                        return None
+                    # Stale marker (prompt/model changed) — fall through to normal processing
+                elif canonical_data is not None:
+                    console.print(f"    [dim]Near-duplicate of {canonical_hash[:8]} — reusing extraction[/dim]")
+                    self.create_atlas_link(event["id"], source["id"], canonical_hash, canonical_extract, raw_art, event.get("outcome_date", ""))
+                    return None
+            # Canonical extraction doesn't exist yet for this event (or is stale/corrupt)
+            # — fall through to normal processing
 
         vault_path = self.vault_dir / "articles" / f"{art_hash}.json"
         if not vault_path.exists():
@@ -305,12 +345,23 @@ class Orchestrator:
             self._simhash_idx.add(art_hash, text)
             self._simhash_idx.save()
         
-        model_v = "v1" 
+        model_v = EXTRACTION_PROMPT_VERSION
         extract_path = self.vault_dir / "extractions" / f"{art_hash}_{event['id']}_{model_v}.json"
-        
+
         if extract_path.exists() and not self.force_reextract:
-            self.create_atlas_link(event["id"], source["id"], art_hash, extract_path, raw_art, event.get("outcome_date", ""))
-            return None
+            cached = self._load_extraction_file(extract_path)
+            if cached is not None and is_negative_marker(cached):
+                if self._negative_marker_is_current(cached):
+                    # Gate-rejected / no-prediction under the current models — the
+                    # whole point of docs#57 item 2: don't re-run the LLM every cycle.
+                    console.print(f"    [dim]Negative marker ({cached.get('status')}) for {art_hash[:8]} — skipping[/dim]")
+                    return None
+                console.print(f"    [yellow]Stale negative marker for {art_hash[:8]} (prompt/model changed) — re-extracting[/yellow]")
+                # fall through to a fresh extraction
+            elif cached is not None:
+                self.create_atlas_link(event["id"], source["id"], art_hash, extract_path, raw_art, event.get("outcome_date", ""))
+                return None
+            # cached is None (unreadable file): fall through and re-extract
         elif extract_path.exists() and self.force_reextract:
             console.print(f"    [yellow]--force-reextract: re-running LLM for {art_hash[:8]}[/yellow]")
 
@@ -355,6 +406,7 @@ class Orchestrator:
             try:
                 with open(extract_path, "w") as f:
                     data = {
+                        "status": "done",
                         "extraction": result.extraction.model_dump(),
                         "prompt_version": model_v,
                         "extractor_model": settings.extractor_model,
@@ -367,8 +419,30 @@ class Orchestrator:
                 self.create_atlas_link(event["id"], source["id"], art_hash, extract_path, raw_art, event.get("outcome_date", ""))
             except Exception as e:
                 console.print(f"    [bold red]Failed to save to vault:[/bold red] {str(e)}")
+        elif result.error is None:
+            # Definitive negative outcome (docs#57 item 2): the gatekeeper rejected
+            # the article, or the gate passed but extraction produced nothing. Write
+            # a marker so the next cycle skips the LLM instead of re-judging the same
+            # article every 5 minutes. Infra errors (result.error set) deliberately
+            # write NOTHING — they must stay retryable.
+            status = "gate_rejected" if not result.is_prediction else "no_predictions"
+            console.print(f"    [yellow]Extraction resulted in 0 predictions ({status}).[/yellow]")
+            try:
+                with open(extract_path, "w") as f:
+                    json.dump({
+                        "status": status,
+                        "extraction": None,
+                        "prompt_version": model_v,
+                        "extractor_model": settings.extractor_model,
+                        "gatekeeper_model": settings.gatekeeper_model,
+                        "gatekeeper_reason": result.gatekeeper_reason,
+                        "run_date": datetime.now().isoformat()
+                    }, f, indent=2)
+                console.print(f"    [dim]Negative marker saved: {extract_path}[/dim]")
+            except Exception as e:
+                console.print(f"    [bold red]Failed to save negative marker:[/bold red] {str(e)}")
         else:
-            console.print(f"    [yellow]Extraction resulted in 0 predictions.[/yellow]")
+            console.print(f"    [yellow]Extraction resulted in 0 predictions (error — will retry).[/yellow]")
 
         return result
 
@@ -415,6 +489,13 @@ class Orchestrator:
         link_path = link_dir / f"entry_{art_hash[:8]}.json"
         with open(extract_path, "r") as f:
             ext_data = json.load(f)
+
+        # Defensive: a negative marker (docs#57 item 2) has no extraction — it
+        # must never become an atlas entry. Callers already filter; this is the
+        # backstop for any future path that reaches here with a marker.
+        if is_negative_marker(ext_data) or ext_data.get("extraction") is None:
+            console.print(f"    [dim]Not linking negative marker {extract_path.name} into atlas[/dim]")
+            return
 
         link_data = {
             "article_hash": art_hash,

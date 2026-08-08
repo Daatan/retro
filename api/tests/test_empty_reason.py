@@ -10,6 +10,8 @@ import asyncio
 
 import pytest
 
+from tm import web_search
+
 from forecast_api import forecaster
 from forecast_api.forecaster import _empty_response, _reason_from_outcomes, run_forecast
 from forecast_api.models import ForecastRequest
@@ -48,7 +50,7 @@ class TestEmptyResponseFields:
 class TestNoSearchResultsReason:
     def test_empty_search_sets_reason(self, monkeypatch):
         # Search returns nothing; distillation no-ops (no network).
-        monkeypatch.setattr(forecaster, "search_articles", lambda q, limit: [])
+        monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None: [])
 
         async def _no_distill(question):
             return question, {}

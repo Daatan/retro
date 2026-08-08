@@ -37,6 +37,8 @@ from rich.console import Console
 
 from .models import is_negative_marker
 from .scorer import brier_decomposition, brier_score, stance_to_prob
+# Reuse the evergreen-domain helper rather than re-implement it (retro#439).
+from .web_search_ingest import _is_evergreen_domain
 
 console = Console()
 
@@ -100,23 +102,6 @@ def pm_probability(ev: dict, t_days: int) -> Optional[float]:
     return round(raw_prob, 4)
 
 
-# Evergreen / encyclopedic domains where published_at reflects page creation
-# but content is continuously updated — reading "Bashar al-Assad - Wikipedia"
-# in 2026 reveals the 2024 outcome regardless of the page's stored date.
-_EVERGREEN_DOMAIN_SUFFIXES = (
-    "wikipedia.org",
-    "britannica.com",
-    "cfr.org",
-    "encyclopedia.com",
-    "history.com",
-    "investopedia.com",
-)
-
-
-def _is_evergreen(domain: str) -> bool:
-    return any(domain.endswith(s) for s in _EVERGREEN_DOMAIN_SUFFIXES)
-
-
 def _load_vault2_articles(data_dir: Path, eid: str, cutoff_str: str) -> list[dict]:
     """
     Return vault2 articles for event ``eid`` published on or before ``cutoff_str``.
@@ -160,7 +145,7 @@ def _load_vault2_articles(data_dir: Path, eid: str, cutoff_str: str) -> list[dic
             continue
         url = art.get("url", "")
         domain = re.sub(r"^www\.", "", urlparse(url).netloc).lower()
-        if _is_evergreen(domain):
+        if _is_evergreen_domain(url):
             console.print(f"    [dim yellow]{eid}: skipping evergreen source {domain} — {art.get('headline','')[:60]}[/dim yellow]")
             continue
         n_date_ok += 1

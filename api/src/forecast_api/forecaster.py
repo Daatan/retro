@@ -40,7 +40,7 @@ from tm.extractor import (
     PROMPT_SUFFIX as _EXTRACTOR_PROMPT_SUFFIX,
 )
 from tm.models import GatekeeperOutput, PredictionExtraction
-from tm.web_search import search_articles, SearchResult, get_last_search_provider, get_last_search_provider_chain
+from tm.web_search import SearchResult, search_capturing
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once_with_usage
 from tm.net_guard import UnsafeURLError, safe_get
@@ -567,19 +567,6 @@ async def _distill_query(question: str) -> tuple[str, dict]:
     except Exception as exc:
         logger.warning("query distillation failed: %s", exc)
     return question, {}
-
-
-def _search_capturing(query: str, limit: int) -> tuple[list, str, list[str]]:
-    """Run search_articles and capture the winning provider/chain *in the same
-    thread*.
-
-    ``get_last_search_provider()`` is thread-local; the forecaster runs search
-    via ``asyncio.to_thread``, so reading the provider in the caller's thread
-    always returned "none". Reading it here — inside the worker thread — fixes
-    that, so ``debug.search_provider`` actually names the provider.
-    """
-    results = search_articles(query, limit)
-    return results, get_last_search_provider(), get_last_search_provider_chain()
 
 
 def _fetch_article_text(url: str, fallback: str) -> str:
@@ -1171,7 +1158,7 @@ async def _run_forecast_inner(
             distilled_query = search_query if distilled else None
             try:
                 search_results, search_provider, provider_chain = await asyncio.to_thread(
-                    _search_capturing, search_query, limit
+                    search_capturing, search_query, limit
                 )
             except Exception as exc:
                 logger.error("Search failed: %s", exc)
@@ -1180,7 +1167,7 @@ async def _run_forecast_inner(
             if not search_results and distilled:
                 try:
                     search_results, search_provider, provider_chain = await asyncio.to_thread(
-                        _search_capturing, verbatim, limit
+                        search_capturing, verbatim, limit
                     )
                     search_query = verbatim
                 except Exception as exc:

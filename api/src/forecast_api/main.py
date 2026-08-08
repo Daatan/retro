@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 
 from ._build import build_info
 from .auth import ApiKeyClient, verify_api_key
-from .bayesoracle import compute_nodes
+from .bayesoracle import compute_nodes, parse_node_observations
 from .cache import forecast_cache
 from .config import settings
 from .forecaster import run_forecast, run_pool_aggregate
@@ -149,17 +149,7 @@ async def bayes_nodes(
     the probability simplex.  The graph lives in ``bayesoracle/graph_political.json``.
     Supply ``observations`` to lock specific nodes and see how the rest shifts.
     """
-    obs: dict[str, float] = {}
-    if observations:
-        for part in observations.split(","):
-            part = part.strip()
-            if "=" not in part:
-                continue
-            node_id, _, val = part.partition("=")
-            try:
-                obs[node_id.strip().upper()] = float(val.strip())
-            except ValueError:
-                pass
+    obs = parse_node_observations(observations)
     return {"nodes": compute_nodes(obs or None)}
 
 

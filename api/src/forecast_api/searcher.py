@@ -37,12 +37,10 @@ async def run_search(req: SearchRequest) -> SearchResponse:
     # Provider attribution is thread-local: search runs in a worker thread via
     # asyncio.to_thread, so we must read get_last_search_provider() *inside that
     # same thread*. Reading it here in the event-loop thread always returned
-    # "none" (same bug the forecaster fixed with _search_capturing).
-    def _search_capturing(q: str):
-        results = _ws.search_articles(q, req.limit, date_from, date_to)
-        return results, _ws.get_last_search_provider(), _ws.get_last_search_provider_chain()
-
-    results, provider, chain = await asyncio.to_thread(_search_capturing, req.query)
+    # "none" — _ws.search_capturing() does the read in the worker thread instead.
+    results, provider, chain = await asyncio.to_thread(
+        _ws.search_capturing, req.query, req.limit, date_from, date_to
+    )
 
     # On 0 verbatim results, distill the query to keywords and retry once. Reuses
     # the same _distill_query the /forecast pipeline uses (Nova Micro; it also
@@ -56,7 +54,9 @@ async def run_search(req: SearchRequest) -> SearchResponse:
         distilled, _distill_usage = await _distill_query(req.query)
         if distilled and distilled != req.query:
             distilled_query = distilled
-            results, provider, chain = await asyncio.to_thread(_search_capturing, distilled)
+            results, provider, chain = await asyncio.to_thread(
+                _ws.search_capturing, distilled, req.limit, date_from, date_to
+            )
 
     duration_ms = round((time.perf_counter() - t0) * 1000, 1)
 

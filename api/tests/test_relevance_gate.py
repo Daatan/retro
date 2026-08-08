@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from forecast_api import forecaster
 from forecast_api.config import settings as api_settings
 from forecast_api.models import ForecastRequest
+from tm import web_search
 from tm.config import settings as pipeline_settings
 from tm.models import GatekeeperOutput, PredictionExtraction
 from tm.web_search import SearchResult
@@ -62,7 +63,7 @@ def _wire(monkeypatch, articles, certainty: float = 0.8, evidence_class=None):
         SearchResult(title="t", url=url, snippet="s", source=url, published_date=today)
         for url, _, _ in articles
     ]
-    monkeypatch.setattr(forecaster, "search_articles", lambda q, limit: list(results))
+    monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None: list(results))
 
     async def _no_distill(question):
         return question, {}

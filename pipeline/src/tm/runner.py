@@ -9,7 +9,16 @@ from typing import Optional
 from rich.console import Console
 
 from .gatekeeper import check_is_prediction
-from .extractor import extract_predictions
+from .extractor import (
+    extract_predictions,
+    enforce_anchor_provenance,
+    enforce_interested_party_certainty,
+    enforce_interested_party_stance_cap,
+    enforce_precursor_cap,
+    enforce_relative_date_resolution,
+    enforce_settlement_event_date,
+    flag_claim_stance_sign_conflicts,
+)
 from .models import ExtractionOutput, CellStatus
 from .progress import update_cell
 
@@ -66,6 +75,31 @@ async def run_article(article: ArticleInput) -> PipelineResult:
             event_name=article.event_name,
             event_description=article.event_description,
             journalist=article.journalist or "unknown",
+        )
+
+        # Same enforce_*/flag_* chain forecaster.py runs on the live Oracle path
+        # (retro#428) — batch feeds calibration, Brier/ELO scoring, and the
+        # public atlas, and a bad extraction is cached indefinitely by
+        # (article_hash, event_id, prompt_version), so skipping these here let
+        # already-fixed bugs (24.4% of precursor rows, 30.3% of interested-party
+        # rows over-cap) back into the vault permanently. enforce_deadline_arithmetic
+        # is omitted: it needs a claim_deadline/claim_direction the batch pipeline's
+        # per-event schema doesn't carry (retroactive events don't pose a single
+        # binary question with a direction the way a live /forecast request does).
+        flag_claim_stance_sign_conflicts(extraction.predictions)
+        extraction.predictions = enforce_relative_date_resolution(
+            extraction.predictions, article.article_date,
+        )
+        extraction.predictions = enforce_settlement_event_date(
+            extraction.predictions, article.article_date,
+        )
+        extraction.predictions = enforce_precursor_cap(extraction.predictions)
+        extraction.predictions = enforce_anchor_provenance(extraction.predictions)
+        extraction.predictions = enforce_interested_party_stance_cap(
+            extraction.predictions,
+        )
+        extraction.predictions = enforce_interested_party_certainty(
+            extraction.predictions,
         )
 
         update_cell(

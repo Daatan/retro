@@ -437,9 +437,17 @@ def _render_matrix(matrix_rows: list, search_status: dict,
                 title = f'{cell["pred_count"]} predictions, avg stance {stance_str}'
                 if comp:
                     title += f', competitive Brier {comp["brier"]:.3f} (skill {comp["skill"]:+.3f})'
-                # Build popup article data attribute
+                # Build popup article data attribute. openCellPopup (atlas.html)
+                # JSON.parse()s this and inserts a.headline/a.url via innerHTML
+                # unescaped, so headline/url need html.escape() here — the
+                # '"' -> '&quot;' below only protects the attribute boundary,
+                # not that downstream sink.
                 arts = (cell_articles or {}).get((eid, sid), [])
-                arts_json = json.dumps(arts).replace('"', '&quot;')
+                arts_for_popup = [
+                    {**a, "headline": html.escape(a["headline"] or ""), "url": html.escape(a["url"] or "")}
+                    for a in arts
+                ]
+                arts_json = json.dumps(arts_for_popup).replace('"', '&quot;')
                 parts.append(
                     f'<td class="cell has-data" style="background:{bg}"'
                     f' title="{title}"'
@@ -532,6 +540,7 @@ def _render_event_sections(event_ids: list, events: dict, polymarket: dict,
                 if not arts:
                     continue
                 color = SOURCE_COLORS.get(sid, "#888")
+                # headline/url are html.escape()'d already, at cell_articles construction.
                 art_items = "".join(
                     f'<div class="art-item">'
                     f'{"<a href=\'" + html.escape(a["url"]) + "\' target=_blank rel=noopener>" if a["url"] else ""}'
@@ -810,14 +819,20 @@ def render(data_dir: Path, output_path: Path,
                 continue
         pm_series.sort(key=lambda p: -p["x"])
 
+        # event_name/quote/claim/headline/url are scraped/LLM content that lands
+        # raw in the frontend's innerHTML (atlas.html renderPredictions/
+        # openCellPopup) once the JS engine parses this object literal —
+        # _json_for_script's '<'-escaping alone doesn't protect that sink,
+        # since '<' decodes back to a literal '<' at JS-parse time.
+        # html.escape() here is what actually neutralizes it.
         chart_data[eid] = {
-            "event_name": ev["name"],
+            "event_name": html.escape(ev["name"]),
             "outcome": ev["outcome"],
             "outcome_date": ev["outcome_date"],
             "sources": {
                 sid: [{"x": pt["days_before"], "y": round(pt["stance"] * 100, 1),
                        "certainty": pt["certainty"], "hedge": pt["hedge_index"],
-                       "quote": pt["quote"]}
+                       "quote": html.escape(pt["quote"] or "")}
                       for pt in pts]
                 for sid, pts in series.items()
             },
@@ -828,7 +843,7 @@ def render(data_dir: Path, output_path: Path,
             for pt in pts:
                 all_preds.append({
                     "eid": eid,
-                    "event_name": ev["name"],
+                    "event_name": html.escape(ev["name"]),
                     "sid": sid,
                     "source_name": sources.get(sid, {}).get("name", sid),
                     "date": pt["date"],
@@ -836,10 +851,10 @@ def render(data_dir: Path, output_path: Path,
                     "stance": pt["stance"],
                     "certainty": pt["certainty"],
                     "hedge_index": pt["hedge_index"],
-                    "quote": pt["quote"],
-                    "claim": pt["claim"],
-                    "headline": pt["headline"],
-                    "url": pt["url"],
+                    "quote": html.escape(pt["quote"] or ""),
+                    "claim": html.escape(pt["claim"] or ""),
+                    "headline": html.escape(pt["headline"] or ""),
+                    "url": html.escape(pt["url"] or ""),
                 })
 
     all_preds.sort(key=lambda x: (x["eid"], x["days_before"]))
@@ -849,9 +864,12 @@ def render(data_dir: Path, output_path: Path,
     scoring_html = _render_scoring(scores, events)
 
     # ── fill template ──
+    # Named rendered_html, not html — a local var named `html` would shadow
+    # the module import for this whole function (same class of bug fixed in
+    # _render_scoring), and this function calls html.escape() above.
     active_events = [e for e in MVP_EVENTS if e in events]
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
-    html = template.format(
+    rendered_html = template.format(
         stats_events=len(active_events),
         stats_articles=total_articles,
         stats_preds=total_preds,
@@ -875,7 +893,7 @@ def render(data_dir: Path, output_path: Path,
         predictions_js=_json_for_script(all_preds),
     )
 
-    output_path.write_text(html, encoding="utf-8")
+    output_path.write_text(rendered_html, encoding="utf-8")
     print(f"Factum Atlas rendered → {output_path}  ({output_path.stat().st_size // 1024} KB)")
 
 

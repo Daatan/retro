@@ -8,7 +8,12 @@ json.dumps() must have '<' escaped so a payload containing '</script' can't
 prematurely close the tag (the HTML tokenizer runs before JS parsing, so
 this has to happen at the JSON-string level)."""
 
+import json
+
 from tm.render_atlas import (
+    MVP_EVENTS,
+    SOURCES,
+    render,
     _json_for_script,
     _render_event_sections,
     _render_matrix,
@@ -98,3 +103,51 @@ def test_render_scoring_calibration_json_is_script_safe():
     out = _render_scoring(scores, events={})
     assert '</script><script>alert(1)</script>' not in out
     assert '\\u003c/script>\\u003cscript>alert(1)\\u003c/script>' in out
+
+
+def test_render_end_to_end_escapes_chart_data_and_predictions_json(tmp_path):
+    # _json_for_script's '<' -> '\u003c' protects the <script> tag boundary,
+    # but the JS engine decodes '\u003c' back to a literal '<' the moment it
+    # parses `const PREDICTIONS = {predictions_js};` as an object literal —
+    # so quote/claim/headline/event_name/url must ALSO be html.escape()'d
+    # individually before json.dumps(), or the frontend's innerHTML sinks
+    # (renderPredictions/openCellPopup in atlas.html) stay exploitable.
+    # chart_data/all_preds/cell_articles are built inline inside render(),
+    # not as separately-testable functions, so this drives it end-to-end.
+    eid, sid = MVP_EVENTS[0], SOURCES[0]
+    data_dir = tmp_path / "data"
+
+    events_dir = data_dir / "events"
+    events_dir.mkdir(parents=True)
+    (events_dir / f"{eid}.json").write_text(json.dumps({
+        "outcome": True, "outcome_date": "2024-06-10",
+        "name": PAYLOAD, "description": "",
+    }))
+
+    sources_dir = data_dir / "sources"
+    sources_dir.mkdir(parents=True)
+    (sources_dir / f"{sid}.json").write_text(json.dumps({"name": "Test Source"}))
+
+    cell_dir = data_dir / "atlas" / eid / sid
+    cell_dir.mkdir(parents=True)
+    (cell_dir / "entry_0001.json").write_text(json.dumps({
+        "headline": PAYLOAD,
+        "article_date": "2024-06-01",
+        "article_hash": "abc123",
+        "predictions": [{"stance": 0.5, "certainty": 0.8, "quote": PAYLOAD, "claim": PAYLOAD}],
+    }))
+
+    vault_dir = data_dir / "vault2" / "articles"
+    vault_dir.mkdir(parents=True)
+    (vault_dir / "abc123.json").write_text(json.dumps({"url": 'https://x/"><script>alert(2)</script>'}))
+
+    output_path = tmp_path / "out.html"
+    render(data_dir, output_path)
+    out = output_path.read_text()
+
+    assert PAYLOAD not in out
+    assert '<script>alert(2)</script>' not in out
+    # The escaped forms must survive into the embedded JSON (event_name,
+    # quote, claim, headline all carry PAYLOAD; url carries the second one).
+    assert ESCAPED_PAYLOAD in out
+    assert '&lt;script&gt;alert(2)&lt;/script&gt;' in out

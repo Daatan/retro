@@ -185,7 +185,7 @@ Progress: 3/250 (1.2%) | done: 2 | no_pred: 1 | failed: 0
 | Stage | File | Model | Purpose |
 |---|---|---|---|
 | 1 | `gatekeeper.py` | `bedrock/amazon.nova-micro-v1:0` | graded topic/evidence-relevance gate (emits relevance_score; passes indirect evidence, not just explicit predictions) |
-| 2 | `extractor.py` | `bedrock/amazon.nova-lite-v1:0` | extract up to 5 predictions per article (5 fields: quote, claim, stance, certainty, settled) |
+| 2 | `extractor.py` | `bedrock/amazon.nova-lite-v1:0` | extract up to 5 predictions per article (14 requested fields: quote, claim, stance, certainty, settled, quantitative_estimate, evidence_class, fact_signal, event_actors, event_target, is_occurrence, verified, event_date, event_date_reference — see `PredictionExtraction` in `pipeline/src/tm/models.py`) |
 | 3 | `runner.py` | — | orchestrate stages 1+2 per article |
 | 4 | `aggregator.py` | — | collapse article predictions → CellSignal |
 | 5 | `orchestrator.py` | — | batch across all events × sources |

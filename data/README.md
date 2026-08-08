@@ -157,12 +157,16 @@ LLM extraction result for a specific article × event pair. Cached — reused if
         "claim": "Iran will strike Israel within days",
         "stance": 0.85,
         "certainty": 0.9,
-        "sentiment": -0.3,
-        "hedge_ratio": 0.1,
-        "time_horizon": "days",
-        "time_horizon_days": 3,
-        "prediction_type": "binary",
-        "source_authority": 0.8
+        "settled": null,
+        "quantitative_estimate": null,
+        "evidence_class": "reporting",
+        "fact_signal": null,
+        "event_actors": null,
+        "event_target": null,
+        "is_occurrence": null,
+        "verified": null,
+        "event_date": null,
+        "event_date_reference": null
       }
     ]
   },
@@ -170,6 +174,12 @@ LLM extraction result for a specific article × event pair. Cached — reused if
   "run_date": "2026-03-22T08:14:00"
 }
 ```
+
+Legacy fields (`sentiment`, `specificity`, `hedge_ratio`, `conditionality`, `magnitude`,
+`time_horizon`, `time_horizon_days`, `prediction_type`, `source_authority`) still appear
+on entries produced before PR #102 and remain `Optional` on `PredictionExtraction` for
+backward compatibility, but are no longer requested from the LLM. See
+`docs/ARCHITECTURE.md` "Prediction (extracted by LLM)" for the current field set.
 
 ---
 

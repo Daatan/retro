@@ -26,6 +26,7 @@ from .leaderboard import (
 )
 from .resolution_feedback import ingest_resolution
 from .resolution_scorer import load_shadow_leaderboard, rescore_authors_from_disk, rescore_from_disk
+from .settlement_pin_ledger import load_ledger, record_settlement_pin
 from tm.config import settings as _pipeline_settings
 from tm.gatekeeper import check_is_prediction
 from tm.llm import complete_text_once_with_usage
@@ -33,7 +34,7 @@ from .article_fetch import ArticleFetchError, fetch_and_extract
 from .limiter import limiter
 from .mcp_auth import SCOPE_FORECAST, SCOPE_READ
 from .mcp_server import build_mcp
-from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, IngestResolutionRequest, IngestResolutionResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, RelevanceRequest, RelevanceResponse, SearchRequest, SearchResponse, SearchHealthResponse, TokenUsage, VersionResponse
+from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, IngestResolutionRequest, IngestResolutionResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, RelevanceRequest, RelevanceResponse, SearchRequest, SearchResponse, SearchHealthResponse, SettlementPinReportResponse, TokenUsage, VersionResponse
 from .searcher import run_search, run_search_health
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
@@ -199,8 +200,16 @@ async def leaderboard_ingest(
     either way. Idempotent on prediction_id: re-sending the same
     prediction_id is a no-op (already_ingested=true), safe for a
     fire-and-forget retry on the caller's side.
+
+    Also feeds the settlement-pin ledger (retro#361 Phase 1): when the
+    payload carries a ``settlement_snapshot``, records the pin's declared
+    direction against ``outcome`` for GET /leaderboard/settlement-pin-report.
+    Independent idempotency from the resolution-feedback store above — keyed
+    on prediction_id in its own ledger file — so a retry that adds a
+    snapshot the first push omitted can still land it.
     """
     result = await ingest_resolution(settings.resolved_resolution_feedback_path, body)
+    await record_settlement_pin(settings.resolved_settlement_pin_ledger_path, body)
     if not result.already_ingested:
         await asyncio.to_thread(
             rescore_from_disk,
@@ -247,6 +256,34 @@ async def leaderboard_author_shadow(_: ApiKeyClient = Depends(verify_api_key)):
     """
     data = await asyncio.to_thread(load_shadow_leaderboard, settings.resolved_resolution_author_leaderboard_path)
     return {"authors": data, "count": len(data)}
+
+
+@app.get("/leaderboard/settlement-pin-report", response_model=SettlementPinReportResponse, tags=["Meta"])
+async def leaderboard_settlement_pin_report(
+    include_confirmed: bool = Query(default=False, description="Include pins that agreed with their resolution too, not just contradicted ones"),
+    _: ApiKeyClient = Depends(verify_api_key),
+):
+    """
+    Settlement-pin quality report (retro#361 Phase 1) — every settlement pin
+    on record, compared against its eventual resolved outcome. Recomputed
+    from the ledger on disk on every call, same as GET /leaderboard/*-shadow.
+
+    Defaults to contradicted pins only — the direct answer to "which pins
+    were wrong". Pass include_confirmed=true for the full ledger (both
+    directions), e.g. to compute a denominator for pin precision.
+
+    Deliberately does NOT classify *why* a contradicted pin was wrong
+    (extraction error / question semantics / genuine miss / pin-correct) —
+    that heuristic is the issue's Phase 2, scoped out here as follow-up work
+    requiring its own review.
+    """
+    all_entries = await load_ledger(settings.resolved_settlement_pin_ledger_path)
+    contradicted = [e for e in all_entries if e.contradicted]
+    return SettlementPinReportResponse(
+        entries=all_entries if include_confirmed else contradicted,
+        contradicted_count=len(contradicted),
+        total_settled_pins=len(all_entries),
+    )
 
 
 @app.get("/health", tags=["Meta"])

@@ -217,7 +217,10 @@ def test_fact_signal_section_present():
     evidence_class-only shortcut was shown NOT to cover."""
     assert "## FACT_SIGNAL" in PROMPT_PREFIX
     assert "REPORTED FACTS on their own establish about the related event" in PROMPT_PREFIX
-    assert "A precursor is capped at |0.3|" in PROMPT_PREFIX
+    # retro#354 D1: the |0.3| numeral was deleted from the prompt once enforce_precursor_cap
+    # (extractor.py) started enforcing the ceiling in code regardless of what the model
+    # emits — a numeral in prose is policy the estimator, not the prompt, should carry.
+    assert "A precursor never scores as the event occurring" in PROMPT_PREFIX
     assert "is context only" in PROMPT_PREFIX
     assert "A claimed-but-unverified event is down-weighted" in PROMPT_PREFIX
 

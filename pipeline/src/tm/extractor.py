@@ -1268,3 +1268,186 @@ def flag_claim_stance_sign_conflicts(
                 p.stance, p.claim[:160],
             )
     return predictions
+
+
+# ── winner-entity consistency (retro#401) ───────────────────────────────────
+#
+# The England–Argentina incident (retro#360) inverted stance because nothing
+# checked the extracted evidence against the question's own subject — the
+# model's judgement was the only check there was. #313 shipped exactly the
+# facets a deterministic check needs (event_actors/event_target/is_occurrence)
+# but nothing downstream ever read them. This is that check.
+#
+# Deliberately narrow. A free-text `question` cannot be parsed into named
+# entities without NER, so the patterns below only fire on a small number of
+# explicit "X (will) VERB [against/vs/over] Y" shapes — a two-word "vs"
+# question with no verb, or a subject named some other way, is left alone
+# (no match => no-op). False negatives are free (today's LLM-only behaviour);
+# false positives are not, so precision is chosen over recall throughout.
+
+# Sentence-initial words that are capitalized but are never the subject of a
+# versus question — without this, "Will England beat Argentina" reads "Will"
+# as a one-word entity, since it starts with a capital letter like any name.
+_VERSUS_ENTITY_STOPWORDS = frozenset({
+    "will", "would", "does", "did", "is", "are", "can", "the", "a", "an",
+    "their", "his", "her", "its", "this", "that", "these", "those", "who",
+    "what", "when", "after", "before", "and", "or", "so", "if",
+})
+
+# A "named entity" here is one-to-four consecutive capitalized words — good
+# enough for team/country/candidate names ("England", "Real Madrid", "New
+# Zealand"), not a real NER model. An optional leading "the"/"the" article is
+# absorbed separately so "the Lakers" still yields entity "Lakers".
+_ENTITY = r"[A-Z][A-Za-z0-9&'\-]*(?:\s+[A-Z][A-Za-z0-9&'\-]*){0,3}"
+_ARTICLE = r"(?:(?i:the)\s+)?"
+
+# Transitive win verbs take the rival as a direct object — "England beat
+# Argentina" — no preposition needed. "win" is deliberately excluded here: it
+# is almost always intransitive ("win the match"), so it is handled by the
+# prepositional pattern below instead, which requires an explicit versus
+# marker and so is far less prone to misfiring on a non-versus sentence.
+_WIN_VERB_TRANSITIVE = (
+    r"(?:beat|defeat|overcome|upset|edge|down|sink|stun|top|rout|thrash|crush)"
+)
+_VERSUS_MARKER = r"(?:against|vs\.?|v\.?|over)"
+
+_VERSUS_TRANSITIVE_RE = re.compile(
+    rf"{_ARTICLE}(?P<subject>{_ENTITY})\s+(?:will\s+)?(?i:{_WIN_VERB_TRANSITIVE})\w*\s+"
+    rf"{_ARTICLE}(?P<rival>{_ENTITY})"
+)
+_VERSUS_PREPOSITIONAL_RE = re.compile(
+    rf"{_ARTICLE}(?P<subject>{_ENTITY})\s+(?:will\s+)?(?i:win)\w*"
+    rf"(?:\s+[\w-]+){{0,8}}?\s+(?i:{_VERSUS_MARKER})\s+"
+    rf"{_ARTICLE}(?P<rival>{_ENTITY})"
+)
+_LEADING_INTERROGATIVE_RE = re.compile(r"^\s*(?:will|would)\s+", re.I)
+
+
+def _match_versus_question(question: str) -> Optional[tuple[str, str]]:
+    """Return ``(subject, rival)`` for a two-named-actor versus question, or
+    ``None`` when the question does not confidently match that shape.
+
+    Tries the prepositional pattern ("X will win ... against/vs/over Y")
+    before the transitive one ("X (will) beat/defeat/... Y") only because the
+    former is the shape of the incident that motivated this function; either
+    can match a given question and only the first hit is used.
+    """
+    stripped = _LEADING_INTERROGATIVE_RE.sub("", question)
+    for pattern in (_VERSUS_PREPOSITIONAL_RE, _VERSUS_TRANSITIVE_RE):
+        for m in pattern.finditer(stripped):
+            subject, rival = m.group("subject").strip(), m.group("rival").strip()
+            if subject.split()[0].lower() in _VERSUS_ENTITY_STOPWORDS:
+                continue
+            if rival.split()[0].lower() in _VERSUS_ENTITY_STOPWORDS:
+                continue
+            if subject.lower() == rival.lower():
+                continue
+            return subject, rival
+    return None
+
+
+def _mentions_entity(field_text: Optional[str], entity: str) -> bool:
+    """Case-insensitive whole-phrase containment: does ``field_text`` name
+    ``entity`` (e.g. does event_actors="Argentina's players" mention "Argentina")?
+    """
+    if not field_text:
+        return False
+    return re.search(rf"\b{re.escape(entity)}\b", field_text, re.I) is not None
+
+
+def enforce_winner_entity_consistency(
+    predictions: list[PredictionExtraction],
+    question: str,
+) -> list[PredictionExtraction]:
+    """Deterministic guard for versus/sports questions: does the dominant
+    fact's actor→target dyad actually support the stance sign it carries?
+
+    retro#360 (prod, 2026-07-15): four articles plainly reporting "Argentina
+    beat England" were extracted as stance +1.0 for "England will win", and
+    the false-unanimous settlement pinned the estimate at 97% — Brier 0.94,
+    one of the two worst misses in the resolved corpus. retro#313 shipped
+    ``event_actors``/``event_target``/``is_occurrence`` for exactly this
+    check, but nothing ever read them (retro#401). This does:
+
+      1. Parse the question for a two-named-actor "X (will) beat/win against Y"
+         shape (:func:`_match_versus_question`). No match => no-op — this
+         never invents a subject/rival the question doesn't name plainly.
+      2. For each claim whose dyad IS the event itself (``is_occurrence`` is
+         exactly ``True`` — a precursor cannot tell us who won, and an
+         unjudged ``None`` is left to :func:`enforce_precursor_cap` and the
+         model's own stance), check whether ``event_actors`` names the RIVAL
+         (not the subject) acting on a ``event_target`` naming the SUBJECT
+         (not the rival) — "Argentina [actor] beat England [target]" — or the
+         mirror image, the SUBJECT acting on the RIVAL.
+      3. A rival-beats-subject dyad with a positive stance, or a
+         subject-beats-rival dyad with a negative stance, is exactly the
+         incident's shape: the dyad and the stance sign disagree about who
+         won.
+
+    Conservative by design (retro#401 asks for this explicitly): the dyad
+    match tells us the SIGN is wrong with reasonable confidence, but nothing
+    here is confident enough in the correct magnitude to assert a flipped
+    value, so a caught claim is NEUTRALISED, not inverted — ``stance`` is
+    zeroed (no directional vote) and ``settled`` is stripped (mirrors
+    :func:`enforce_settlement_event_date`'s "loses settled, keeps voting as
+    ordinary evidence" demotion — except here even the ordinary vote is
+    silenced, because the one thing this function is sure of is that the
+    existing sign is untrustworthy). ``certainty``/``evidence_class``/facets
+    are untouched, so the claim still contributes to weight and is still
+    fully auditable in ``claims_detail``.
+
+    Every step fails open: a question that doesn't parse, a claim missing
+    either facet, an unjudged ``is_occurrence``, or a dyad that names neither
+    "the rival acting on the subject" nor "the subject acting on the rival"
+    leaves the claim exactly as extracted.
+    """
+    match = _match_versus_question(question)
+    if match is None:
+        return predictions
+    subject, rival = match
+
+    for p in predictions:
+        if p.event_actors is None or p.event_target is None:
+            continue
+        if p.is_occurrence is not True:
+            continue
+
+        actor_is_rival = (
+            _mentions_entity(p.event_actors, rival)
+            and not _mentions_entity(p.event_actors, subject)
+        )
+        actor_is_subject = (
+            _mentions_entity(p.event_actors, subject)
+            and not _mentions_entity(p.event_actors, rival)
+        )
+        target_is_subject = (
+            _mentions_entity(p.event_target, subject)
+            and not _mentions_entity(p.event_target, rival)
+        )
+        target_is_rival = (
+            _mentions_entity(p.event_target, rival)
+            and not _mentions_entity(p.event_target, subject)
+        )
+
+        rival_beats_subject = actor_is_rival and target_is_subject
+        subject_beats_rival = actor_is_subject and target_is_rival
+        if not (rival_beats_subject or subject_beats_rival):
+            continue
+
+        wrong_signed = (
+            (rival_beats_subject and p.stance > 0)
+            or (subject_beats_rival and p.stance < 0)
+        )
+        if not wrong_signed:
+            continue
+
+        logger.warning(
+            "event=winner_entity_sign_conflict subject=%r rival=%r actors=%r "
+            "target=%r stance=%+.2f settled=%s claim=%r",
+            subject, rival, p.event_actors, p.event_target, p.stance, p.settled,
+            p.claim[:120],
+        )
+        p.settled = False
+        p.stance = 0.0
+
+    return predictions

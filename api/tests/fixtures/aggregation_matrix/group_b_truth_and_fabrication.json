@@ -2657,6 +2657,191 @@
           }
         ]
       }
+    },
+    {
+      "id": "B20",
+      "name": "the winner-entity dyad check demotes retro#360's sign-flipped settlement votes",
+      "traces": [
+        "#401",
+        "#360",
+        "#313"
+      ],
+      "question": "England will win their World Cup semi-final against Argentina",
+      "notes": "B19 pins the England-Argentina incident (retro#360) with the extractor's real fabricated shape but no dyad data, because the extractor never emitted event_actors/event_target for the incident's own rows (pool rows are overwritten in place -- the F1 append-only gap #360 itself records) and the fixture cannot invent what was never captured. This case is the SAME shape with realistic dyad facets attached (retro#313's event_actors/event_target/is_occurrence), exercising enforce_winner_entity_consistency (retro#401) directly: alpha/bravo's settled +1.0 votes and charlie's unsettled +0.8 vote all carry event_actors='Argentina' acting on event_target='England' -- the RIVAL beating the SUBJECT -- with a POSITIVE stance for England winning, exactly retro#360's inversion. The check neutralises all three (stance to 0.0, settled stripped) rather than inverting them -- retro#401 asks for exactly this conservatism: the dyad match is confident the SIGN is wrong, not confident enough in the correct magnitude to assert a flipped value. delta's correctly-signed -1.0 vote carries the same dyad with a NEGATIVE stance -- no conflict, untouched. Net effect: settlement_min_sources=2 is no longer met (only delta stays settled), so the false pin is gone entirely rather than merely retimed, and the surviving weighted mean leans negative -- the right direction -- off delta's credibility-2.0 vote alone. This does not address the other half of #360's own known_bad note on B19 (aggregation should suppress a pin when a credible dissenting settlement vote exists) -- that is #372/#388's territory, orthogonal to this extraction-level fix.",
+      "request": {
+        "claim_direction": "arrival",
+        "claim_deadline": "2026-08-15"
+      },
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "evidence_class": "reported_fact",
+              "settled": true,
+              "event_date": "2026-07-30",
+              "fact_signal": 1.0,
+              "event_actors": "Argentina",
+              "event_target": "England",
+              "is_occurrence": true,
+              "verified": true
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "evidence_class": "reported_fact",
+              "settled": true,
+              "event_date": "2026-07-30",
+              "fact_signal": 1.0,
+              "event_actors": "Argentina",
+              "event_target": "England",
+              "is_occurrence": true,
+              "verified": true
+            }
+          ]
+        },
+        {
+          "source": "charlie",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 0.8,
+              "certainty": 0.9,
+              "evidence_class": "reported_fact",
+              "fact_signal": 0.8,
+              "event_actors": "Argentina",
+              "event_target": "England",
+              "is_occurrence": true,
+              "verified": true
+            }
+          ]
+        },
+        {
+          "source": "delta",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 2.0,
+          "claims": [
+            {
+              "stance": -1.0,
+              "certainty": 0.95,
+              "evidence_class": "reported_fact",
+              "settled": true,
+              "fact_signal": -1.0,
+              "event_actors": "Argentina",
+              "event_target": "England",
+              "is_occurrence": true,
+              "verified": true
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "settled is False",
+        "mean < 0",
+        "sources[0]['stance'] == 0.0",
+        "sources[0]['settled'] is None",
+        "sources[1]['stance'] == 0.0",
+        "sources[1]['settled'] is None",
+        "sources[2]['stance'] == 0.0",
+        "sources[3]['stance'] == -1.0",
+        "sources[3]['settled'] is True"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 4,
+        "settled": false,
+        "mean": -0.7254,
+        "std": 0.5845,
+        "ci_low": -0.98,
+        "ci_high": -0.1192,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 0.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.82,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": 1.0,
+            "is_occurrence": true,
+            "verified": true,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 0.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.82,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": 1.0,
+            "is_occurrence": true,
+            "verified": true,
+            "author_lean": null
+          },
+          {
+            "source": "charlie",
+            "stance": 0.0,
+            "certainty": 0.9,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.82,
+            "settled": null,
+            "settlement_event_date": null,
+            "fact_signal": 0.8,
+            "is_occurrence": true,
+            "verified": true,
+            "author_lean": null
+          },
+          {
+            "source": "delta",
+            "stance": -1.0,
+            "certainty": 0.95,
+            "credibility_weight": 2.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 1.64,
+            "settled": true,
+            "settlement_event_date": null,
+            "fact_signal": -1.0,
+            "is_occurrence": true,
+            "verified": true,
+            "author_lean": null
+          }
+        ]
+      }
     }
   ]
 }

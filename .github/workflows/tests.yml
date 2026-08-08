@@ -1,16 +1,17 @@
 name: Tests
 
-# Runs the api/ and pipeline/ pytest suites. Triggered directly on PRs for fast
-# feedback, and exposed via `workflow_call` so deploy-oracle.yml can require it
-# as a gate before shipping to the live Oracle box. No API keys or EC2 needed:
-# the suites mock external services, and api/tests/conftest.py supplies a dummy
-# ORACLE_API_KEY so settings validation passes.
+# Runs the api/, pipeline/, and bayesoracle/ pytest suites. Triggered directly
+# on PRs for fast feedback, and exposed via `workflow_call` so deploy-oracle.yml
+# can require it as a gate before shipping to the live Oracle box. No API keys
+# or EC2 needed: the suites mock external services, and api/tests/conftest.py
+# supplies a dummy ORACLE_API_KEY so settings validation passes.
 
 on:
   pull_request:
     paths:
       - api/**
       - pipeline/**
+      - bayesoracle/**
       # The case studies are hand-edited data, and test_event_validation.py
       # validates the committed set — so a bad edit to an event file alone must
       # trigger this workflow, not just changes under pipeline/.
@@ -24,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [api, pipeline]
+        project: [api, pipeline, bayesoracle]
     defaults:
       run:
         working-directory: ${{ matrix.project }}

@@ -148,6 +148,27 @@ def test_rejection_is_a_verdict_not_an_error():
     assert r.json()["reason"]
 
 
+# ── article_text length cap (retro#433) ─────────────────────────────────────
+# article_text had no max_length while /relevance sits at 120/minute (12x /forecast's
+# 10/minute) -- an uncapped-length payload at a high rate limit is an unmetered-cost
+# vector. The cap matches retro#432's LlmMessage.content cap (32,000 chars).
+
+def test_article_text_over_the_cap_is_rejected_without_reaching_the_model():
+    too_long = {**BODY, "article_text": "x" * 32_001}
+    with patch("forecast_api.main.check_is_prediction", new=AsyncMock(return_value=(_verdict(), {}))) as gk:
+        r = client.post("/relevance", json=too_long, headers=HEADERS)
+    assert r.status_code == 422
+    gk.assert_not_awaited()
+
+
+def test_article_text_at_the_cap_still_reaches_the_model():
+    at_cap = {**BODY, "article_text": "x" * 32_000}
+    with patch("forecast_api.main.check_is_prediction", new=AsyncMock(return_value=(_verdict(), {}))) as gk:
+        r = client.post("/relevance", json=at_cap, headers=HEADERS)
+    assert r.status_code == 200
+    gk.assert_awaited_once()
+
+
 def test_a_real_short_post_still_reaches_the_model():
     """The guard is a floor, not a filter — terse posts from curated journalists are the entire
     reason this endpoint exists, and must be judged on content exactly as before."""

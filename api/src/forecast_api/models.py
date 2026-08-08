@@ -449,7 +449,11 @@ class RelevanceRequest(BaseModel):
     full /forecast run — news-indexer uses it to rescue articles its embedding
     cosine ranks poorly (the cosine misranks; see docs/ORACLE_API.md)."""
     claim: str = Field(..., min_length=3, description="The claim to judge against — daatan's Prediction.claimText")
-    article_text: str = Field(..., min_length=1, description="Article body text")
+    # retro#433: unbounded length + this route's 120/minute limit (12x /forecast's) is an
+    # unmetered-cost vector. 32,000 chars matches the cap retro#432 put on LlmMessage.content
+    # for the same reason — comfortably covers a full article-sized prompt; a legitimate
+    # caller with more should trim to the relevant excerpt, not stuff the whole body in.
+    article_text: str = Field(..., min_length=1, max_length=32_000, description="Article body text")
     source_name: str = Field(default="", description="Outlet/source name, as the gatekeeper prompt's Source line")
     article_date: str = Field(default="", description="Article date, as the gatekeeper prompt's Date line")
     short_form: bool = Field(

@@ -947,8 +947,8 @@
         "settled": false,
         "mean": 0.3,
         "std": 0.1,
-        "ci_low": 0.1614,
-        "ci_high": 0.4386,
+        "ci_low": 0.1289,
+        "ci_high": 0.4711,
         "sources": [
           {
             "source": "alpha",
@@ -1268,8 +1268,8 @@
         "settled": false,
         "mean": 0.7,
         "std": 0.1,
-        "ci_low": 0.5868,
-        "ci_high": 0.8132,
+        "ci_low": 0.54,
+        "ci_high": 0.86,
         "sources": [
           {
             "source": "alpha",

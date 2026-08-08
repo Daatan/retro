@@ -1211,7 +1211,7 @@
         "settled": false,
         "mean": 0.98,
         "std": 0.1,
-        "ci_low": 0.8412,
+        "ci_low": 0.8153,
         "ci_high": 0.98,
         "sources": [
           {
@@ -1345,7 +1345,7 @@
       "traces": [
         "F16"
       ],
-      "notes": "F16's dispersion floor decays as 1.96*sigma/sqrt(n_eff), and n_eff is caller-controllable. Kish blocks NEAR-WEIGHTLESS padding beside a strong row (that pool keeps n_eff ~= 1), but not this shape: twelve IDENTICAL low-mass rows are perfectly equal-weight, so n_eff equals the row COUNT while the pool carries only about one strong row's worth of evidence mass. The interval then reports the number of rows rather than the weight behind them. This is the 76x fan-out shape already measured in the funnel work (news-indexer#193/#194, daatan#1231/#1232), not a hypothetical. Held at twelve articles because the runner gives each article index its own title vocabulary and only twelve exist; at the prod-shaped fifty the published width falls to ~2.8pp (retro#382's table), which rounds to 1pp and is invisible in daatan. Distinct from C10, which is the same collapse driven by SYNDICATION of strong rows (F2) rather than by low-mass volume.",
+      "notes": "FIXED (retro#382): the dispersion floor's divisor is now min(n_eff, k) with k = sum(min(w_i, decisiveness_floor)) / decisiveness_floor. Twelve identical low-mass rows are perfectly equal-weight, so Kish n_eff equals the row COUNT (12) while the pool carries ~2 capped rows' worth of mass (k = 2.07); the floor now divides by k, publishing ~27.2pp stance width instead of the pre-fix 11.3pp. The band may still sit below the single-source floor (19.6pp prob) precisely because the mass genuinely corroborates ~2 rows' worth — the invariant pins that width is bought by mass, never by row volume alone (retro#382's table: 50 rows at w=0.02 -> k=2 -> ~13.9pp, same ceiling as here). This is the live contingency while retro#355 clustering ships inert (cluster_downweight_exponent = 0.0); when clustering activates it collapses volume BEFORE n_eff, and this case should not move. Held at twelve articles because the runner gives each article index its own title vocabulary and only twelve exist; past that, dedupe_syndicated would collapse them at the 0.8 Jaccard bar and the case would measure the wrong thing. Distinct from C10, which is the same collapse driven by SYNDICATION of strong rows (F2).",
       "articles": [
         {
           "source": "alpha",
@@ -1506,12 +1506,9 @@
       ],
       "invariants": [
         "n == 12",
-        "ci_high - ci_low < 0.2"
+        "ci_high - ci_low > 0.25",
+        "ci_high - ci_low < 0.392"
       ],
-      "known_bad": {
-        "finding": "F16",
-        "expected_behavior": "Twelve rows carrying one row's worth of mass must not buy a twelve-row-tight interval. The published width should not fall below the single-source floor (~0.392, i.e. 19.6pp) on row volume alone. retro#382 records the measured mitigation as min(n_eff, k) with k = sum(min(w_i, decisiveness_floor)) / decisiveness_floor, verified a no-op on all five headline F16 cases (C9, B11, B15, B3, C10); it is the contingency now that retro#355 story clustering has landed but is shipped inert (cluster_downweight_exponent = 0.0), so nothing yet collapses volume before n_eff is computed."
-      },
       "expect": {
         "insufficient_data": false,
         "reason": null,
@@ -1519,8 +1516,8 @@
         "settled": false,
         "mean": 0.6,
         "std": 0.1,
-        "ci_low": 0.5434,
-        "ci_high": 0.6566,
+        "ci_low": 0.4639,
+        "ci_high": 0.7361,
         "sources": [
           {
             "source": "alpha",

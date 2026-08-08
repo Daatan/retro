@@ -416,6 +416,30 @@ def effective_sample_size(weights: Sequence[float]) -> float:
     return clamp((total_w * total_w) / sum_w2, 1.0, float(n))
 
 
+def capped_weight_count(weights: Sequence[float], cap: float) -> float:
+    """Capped-weight count, ``Σ min(wᵢ, cap) / cap`` (retro#382).
+
+    How many rows' worth of evidence the pool carries if no single row may
+    claim more than ``cap`` of it. Kish's ``n_eff`` is exactly the row count
+    for equal weights, so a pool of N identical low-mass rows — the funnel's
+    76× fan-out shape — reads as N full samples no matter how little mass each
+    carries (matrix case C15). This statistic charges those rows for their
+    mass: fifty rows at w=0.02 count as one.
+
+    Not a sample size on its own — it is unbounded below 1 and overcounts a
+    pool one heavy row dominates (the D1 objection recorded in retro#382, ~22%
+    too narrow). Callers must take ``min(effective_sample_size(w), k)``: each
+    statistic overcounts in the failure mode the other catches, and the min is
+    conservative in both.
+
+    ``cap`` ≤ 0 is a caller error; guarded at the call site (the cap tracks
+    ``decisiveness_floor``, whose kill switch is 0).
+    """
+    if cap <= 0:
+        raise ValueError("capped_weight_count requires cap > 0")
+    return sum(min(w, cap) for w in weights) / cap
+
+
 def pool_sources(
     stances: Sequence[float],
     weights: Sequence[float],
@@ -548,7 +572,10 @@ def widen_ci_for_unresolved_dispersion(
     widest median interval of any bucket (56pp) because thin-evidence widening
     dominates them; the zero-width cases are precisely the subset strong enough
     to escape it. A mass-keyed floor would fire on the pools that are already
-    wide and miss the ones that are not.
+    wide and miss the ones that are not. (The *divisor* is the exception:
+    :func:`aggregate_pool` passes ``min(n_eff, capped_weight_count)`` so that
+    equal-weight row volume cannot shrink the floor on multiplicity alone —
+    retro#382, matrix case C15. The firing condition stays dispersion-only.)
 
     A floor, not an addition: ``min``/``max`` against whatever the band already
     is, so a pool with real dispersion — or one already widened for thin
@@ -1100,10 +1127,19 @@ def aggregate_pool(
     # F16: last, so it composes as a floor on whatever the pooled + thin path
     # produced, and BEFORE the settlement pin, which replaces the interval
     # outright with its own policy band.
+    # The floor's divisor is min(n_eff, k) (retro#382): Kish alone is exactly
+    # the row count for equal weights, so equal-weight volume — fifty rows at
+    # w=0.02 — buys a fifty-row-tight band on one row's worth of evidence,
+    # while k alone overcounts a pool one heavy row dominates. The min is
+    # conservative in both failure modes. Falls back to n_eff alone when
+    # decisiveness_floor is switched off (k needs a positive cap).
+    floor_n = effective_sample_size(weights)
+    if decisiveness_floor > 0:
+        floor_n = min(floor_n, capped_weight_count(weights, decisiveness_floor))
     ci_low, ci_high, std = widen_ci_for_unresolved_dispersion(
         mean, ci_low, ci_high, std,
         min_dispersion=pool_dispersion_floor,
-        n_eff=effective_sample_size(weights),
+        n_eff=floor_n,
         clamp_eps=logit_clamp,
     )
 

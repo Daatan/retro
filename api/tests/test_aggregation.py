@@ -13,6 +13,7 @@ import pytest
 
 from forecast_api.aggregation import (
     aggregate_pool,
+    capped_weight_count,
     claim_weighted_stance,
     effective_sample_size,
     evidence_class_weight,
@@ -650,6 +651,27 @@ class TestEffectiveSampleSize:
         assert effective_sample_size([]) == 0.0
 
 
+class TestCappedWeightCount:
+    """k = Σ min(wᵢ, cap) / cap — the volume half of the floor divisor (retro#382)."""
+
+    def test_equal_low_mass_rows_count_by_mass_not_by_row(self):
+        # The C15 shape: fifty rows at w=0.02 carry one strong row's worth of
+        # evidence, so they count as two capped rows — not fifty.
+        assert capped_weight_count([0.02] * 50, 0.5) == pytest.approx(2.0)
+
+    def test_a_row_at_or_above_the_cap_counts_as_exactly_one(self):
+        assert capped_weight_count([5.0, 2.0, 0.5], 0.5) == pytest.approx(3.0)
+
+    def test_unbounded_below_one_which_is_why_callers_take_the_min(self):
+        # Not a sample size on its own: a single sub-cap row counts below 1,
+        # and widen_ci_for_unresolved_dispersion's max(n_eff, 1.0) absorbs it.
+        assert capped_weight_count([0.1], 0.5) == pytest.approx(0.2)
+
+    def test_rejects_a_non_positive_cap(self):
+        with pytest.raises(ValueError):
+            capped_weight_count([0.5], 0.0)
+
+
 class TestDispersionFloor:
     """The unanimity floor — defect (b) of F16 / retro#365."""
 
@@ -690,6 +712,20 @@ class TestDispersionFloor:
             widths.append(r.ci_high - r.ci_low)
         assert widths == sorted(widths, reverse=True)
         assert all(a > b for a, b in zip(widths, widths[1:]))
+
+    def test_equal_weight_row_volume_no_longer_buys_floor_decay(self):
+        """C15 / retro#382: N identical low-mass rows are perfectly equal-weight,
+        so Kish n_eff is exactly N and the floor used to shrink by √N on volume
+        alone. With min(n_eff, k) the band must match the pool carrying the same
+        mass in honest full-weight rows."""
+        spam = aggregate_pool([0.4] * 50, [0.02] * 50, [1.0] * 50, [False] * 50,
+                              **_aggregate_kwargs())
+        honest = aggregate_pool([0.4] * 2, [0.5] * 2, [1.0] * 2, [False] * 2,
+                                **_aggregate_kwargs())
+        assert spam is not None and honest is not None
+        assert (spam.ci_high - spam.ci_low) == pytest.approx(
+            honest.ci_high - honest.ci_low, rel=1e-6
+        )
 
     def test_zero_disables_the_floor(self):
         r = aggregate_pool([0.4] * 4, [0.6] * 4, [1.0] * 4, [False] * 4,

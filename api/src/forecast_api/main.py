@@ -382,7 +382,7 @@ async def search_health(_: ApiKeyClient = Depends(verify_api_key)):
 async def llm_proxy(
     request: Request,
     body: LlmRequest,
-    _: ApiKeyClient = Depends(verify_api_key),
+    client: ApiKeyClient = Depends(verify_api_key),
 ):
     """
     Proxy LLM calls to Bedrock (via tm.llm → litellm) using the server's AWS creds.
@@ -393,7 +393,20 @@ async def llm_proxy(
     Uses the non-retrying complete_text_once_with_usage: this is an interactive
     endpoint and daatan's caller times out at 60s, so we don't want the
     [30,60,120] backoff.
+
+    retro#432: a ``max_articles``-capped key exists specifically to stop
+    unmetered LLM spend (the staging-key-cutover incident, see auth.py). That
+    cap has no natural meaning here — this route has no article concept to
+    scale it against — so a capped client is denied the endpoint outright
+    rather than partially metered; the whole point of the cap is that this
+    key must not drive uncontrolled spend.
     """
+    if client.max_articles is not None:
+        logger.warning("event=llm_proxy_denied_capped_client client=%s", client.name)
+        return JSONResponse(
+            {"detail": "This API key is spend-capped and cannot use the raw /llm proxy"},
+            status_code=403,
+        )
     model = body.model or _pipeline_settings.extractor_model
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
     try:

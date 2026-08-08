@@ -26,6 +26,7 @@ from .config import settings
 from .forecaster import run_forecast
 from .leaderboard import get_leaderboard_data, leaderboard_size, leaderboard_snapshot_date
 from .mcp_auth import SCOPE_FORECAST, SCOPE_READ, CognitoTokenVerifier, require_scope
+from .mcp_limiter import FETCH_LIMIT, FORECAST_LIMIT, MARKET_LIMIT, SEARCH_LIMIT, enforce
 from .models import ForecastRequest, SearchRequest
 from .polymarket_live import current_yes_price, is_binary_yesno, resolve_market, summarize_market
 from .searcher import run_search
@@ -96,6 +97,7 @@ async def forecast(question: str, max_articles: Optional[int] = None) -> dict:
     tool (a live news+LLM pipeline; tens of seconds, occasionally more).
     """
     require_scope(SCOPE_FORECAST)
+    enforce(FORECAST_LIMIT, "forecast")
     resp = await run_forecast(ForecastRequest(question=question, max_articles=max_articles))
     return _forecast_payload(resp)
 
@@ -111,6 +113,7 @@ async def search_news(
     Returns article title/url/snippet/source/date. `date_from`/`date_to` are
     ISO dates (YYYY-MM-DD). Evidence gathering — does not forecast.
     """
+    enforce(SEARCH_LIMIT, "search_news")
     resp = await run_search(
         SearchRequest(query=query, limit=limit, date_from=date_from, date_to=date_to)
     )
@@ -123,6 +126,7 @@ async def fetch_article(url: str) -> dict:
     SSRF-guarded (public http(s) only). Use to read a specific source found via
     search_news.
     """
+    enforce(FETCH_LIMIT, "fetch_article")
     try:
         return (await fetch_and_extract(url)).model_dump()
     except ArticleFetchError as exc:
@@ -178,6 +182,7 @@ async def polymarket_market(market: str) -> dict:
     market id. Returns question, outcomes, current prices (`yes_price` is the YES
     implied probability), volume, and end date.
     """
+    enforce(MARKET_LIMIT, "polymarket_market")
     m = await resolve_market(market)
     if not m:
         raise ValueError(f"No Polymarket market found for {market!r}")
@@ -198,6 +203,7 @@ async def polymarket_edge(market: str, edge_threshold: float = 0.05) -> dict:
     Only binary yes/no markets are supported. Slow (runs a full forecast).
     """
     require_scope(SCOPE_FORECAST)
+    enforce(FORECAST_LIMIT, "polymarket_edge")
     m = await resolve_market(market)
     if not m:
         return {"market": market, "suggested_side": "NONE",

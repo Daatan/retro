@@ -6,6 +6,7 @@ Usage:
     # Writes factum_atlas.html next to the data dir.
 """
 
+import html
 import json
 import os
 from dataclasses import dataclass
@@ -76,6 +77,16 @@ SCORING_CONFIG = ScoringConfig()
 def load_json(p: Path) -> Any:
     with open(p) as f:
         return json.load(f)
+
+
+def _json_for_script(obj: Any) -> str:
+    """json.dumps() safe for embedding inside a <script> block. The HTML
+    tokenizer runs before any JS parsing, so a value containing the literal
+    substring '</script' closes the tag early regardless of it being "inside
+    a JS string" — json.dumps() alone doesn't escape '<'. Escaping every '<'
+    as its JSON-legal unicode form neutralizes that without changing the
+    parsed JS value."""
+    return json.dumps(obj).replace('<', '\\u003c')
 
 
 def stance_to_color(stance: float) -> str:
@@ -389,8 +400,8 @@ def _render_matrix(matrix_rows: list, search_status: dict,
             opacity = "1" if quality == "exact" else "0.65"
             pm_question = pm.get("question", "")
             pm_badge = (
-                f'<a href="{pm["url"]}" target="_blank" rel="noopener" '
-                f'title="Polymarket: {pm_question} ({quality})" '
+                f'<a href="{html.escape(pm["url"])}" target="_blank" rel="noopener" '
+                f'title="Polymarket: {html.escape(pm_question)} ({html.escape(quality)})" '
                 f'class="pm-badge" style="opacity:{opacity}">PM</a>'
             )
         parts.append(
@@ -398,7 +409,7 @@ def _render_matrix(matrix_rows: list, search_status: dict,
             f'<td class="event-label">'
             f'<span class="event-name">'
             f'<span class="event-id">{eid}</span>'
-            f'<a href="#event-{eid}">{row["name"]}</a>'
+            f'<a href="#event-{eid}">{html.escape(row["name"])}</a>'
             f'</span>'
             f'{pm_badge}'
             f'{badge}'
@@ -508,7 +519,7 @@ def _render_event_sections(event_ids: list, events: dict, polymarket: dict,
         # Description block
         description = ev.get("description") or ev.get("llm_referee_criteria") or ""
         desc_html = (
-            f'<div class="event-desc">{description}</div>'
+            f'<div class="event-desc">{html.escape(description)}</div>'
             if description else ""
         )
 
@@ -523,10 +534,10 @@ def _render_event_sections(event_ids: list, events: dict, polymarket: dict,
                 color = SOURCE_COLORS.get(sid, "#888")
                 art_items = "".join(
                     f'<div class="art-item">'
-                    f'{"<a href=" + repr(a["url"]) + " target=_blank rel=noopener>" if a["url"] else ""}'
-                    f'{a["headline"] or "(no headline)"}'
+                    f'{"<a href=\'" + html.escape(a["url"]) + "\' target=_blank rel=noopener>" if a["url"] else ""}'
+                    f'{html.escape(a["headline"]) if a["headline"] else "(no headline)"}'
                     f'{"</a>" if a["url"] else ""}'
-                    f'<span class="art-meta">{a["date"]} · {a["pred_count"]} pred{"s" if a["pred_count"]!=1 else ""}</span>'
+                    f'<span class="art-meta">{html.escape(a["date"])} · {a["pred_count"]} pred{"s" if a["pred_count"]!=1 else ""}</span>'
                     f'</div>'
                     for a in arts
                 )
@@ -549,7 +560,7 @@ def _render_event_sections(event_ids: list, events: dict, polymarket: dict,
             f'<div class="event-section" id="event-{eid}">'
             f'<div class="event-header">'
             f'<h2><span style="font-family:monospace;color:#58a6ff;margin-right:8px">{eid}</span>'
-            f'{ev["name"]}</h2>'
+            f'{html.escape(ev["name"])}</h2>'
             f'<span class="outcome-badge {badge_cls}">{badge_txt}</span>'
             f'<span class="event-meta">{ev["outcome_date"]}{pm_note}</span>'
             f'</div>'
@@ -575,7 +586,10 @@ def _render_scoring(scores: dict, events: dict) -> str:
     skill_str = f'{overall["skill"]:+.3f}' if overall["skill"] is not None else "—"
 
     # ── overall bar ──
-    html = f"""
+    # Named out_html, not html — this function calls html.escape() below, and a
+    # local var named `html` would shadow the module import for the whole
+    # function (Python hoists local assignments to the top of their scope).
+    out_html = f"""
 <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:24px">
   <div class="stat">
     <div class="stat-n">{overall['brier']:.3f}</div>
@@ -599,7 +613,7 @@ def _render_scoring(scores: dict, events: dict) -> str:
 """
 
     # ── per-event table ──
-    html += """
+    out_html += """
 <table class="pred-table" style="margin-bottom:32px">
   <thead><tr>
     <th>Event</th><th>Outcome</th><th>N preds</th>
@@ -611,7 +625,7 @@ def _render_scoring(scores: dict, events: dict) -> str:
         s = by_event.get(eid)
         if not s:
             continue
-        ev_name = events.get(eid, {}).get("name", eid)
+        ev_name = html.escape(events.get(eid, {}).get("name", eid))
         outcome_badge = (
             '<span class="outcome-badge badge-true">TRUE</span>'
             if s["outcome"] else
@@ -621,7 +635,7 @@ def _render_scoring(scores: dict, events: dict) -> str:
         skill = round(1 - brier / 0.25, 3)
         skill_clr = "#3fb950" if skill > 0 else "#f85149"
         p_clr = "#3fb950" if s["implied_p"] >= 50 else "#f85149"
-        html += (
+        out_html += (
             f'<tr>'
             f'<td><a href="#event-{eid}" style="font-family:monospace;color:#58a6ff">{eid}</a>'
             f' <span style="color:var(--muted);font-size:11px">{ev_name}</span></td>'
@@ -632,10 +646,10 @@ def _render_scoring(scores: dict, events: dict) -> str:
             f'<td style="text-align:center;color:{skill_clr};font-weight:600">{skill:+.3f}</td>'
             f'</tr>'
         )
-    html += '</tbody></table>'
+    out_html += '</tbody></table>'
 
     # ── per-source table ──
-    html += """
+    out_html += """
 <table class="pred-table">
   <thead><tr>
     <th>Source</th><th>N preds</th><th>Brier Score</th><th>Skill vs. Random</th>
@@ -646,7 +660,7 @@ def _render_scoring(scores: dict, events: dict) -> str:
         color = SOURCE_COLORS.get(sid, "#888")
         skill = round(1 - s["brier"] / 0.25, 3)
         skill_clr = "#3fb950" if skill > 0 else "#f85149"
-        html += (
+        out_html += (
             f'<tr>'
             f'<td><span class="source-dot" style="background:{color}"></span>{sid}</td>'
             f'<td style="text-align:center">{s["n"]}</td>'
@@ -654,13 +668,13 @@ def _render_scoring(scores: dict, events: dict) -> str:
             f'<td style="text-align:center;color:{skill_clr};font-weight:600">{skill:+.3f}</td>'
             f'</tr>'
         )
-    html += '</tbody></table>'
+    out_html += '</tbody></table>'
 
     # ── calibration curve ──
     calibration = scores.get("calibration")
     if calibration:
-        calib_json = json.dumps(calibration)
-        html += f"""
+        calib_json = _json_for_script(calibration)
+        out_html += f"""
 <h3 style="font-size:14px;font-weight:600;margin:32px 0 8px;color:var(--text)">Calibration Curve</h3>
 <p style="color:var(--muted);font-size:12px;margin-bottom:12px">
   Implied probability vs actual YES rate across 10 buckets.
@@ -717,12 +731,12 @@ def _render_scoring(scores: dict, events: dict) -> str:
 </script>
 """
     else:
-        html += (
+        out_html += (
             '<p style="color:var(--muted);font-size:12px;margin-top:24px">'
             'Calibration curve — not enough predictions yet (need ≥ 10).</p>'
         )
 
-    return html
+    return out_html
 
 
 # ── main render ───────────────────────────────────────────────────────────────
@@ -856,9 +870,9 @@ def render(data_dir: Path, output_path: Path,
         source_options=''.join(
             f'<option value="{sid}">{sid}</option>' for sid in SOURCES
         ),
-        source_colors_js=json.dumps(SOURCE_COLORS),
-        chart_data_js=json.dumps(chart_data),
-        predictions_js=json.dumps(all_preds),
+        source_colors_js=_json_for_script(SOURCE_COLORS),
+        chart_data_js=_json_for_script(chart_data),
+        predictions_js=_json_for_script(all_preds),
     )
 
     output_path.write_text(html, encoding="utf-8")

@@ -16,6 +16,7 @@ from .runner import run_article, ArticleInput, PipelineResult
 from .progress import update_cell, load_state
 from .utils import KNOWN_SOURCE_IDS, predates_outcome
 from .gnews_ingest import _is_stub_page
+from .net_guard import safe_get_async
 import httpx
 from bs4 import BeautifulSoup
 
@@ -84,7 +85,7 @@ class Orchestrator:
         console.print(f"    [dim]Scraping full text from: {url}[/dim]")
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.get(url, follow_redirects=True)
+                response = await safe_get_async(client, url)
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, "html.parser")
                     for s in soup(["script", "style", "nav", "footer", "header"]):

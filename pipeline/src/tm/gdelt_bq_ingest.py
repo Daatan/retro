@@ -378,6 +378,18 @@ async def run_batch(
     )
 
 
+def _entity_regex_patterns(terms: List[str]) -> List[str]:
+    """Build case-insensitive REGEXP_CONTAINS patterns for BigQuery entity terms.
+
+    Returns one ``(?i)<escaped term>`` pattern per term, meant to be bound as a
+    BigQuery ``ArrayQueryParameter`` rather than interpolated into SQL text.
+    ``re.escape()`` only neutralises regex metacharacters (so the pattern matches
+    the term literally) — it says nothing about SQL syntax, so the caller must
+    still bind these as parameters, never splice them into the query string.
+    """
+    return [f"(?i){re.escape(t)}" for t in terms]
+
+
 async def discover(keywords: str, date_from: str, date_to: str, data_dir: Path):
     """Surface NO-event candidates: which tracked outlets covered a topic, how heavily.
 
@@ -393,24 +405,32 @@ async def discover(keywords: str, date_from: str, date_to: str, data_dir: Path):
     if not terms:
         console.print("[yellow]No proper-noun entity terms extracted from keywords[/yellow]")
         return
-    entity = " OR ".join(
-        f"REGEXP_CONTAINS(COALESCE(V2Persons,''), r'(?i){re.escape(t)}') "
-        f"OR REGEXP_CONTAINS(COALESCE(AllNames,''), r'(?i){re.escape(t)}')"
-        for t in terms
-    )
+    # Entity terms and date bounds are bound as query parameters — not spliced
+    # into the SQL string — so nothing the caller supplies can alter the query's
+    # structure, regardless of what characters ever end up in a term.
+    patterns = _entity_regex_patterns(terms)
     dom = _ws._sql_domain_filter(list(sources_map.keys()))
     sql = f"""
         SELECT SourceCommonName AS source, COUNT(*) AS n,
                MIN(DATE) AS first_seen, MAX(DATE) AS last_seen
         FROM `gdelt-bq.gdeltv2.gkg_partitioned`
-        WHERE _PARTITIONTIME BETWEEN TIMESTAMP('{date_from}') AND TIMESTAMP('{date_to}')
-          AND ({entity}) {dom}
+        WHERE _PARTITIONTIME BETWEEN TIMESTAMP(@date_from) AND TIMESTAMP(@date_to)
+          AND EXISTS (
+              SELECT 1 FROM UNNEST(@patterns) AS pattern
+              WHERE REGEXP_CONTAINS(COALESCE(V2Persons,''), pattern)
+                 OR REGEXP_CONTAINS(COALESCE(AllNames,''), pattern)
+          ) {dom}
         GROUP BY source ORDER BY n DESC LIMIT 50
     """
     job = client.query(
         sql,
         job_config=_bq.QueryJobConfig(
-            maximum_bytes_billed=_ws._GDELT_BQ_MAX_BYTES_BILLED
+            maximum_bytes_billed=_ws._GDELT_BQ_MAX_BYTES_BILLED,
+            query_parameters=[
+                _bq.ScalarQueryParameter("date_from", "STRING", date_from),
+                _bq.ScalarQueryParameter("date_to", "STRING", date_to),
+                _bq.ArrayQueryParameter("patterns", "STRING", patterns),
+            ],
         ),
     )
     rows = list(await asyncio.to_thread(job.result))

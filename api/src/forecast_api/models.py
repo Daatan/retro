@@ -422,6 +422,23 @@ class AuthorSignalInput(BaseModel):
     evidence_class: Optional[Literal["reported_fact", "cited_probability", "cited_share", "reporting", "opinion"]] = Field(default=None, description="Recorded for later analysis, never filtered on in this lane")
 
 
+class SettlementSnapshotInput(BaseModel):
+    """The settlement pin's state as last computed for this claim, before the
+    outcome was known — daatan's own copy of the last /forecast or
+    /pool/aggregate response's settlement fields (ForecastResponse.settled /
+    .mean / .ci_low / .ci_high, PoolAggregateResponse.settlement_suppressed /
+    .settlement_suppression_reason). Optional: an old daatan build that
+    hasn't wired this up yet still ingests normally, it just contributes
+    nothing to the settlement-pin ledger (retro#361 Phase 1)."""
+    settled: bool = Field(description="Whether the pin had fired (mean/ci pinned near the boundary) as of this snapshot")
+    mean: float = Field(ge=-1.0, le=1.0, description="Pinned mean stance [-1, 1] at snapshot time; sign is the pin's declared direction")
+    ci_low: float = Field(default=0.0, description="Pinned 95% CI lower bound at snapshot time")
+    ci_high: float = Field(default=0.0, description="Pinned 95% CI upper bound at snapshot time")
+    settled_sources: Optional[int] = Field(default=None, description="How many independent sources voted the winning settlement direction")
+    settlement_suppressed: bool = Field(default=False, description="True when a would-be pin was suppressed instead of firing — see PoolAggregateResponse.settlement_suppressed")
+    settlement_suppression_reason: Optional[str] = Field(default=None, description="Why the pin was suppressed, when settlement_suppressed")
+
+
 class IngestResolutionRequest(BaseModel):
     """One resolved forecast's per-source stances, pushed by daatan once a
     Prediction resolves. Idempotent on prediction_id — re-ingesting the same
@@ -432,6 +449,7 @@ class IngestResolutionRequest(BaseModel):
     resolved_at: Optional[str] = Field(default=None)
     sources: list[ResolutionSourceInput] = Field(default_factory=list)
     author_signals: list[AuthorSignalInput] = Field(default_factory=list)
+    settlement_snapshot: Optional[SettlementSnapshotInput] = Field(default=None, description="The settlement pin's snapshot at forecast time, when this claim had one — feeds the settlement-pin ledger (retro#361 Phase 1: pins contradicted by resolution). Omit when the claim was never settlement-pinned; the ledger then records nothing for this prediction_id.")
 
 
 class IngestResolutionResponse(BaseModel):
@@ -439,6 +457,33 @@ class IngestResolutionResponse(BaseModel):
     already_ingested: bool = Field(description="True when prediction_id was already on record — sources_recorded is 0 in that case, nothing was written")
     sources_recorded: int
     author_signals_recorded: int = Field(default=0)
+
+
+# ── Settlement-pin ledger (retro#361 Phase 1) ───────────────────────────────
+# Records, at ingest time, every settlement pin's snapshot alongside the
+# eventual resolved outcome, so "pins contradicted by resolution" is
+# queryable. Classifying WHY a contradicted pin was wrong (extraction error /
+# question semantics / genuine miss) is explicitly Phase 2, deferred — see
+# the issue and the PR that shipped Phase 1.
+
+class SettlementPinLedgerEntry(BaseModel):
+    prediction_id: str
+    outcome: bool = Field(description="The declared resolution: True = YES/TRUE")
+    resolved_at: Optional[str] = Field(default=None)
+    pin_mean: float = Field(description="The pinned mean stance [-1, 1] at snapshot time")
+    pin_ci_low: float
+    pin_ci_high: float
+    pin_direction: Literal["yes", "no"] = Field(description="The pin's declared direction — sign of pin_mean")
+    settled_sources: Optional[int] = Field(default=None)
+    settlement_suppressed: bool = Field(default=False)
+    settlement_suppression_reason: Optional[str] = Field(default=None)
+    contradicted: bool = Field(description="True when pin_direction disagrees with outcome")
+
+
+class SettlementPinReportResponse(BaseModel):
+    entries: list[SettlementPinLedgerEntry] = Field(default_factory=list)
+    contradicted_count: int = Field(description="How many recorded pins disagree with their eventual resolution")
+    total_settled_pins: int = Field(description="How many settlement-pin snapshots are on record in total (contradicted + confirmed)")
 
 
 # ── Relevance ─────────────────────────────────────────────────────────────────

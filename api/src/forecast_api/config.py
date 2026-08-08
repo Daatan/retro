@@ -33,6 +33,13 @@ class ApiSettings(BaseSettings):
     # per-(author, outlet) board replayed from the same feedback file's
     # author_signals (resolution_scorer.rescore_authors_from_disk).
     resolution_author_leaderboard_path: Path = Path("")  # empty = data_dir/resolution_author_leaderboard.json
+    # Settlement-pin ledger (retro#361 Phase 1): append-only JSONL of every
+    # settlement pin's snapshot (what the pin said) alongside the eventual
+    # resolved outcome, written on POST /leaderboard/ingest whenever the
+    # payload carries a settlement_snapshot. Separate file from
+    # resolution_feedback_path — this ledger is specifically about pin
+    # correctness, not per-source credibility.
+    settlement_pin_ledger_path: Path = Path("")  # empty = data_dir/settlement_pin_ledger.jsonl
     # Step 4 — the cutover (docs/ORACLE_VARIABLES.md §9). When True,
     # get_credibility_weight() sources credibility from the resolution-informed
     # shadow board above instead of the vault-curated leaderboard.json. Full
@@ -598,6 +605,12 @@ class ApiSettings(BaseSettings):
         if self.resolution_author_leaderboard_path != Path(""):
             return self.resolution_author_leaderboard_path
         return self.data_dir / "resolution_author_leaderboard.json"
+
+    @property
+    def resolved_settlement_pin_ledger_path(self) -> Path:
+        if self.settlement_pin_ledger_path != Path(""):
+            return self.settlement_pin_ledger_path
+        return self.data_dir / "settlement_pin_ledger.jsonl"
 
 
 settings = ApiSettings()

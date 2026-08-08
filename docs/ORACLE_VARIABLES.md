@@ -1430,3 +1430,42 @@ clean: enforcement moves **exactly B5, B6, B9** and nothing else.
 Interim by construction: R5's provenance axis makes "who stands behind this" a
 field rather than a text scan, and this function should be **deleted** then, not
 migrated — do not grow the allowlist into a general-purpose source registry.
+
+## 2026-08-08 — settlement-pin ledger, Phase 1 (retro#361)
+
+Settlement pin quality is measurable at exactly the moment each error is
+freshest: of the first resolved questions that had been settlement-pinned,
+two contradicted the pin (retro#360's England-Argentina sign flip; the
+USA-bombs-Iran-2025 pin, arguably correct against stretched question
+semantics). retro#361 proposes a ledger + report to make "pins contradicted
+by resolution" queryable, plus a classification heuristic (extraction error
+/ question semantics / genuine miss / pin-correct) for each contradiction.
+
+**This entry ships Phase 1 only — the ledger + report.** The classification
+heuristic is deferred; it needs its own review of real contradicted pins
+once enough accumulate, tracked separately from this shipment.
+
+- `IngestResolutionRequest` gains an optional `settlement_snapshot`
+  (`SettlementSnapshotInput`: `settled`, `mean`, `ci_low`, `ci_high`,
+  `settled_sources`, `settlement_suppressed`, `settlement_suppression_reason`
+  — daatan's own copy of the last `/forecast`/`/pool/aggregate` response's
+  settlement fields for this claim). Omitted entirely by callers that
+  haven't wired it up yet — `POST /leaderboard/ingest` keeps working exactly
+  as before, the ledger simply records nothing for that `prediction_id`.
+- `settlement_pin_ledger.py` (`api/src/forecast_api/`): on ingest, when the
+  snapshot is present and `settled=True`, records `{prediction_id, outcome,
+  pin_direction (sign of pin_mean), pin_mean/ci_low/ci_high,
+  settled_sources, settlement_suppressed, settlement_suppression_reason,
+  contradicted (pin_direction != outcome)}` to
+  `data/settlement_pin_ledger.jsonl`. Same diskcache-backed, cross-worker-
+  safe dedup shape as `resolution_feedback.py` (retro#434/PR#450) — a
+  separate ledger file and dedup store, independently idempotent on
+  `prediction_id` so a retry that adds a snapshot the first push omitted
+  still lands it even after `resolution_feedback`'s own store has already
+  marked that `prediction_id` ingested. A snapshot with `settled=False` (the
+  pool never pinned) is not recorded — nothing to post-mortem.
+- `GET /leaderboard/settlement-pin-report` — new read-only endpoint, same
+  shape as `/leaderboard/resolution-shadow` (recomputed from the ledger file
+  on every call). Defaults to contradicted pins only;
+  `?include_confirmed=true` returns the full ledger for a precision
+  denominator.

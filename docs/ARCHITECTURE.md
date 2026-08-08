@@ -188,6 +188,9 @@ Consumers globbing `vault2/extractions/` must filter markers via
 
 ### Prediction (extracted by LLM)
 Each prediction has: `quote`, `claim`, `stance` (−1 to +1, event probability), `certainty`, `settled` (bool — true when the source reports the outcome as an accomplished fact, not a prediction; the prompt explicitly excludes historical background such as a past removal/ban, see #244), and `quantitative_estimate` (optional [0,1] — an explicit modeled probability, poll number, or market price the source cites for the event itself; carries the quantitative-anchor weight premium).
+
+Also requested, EXPERIMENTAL/shadow (Phase 2 of the author-scoring redesign, not yet consumed by any estimator): `evidence_class` (reported_fact / cited_probability / cited_share / reporting / opinion — S2, see `docs/ORACLE_VARIABLES.md` §5), `fact_signal` (−1 to +1, what the reported facts alone imply, un-fused from the author's framing), `event_actors` / `event_target` (the fact's actor-target dyad, for cross-checking against the claim), `is_occurrence` (is the reported fact the event itself, or only a precursor), `verified` (independently reported vs. merely claimed by an interested party), `event_date` / `event_date_reference` (resolved absolute date + the article's original relative expression). Full field docs: `PredictionExtraction` in `pipeline/src/tm/models.py`.
+
 Older atlas entries also carry: `sentiment`, `specificity`, `hedge_ratio`, `conditionality`, `magnitude`, `time_horizon`, `prediction_type`, `source_authority` (these fields were dropped from the extractor prompt in PR #102 to reduce latency; retained as Optional for backward compatibility).
 
 **stance** = how strongly the prediction implies the related event WILL occur.
@@ -252,7 +255,7 @@ git push → GitHub Actions → GitHub Pages
 | Role | Model | Notes |
 |---|---|---|
 | Gatekeeper | `bedrock/amazon.nova-micro-v1:0` | Topic-relevance filter: is this article on-topic for the event? Uses a directive coarse-gate prompt that passes INDIRECT evidence (rival collapse, coalition dynamics, etc.), not just explicit predictions; regression-guarded by `pipeline/eval_gatekeeper.py`. |
-| Extractor | `bedrock/amazon.nova-lite-v1:0` | Structured extraction of up to 5 predictions per article (6 fields: quote, claim, stance, certainty, settled, quantitative_estimate) |
+| Extractor | `bedrock/amazon.nova-lite-v1:0` | Structured extraction of up to 5 predictions per article (14 requested fields — see "Prediction (extracted by LLM)" above) |
 | Article Aggregator | `bedrock/amazon.nova-lite-v1:0` | Collapses high-spread (>0.4) predictions within a single article into one editorial signal |
 | Keywords | `bedrock/amazon.nova-micro-v1:0` | One-time: generate search keywords per event (via `tm.llm`) |
 

@@ -72,11 +72,13 @@ secret. CI runs this on every PR and **gates the deploy** (see `.github/workflow
 ## Endpoints (summary)
 
 `POST /forecast`, `POST /search`, `GET /search/health`, `POST /llm`,
-`POST /fetch-url`, `GET /bayes/nodes`, `GET /leaderboard`, `GET /health`,
-`GET /version`, `GET /pm/markets`. All require the `x-api-key` header **except**
-`/health`, `/version`, and the deliberately-public `/fetch-url` (which is
-rate-limited and SSRF-guarded — http(s) only, no private/loopback/link-local
-hosts). Full details in the
+`POST /fetch-url`, `POST /pool/aggregate`, `POST /relevance`,
+`GET /bayes/nodes`, `GET /leaderboard`, `POST /leaderboard/ingest`,
+`GET /leaderboard/resolution-shadow`, `GET /leaderboard/author-shadow`,
+`GET /health`, `GET /version`, `GET /pm/markets`. All require the `x-api-key`
+header **except** `/health`, `/version`, and the deliberately-public
+`/fetch-url` (which is rate-limited and SSRF-guarded — http(s) only, no
+private/loopback/link-local hosts). Full details in the
 [Oracle API contract](https://github.com/Daatan/docs/blob/main/oracle-api.md).
 
 Error-contract notes: `/search` returns **422** (not 500) on malformed date

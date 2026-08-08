@@ -1,19 +1,19 @@
 # TruthMachine / Factum Atlas — Status & Runbook
 
-_Last updated: 2026-05-06. The "Current State" snapshot below ages fast — cross-check with the live atlas before trusting specific numbers._
+_Last updated: 2026-08-08. The "Current State" snapshot below ages fast — cross-check with the live atlas before trusting specific numbers._
 
 ---
 
 ## What Is This
 
 TruthMachine is a retroactive media prediction pipeline. It:
-1. **Ingests** news articles from 13 Israeli/international sources via GNews API
+1. **Ingests** news articles from 27 Israeli/international sources via GNews API (see `docs/ARCHITECTURE.md` "Ingest Sources" for the current list)
 2. **Extracts** forward-looking predictions from each article using AWS Bedrock (LLM)
 3. **Aggregates** predictions into a cell signal per (event × source) pair
 4. **Renders** the Factum Atlas — an HTML matrix of prediction signals
 5. **Publishes** the atlas to GitHub (`factum_atlas.html` on `main`)
 
-The matrix has up to **910 cells** = 70 events × 13 sources. Not all combinations have articles (the gatekeeper rejects off-topic coverage, some sources don't cover some events), so the steady-state `done` count is lower than 910.
+The matrix size is events × sources (27 sources as of this update — cross-check the live atlas for the current event count, which moves independently). Not all combinations have articles (the gatekeeper rejects off-topic coverage, some sources don't cover some events), so the steady-state `done` count is lower than the full matrix.
 
 ---
 
@@ -103,8 +103,8 @@ ec2_run.sh (systemd loop)
 - Skips article if False → cell marked `no_predictions`
 
 ### Stage 2: Extractor
-- Extracts up to 10 `PredictionExtraction` objects per article
-- Fields: quote, claim, stance (−1 to +1), sentiment, certainty, specificity, hedge_ratio, conditionality, magnitude, time_horizon, prediction_type, source_authority
+- Extracts up to 5 `PredictionExtraction` objects per article
+- 14 requested fields (quote, claim, stance, certainty, settled, quantitative_estimate, evidence_class, fact_signal, event_actors, event_target, is_occurrence, verified, event_date, event_date_reference) plus legacy fields kept Optional for backward compat with older atlas entries — see `docs/ARCHITECTURE.md` "Prediction (extracted by LLM)" for the current field set
 
 ### Stage 2b: Article Aggregator (new, 2026-03-28)
 - Triggered when a single article produces predictions with stance spread > 0.4

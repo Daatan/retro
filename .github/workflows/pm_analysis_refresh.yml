@@ -6,10 +6,23 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Gate: the api/ + pipeline/ + bayesoracle/ suites must pass before we trust
+  # today's data run. A PR opened with the default GITHUB_TOKEN (below) does
+  # NOT trigger tests.yml's own `pull_request` handler — GitHub suppresses
+  # workflow runs caused by GITHUB_TOKEN to prevent recursive triggering — so
+  # this is the actual gate, not the PR's (absent) checks. Mirrors
+  # deploy-oracle.yml's use of the same reusable workflow.
+  test:
+    uses: ./.github/workflows/tests.yml
+
   refresh:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+      branch: ${{ steps.diff.outputs.branch }}
 
     steps:
       - uses: actions/checkout@v6
@@ -31,10 +44,45 @@ jobs:
       - name: Patch index.html and rebuild all.json
         run: python bayesoracle/apply_html_data.py
 
-      - name: Commit and push if changed
+      - name: Validate refresh output
+        # Fails closed: a NaN/inf value, an out-of-range probability, or a
+        # wildly oversized diff stops here, before anything is committed.
+        run: python bayesoracle/validate_refresh.py
+
+      - name: Commit to a branch if the data changed
+        # PR-only, per this repo's hard rule (CLAUDE.md) — main deploys on
+        # merge (deploy-atlas.yml, bayesoracle/**), so a bad regression run
+        # used to ship straight to bayes.daatan.com with nothing to catch it.
+        id: diff
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add bayesoracle/
-          git diff --staged --quiet || git commit -m "chore(pm-analysis): daily data refresh $(date -u +%Y-%m-%d)"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes — skipping."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          branch="automated/pm-analysis-refresh-$(date -u +%Y-%m-%d)"
+          git checkout -b "$branch"
+          git commit -m "chore(pm-analysis): daily data refresh $(date -u +%Y-%m-%d)"
+          git push -u origin "$branch"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+  open-pr:
+    needs: refresh
+    if: needs.refresh.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --title "chore(pm-analysis): daily data refresh $(date -u +%Y-%m-%d)" \
+            --body "Automated PM-analysis refresh. \`bayesoracle/validate_refresh.py\` sanity checks and the \`tests.yml\` suite both passed before this branch was pushed (see the triggering run)." \
+            --base main \
+            --head "${{ needs.refresh.outputs.branch }}"

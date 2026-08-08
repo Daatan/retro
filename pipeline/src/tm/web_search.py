@@ -1601,6 +1601,26 @@ def search_articles(
     return results
 
 
+def search_capturing(
+    query: str,
+    limit: int = 10,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+) -> tuple[List[SearchResult], str, list[str]]:
+    """Run search_articles() and capture the winning provider/chain *in the same
+    thread* the search ran in.
+
+    ``get_last_search_provider()``/``get_last_search_provider_chain()`` are
+    thread-local; callers typically run search via ``asyncio.to_thread``, so
+    reading the provider back in the calling (event-loop) thread always
+    returns stale/"none" state. Call this whole function inside the worker
+    thread instead (e.g. ``asyncio.to_thread(search_capturing, query, limit)``)
+    so the provider read happens where the search actually ran.
+    """
+    results = search_articles(query, limit, date_from, date_to)
+    return results, get_last_search_provider(), get_last_search_provider_chain()
+
+
 def _search_articles_chain(
     query: str,
     limit: int = 10,

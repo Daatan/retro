@@ -7,6 +7,8 @@ Mirrors test_searcher.py's provider-attribution coverage for the forecaster.
 
 import asyncio
 
+from tm import web_search
+
 from forecast_api import forecaster
 from forecast_api.forecaster import _empty_response, run_forecast
 from forecast_api.models import ArticleInput, ForecastRequest
@@ -33,9 +35,9 @@ class TestEmptyResponseForwardsProvider:
 class TestForecastResponseProvider:
     def test_empty_path_carries_provider(self, monkeypatch):
         # Search returns nothing; provider attribution still flows to the top level.
-        monkeypatch.setattr(forecaster, "search_articles", lambda q, limit: [])
-        monkeypatch.setattr(forecaster, "get_last_search_provider", lambda: "ddg")
-        monkeypatch.setattr(forecaster, "get_last_search_provider_chain",
+        monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None: [])
+        monkeypatch.setattr(web_search, "get_last_search_provider", lambda: "ddg")
+        monkeypatch.setattr(web_search, "get_last_search_provider_chain",
                             lambda: ["gdelt", "brightdata", "dataforseo", "ddg", "gdelt_bq"])
 
         async def _no_distill(q):
@@ -49,9 +51,9 @@ class TestForecastResponseProvider:
         assert resp.distilled_query is None  # distillation was a no-op
 
     def test_distilled_query_is_exposed(self, monkeypatch):
-        monkeypatch.setattr(forecaster, "search_articles", lambda q, limit: [])
-        monkeypatch.setattr(forecaster, "get_last_search_provider", lambda: "none")
-        monkeypatch.setattr(forecaster, "get_last_search_provider_chain", lambda: [])
+        monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None: [])
+        monkeypatch.setattr(web_search, "get_last_search_provider", lambda: "none")
+        monkeypatch.setattr(web_search, "get_last_search_provider_chain", lambda: [])
 
         async def _distill(q):
             return "russia ukraine ceasefire", {}

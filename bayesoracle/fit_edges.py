@@ -27,6 +27,7 @@ Run:  api/.venv/bin/python bayesoracle/fit_edges.py
 from __future__ import annotations
 
 import json
+import sys
 from bisect import bisect_right
 from pathlib import Path
 
@@ -40,14 +41,20 @@ import os
 RIDGE = float(os.environ.get("RIDGE", "2.0"))   # shrink per-node w toward LLM w
 CLIP = 1e-4
 
+# sigmoid/logit are core.py's — this used to be a second, independent
+# reimplementation (retro#439). core.logit is already scalar/numpy-scalar-safe
+# (used here at line ~96 and ~134). core.sigmoid is scalar-only (a branchy
+# `if x >= 0` that can't evaluate on an array's truth value), but this module's
+# `predict()` needs it applied elementwise over an array — np.vectorize adapts
+# it without duplicating the math, at the cost of a Python-level loop per call
+# (fine here: fit_edges.py is an offline research/backtest script, not the
+# request-path code core.sigmoid also serves).
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+from core import logit  # noqa: E402
+from core import sigmoid as _sigmoid_scalar  # noqa: E402
 
-def sigmoid(x):
-    return 1.0 / (1.0 + np.exp(-np.clip(x, -40, 40)))
-
-
-def logit(p):
-    p = np.clip(p, 0.001, 0.999)
-    return np.log(p / (1 - p))
+sigmoid = np.vectorize(_sigmoid_scalar, otypes=[float])
 
 
 class Series:

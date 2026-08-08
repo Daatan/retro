@@ -17,6 +17,7 @@ from .progress import update_cell, load_state
 from .utils import KNOWN_SOURCE_IDS, predates_outcome
 from .gnews_ingest import _is_stub_page
 from .net_guard import safe_get_async
+from .crawler import _source_domain
 import httpx
 from bs4 import BeautifulSoup
 
@@ -195,14 +196,7 @@ class Orchestrator:
             return self.local_file_search(source["id"], event["id"], start, end)
 
         if self.mode == SearchMode.api:
-            domain = (
-                source["url"]
-                .replace("https://www.", "")
-                .replace("http://www.", "")
-                .replace("https://", "")
-                .replace("http://", "")
-                .split("/")[0]
-            )
+            domain = _source_domain(source)
             keywords = event.get("search_keywords", [])
             query = " ".join(keywords[:3]) + f" site:{domain}"
             raw = await self._oracle_search(query, 10, start, end)

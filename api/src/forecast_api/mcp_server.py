@@ -21,7 +21,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from tm.scorer import stance_to_prob
 
 from .article_fetch import ArticleFetchError, fetch_and_extract
-from .bayesoracle import compute_nodes
+from .bayesoracle import compute_nodes, parse_node_observations
 from .config import settings
 from .forecaster import run_forecast
 from .leaderboard import get_leaderboard_data, leaderboard_size, leaderboard_snapshot_date
@@ -140,16 +140,7 @@ async def bayes_nodes(observations: str = "") -> dict:
     'ELECTIONS=0.95,TRUMP=0.70' (values clamped to [0,1]); unlisted nodes are
     computed from the graph. Useful for Israel-politics Polymarket markets.
     """
-    obs: dict[str, float] = {}
-    for part in observations.split(","):
-        part = part.strip()
-        if "=" not in part:
-            continue
-        node_id, _, val = part.partition("=")
-        try:
-            obs[node_id.strip().upper()] = float(val.strip())
-        except ValueError:
-            pass
+    obs = parse_node_observations(observations)
     return {"nodes": compute_nodes(obs or None)}
 
 

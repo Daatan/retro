@@ -41,3 +41,24 @@ def compute_nodes(observations: Optional[dict[str, float]] = None) -> list[dict]
     layer then id — unchanged from the previous contract.
     """
     return _graph().compute_nodes(observations)
+
+
+def parse_node_observations(observations: str) -> dict[str, float]:
+    """Parse a comma-separated ``NODE=prob`` string (e.g. 'ELECTIONS=0.95,TRUMP=0.70')
+    into a {node_id: probability} dict, as accepted by ``compute_nodes``.
+
+    Malformed parts (missing '=' or a non-numeric value) are silently skipped —
+    same lenient behavior the /bayes/nodes route and bayes_nodes MCP tool have
+    always had. Shared here so the two call sites can't drift.
+    """
+    obs: dict[str, float] = {}
+    for part in observations.split(","):
+        part = part.strip()
+        if "=" not in part:
+            continue
+        node_id, _, val = part.partition("=")
+        try:
+            obs[node_id.strip().upper()] = float(val.strip())
+        except ValueError:
+            pass
+    return obs

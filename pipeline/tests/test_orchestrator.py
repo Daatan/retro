@@ -140,6 +140,9 @@ def _fake_async_client(response=None, exc=None):
 
 
 class TestGetFullText:
+    # IP-literal hosts (not "example.com") so safe_get_async's DNS-resolution
+    # check (net_guard.unsafe_reason) doesn't make a real query — matches
+    # test_net_guard.py's own convention.
     async def test_extracts_text_from_html(self, tmp_path, monkeypatch):
         html = "<html><head><style>x</style></head><body><nav>Skip</nav><p>Real content here.</p></body></html>"
         monkeypatch.setattr(
@@ -147,7 +150,7 @@ class TestGetFullText:
             _fake_async_client(response=httpx.Response(200, text=html)),
         )
         orch = _make_orch(tmp_path)
-        text = await orch.get_full_text("https://example.com/a")
+        text = await orch.get_full_text("https://93.184.216.34/a")
         assert "Real content here." in text
         assert "Skip" not in text
 
@@ -157,7 +160,7 @@ class TestGetFullText:
             _fake_async_client(response=httpx.Response(404, text="nope")),
         )
         orch = _make_orch(tmp_path)
-        assert await orch.get_full_text("https://example.com/missing") == ""
+        assert await orch.get_full_text("https://93.184.216.34/missing") == ""
 
     async def test_network_exception_returns_empty_string(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
@@ -165,7 +168,25 @@ class TestGetFullText:
             _fake_async_client(exc=httpx.ConnectTimeout("timeout")),
         )
         orch = _make_orch(tmp_path)
-        assert await orch.get_full_text("https://example.com/a") == ""
+        assert await orch.get_full_text("https://93.184.216.34/a") == ""
+
+    async def test_private_ip_url_is_rejected_without_network_call(self, tmp_path, monkeypatch):
+        # The SSRF guard must reject before any client.get() happens — assert
+        # via a client whose .get() would raise if it were ever reached.
+        monkeypatch.setattr(
+            orch_mod.httpx, "AsyncClient",
+            _fake_async_client(exc=AssertionError("client.get() should not be called")),
+        )
+        orch = _make_orch(tmp_path)
+        assert await orch.get_full_text("https://127.0.0.1/admin") == ""
+
+    async def test_bracketed_ipv6_loopback_is_rejected(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            orch_mod.httpx, "AsyncClient",
+            _fake_async_client(exc=AssertionError("client.get() should not be called")),
+        )
+        orch = _make_orch(tmp_path)
+        assert await orch.get_full_text("https://[::1]/admin") == ""
 
 
 # ─────────────────────────────────────────────

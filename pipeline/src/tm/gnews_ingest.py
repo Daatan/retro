@@ -444,7 +444,7 @@ async def _fetch_wayback(url: str, client: httpx.AsyncClient) -> str:
     """Try Wayback Machine for a cached copy of a paywalled/blocked URL."""
     try:
         wb_url = f"https://web.archive.org/web/{url}"
-        r = await client.get(wb_url, timeout=20, follow_redirects=True)
+        r = await safe_get_async(client, wb_url, timeout=20)
         if r.status_code != 200:
             return ""
         return await _scrape_html(r.text)
@@ -680,7 +680,7 @@ async def search_wayback_cdx(
 
     try:
         async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(CDX_API, params=params)
+            r = await safe_get_async(client, CDX_API, params=params)
         if r.status_code != 200:
             console.print(f"    [dim red]CDX error: HTTP {r.status_code}[/dim red]")
             return []

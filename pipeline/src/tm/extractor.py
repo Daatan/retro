@@ -580,9 +580,10 @@ country, on a different country — is context only: keep |fact_signal| small an
 it as the event occurring, however forceful the fact.
   - OCCURRENCE vs PRECURSOR. Set is_occurrence true only when the fact IS the event itself \
 (or its definitive outcome); set it false when the fact is a precondition, mobilisation, \
-capability, or escalation that merely precedes the event. A precursor is capped at |0.3| no \
-matter how sustained, repeated, or intensifying it is — a conflict escalating over many days, \
-or a preparation repeated night after night, is still not the discrete event happening.
+capability, or escalation that merely precedes the event. A precursor never scores as the \
+event occurring, no matter how sustained, repeated, or intensifying it is — a conflict \
+escalating over many days, or a preparation repeated night after night, is still not the \
+discrete event happening.
   - VERIFIED vs CLAIMED. Set verified true when the fact is independently reported as having \
 happened; set it false when only an interested or belligerent party CLAIMS it and no \
 independent source confirms. A claimed-but-unverified event is down-weighted, not scored at \

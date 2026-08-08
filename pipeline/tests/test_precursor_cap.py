@@ -1,12 +1,13 @@
 """A precursor's fact_signal may not exceed the precursor cap.
 
-The prompt has taught the rule since the fact lane shipped: a fact that only precedes
-the event — a mobilisation, a capability, an escalation — is capped at |0.3| "no matter
-how sustained, repeated, or intensifying it is". Nothing enforced it, and the pool shows
-what advisory means in practice: of the 1101 rows carrying `is_occurrence=false`
-(prod audit 2026-08-01, retro#367), **269 — 24.4% — sit above the cap**, the worst at
-|0.90|. Since the stored number is the claim-weighted MEAN over an article's claims,
-that figure is a floor on the per-claim breach rate, not the rate itself.
+The prompt taught the rule since the fact lane shipped: a fact that only precedes
+the event — a mobilisation, a capability, an escalation — is capped "no matter how
+sustained, repeated, or intensifying it is" (originally stated as a |0.3| numeral;
+retro#354 D1 later deleted it once enforcement moved to code). Advisory-only wasn't
+enough: of the 1101 rows carrying `is_occurrence=false` (prod audit 2026-08-01,
+retro#367), **269 — 24.4% — sat above the cap**, the worst at |0.90|. Since the stored
+number is the claim-weighted MEAN over an article's claims, that figure is a floor on
+the per-claim breach rate, not the rate itself.
 
 enforce_precursor_cap is the enforcement: the model says whether the fact IS the event,
 code decides how far a fact that isn't may move the estimate.
@@ -132,9 +133,13 @@ def test_the_cap_is_read_from_config_at_call_time(monkeypatch):
     assert out.fact_signal == 0.5
 
 
-def test_default_cap_matches_the_prompt_literal():
-    """The prompt still states |0.3| in the OCCURRENCE-vs-PRECURSOR rule; the two must
-    not drift apart while the prompt keeps the number."""
+def test_default_cap_matches_the_prompt_qualitative_rule():
+    """retro#354 D1's follow-up cleanup: now that enforce_precursor_cap enforces the
+    ceiling in code regardless of what the model emits, the |0.3| numeral was deleted
+    from the prompt — a number in prose was policy the estimator, not the prompt,
+    should carry. Only the qualitative rule remains there; the config default here is
+    what actually sets the ceiling."""
     from tm.extractor import PROMPT_PREFIX
     assert settings.fact_signal_precursor_cap == CAP
-    assert "capped at |0.3|" in PROMPT_PREFIX
+    assert "capped at |0.3|" not in PROMPT_PREFIX
+    assert "A precursor never scores as the event occurring" in PROMPT_PREFIX

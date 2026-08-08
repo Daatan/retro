@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v6
@@ -28,13 +29,36 @@ jobs:
       - name: Recompute edge probabilities
         run: python bayesoracle/compute_edge_probs.py
 
+      - name: Validate computed edge weights
+        # Catches a NaN/inf regression fallback before it's baked into
+        # index.html as an invalid JS token (retro#430) — fails the job
+        # (and therefore skips opening a PR) rather than shipping it.
+        run: python bayesoracle/validate_edge_weights.py
+
       - name: Patch index.html and rebuild all.json
         run: python bayesoracle/apply_html_data.py
 
-      - name: Commit and push if changed
+      - name: Open a PR with the refreshed data
+        # PR-only, like every other change in this repo (workspace CLAUDE.md) —
+        # this used to commit straight to main with no test gate at all
+        # (retro#430). Reuses one rolling branch so an unmerged previous
+        # day's refresh is superseded by today's rather than piling up PRs.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add bayesoracle/
-          git diff --staged --quiet || git commit -m "chore(pm-analysis): daily data refresh $(date -u +%Y-%m-%d)"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          BRANCH="pm-analysis-refresh"
+          git checkout -B "$BRANCH"
+          git commit -m "chore(pm-analysis): daily data refresh $(date -u +%Y-%m-%d)"
+          git push --force origin "$BRANCH"
+          if [ "$(gh pr view "$BRANCH" --json state -q .state 2>/dev/null)" != "OPEN" ]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "chore(pm-analysis): daily data refresh $(date -u +%Y-%m-%d)" \
+              --body "Automated daily PM-analysis data refresh. \`validate_edge_weights.py\` already passed (a prerequisite step in this job); \`tests.yml\` (including the \`bayesoracle\` job) runs as a normal PR check on top of that."
+          fi

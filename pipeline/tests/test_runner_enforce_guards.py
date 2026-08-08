@@ -94,3 +94,31 @@ async def test_well_formed_prediction_is_left_untouched():
     out = await _run_with_predictions(preds)
     assert out.predictions[0].stance == 0.6
     assert out.predictions[0].certainty == 0.7
+
+
+async def test_winner_entity_conflict_is_neutralised_using_article_event_name():
+    """retro#401: the batch path must run enforce_winner_entity_consistency
+    exactly like the live Oracle path, keyed on article.event_name (runner.py
+    has no separate `question` field — event_name IS the question here)."""
+    gate = GatekeeperOutput(is_prediction=True, reason="looks predictive")
+    preds = [PredictionExtraction(
+        quote="q", claim="Argentina beat England", stance=1.0, certainty=0.95,
+        settled=True, event_date="2026-07-30", fact_signal=1.0,
+        event_actors="Argentina", event_target="England",
+        is_occurrence=True, verified=True,
+    )]
+    extraction = ExtractionOutput(predictions=preds)
+    article = _article(
+        event_name=(
+            "England will win their FIFA World Cup 2026 semi-final match "
+            "against Argentina on July 15"
+        ),
+    )
+    with patch("tm.runner.check_is_prediction", new=AsyncMock(return_value=(gate, {}))), \
+         patch("tm.runner.extract_predictions", new=AsyncMock(return_value=(extraction, {}))), \
+         patch("tm.runner.update_cell"):
+        result = await run_article(article)
+    assert result.extraction is not None
+    out = result.extraction.predictions[0]
+    assert out.stance == 0.0
+    assert out.settled is False

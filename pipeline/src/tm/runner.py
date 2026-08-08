@@ -17,6 +17,7 @@ from .extractor import (
     enforce_precursor_cap,
     enforce_relative_date_resolution,
     enforce_settlement_event_date,
+    enforce_winner_entity_consistency,
     flag_claim_stance_sign_conflicts,
 )
 from .models import ExtractionOutput, CellStatus
@@ -100,6 +101,13 @@ async def run_article(article: ArticleInput) -> PipelineResult:
         )
         extraction.predictions = enforce_interested_party_certainty(
             extraction.predictions,
+        )
+        # Deterministic winner-entity check (retro#401): does the dominant
+        # fact's actor→target dyad actually agree with the stance sign it
+        # carries, for a two-named-actor versus/sports question? Uses the
+        # #313 facets that were populated but never read before this.
+        extraction.predictions = enforce_winner_entity_consistency(
+            extraction.predictions, article.event_name,
         )
 
         update_cell(

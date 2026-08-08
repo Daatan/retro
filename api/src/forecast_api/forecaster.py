@@ -35,6 +35,7 @@ from tm.extractor import (
     enforce_precursor_cap,
     enforce_relative_date_resolution,
     enforce_settlement_event_date,
+    enforce_winner_entity_consistency,
     flag_claim_stance_sign_conflicts,
     PROMPT_PREFIX as _EXTRACTOR_PROMPT_PREFIX,
     PROMPT_SUFFIX as _EXTRACTOR_PROMPT_SUFFIX,
@@ -918,6 +919,15 @@ async def _process_article(
         # two must move R8 cases separately attributably.
         extraction.predictions = enforce_interested_party_certainty(
             extraction.predictions,
+        )
+        # Deterministic winner-entity check (retro#401): for a two-named-actor
+        # versus/sports question, does the dominant fact's actor→target dyad
+        # (#313's facets, populated but never read until now) actually agree
+        # with the stance sign it carries? Catches the retro#360 shape — "the
+        # rival beat the subject" extracted as a positive stance FOR the
+        # subject — without a second LLM call.
+        extraction.predictions = enforce_winner_entity_consistency(
+            extraction.predictions, question,
         )
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", result.url, exc)

@@ -35,6 +35,8 @@ jobs:
       - name: Install uv
         # setup-uv has no moving major tag — pin the exact version.
         uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev

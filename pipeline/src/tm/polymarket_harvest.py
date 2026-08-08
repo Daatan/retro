@@ -17,6 +17,7 @@ Output:
 import argparse
 import json
 import logging
+import os
 import re
 import time
 from datetime import datetime, timezone
@@ -496,11 +497,30 @@ def backfill_clob_tokens(data_dir: Path) -> int:
     return updated
 
 
+def _atomic_rewrite(output_path: Path, events: list[dict]) -> None:
+    """Rewrite ``output_path`` with ``events`` via a temp-file + atomic rename.
+
+    ``os.replace`` is atomic on POSIX and Windows, so a crash mid-write leaves
+    either the old file intact or the new one fully written — never a
+    truncated/partial file.
+    """
+    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    with open(tmp_path, "w") as f:
+        for ev in events:
+            f.write(json.dumps(ev) + "\n")
+    os.replace(tmp_path, output_path)
+
+
 def fetch_prices(data_dir: Path) -> None:
     """
     Second pass: fetch price history for all events in events.jsonl that have empty prices.
     Uses the CLOB API with clob_token_yes (stored during harvest).
-    Writes updated events.jsonl in-place.
+
+    Crash-safe: like harvest(), progress is persisted incrementally (via an atomic
+    temp-file + rename after each fetched event) rather than accumulated in memory
+    and written once at the end — a crash partway through only loses the
+    in-flight event, and the already-fetched ones' `prices_fetched=True` flag
+    lets a re-run skip them and resume from where it stopped.
     Run after harvest() completes.
     """
     output_path = data_dir / "pm_harvest" / "events.jsonl"
@@ -527,26 +547,28 @@ def fetch_prices(data_dir: Path) -> None:
     need_prices = [e for e in need_prices if e.get("clob_token_yes")]
     console.print(f"[bold cyan]Fetch prices[/bold cyan] — {len(need_prices)}/{len(events)} events need price history")
 
+    fetched = 0
     with httpx.Client(timeout=30) as client:
         for i, ev in enumerate(need_prices):
-            prices = _fetch_price_history(ev["clob_token_yes"], ev["outcome_date"], client)
-            ev["prices"] = prices
-            ev["prices_fetched"] = True
+            try:
+                prices = _fetch_price_history(ev["clob_token_yes"], ev["outcome_date"], client)
+                ev["prices"] = prices
+                ev["prices_fetched"] = True
+                fetched += 1
+            finally:
+                # Persist after every event (success or failure) so a crash never
+                # loses more than the single in-flight fetch.
+                _atomic_rewrite(output_path, events)
             if (i + 1) % 50 == 0:
                 console.print(f"  {i+1}/{len(need_prices)} fetched — last had {len(prices)} points...")
                 time.sleep(0.5)
 
-    # Rewrite file
-    with open(output_path, "w") as f:
-        for ev in events:
-            f.write(json.dumps(ev) + "\n")
-    console.print(f"[bold green]Done.[/bold green] Price history written for {len(need_prices)} events.")
+    console.print(f"[bold green]Done.[/bold green] Price history written for {fetched} events.")
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING)
 
-    import os
     parser = argparse.ArgumentParser(description="Harvest Polymarket political events")
     parser.add_argument("--data-dir", default="data/poc", help="Base data directory (default: data/poc)")
     parser.add_argument("--start", default="2023-01-01", help="Start date YYYY-MM-DD")

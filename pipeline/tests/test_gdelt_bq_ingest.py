@@ -7,11 +7,13 @@ added to ``_search_gdelt_bq``. Skipped only when core deps are absent.
 
 import json
 from datetime import datetime
+from unittest.mock import MagicMock
 
 import pytest
 
 pytest.importorskip("httpx")
 pytest.importorskip("boto3")
+pytest.importorskip("google.cloud.bigquery")
 
 from tm import gdelt_bq_ingest as g
 from tm import web_search as ws
@@ -148,3 +150,86 @@ class TestSourceLevelInvariants:
         assert "SourceCommonName IN" in inspect.getsource(ws._sql_domain_filter)
         assert "domain_filter" in src
         assert "maximum_bytes_billed" in src
+
+
+class TestEntityRegexPatterns:
+    """_entity_regex_patterns() builds the values bound as a BigQuery
+    ArrayQueryParameter in discover() — it must never be interpolated into SQL."""
+
+    def test_wraps_each_term_case_insensitively_and_escapes_regex_metachars(self):
+        patterns = g._entity_regex_patterns(["Netanyahu", "a.b*c"])
+        assert patterns[0] == "(?i)Netanyahu"
+        assert patterns[1].startswith("(?i)")
+        # re.escape neutralises regex metacharacters (not SQL syntax — that's
+        # discover()'s job, by binding this value as a parameter).
+        assert "\\." in patterns[1] and "\\*" in patterns[1]
+
+
+class TestDiscoverSqlInjectionSafety:
+    """retro#440 item 4 — discover() must bind entity terms and date bounds as
+    BigQuery query parameters, never splice them into the SQL string. Regex-
+    escaping (re.escape) is not SQL-escaping; only parameter binding is safe
+    regardless of what characters a term or date string ever contains.
+    """
+
+    async def _run_discover(self, tmp_path, monkeypatch, terms, date_from="2024-01-01", date_to="2024-02-01"):
+        sources_dir = tmp_path / "sources"
+        sources_dir.mkdir()
+
+        fake_client = MagicMock()
+        fake_job = MagicMock()
+        fake_job.result.return_value = []
+        fake_job.total_bytes_processed = 0
+        fake_client.query.return_value = fake_job
+
+        monkeypatch.setattr(ws, "_get_bq_client", lambda: fake_client)
+        monkeypatch.setattr(ws, "_extract_bq_terms", lambda keywords: terms)
+
+        await g.discover("irrelevant keywords", date_from, date_to, tmp_path)
+        return fake_client
+
+    async def test_sql_injection_shaped_term_is_bound_not_interpolated(self, tmp_path, monkeypatch):
+        evil_term = "' OR '1'='1"
+        fake_client = await self._run_discover(tmp_path, monkeypatch, [evil_term])
+
+        assert fake_client.query.call_count == 1
+        sql, kwargs = fake_client.query.call_args
+        sql_text = sql[0]
+
+        # The malicious term must never appear in the SQL text itself.
+        assert evil_term not in sql_text
+        assert "1'='1" not in sql_text
+
+        # It must instead be present, verbatim (only regex-escaped), inside a
+        # bound query parameter.
+        job_config = kwargs["job_config"]
+        param_names = {p.name for p in job_config.query_parameters}
+        assert param_names == {"date_from", "date_to", "patterns"}
+
+        patterns_param = next(p for p in job_config.query_parameters if p.name == "patterns")
+        assert patterns_param.array_type == "STRING"
+        assert patterns_param.values == [f"(?i){__import__('re').escape(evil_term)}"]
+
+    async def test_date_bounds_are_also_bound_parameters_not_interpolated(self, tmp_path, monkeypatch):
+        evil_date = "2024-01-01') OR ('1'='1"
+        fake_client = await self._run_discover(
+            tmp_path, monkeypatch, ["Netanyahu"], date_from=evil_date,
+        )
+
+        sql, kwargs = fake_client.query.call_args
+        sql_text = sql[0]
+        assert evil_date not in sql_text
+
+        job_config = kwargs["job_config"]
+        date_from_param = next(p for p in job_config.query_parameters if p.name == "date_from")
+        assert date_from_param.value == evil_date
+
+    async def test_sql_text_uses_named_placeholders_not_literal_values(self, tmp_path, monkeypatch):
+        fake_client = await self._run_discover(tmp_path, monkeypatch, ["Netanyahu"])
+        sql, _kwargs = fake_client.query.call_args
+        sql_text = sql[0]
+        assert "@date_from" in sql_text
+        assert "@date_to" in sql_text
+        assert "@patterns" in sql_text
+        # No raw TIMESTAMP('...') literal left over from the old f-string form.
+        assert "TIMESTAMP('" not in sql_text

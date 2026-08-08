@@ -61,7 +61,11 @@ async def run_all(
         console.print(Rule("[bold cyan]GDELT[/bold cyan]"))
         total = 0
         for eid, event in events.items():
-            count = await gdelt_ingest.ingest_event(event, raw_ingest_dir, limit, force)
+            try:
+                count = await gdelt_ingest.ingest_event(event, raw_ingest_dir, limit, force)
+            except Exception as e:
+                console.print(f"    [dim red]GDELT {eid}: error, skipping — {e}[/dim red]")
+                continue
             total += count
         totals["gdelt"] = total
         console.print(f"GDELT total: [green]{total}[/green] articles\n")
@@ -74,7 +78,13 @@ async def run_all(
         total = 0
         for eid, event in events.items():
             for source_id in site_search.SEARCH_FNS:
-                count = await site_search.ingest_cell(event, source_id, raw_ingest_dir, force)
+                try:
+                    count = await site_search.ingest_cell(event, source_id, raw_ingest_dir, force)
+                except Exception as e:
+                    console.print(
+                        f"    [dim red]site_search {eid}/{source_id}: error, skipping — {e}[/dim red]"
+                    )
+                    continue
                 total += count
         totals["site_search"] = total
         console.print(f"site_search total: [green]{total}[/green] articles\n")
@@ -86,7 +96,11 @@ async def run_all(
         console.print(Rule("[bold cyan]web_search[/bold cyan]"))
         total = 0
         for eid, event in events.items():
-            count = await web_search_ingest.ingest_event(event, raw_ingest_dir, limit, force)
+            try:
+                count = await web_search_ingest.ingest_event(event, raw_ingest_dir, limit, force)
+            except Exception as e:
+                console.print(f"    [dim red]web_search {eid}: error, skipping — {e}[/dim red]")
+                continue
             total += count
         totals["web_search"] = total
         console.print(f"web_search total: [green]{total}[/green] articles\n")

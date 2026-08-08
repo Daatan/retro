@@ -19,19 +19,29 @@ OAuth-only. Non-agent/service automation should keep calling REST directly.
 Built for a **Polymarket trader** workflow — take a market, get an independent
 probability, compare to the price, find an edge — plus general forecasting.
 
-| Tool | Scope | What it does |
-|------|-------|--------------|
-| `polymarket_edge(market, edge_threshold=0.05)` | `forecast` | Resolve a market (URL/slug/Gamma id) → live YES price; forecast its question; return the **edge** (oracle − market) and a **suggested side** (BUY YES / BUY NO / NO EDGE) |
-| `polymarket_market(market)` | `read` | Live market data: question, outcomes, prices, volume, end date |
-| `forecast(question, max_articles?)` | `forecast` | Calibrated probability for any binary question (`probability` in [0,1]) |
-| `search_news(query, limit?, date_from?, date_to?)` | `read` | News search via the provider chain |
-| `fetch_article(url)` | `read` | Fetch + extract one article (SSRF-guarded) |
-| `bayes_nodes(observations?)` | `read` | BayesOracle Israeli-politics DAG probabilities |
-| `source_leaderboard()` | `read` | Live source-credibility ranking |
+| Tool | Scope | Rate limit | What it does |
+|------|-------|------------|--------------|
+| `polymarket_edge(market, edge_threshold=0.05)` | `forecast` | 10/min | Resolve a market (URL/slug/Gamma id) → live YES price; forecast its question; return the **edge** (oracle − market) and a **suggested side** (BUY YES / BUY NO / NO EDGE) |
+| `polymarket_market(market)` | `read` | 30/min | Live market data: question, outcomes, prices, volume, end date |
+| `forecast(question, max_articles?)` | `forecast` | 10/min | Calibrated probability for any binary question (`probability` in [0,1]) |
+| `search_news(query, limit?, date_from?, date_to?)` | `read` | 60/min | News search via the provider chain |
+| `fetch_article(url)` | `read` | 30/min | Fetch + extract one article (SSRF-guarded) |
+| `bayes_nodes(observations?)` | `read` | none | BayesOracle Israeli-politics DAG probabilities |
+| `source_leaderboard()` | `read` | none | Live source-credibility ranking |
 
 `forecast` / `polymarket_edge` are **slow** (a live news + LLM pipeline — tens of
 seconds, occasionally past the 120s proxy timeout) and cost LLM + search credits,
 which is why they sit behind the `oracle-mcp/forecast` scope.
+
+**Rate limiting** (`mcp_limiter.py`) is enforced per tool call, independently of
+the REST API's `@limiter.limit(...)` (slowapi) — MCP tools call the Oracle's
+service functions in-process and never pass through those decorated REST
+routes, so they need their own gate (retro#431). It mirrors each tool's REST
+equivalent (see table above) but keys on the caller's Cognito identity
+(`sub` for human PKCE tokens, `client_id` for M2M) rather than remote address,
+since MCP traffic can arrive from a shared client-side proxy. Same
+in-memory-per-worker caveat as the REST limiter: not shared across gunicorn
+workers.
 
 > `polymarket_edge` is **informational, not financial advice**, and never places
 > orders. It surfaces the sign of an edge only; only binary yes/no markets are

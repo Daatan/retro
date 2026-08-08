@@ -12,7 +12,7 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from forecast_api import mcp_server
+from forecast_api import mcp_limiter, mcp_server
 from forecast_api.config import settings
 from forecast_api.mcp_auth import (
     SCOPE_FORECAST,
@@ -25,6 +25,15 @@ from forecast_api.models import ForecastResponse
 
 ISSUER = "https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_TESTPOOL"
 CLIENT_ID = "client-abc"
+
+
+@pytest.fixture(autouse=True)
+def _reset_mcp_rate_limits():
+    """Every tool call in this module goes through the real mcp_limiter.enforce()
+    (only auth is monkeypatched) — reset its in-memory state before each test so
+    call counts from other tests/cases can never accumulate toward a limit."""
+    mcp_limiter.reset()
+    yield
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
@@ -126,6 +135,24 @@ class TestForecastTool:
         out = await mcp_server.forecast("Will X happen by 2027?")
         assert out["probability"] is None
         assert out["insufficient_data"] is True
+
+    @pytest.mark.asyncio
+    async def test_rate_limited_after_the_per_caller_cap(self, monkeypatch):
+        """retro#431: the forecast tool calls run_forecast in-process, never
+        through the REST route's @limiter.limit("10/minute") — this is the
+        tool-level enforcement that replaces it."""
+        _patch_scope_ok(monkeypatch)
+        _patch_forecast(monkeypatch, _forecast_response(0.5))
+        monkeypatch.setattr(
+            "forecast_api.mcp_limiter.get_access_token",
+            lambda: SimpleNamespace(subject="user-1", client_id="client-abc"),
+        )
+        monkeypatch.setattr(mcp_server, "FORECAST_LIMIT", mcp_limiter.parse("2/minute"))
+
+        await mcp_server.forecast("Will X happen by 2027?")
+        await mcp_server.forecast("Will X happen by 2027?")
+        with pytest.raises(mcp_limiter.MCPRateLimitExceeded):
+            await mcp_server.forecast("Will X happen by 2027?")
 
 
 # ── polymarket_edge logic ───────────────────────────────────────────────────

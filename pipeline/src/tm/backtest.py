@@ -168,7 +168,7 @@ def entry_to_features(entry: dict, source_brier: float) -> dict:
         "magnitude": magnitude,
         "source_authority": source_authority,
         "sentiment": sentiment,
-        "days_before": days_before or MAX_DAYS_BEFORE_EVENT,
+        "days_before": days_before if days_before is not None else MAX_DAYS_BEFORE_EVENT,
         "source_brier": source_brier,
         "prediction_count": len(preds),
     }
@@ -220,16 +220,19 @@ def train_and_predict_lgbm(
         raise ImportError("lightgbm not installed. Run: uv add lightgbm")
 
     X_train, y_train = [], []
+    first_feat = None
     for ev in train_events:
         for feat in ev.get("features", []):
             if feat:
                 X_train.append(list(feat.values()))
                 y_train.append(float(ev["outcome"]))
+                if first_feat is None:
+                    first_feat = feat
 
     if len(X_train) < 10:
         raise ValueError(f"Not enough training data: {len(X_train)} samples (need 10+)")
 
-    feature_names = list(train_events[0]["features"][0].keys())
+    feature_names = list(first_feat.keys())
 
     model = lgb.LGBMClassifier(
         n_estimators=100,

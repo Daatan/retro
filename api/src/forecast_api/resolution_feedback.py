@@ -10,22 +10,42 @@ touches leaderboard.json / get_credibility_weight() — that's a separate,
 not-yet-built step, deliberately kept out of this one so ingestion can ship
 and start accumulating real data before the scoring design is settled.
 
-Idempotent on prediction_id: an in-memory set (loaded from disk at first
-use, same lazy-cache shape as leaderboard.py's _cache) guards against
-double-counting a fire-and-forget retry from the daatan side.
+Idempotent on prediction_id: dedup state lives in a diskcache.Cache directory
+next to the JSONL file, shared by all gunicorn workers on the box (same fix
+as ForecastCache's migration for retro#405 — see cache.py's docstring). The
+old design used a per-process in-memory set, which let a fire-and-forget
+retry that landed on the *other* worker slip past the "already ingested"
+check and double-count a resolution (retro#434). diskcache.Cache.add() is
+atomic across processes (backed by a SQLite transaction), so two workers
+racing on the same prediction_id can't both win.
 """
 import asyncio
 import json
 import logging
 from pathlib import Path
 
+import diskcache
+
 from .models import IngestResolutionRequest, IngestResolutionResponse
 
 logger = logging.getLogger(__name__)
 
-_ingested_ids: set[str] = set()
+_stores: dict[str, diskcache.Cache] = {}
+_loaded_paths: set[str] = set()
 _lock = asyncio.Lock()
-_loaded = False
+
+
+def _dedup_dir(path: Path) -> Path:
+    return path.parent / f".{path.stem}_dedup_cache"
+
+
+def _get_store(path: Path) -> diskcache.Cache:
+    key = str(path)
+    store = _stores.get(key)
+    if store is None:
+        store = diskcache.Cache(str(_dedup_dir(path)))
+        _stores[key] = store
+    return store
 
 
 def _load_ids_from_disk(path: Path) -> set[str]:
@@ -50,34 +70,44 @@ def _append_line_to_disk(path: Path, line: str) -> None:
 
 
 async def _ensure_loaded(path: Path) -> None:
-    global _loaded
-    if _loaded:
+    """Backfill the dedup store from the JSONL file — needed once per store
+    directory to cover prediction_ids ingested before this store existed
+    (or by an older deploy). ``store.add`` is idempotent, so redundant
+    backfills across racing workers are harmless."""
+    key = str(path)
+    if key in _loaded_paths:
         return
     async with _lock:
-        if _loaded:
+        if key in _loaded_paths:
             return
-        loaded = await asyncio.to_thread(_load_ids_from_disk, path)
-        _ingested_ids.update(loaded)
-        _loaded = True
-        logger.info("Resolution feedback store loaded: %d predictions already ingested", len(_ingested_ids))
+        store = _get_store(path)
+        ids = await asyncio.to_thread(_load_ids_from_disk, path)
+
+        def _backfill() -> None:
+            for prediction_id in ids:
+                store.add(prediction_id, True)
+
+        await asyncio.to_thread(_backfill)
+        _loaded_paths.add(key)
+        logger.info("Resolution feedback store backfilled: %d predictions already ingested", len(ids))
 
 
 async def ingest_resolution(path: Path, req: IngestResolutionRequest) -> IngestResolutionResponse:
     await _ensure_loaded(path)
+    store = _get_store(path)
 
-    async with _lock:
-        if req.prediction_id in _ingested_ids:
-            return IngestResolutionResponse(already_ingested=True, sources_recorded=0)
+    added = await asyncio.to_thread(store.add, req.prediction_id, True)
+    if not added:
+        return IngestResolutionResponse(already_ingested=True, sources_recorded=0)
 
-        record = {
-            "prediction_id": req.prediction_id,
-            "outcome": req.outcome,
-            "resolved_at": req.resolved_at,
-            "sources": [s.model_dump() for s in req.sources],
-            "author_signals": [s.model_dump() for s in req.author_signals],
-        }
-        await asyncio.to_thread(_append_line_to_disk, path, json.dumps(record))
-        _ingested_ids.add(req.prediction_id)
+    record = {
+        "prediction_id": req.prediction_id,
+        "outcome": req.outcome,
+        "resolved_at": req.resolved_at,
+        "sources": [s.model_dump() for s in req.sources],
+        "author_signals": [s.model_dump() for s in req.author_signals],
+    }
+    await asyncio.to_thread(_append_line_to_disk, path, json.dumps(record))
 
     return IngestResolutionResponse(
         already_ingested=False,
@@ -86,5 +116,5 @@ async def ingest_resolution(path: Path, req: IngestResolutionRequest) -> IngestR
     )
 
 
-def ingested_count() -> int:
-    return len(_ingested_ids)
+def ingested_count(path: Path) -> int:
+    return len(_get_store(path))

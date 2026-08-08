@@ -110,6 +110,12 @@ def _patch(monkeypatch, claims, *, verdict: Verdict | None = None):
     monkeypatch.setattr(forecaster, "check_is_prediction", fake_gate)
     monkeypatch.setattr(forecaster, "extract_predictions", fake_extract)
     monkeypatch.setattr(forecaster, "get_credibility_weight", lambda sid: 1.0)
+    # Clustering out of scope: fake_extract hands BOTH articles the same claims
+    # list, which the settlement count reads as syndication (one cluster = one
+    # vote, retro#372) and the pin this suite needs would never fire. The
+    # cluster count has its own coverage (test_settlement_revalidation
+    # .TestClusterCountedVotes, matrix C19).
+    monkeypatch.setattr(api_settings, "cluster_jaccard_threshold", 1.1)
     calls: list[tuple] = []
     if verdict is not None:
         async def fake_verify(question, votes, **kwargs):

@@ -1733,7 +1733,7 @@
         "#396",
         "R7"
       ],
-      "notes": "retro#396. system-model §6.2 fixes one publish-time precedence — settlement pin > impossibility pin > abstention > glide > pooled estimate — but aggregate_pool evaluated the three abstention reasons first and returned early, so a pool tripping any of them could never publish a pin however well-founded. Four articles at relevance 0.1 give relevance_mass 0.04, under relevance_weight_floor (0.05): off-topic by the safety net's own measure. Two of them are dated, settlement-grade accomplished-fact reports attributed to Polymarket, so they keep the cited_probability premium (4.0) through enforce_anchor_provenance and carry 0.12 each — 0.24 combined, clear of settlement_quality_floor (0.20). A settled fact does not need a topically-dense pool to be true. Before the fix this answered all_articles_off_topic with articles_used 0 and discarded the settlement; it now publishes the pin, and the pool's thinness stays visible in evidence_mass rather than in the estimate. That the settling rows need the x4 anchor premium to get here is the point, not a contrivance: with any ordinary class the quality floor already nests inside the relevance floor, which is why the inversion never produced an incident.",
+      "notes": "retro#396. system-model §6.2 fixes one publish-time precedence — settlement pin > impossibility pin > abstention > glide > pooled estimate — but aggregate_pool evaluated the three abstention reasons first and returned early, so a pool tripping any of them could never publish a pin however well-founded. Four articles at relevance 0.1 give relevance_mass 0.04, under relevance_weight_floor (0.05): off-topic by the safety net's own measure. Two of them are dated, settlement-grade accomplished-fact reports attributed to Polymarket, so they keep the cited_probability premium (4.0) through enforce_anchor_provenance and carry 0.12 each — 0.24 combined, clear of settlement_quality_floor (0.20). A settled fact does not need a topically-dense pool to be true. Before the fix this answered all_articles_off_topic with articles_used 0 and discarded the settlement; it now publishes the pin, and the pool's thinness stays visible in evidence_mass rather than in the estimate. That the settling rows need the x4 anchor premium to get here is the point, not a contrivance: with any ordinary class the quality floor already nests inside the relevance floor, which is why the inversion never produced an incident. [2026-08-08, retro#372] bravo's quote reworded to be textually distinct from alpha's (byte-identical quotes now read as one settlement cluster -- syndication is C19's subject, not this case's) while still naming Polymarket: cited_probability without an allowlisted source in the quote is demoted by enforce_anchor_provenance, which would sink the winning weight under settlement_quality_floor and change this case's subject a second way.",
       "articles": [
         {
           "source": "alpha",
@@ -1763,7 +1763,7 @@
               "settled": true,
               "event_date": "2026-07-30",
               "evidence_class": "cited_probability",
-              "quote": "Polymarket resolved the market to YES on the official result."
+              "quote": "Polymarket has settled the contract affirmatively following certification of the official outcome."
             }
           ]
         },
@@ -1888,7 +1888,7 @@
         "#396",
         "#279"
       ],
-      "notes": "The guard that keeps C16's ordering honest, and the reason hoisting the settlement decision above the abstention gate is not a loosening. Identical to C16 except the two settling sources carry neutral credibility, so the winning direction's combined weight is 0.08 against settlement_quality_floor's 0.20 (retro#279): the pin is suppressed and the abstention stands. 'This pool is unusable' and 'this pin is unusable' are two questions with two thresholds — retro#396 reordered them, it did not merge them.",
+      "notes": "The guard that keeps C16's ordering honest, and the reason hoisting the settlement decision above the abstention gate is not a loosening. Identical to C16 except the two settling sources carry neutral credibility, so the winning direction's combined weight is 0.08 against settlement_quality_floor's 0.20 (retro#279): the pin is suppressed and the abstention stands. 'This pool is unusable' and 'this pin is unusable' are two questions with two thresholds — retro#396 reordered them, it did not merge them. [2026-08-08, retro#372] bravo's quote reworded to be textually distinct from alpha's (byte-identical quotes now read as one settlement cluster -- syndication is C19's subject, not this case's) while still naming Polymarket: cited_probability without an allowlisted source in the quote is demoted by enforce_anchor_provenance, which would sink the winning weight under settlement_quality_floor and change this case's subject a second way.",
       "articles": [
         {
           "source": "alpha",
@@ -1918,7 +1918,7 @@
               "settled": true,
               "event_date": "2026-07-30",
               "evidence_class": "cited_probability",
-              "quote": "Polymarket resolved the market to YES on the official result."
+              "quote": "Polymarket has settled the contract affirmatively following certification of the official outcome."
             }
           ]
         },
@@ -2347,6 +2347,102 @@
             "weight": 0.06,
             "settled": null,
             "settlement_event_date": null,
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "C19",
+      "name": "two syndicated copies of one settling report count as one settlement source",
+      "traces": [
+        "F12",
+        "F2"
+      ],
+      "notes": "retro#372's second half: the settlement trigger demands settlement_min_sources (2) INDEPENDENT observations, and syndication is not corroboration. Both articles carry byte-identical claim+quote text, so the clusterer (retro#355, shingle Jaccard >= 0.5 over claims_detail text) puts them in one cluster and the vote count is 1 -- no pin; the pooled mean over the two rows publishes instead. C11 is the control: same shape, per-article distinct claim text, two singleton clusters, still pins. The cluster DOWNWEIGHT stays inert (exponent 0.0, gated on the retro#403 backtest); the count spends the assignment unconditionally because it needs no calibration -- 'two copies of one report are one report' is definitional, not tuned. Note prod echo at this threshold is currently zero (retro#414, max observed Jaccard 0.457), so this binds live only as syndicated text actually repeats or the threshold is tuned down.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-29",
+              "evidence_class": "reported_fact",
+              "claim": "The licensing agreement has been officially signed by both governments.",
+              "quote": "Officials confirmed the licensing agreement was signed on Wednesday."
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-07-31",
+          "relevance": 1.0,
+          "credibility": 1.0,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-29",
+              "evidence_class": "reported_fact",
+              "claim": "The licensing agreement has been officially signed by both governments.",
+              "quote": "Officials confirmed the licensing agreement was signed on Wednesday."
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "settled is False",
+        "n == 2",
+        "mean > 0.5"
+      ],
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": false,
+        "mean": 0.98,
+        "std": 0.1,
+        "ci_low": 0.8412,
+        "ci_high": 0.98,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.82,
+            "settled": true,
+            "settlement_event_date": "2026-07-29",
+            "fact_signal": null,
+            "is_occurrence": null,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 1.0,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.906,
+            "relevance_score": 1.0,
+            "weight": 0.906,
+            "settled": true,
+            "settlement_event_date": "2026-07-29",
             "fact_signal": null,
             "is_occurrence": null,
             "verified": null,

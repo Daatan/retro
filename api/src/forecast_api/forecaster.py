@@ -1698,8 +1698,10 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
     # (url / source_id / outlet / evidence_class / fact_signal + facets /
     # claims_detail — F1/F15, retro#364); reading any of them here would be an
     # estimator behaviour change smuggled in under a persistence PR. Claim-level
-    # weighting (R1) and cluster-aware settlement (#355/#372) are the issues
-    # that get to spend this data, each with its own R8 movement report.
+    # weighting (R1) remains the issue that gets to spend this data next;
+    # claims_detail is already spent, deliberately and with its own R8 movement
+    # report each time, by retro#355 (clustering, via _cluster_text_of below)
+    # and retro#372 (the settlement count over those clusters).
     for s in req.sources:
         rweight = recency_weight(
             s.published_date, ref_date,

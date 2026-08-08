@@ -84,6 +84,13 @@ def _patch_pipeline(monkeypatch, extractions_by_url: dict[str, list[PredictionEx
     monkeypatch.setattr(forecaster, "extract_predictions", fake_extract)
     # Isolate from cross-test cache hits.
     monkeypatch.setattr(api_settings, "cache_ttl_seconds", 0)
+    # Clustering out of scope: every claim this suite builds shares one text
+    # ("quote"/"claim"), which the settlement count would read as syndication
+    # (one cluster = one vote, retro#372) — but syndication is not this suite's
+    # subject; independent sources are the premise. Coverage for the cluster
+    # count lives in test_settlement_revalidation.TestClusterCountedVotes and
+    # matrix case C19. Jaccard is ≤ 1.0, so 1.1 can never be reached.
+    monkeypatch.setattr(api_settings, "cluster_jaccard_threshold", 1.1)
 
 
 class TestSettlementOverride:

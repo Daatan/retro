@@ -99,6 +99,11 @@ def _patch_pipeline(monkeypatch, extractions_by_source: dict[str, list[Predictio
     monkeypatch.setattr(forecaster, "check_is_prediction", fake_gate)
     monkeypatch.setattr(forecaster, "extract_predictions", fake_extract)
     monkeypatch.setattr(api_settings, "cache_ttl_seconds", 0)
+    # Clustering out of scope: this suite's claims share one builder text, which
+    # the settlement count would read as syndication (retro#372) — independent
+    # sources are its premise, and the cluster count has its own coverage
+    # (test_settlement_revalidation.TestClusterCountedVotes, matrix C19).
+    monkeypatch.setattr(api_settings, "cluster_jaccard_threshold", 1.1)
 
 
 class TestClaimGates:

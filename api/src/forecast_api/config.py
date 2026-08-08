@@ -161,7 +161,11 @@ class ApiSettings(BaseSettings):
     forecast_relevance_bar: float = 0.0
     # ── Correlated-evidence clustering (retro#355) ──────────────────────────────
     # Pooling counts N articles echoing ONE development as N independent facts. These
-    # two settings are the seam that fixes it; both ship INERT.
+    # two settings are the seam that fixes it; the WEIGHT side ships INERT.
+    # (The settlement COUNT is the exception since retro#372: it consumes the cluster
+    # assignment unconditionally — "two copies of one report are one settling source"
+    # is definitional, not tuned, so it is not gated on the backtest below. The
+    # jaccard threshold still governs when any of this bites.)
     #
     # `cluster_downweight_exponent` = 0.0 is the identity: a cluster of k rows carries
     # k ** (1 - exponent) = k times a single row, exactly as today. At 0.5 it carries

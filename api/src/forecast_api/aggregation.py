@@ -795,12 +795,23 @@ def settlement_decision(
     settlement_revalidate: bool = False,
     settlement_post_deadline_grace_days: int = 14,
     settlement_quality_floor: float = 0.0,
+    cluster_ids: Optional[Sequence[int]] = None,
 ) -> SettlementDecision:
     """Count the settlement votes and decide whether they pin the estimate.
 
     Pure and pooling-free: it reads the same per-source ``weights``
     :func:`aggregate_pool` pools, but only to score the winning direction
     against ``settlement_quality_floor`` — it never averages anything.
+
+    The count is over **independent clusters**, not rows, when a cluster
+    assignment is available (retro#372, the second half of F12): two syndicated
+    copies of one report are one observation, and ``settlement_min_sources``
+    exists to demand corroboration, which an echo is not. Rows without cluster
+    text are singletons (:func:`clustering.cluster_text_for_claims`), so a
+    missing claim layer can never cost a vote — it just counts as itself, the
+    pre-#372 behavior. ``settlement_quality_floor`` stays a sum over rows:
+    mass is mass, however correlated; independence is the count's axis.
+    Legacy (non-revalidation) path deliberately untouched, kill-switch shape.
     """
     if settlement_revalidate and settlement_min_sources > 0:
         # Revalidation path (SETTLEMENT_REVALIDATE, default on): every settled
@@ -844,7 +855,15 @@ def settlement_decision(
         demoted = tuple(demotions)
         if pos > 0 and neg > 0:
             return SettlementDecision(None, 0, True, "settlement_conflict", demoted, ())
-        if max(pos, neg) >= settlement_min_sources:
+        # Independent-cluster count (retro#372). Falls back to the row count
+        # when no assignment exists or it doesn't cover this pool (length
+        # mismatch would mis-map votes to clusters — worse than not counting).
+        if cluster_ids is not None and len(cluster_ids) == len(stances):
+            pos_count = len({cluster_ids[i] for i in pos_indices})
+            neg_count = len({cluster_ids[i] for i in neg_indices})
+        else:
+            pos_count, neg_count = pos, neg
+        if max(pos_count, neg_count) >= settlement_min_sources:
             winning_weight = pos_weight if pos > neg else neg_weight
             if settlement_quality_floor > 0 and winning_weight < settlement_quality_floor:
                 # Count clears the bar, but the settling votes are uniformly
@@ -862,7 +881,9 @@ def settlement_decision(
                 )
             return SettlementDecision(
                 1.0 if pos > 0 else -1.0,
-                max(pos, neg),
+                # Independent observations, not rows — the honest number for
+                # settled_sources now that the trigger counts the same way.
+                max(pos_count, neg_count),
                 False,
                 None,
                 demoted,
@@ -1064,6 +1085,10 @@ def aggregate_pool(
         settlement_revalidate=settlement_revalidate,
         settlement_post_deadline_grace_days=settlement_post_deadline_grace_days,
         settlement_quality_floor=settlement_quality_floor,
+        # The same assignment the downweight uses (inert until its exponent is
+        # non-zero) — but the settlement COUNT spends it unconditionally
+        # (retro#372): two rows echoing one report are one settling source.
+        cluster_ids=cluster_ids,
     )
 
     if all_off_topic or no_usable_weight or no_decisive_signal:

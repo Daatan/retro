@@ -145,17 +145,26 @@ def _article_input(case_id: str, index: int, spec: dict) -> ArticleInput:
     )
 
 
-def _prediction(spec: dict, index: int) -> PredictionExtraction:
+def _prediction(spec: dict, index: int, source: str) -> PredictionExtraction:
     """Build a claim from the fixture spec.
 
     Keys pass straight through to ``PredictionExtraction``, so a case can set
     any extractor field (``settled``, ``event_date``, ``evidence_class``,
     ``quantitative_estimate``, ``specificity``, ``fact_signal``, …) without
     this runner needing to know about it.
+
+    The default claim/quote text is distinct **per article**, mirroring the
+    per-article title vocabulary above: ``index`` alone is the claim's position
+    *within* its article, so without ``source`` every article's first claim
+    carried byte-identical text and the story clusterer (retro#355) read whole
+    pools as one echo cluster — invisible while only the inert downweight
+    consumed the assignment, pin-killing once the settlement count did
+    (retro#372). Fixture articles are independent sources unless a case says
+    otherwise by setting identical ``claim``/``quote`` explicitly.
     """
     fields: dict[str, Any] = {
-        "quote": f"Fixture quote {index}.",
-        "claim": f"Fixture claim {index}.",
+        "quote": f"Fixture quote {index} per {source}.",
+        "claim": f"Fixture claim {index} from {source}.",
     }
     fields.update(spec)
     return PredictionExtraction(**fields)
@@ -184,7 +193,9 @@ def _patch_pipeline(monkeypatch, case: dict) -> None:
         art = by_source[kwargs["source_name"]]
         return (
             ExtractionOutput(
-                predictions=[_prediction(c, i) for i, c in enumerate(art["claims"])],
+                predictions=[
+                    _prediction(c, i, art["source"]) for i, c in enumerate(art["claims"])
+                ],
                 author_lean=art.get("author_lean"),
                 author_lean_certainty=art.get("author_lean_certainty"),
             ),

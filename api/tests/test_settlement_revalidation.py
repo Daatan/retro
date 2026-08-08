@@ -563,3 +563,67 @@ class TestPinOutranksAbstention:
         assert agg.insufficient_reason == "all_articles_off_topic"
         assert agg.settlement_suppressed is False
         assert agg.suppression_reason is None
+
+
+class TestClusterCountedVotes:
+    """retro#372's second half: the trigger counts independent clusters, not rows.
+
+    ``settlement_min_sources`` demands corroboration, and two syndicated copies
+    of one report are one observation. The assignment comes from retro#355's
+    clusterer; rows without claim text are singletons there, so a missing claim
+    layer can never cost a vote — it just counts as itself.
+    """
+
+    def _pin(self, cluster_ids, weights=None):
+        return aggregate_pool(
+            [1.0, 1.0], weights if weights is not None else [1.0, 1.0],
+            [1.0, 1.0], [True, True],
+            settlement_event_dates=["2026-07-01", "2026-07-01"],
+            published_dates=["2026-07-02", "2026-07-02"],
+            cluster_ids=cluster_ids,
+            **_kwargs(),
+        )
+
+    def test_two_votes_in_one_cluster_do_not_pin(self):
+        agg = self._pin(cluster_ids=(0, 0))
+        assert agg.settled is False
+        assert agg.settled_sources == 0
+
+    def test_two_votes_in_distinct_clusters_pin(self):
+        agg = self._pin(cluster_ids=(0, 1))
+        assert agg.settled is True
+        assert agg.settled_sources == 2
+
+    def test_no_assignment_falls_back_to_the_row_count(self):
+        agg = self._pin(cluster_ids=None)
+        assert agg.settled is True
+        assert agg.settled_sources == 2
+
+    def test_a_mismatched_assignment_is_ignored_not_misapplied(self):
+        # A wrong-length assignment would mis-map votes to clusters; ignoring
+        # it degrades to the row count, the pre-#372 behavior.
+        agg = self._pin(cluster_ids=(0,))
+        assert agg.settled is True
+        assert agg.settled_sources == 2
+
+    def test_settled_sources_reports_clusters_not_rows(self):
+        # Three rows, two of them echoing one report: the pin stands on two
+        # independent observations and says so.
+        agg = aggregate_pool(
+            [1.0, 1.0, 1.0], [1.0] * 3, [1.0] * 3, [True] * 3,
+            settlement_event_dates=["2026-07-01"] * 3,
+            published_dates=["2026-07-02"] * 3,
+            cluster_ids=(0, 0, 1),
+            **_kwargs(),
+        )
+        assert agg.settled is True
+        assert agg.settled_sources == 2
+
+    def test_quality_floor_still_sums_rows_not_clusters(self):
+        # Mass is mass, however correlated — independence is the count's axis,
+        # not the floor's. Two echoed rows at 0.15 carry 0.30 >= the 0.20
+        # floor; they are still ONE observation, so no pin, and the floor is
+        # not what suppressed it.
+        agg = self._pin(cluster_ids=(0, 0), weights=[0.15, 0.15])
+        assert agg.settled is False
+        assert agg.suppression_reason is None

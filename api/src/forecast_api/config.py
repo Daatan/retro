@@ -269,8 +269,13 @@ class ApiSettings(BaseSettings):
     # unanimous pool — or a single strong source that clears decisiveness_floor
     # on its own, so widen_ci_for_thin_evidence never fires — publishes std=0 and
     # a zero-width 95% band. widen_ci_for_unresolved_dispersion floors the band at
-    # 1.96·σ/√n_eff, so the floor decays with corroboration and binds exactly when
-    # std_p < σ, independent of pool size.
+    # 1.96·σ/√min(n_eff, k), so the floor decays with corroboration and binds
+    # exactly when std_p < σ, independent of pool size. The k term (retro#382,
+    # k = Σ min(wᵢ, decisiveness_floor) / decisiveness_floor) stops equal-weight
+    # row volume from buying the decay on multiplicity alone: Kish n_eff is
+    # exactly the row count for equal weights, so without it fifty rows at
+    # w=0.02 — one strong row's worth of mass, the funnel's fan-out shape —
+    # shrank the floor 7×. Matrix case C15 pins this.
     #
     # THIS IS A POLICY NUMBER, NOT A MEASUREMENT — the same status as
     # interested_party_stance_cap = 0.3 (F20, retro#368). Nobody has measured the

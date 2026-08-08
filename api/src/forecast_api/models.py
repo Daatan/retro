@@ -266,7 +266,11 @@ class DebugInfo(BaseModel):
 
 class LlmMessage(BaseModel):
     role: str
-    content: str
+    # retro#432: unbounded content let any caller (not just a max_articles-capped
+    # key) drive arbitrary input-token cost through this proxy. 32,000 chars
+    # (~8k tokens) comfortably covers a full article-sized prompt; a legitimate
+    # caller needing more should chunk, not stuff one message.
+    content: str = Field(max_length=32_000)
 
 
 class LlmRequest(BaseModel):
@@ -274,7 +278,9 @@ class LlmRequest(BaseModel):
         default=None,
         description="litellm model ID (e.g. bedrock/amazon.nova-lite-v1:0); defaults to the server's configured Bedrock model",
     )
-    messages: list[LlmMessage]
+    # retro#432: same reasoning as content's cap — bounds worst-case request
+    # cost (message count × per-message cap) rather than leaving it open-ended.
+    messages: list[LlmMessage] = Field(max_length=20)
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
 
 

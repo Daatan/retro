@@ -43,6 +43,11 @@ _shadow_total_resolutions: int = 0
 # One lock guards both — they are only ever refreshed together, on one event loop.
 _cache_lock = asyncio.Lock()
 
+# Age (days) past which leaderboard.json is flagged as stale on refresh
+# (retro#458 Phase 4). The vault hasn't regenerated since 2026-03-28 — this
+# just makes that fact observable instead of silent.
+_STALE_THRESHOLD_DAYS = 90
+
 
 def _load_from_disk(path: Path) -> dict[str, dict]:
     if not path.exists():
@@ -70,6 +75,13 @@ async def refresh_cache(path: Path) -> None:
         _cache.update(loaded)
         _snapshot_mtime = mtime
     logger.info("Leaderboard refreshed: %d sources loaded", len(_cache))
+    if mtime is not None:
+        age_days = (datetime.now(tz=timezone.utc) - datetime.fromtimestamp(mtime, tz=timezone.utc)).days
+        if age_days > _STALE_THRESHOLD_DAYS:
+            logger.warning(
+                "event=credibility_leaderboard_stale snapshot_date=%s age_days=%d",
+                leaderboard_snapshot_date(), age_days,
+            )
 
 
 def leaderboard_snapshot_date() -> str | None:
@@ -164,13 +176,16 @@ def _resolution_shadow_weight(source_id: str) -> float:
     to the frozen vault, which would reintroduce exactly the stale-scores
     ambiguity the cutover exists to remove."""
     if _shadow_total_resolutions < settings.resolution_shadow_min_global_predictions:
+        logger.info("event=credibility_fallback_default source_id=%s branch=%s", source_id, "shadow")
         return 1.0
     entry = _shadow_cache.get(source_id)
     if entry is None:
+        logger.info("event=credibility_fallback_default source_id=%s branch=%s", source_id, "shadow")
         return 1.0
     brier = entry.get("brier_score")
     predictions = entry.get("predictions")
     if brier is None or not predictions:
+        logger.info("event=credibility_fallback_default source_id=%s branch=%s", source_id, "shadow")
         return 1.0
     return _weight_from_brier(float(brier), int(predictions))
 
@@ -202,6 +217,7 @@ def get_credibility_weight(source_id: str) -> float:
 
     entry = _cache.get(source_id)
     if entry is None:
+        logger.info("event=credibility_fallback_default source_id=%s branch=%s", source_id, "legacy")
         return 1.0
 
     # Support new field name (skill_conservative) and old (trueskill_conservative).

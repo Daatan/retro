@@ -8,7 +8,10 @@ default path is untouched; the rest exercise the flag-ON path.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
+import time
 
 import pytest
 
@@ -132,3 +135,94 @@ class TestLoadShadowFromDisk:
 
     def test_missing_board_is_empty_not_an_error(self, tmp_path):
         assert leaderboard._load_shadow_from_disk(tmp_path / "nope.json") == {}
+
+
+class TestFallbackDefaultLogging:
+    """retro#458 Phase 4: the frozen-credibility 1.0 fallback must be explicit
+    in the logs, on both the legacy and shadow branches. Purely additive —
+    every value assertion elsewhere in this file must stay unchanged; these
+    tests only add caplog coverage of the new log event."""
+
+    def test_legacy_branch_logs_on_unknown_source(self, vault, caplog):
+        with caplog.at_level("INFO"):
+            weight = get_credibility_weight("never-seen")
+        assert weight == 1.0  # unchanged behavior
+        assert "event=credibility_fallback_default" in caplog.text
+        assert "source_id=never-seen" in caplog.text
+        assert "branch=legacy" in caplog.text
+
+    def test_legacy_branch_does_not_log_when_source_is_known(self, vault, caplog):
+        with caplog.at_level("INFO"):
+            weight = get_credibility_weight("ynet")
+        assert weight == pytest.approx(1.4)  # unchanged behavior
+        assert "event=credibility_fallback_default" not in caplog.text
+
+    def test_shadow_branch_logs_under_the_global_gate(self, shadow, caplog):
+        shadow(settings.resolution_shadow_min_global_predictions - 1)
+        with caplog.at_level("INFO"):
+            weight = get_credibility_weight("sharp")
+        assert weight == 1.0  # unchanged behavior
+        assert "event=credibility_fallback_default" in caplog.text
+        assert "source_id=sharp" in caplog.text
+        assert "branch=shadow" in caplog.text
+
+    def test_shadow_branch_logs_when_source_absent_from_cache(self, shadow, caplog):
+        with caplog.at_level("INFO"):
+            weight = get_credibility_weight("never-seen")
+        assert weight == 1.0  # unchanged behavior
+        assert "event=credibility_fallback_default" in caplog.text
+        assert "source_id=never-seen" in caplog.text
+        assert "branch=shadow" in caplog.text
+
+    def test_shadow_branch_logs_on_malformed_board_row(self, shadow, monkeypatch, caplog):
+        monkeypatch.setattr(leaderboard, "_shadow_cache", {
+            "no-brier": {"id": "no-brier", "predictions": 40},
+        })
+        with caplog.at_level("INFO"):
+            weight = get_credibility_weight("no-brier")
+        assert weight == 1.0  # unchanged behavior
+        assert "event=credibility_fallback_default" in caplog.text
+        assert "source_id=no-brier" in caplog.text
+        assert "branch=shadow" in caplog.text
+
+    def test_shadow_branch_does_not_log_when_score_applies(self, shadow, caplog):
+        with caplog.at_level("INFO"):
+            weight = get_credibility_weight("sharp")
+        assert weight > 1.0  # unchanged behavior
+        assert "event=credibility_fallback_default" not in caplog.text
+
+
+class TestLeaderboardStalenessWarning:
+    """retro#458 Phase 4: refresh_cache() should warn once per refresh when
+    leaderboard.json's snapshot is older than the staleness threshold."""
+
+    def _write_board_with_age(self, tmp_path, age_days):
+        board = tmp_path / "leaderboard.json"
+        board.write_text(json.dumps([{"id": "ynet", "skill_conservative": 1.0}]))
+        old_time = time.time() - age_days * 86400
+        os.utime(board, (old_time, old_time))
+        return board
+
+    def test_warns_when_snapshot_is_older_than_the_threshold(self, tmp_path, caplog, monkeypatch):
+        monkeypatch.setattr(leaderboard, "_cache", {})
+        monkeypatch.setattr(leaderboard, "_snapshot_mtime", None)
+        board = self._write_board_with_age(tmp_path, leaderboard._STALE_THRESHOLD_DAYS + 5)
+        with caplog.at_level("WARNING"):
+            asyncio.run(leaderboard.refresh_cache(board))
+        assert "event=credibility_leaderboard_stale" in caplog.text
+        assert f"snapshot_date={leaderboard.leaderboard_snapshot_date()}" in caplog.text
+
+    def test_does_not_warn_when_snapshot_is_fresh(self, tmp_path, caplog, monkeypatch):
+        monkeypatch.setattr(leaderboard, "_cache", {})
+        monkeypatch.setattr(leaderboard, "_snapshot_mtime", None)
+        board = self._write_board_with_age(tmp_path, 1)
+        with caplog.at_level("WARNING"):
+            asyncio.run(leaderboard.refresh_cache(board))
+        assert "event=credibility_leaderboard_stale" not in caplog.text
+
+    def test_does_not_warn_when_the_file_is_missing(self, tmp_path, caplog, monkeypatch):
+        monkeypatch.setattr(leaderboard, "_cache", {})
+        monkeypatch.setattr(leaderboard, "_snapshot_mtime", None)
+        with caplog.at_level("WARNING"):
+            asyncio.run(leaderboard.refresh_cache(tmp_path / "nope.json"))
+        assert "event=credibility_leaderboard_stale" not in caplog.text

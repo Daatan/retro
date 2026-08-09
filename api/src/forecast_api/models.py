@@ -185,6 +185,46 @@ class ClaimDetail(BaseModel):
     event_target: Optional[str] = Field(default=None, description="EXPERIMENTAL shadow — the TARGET of the action in this claim's reported fact; with event_actors, the fact's dyad")
     is_occurrence: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when this claim's fact IS the event itself, False when it is only a precursor/precondition/escalation")
     verified: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when independently reported, False when only claimed by an interested party. Per-claim: the article-level field is the dominant claim's, so a lone over-cap interested-party claim diluted by in-contract siblings is invisible above this layer (retro#378)")
+    # --- Conditional fields (v1.1, Phase 1 capture plan; see conditionals.md §4.4 + conditional-capture-phase1.md §3) ---
+    # PRE-RESOLUTION: recorded BEFORE enforce_* chain (asymmetric with other ClaimDetail fields; documented per §3.3)
+    is_conditional: Optional[bool] = Field(
+        default=None,
+        description="PRE-RESOLUTION: True when the claim is conditional on an antecedent"
+    )
+    antecedent_text: Optional[str] = Field(
+        default=None,
+        description="PRE-RESOLUTION: Verbatim 'if'-clause from the article, original language"
+    )
+    antecedent_text_en: Optional[str] = Field(
+        default=None,
+        description="PRE-RESOLUTION: Antecedent as standalone English proposition, stated positively (v1.1). "
+                    "Negation lives in antecedent_polarity. THE ONLY FIELD used for embedding/linking"
+    )
+    antecedent_polarity: Optional[bool] = Field(
+        default=None,
+        description="PRE-RESOLUTION: False for 'if X does NOT happen', True/None for affirmative"
+    )
+    relation: Optional[str] = Field(
+        default=None,
+        description="PRE-RESOLUTION: How antecedent relates: 'raises'/'lowers' (evidential), "
+                    "'requires'/'precludes' (logical), 'unclear'. Plain string so new values don't fail"
+    )
+    strength: Optional[str] = Field(
+        default=None,
+        description="PRE-RESOLUTION: Source's strength when no explicit number: 'certain'/'likely'/'possible'/'unlikely'"
+    )
+    stated_probability: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="PRE-RESOLUTION: P(consequent|antecedent) when source explicitly states it"
+    )
+    is_counterfactual: Optional[bool] = Field(
+        default=None,
+        description="PRE-RESOLUTION: True for 'had X not happened' — past-directed"
+    )
+    speaker: Optional[str] = Field(
+        default=None,
+        description="PRE-RESOLUTION: Who asserted: outlet or analyst name"
+    )
 
 
 class SourceSignal(BaseModel):

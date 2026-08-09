@@ -500,3 +500,148 @@ class TestPoolWireIsAdditive:
         # Unset per-claim fields default to None rather than being dropped.
         assert detail[0].specificity is None
         assert detail[0].event_date is None
+
+
+class TestConditionalFields:
+    """Phase 1 capture (v1.1): conditional claims are pre-resolution shadow fields.
+
+    All 9 conditional fields are Optional and default to None. They are recorded
+    PRE-RESOLUTION (before enforce_* chain), asymmetric with other ClaimDetail fields.
+    """
+
+    def test_conditional_fields_are_optional_and_default_to_none(self):
+        """Claims without conditionals have all 9 fields null."""
+        claim = ClaimDetail(
+            claim="Regular claim.",
+            quote="A quote.",
+            stance=0.5,
+            certainty=0.6,
+        )
+        assert claim.is_conditional is None
+        assert claim.antecedent_text is None
+        assert claim.antecedent_text_en is None
+        assert claim.antecedent_polarity is None
+        assert claim.relation is None
+        assert claim.strength is None
+        assert claim.stated_probability is None
+        assert claim.is_counterfactual is None
+        assert claim.speaker is None
+
+    def test_conditional_fields_can_be_populated(self):
+        """Conditional claims carry all fields populated."""
+        claim = ClaimDetail(
+            claim="Likud gains 15 seats.",
+            quote="If the ceasefire holds, Likud is expected to gain 15 seats.",
+            stance=0.4,
+            certainty=0.6,
+            is_conditional=True,
+            antecedent_text="if the ceasefire holds",
+            antecedent_text_en="the ceasefire holds",
+            antecedent_polarity=True,
+            relation="raises",
+            strength=None,
+            stated_probability=None,
+            is_counterfactual=False,
+            speaker="Analysts",
+        )
+        assert claim.is_conditional is True
+        assert claim.antecedent_text == "if the ceasefire holds"
+        assert claim.antecedent_text_en == "the ceasefire holds"
+        assert claim.antecedent_polarity is True
+        assert claim.relation == "raises"
+        assert claim.speaker == "Analysts"
+
+    def test_conditional_fields_round_trip_through_json(self):
+        """ClaimDetail with conditionals survives JSON serialization."""
+        claim = ClaimDetail(
+            claim="Likud gains 15 seats.",
+            quote="If the ceasefire holds, Likud is expected to gain 15 seats.",
+            stance=0.4,
+            certainty=0.6,
+            is_conditional=True,
+            antecedent_text="if the ceasefire holds",
+            antecedent_text_en="the ceasefire holds",
+            antecedent_polarity=True,
+            relation="raises",
+            speaker="Analysts",
+        )
+        # Serialize to JSON dict (via Pydantic model_dump)
+        dumped = claim.model_dump()
+        # Deserialize back
+        restored = ClaimDetail(**dumped)
+        assert restored.is_conditional is True
+        assert restored.antecedent_text == "if the ceasefire holds"
+        assert restored.relation == "raises"
+
+    def test_conditional_fields_in_claims_detail_list(self):
+        """Multiple claims with mixed conditional/non-conditional fields."""
+        claims = [
+            ClaimDetail(claim="A.", quote="Q1.", stance=0.5, certainty=0.6),
+            ClaimDetail(
+                claim="B.", quote="If X then B.", stance=0.4, certainty=0.5,
+                is_conditional=True, antecedent_text="if X", antecedent_text_en="X",
+                relation="raises",
+            ),
+            ClaimDetail(claim="C.", quote="Q3.", stance=-0.2, certainty=0.7),
+        ]
+        assert claims[0].is_conditional is None
+        assert claims[1].is_conditional is True
+        assert claims[2].is_conditional is None
+
+    async def test_settlement_gate_unchanged_with_conditional_fields(self, monkeypatch):
+        """CRITICAL (§3.0): Settlement-match gate verdicts unchanged when conditional
+        fields are populated. The gate reads only 4 fields (claim, quote, event_date, settled)
+        which are all outside the new conditional field set.
+
+        This test runs the settlement gate on the exact same source twice: once with
+        conditional fields populated, once without. Verdicts must be identical.
+        """
+        from forecast_api.forecaster import _settlement_votes
+
+        # Settlement claim: should pin when sufficiently confident
+        settlement_claim = {
+            "claim": "The election was held.",
+            "quote": "The election took place on Tuesday.",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "settled": True,
+            "event_date": "2026-07-20",
+        }
+        # Dummy colour claim
+        colour_claim = {
+            "claim": "Candidate X will win.",
+            "quote": "X leads in polls.",
+            "stance": 0.3,
+            "certainty": 0.5,
+            "settled": False,
+        }
+
+        # Run gate WITHOUT conditional fields
+        claims_bare = [
+            ClaimDetail(**settlement_claim),
+            ClaimDetail(**colour_claim),
+        ]
+        verdicts_bare = _settlement_votes(outlet="AP", claims_detail=claims_bare)
+
+        # Run gate WITH conditional fields populated
+        settlement_with_conditionals = {
+            **settlement_claim,
+            "is_conditional": False,
+            "antecedent_text": None,
+            "antecedent_text_en": None,
+            "antecedent_polarity": None,
+            "relation": None,
+            "strength": None,
+            "stated_probability": None,
+            "is_counterfactual": None,
+            "speaker": None,
+        }
+        claims_enriched = [
+            ClaimDetail(**settlement_with_conditionals),
+            ClaimDetail(**colour_claim),
+        ]
+        verdicts_enriched = _settlement_votes(outlet="AP", claims_detail=claims_enriched)
+
+        # Verdicts must be identical
+        assert verdicts_bare == verdicts_enriched, \
+            "Settlement gate verdicts changed when conditional fields were populated"

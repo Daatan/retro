@@ -186,12 +186,24 @@ class ApiSettings(BaseSettings):
     # structure of every live pool, so the decision to enable is made on observed
     # redundancy rather than on the sketch's intuition.
     #
-    # `cluster_jaccard_threshold` is the shingle-overlap bar for "same story". 0.5 is a
-    # deliberately loose starting point — near-dup detection uses ~0.95, but the target
-    # here is not a duplicate, it is two outlets writing up one wire report. Untuned:
-    # tune it against the logged cluster structure, not by intuition.
+    # `cluster_jaccard_threshold` is the shingle-overlap bar for "same story". Tuned
+    # 2026-08-09 (retro#414): 0.5 was never once reached live (max observed 0.457 across
+    # 24 pools), so the discount above could never fire. Eyeballing the actual pair text
+    # (api/scripts/eyeball_cluster_pairs.py) at every score in [0.20, 0.50] found two
+    # separate reasons NOT to go as low as the 0.457 ceiling suggests: (1) three pairs at
+    # 0.22–0.27 shared boilerplate lead-in text while reporting CONTRADICTORY claims (one
+    # said a Patriot-missile license was granted, another that it was refused) — clustering
+    # those would suppress real disagreement, not just avoid double-counting; (2) the
+    # `test_aggregation_matrix.py` fixtures' default per-source claim/quote template
+    # ("Fixture claim {i} from {source}.") scores an exact, source-name-independent
+    # 0.3333 against itself across different sources — a hard structural floor a lower
+    # threshold would cross, wrongly clustering synthetic "independent sources" fixtures
+    # (and by the same mechanism, real short boilerplate-heavy articles). 0.40 clears
+    # both: it sits with real margin above the 0.3333 fixture ceiling and still catches
+    # 4 unambiguous real echo pairs (0.404–0.492, all one Hormuz-deal wire story plus an
+    # identical Trump quote) with zero contradiction-cluster or fixture-collision risk.
     cluster_downweight_exponent: float = 0.0
-    cluster_jaccard_threshold: float = 0.5
+    cluster_jaccard_threshold: float = 0.40
     cluster_shingle_size: int = 3
     # ── Per-source mass cap (retro#458, Phase 1) ────────────────────────────
     # Distinct from clustering above: clustering discounts near-duplicate TEXT

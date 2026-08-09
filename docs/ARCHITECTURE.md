@@ -210,6 +210,43 @@ certainty with only mild stance), but the extractor prompt (`pipeline/src/tm/ext
 only ever demonstrates them via correlated examples — it never states the distinction
 as a rule. See "Known limitations" below.
 
+### Conditional Claims (Phase 1 Capture, PR #504)
+
+Starting 2026-08-09, the extractor records **conditional claims** — predictions that depend on an
+antecedent event or condition — on shadow lane via 9 optional per-claim fields. The old `conditionality`
+field (dropped in PR #102) is replaced by a richer model capturing the antecedent, its negation,
+the causal relation, and (optionally) an explicit conditional probability.
+
+**Full documentation:** [`CONDITIONAL_CAPTURE.md`](./CONDITIONAL_CAPTURE.md)
+
+**Why conditionals matter:** A claim like "If the court rules X, then Y will happen" is evidence
+only when the antecedent (court rules X) resolves. Divorcing this from the unconditional case
+(treat as ordinary evidence regardless) inflates forecaster confidence in claims that rest on
+unresolved preconditions. The plan (3 phases) is to:
+1. **Phase 1 (DONE):** Capture conditionals on shadow lane (zero scoring impact yet)
+2. **Phase 2 (TBD):** Measure Brier delta; decide if attenuation is worth the complexity
+3. **Phase 4 (TBD):** Gate on `is_conditional=True` to attenuate certainty weights
+
+**Fields (all Optional, default None):**
+- `is_conditional` — True when the claim is conditional on an antecedent; gate for Phase 4 attenuation
+- `antecedent_text` — Verbatim "if"-clause from the article (original language)
+- `antecedent_text_en` — English canonical form; the ONLY field used for antecedent→question embedding/linking (§3.4)
+- `antecedent_polarity` — False if the antecedent is negated ("if NOT X")
+- `relation` — How the antecedent relates to the consequence: `'raises'` / `'lowers'` (evidential), `'requires'` / `'precludes'` (logical), `'unclear'`
+- `strength` — Linguistic likelihood of the conditional: `'certain'` / `'likely'` / `'possible'` / `'unlikely'`
+- `stated_probability` — Explicit P(consequence|antecedent) when the source provides one
+- `is_counterfactual` — True for counterfactual conditionals ("had X not happened, then Y")
+- `speaker` — Attribution: the outlet or analyst making the conditional claim
+
+**Extraction design (v1.1, single-call):**
+The extractor uses a cheap lexical pre-filter (12 keywords: if, unless, should, provided, were, in the event, absent, barring, contingent, depends, assuming, so long as) to gate a 180-line conditional instruction block. When the lexicon matches, the LLM extracts the 9 fields; when it doesn't, the fields are expected to null. No second LLM round-trip — cost is ~0s for non-conditional articles.
+
+**Safety:** The settlement-match gate (retro#388, which reads claim/quote/event_date/settled) is unaffected by the new conditional fields. Test `test_settlement_gate_unchanged_with_conditional_fields()` verifies this.
+
+**Backward compatibility:** All fields are Optional and nullable; old articles missing them parse fine. Scoring systems unchanged until Phase 4.
+
+Full field docs: `PredictionExtraction` in `pipeline/src/tm/models.py`; `ClaimDetail` in `api/src/forecast_api/models.py`.
+
 ---
 
 ## Pipeline Flow

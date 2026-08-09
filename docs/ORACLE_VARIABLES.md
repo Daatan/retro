@@ -361,7 +361,7 @@ separately: one source, two computations, free to drift.
 
 Config constants (16): `recency_half_life_days=7`, `recency_floor=0.02`,
 `logit_clamp=0.01`, `relevance_weight_floor=0.05`, `forecast_relevance_bar=0.0`,
-`cluster_downweight_exponent=0.0`, `cluster_jaccard_threshold=0.5`,
+`cluster_downweight_exponent=0.0`, `cluster_jaccard_threshold=0.40`,
 `cluster_shingle_size=3`,
 `syndication_title_similarity=0.8`,
 `decisiveness_floor=0.5`, `thin_evidence_ci_inflation=0.45`,
@@ -404,9 +404,29 @@ news-indexer's pgvector near-dup machinery, but that lives in another service: r
 embedding dependency, and adding one buys a per-row API call on every recompute plus a model
 whose drift would silently re-cluster history. The gate harness (#350) measures this change by
 *replaying past pools*, which a non-deterministic clusterer cannot support. Shingle Jaccard
-(`cluster_jaccard_threshold=0.5`, `cluster_shingle_size=3`) is free, exact and reproducible.
+(`cluster_jaccard_threshold=0.40`, `cluster_shingle_size=3`) is free, exact and reproducible.
 Single-linkage, so A~B and B~C puts all three together. A row with no usable text is always
 its own singleton — missing text can never *cost* a source its vote.
+
+**Threshold tuned 2026-08-09 (retro#414):** the original 0.5 was never once reached live (max
+observed 0.457 across 24 pools), so the discount above could not fire regardless of the
+exponent. `api/scripts/eyeball_cluster_pairs.py` pulled the actual `claims_detail` text behind
+every pairwise score in prod and printed it for review — the aggregate stats alone couldn't
+distinguish real echo from coincidence. Most pairs down to ~0.30 turned out to be genuine
+syndication of one report (the same Reuters/AP wire write-up run by several outlets, a Michael
+Burry quote picked up by three headlines) — but two independent findings ruled out going that
+low: (1) three pairs at 0.22–0.27 shared boilerplate lead-in text while reporting
+**contradictory** claims (one said a Patriot-missile production license was granted, another
+that it was refused) — clustering those together would suppress real disagreement, not just
+double-counting; (2) `test_aggregation_matrix.py`'s own synthetic fixtures, whose default
+per-source claim/quote template exists specifically so *different* sources don't cluster
+(the docstring on `_prediction()` documents an earlier, worse version of this exact bug — see
+retro#372), score an exact, source-name-independent **0.3333** against each other, a hard
+structural floor a lower threshold would cross. `0.40` clears both: real margin above the
+0.3333 fixture ceiling, and it still catches 4 unambiguous echo pairs (0.404–0.492, one
+Hormuz-deal wire story plus an identical Trump quote) with zero contradiction or
+fixture-collision risk. Not re-derived after a `claims_detail`-quality change (e.g. the
+`title` fix sketched in retro#408); re-eyeball if one lands.
 
 **Coverage is bounded by `claims_detail` today.** Neither `SourceSignal` nor
 `PoolSourceInput` carries a title, so that field is the only cluster text either caller can
@@ -444,11 +464,13 @@ compare, a pool of text-less legacy rows, and a pool of genuinely independent re
 wrote the same nothing. Measured 2026-08-05, that produced exactly **one** line (a synthetic
 probe) across 180 `/pool/aggregate` and 374 `/forecast` requests.
 
-The threshold is untuned: tune it against `max_jaccard`/`hist`, which is the only reason
-those two fields exist — the conditional log could only ever show echo that *already* cleared
-the bar, so there was no data below it to lower the bar onto. Note this measurement accrues at
-**traffic rate**, not at resolution rate: it observes pool structure rather than forecast
-accuracy, so unlike enabling the discount it is not gated on the resolved-forecast backlog.
+The threshold **was** untuned — `max_jaccard`/`hist` exist exactly so it could be, and retro#414
+did that tuning (2026-08-09, `cluster_jaccard_threshold` 0.5 → 0.40, see §2.4 above): the
+conditional log could only ever show echo that *already* cleared the bar, so there was no data
+below it to lower the bar onto until the unconditional line landed. Note this measurement
+accrues at **traffic rate**, not at resolution rate: it observes pool structure rather than
+forecast accuracy, so unlike enabling the discount it is not gated on the resolved-forecast
+backlog.
 `pool_dispersion_floor` is the minimum published interval width, as a
 between-source standard deviation in probability space — **a policy number, not
 a measurement**, in the same class as `interested_party_stance_cap`; see the

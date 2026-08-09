@@ -238,6 +238,42 @@ class TestFacetsAreClaimLevel:
         assert [c.event_actors for c in s.claims_detail] == ["Alpha", "Beta"]
 
 
+class TestFactSignalNullIsDistinguishable:
+    """retro#471: fact_signal's null must not conflate 'no relevant fact',
+    'a contrary fact too weak to anchor a value', and 'opinion' — a consumer
+    reading claims_detail must be able to tell them apart per claim."""
+
+    async def test_no_fact_found_is_distinguishable_from_opinion(self, monkeypatch):
+        s = await _one_source(monkeypatch, [
+            _claim(claim="Nothing bears on the event.",
+                   fact_signal_absent_reason="no_fact_found"),
+            _claim(claim="Pure opinion column.",
+                   evidence_class="opinion", fact_signal_absent_reason="opinion"),
+        ], "[F1-tristate] Will the event occur?")
+
+        reasons = [c.fact_signal_absent_reason for c in s.claims_detail]
+        assert reasons == ["no_fact_found", "opinion"]
+        assert all(c.fact_signal is None for c in s.claims_detail)
+
+    async def test_contrary_below_anchor_is_its_own_state(self, monkeypatch):
+        s = await _one_source(monkeypatch, [
+            _claim(claim="A weak, ambiguous contrary fact.",
+                   fact_signal_absent_reason="contrary_below_anchor"),
+        ], "[F1-tristate-contrary] Will the event occur?")
+
+        assert s.claims_detail[0].fact_signal is None
+        assert s.claims_detail[0].fact_signal_absent_reason == "contrary_below_anchor"
+
+    async def test_reason_is_absent_when_fact_signal_is_present(self, monkeypatch):
+        """The reason only exists to explain a null — a scored claim has none."""
+        s = await _one_source(monkeypatch, [
+            _claim(claim="A graded fact.", fact_signal=-0.4, is_occurrence=True),
+        ], "[F1-tristate-scored] Will the event occur?")
+
+        assert s.claims_detail[0].fact_signal == -0.4
+        assert s.claims_detail[0].fact_signal_absent_reason is None
+
+
 class TestTheReductionReplaysFromPersistedClaims:
     """Item 3 of F1: the scalars are DERIVED from the per-claim layer.
 

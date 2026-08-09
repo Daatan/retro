@@ -82,6 +82,23 @@ class PredictionExtraction(BaseModel):
                     "the prediction rests on opinion/advocacy with no reported fact bearing on "
                     "the event.",
     )
+    fact_signal_absent_reason: Optional[Literal[
+        "no_fact_found", "contrary_below_anchor", "opinion",
+    ]] = Field(
+        default=None,
+        description="Required whenever fact_signal is omitted, so the null itself stays "
+                    "honest (retro#471) — a consumer must be able to tell 'nothing found' "
+                    "from 'something found that points the other way': "
+                    "'no_fact_found' — nothing in the article bears on the event's "
+                    "occurrence either way; "
+                    "'contrary_below_anchor' — a reported fact DOES point against the "
+                    "event but is too weak, ambiguous, or off-dyad to anchor a graded "
+                    "negative value (most contrary facts should still be graded per the "
+                    "NEGATIVE PRECURSORS rule — reserve this for the genuine remainder); "
+                    "'opinion' — the claim rests on opinion, advocacy, or expectation with "
+                    "no reported fact bearing on the event. Omit entirely when fact_signal "
+                    "is present.",
+    )
     event_actors: Optional[str] = Field(
         default=None,
         description="EXPERIMENTAL, shadow — WHO acts in the reported fact behind fact_signal "

@@ -233,6 +233,20 @@ def test_fact_signal_in_output_contract():
     assert "verified" in PROMPT_SUFFIX
 
 
+def test_fact_signal_absent_reason_section_present():
+    """retro#471: the null itself must stay honest — a consumer needs to tell
+    'nothing found' from 'something found that points the other way'."""
+    assert "fact_signal_absent_reason" in PROMPT_PREFIX
+    assert "no_fact_found" in PROMPT_PREFIX
+    assert "contrary_below_anchor" in PROMPT_PREFIX
+    assert "opinion" in PROMPT_PREFIX
+
+
+def test_fact_signal_absent_reason_in_output_contract():
+    assert "fact_signal_absent_reason" in PROMPT_SUFFIX
+    assert "never omit both" in PROMPT_SUFFIX
+
+
 def test_prompt_placeholders_still_format():
     # Guards against unescaped braces sneaking into future prompt edits.
     PROMPT_SUFFIX.format(

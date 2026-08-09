@@ -188,6 +188,7 @@ def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDe
             settled=p.settled,
             event_date=p.event_date,
             fact_signal=p.fact_signal,
+            fact_signal_absent_reason=p.fact_signal_absent_reason,
             event_actors=p.event_actors,
             event_target=p.event_target,
             is_occurrence=p.is_occurrence,

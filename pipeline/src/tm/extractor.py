@@ -554,6 +554,14 @@ with "what the facts show", fact_signal is ONLY the second: +1 the facts establi
 happened or is happening, -1 the facts establish it will not or cannot, 0 the facts bear on \
 it but point neither way. Return null (omit fact_signal and its facets) when the prediction \
 rests on opinion, advocacy, or expectation with no reported fact that bears on the event. \
+WHENEVER you omit fact_signal, also record fact_signal_absent_reason so the null itself \
+stays honest — a consumer must be able to tell "nothing found" from "something found that \
+points the other way": opinion — the claim rests on opinion/advocacy/expectation with no \
+reported fact bearing on the event; no_fact_found — nothing in the article bears on the \
+event's occurrence either way; contrary_below_anchor — a reported fact DOES point against \
+the event but is too weak, ambiguous, or off-dyad to anchor a graded negative value. Reserve \
+contrary_below_anchor for the genuine remainder, not as an escape hatch from grading — per \
+NEGATIVE PRECURSORS below, most contrary facts should be graded, not nulled.
 The one EXCEPTION — DECIDER STATEMENTS: a public, on-record statement by the decider — the \
 actor or authority whose own act or announcement would itself resolve the claim, including \
 a senior official speaking for that authority — is itself a reported fact about intent, \
@@ -634,13 +642,15 @@ event_date, e.g. "on Friday" or "yesterday"; OMIT it when the article names the 
 absolute date outright — see the DATES section above)
 
 The following are EXPERIMENTAL shadow fields — include them together per the FACT_SIGNAL \
-section, and OMIT all of them when the prediction rests on opinion/expectation with no \
-reported fact bearing on the event: \
+section whenever a reported fact bears on the event: \
 fact_signal (float −1 to 1 — what the reported facts alone imply about the event), \
 event_actors (string — who acts in that fact), event_target (string — the target of the \
 action), is_occurrence (boolean — true only when the fact IS the event itself, false for a \
 precursor/precondition/escalation), verified (boolean — true when independently reported, \
-false when only claimed by an interested party).
+false when only claimed by an interested party). \
+When you OMIT fact_signal (and the four facets above with it), include \
+fact_signal_absent_reason instead (one of opinion / no_fact_found / contrary_below_anchor — \
+see the FACT_SIGNAL section for which applies) — never omit both.
 
 Example — related event: "Assad regime falls in Syria":
 {{

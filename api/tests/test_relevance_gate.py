@@ -75,7 +75,8 @@ def _wire(monkeypatch, articles, certainty: float = 0.8, evidence_class=None):
 
     async def _bounded(
         result, question, *, max_article_chars, timings, article_debugs, timeout_s,
-        claim_deadline=None, claim_direction=None, prediction_id=None, usage_events=None,
+        claim_deadline=None, claim_direction=None, prediction_id=None,
+        resolution_criteria=None, usage_events=None,
     ):
         rel, stance = by_url[result.url]
         timings.append({"url": result.url, "outcome": "ok"})

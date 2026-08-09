@@ -657,6 +657,7 @@ async def _process_article_bounded(
     claim_deadline: str | None = None,
     claim_direction: str | None = None,
     prediction_id: str | None = None,
+    resolution_criteria: str | None = None,
     usage_events: list[dict] | None = None,
 ) -> tuple[SearchResult, float, list, float | None, float | None] | None:
     """Run _process_article under a per-article wall-clock ceiling.
@@ -676,6 +677,7 @@ async def _process_article_bounded(
                 claim_deadline=claim_deadline,
                 claim_direction=claim_direction,
                 prediction_id=prediction_id,
+                resolution_criteria=resolution_criteria,
                 usage_events=usage_events,
             ),
             timeout=timeout_s,
@@ -708,6 +710,7 @@ async def _process_article(
     claim_deadline: str | None = None,
     claim_direction: str | None = None,
     prediction_id: str | None = None,
+    resolution_criteria: str | None = None,
     usage_events: list[dict] | None = None,
 ) -> tuple[SearchResult, float, list, float | None, float | None] | None:
     """
@@ -864,7 +867,11 @@ async def _process_article(
             source_name=source_name,
             article_date=article_date,
             event_name=question,
-            event_description=question,
+            # retro#353: resolution_criteria (when the caller sends it) is the actual
+            # resolution rules — mirrors the batch pipeline's llm_referee_criteria
+            # (orchestrator.py). Falls back to the bare question, today's behavior,
+            # so a caller that hasn't started sending it sees no change at all.
+            event_description=resolution_criteria or question,
             claim_deadline=claim_deadline,
             short_form=short_form,
             language=language,
@@ -1276,6 +1283,7 @@ async def _run_forecast_inner(
                 claim_deadline=req.claim_deadline,
                 claim_direction=req.claim_direction,
                 prediction_id=req.prediction_id,
+                resolution_criteria=req.resolution_criteria,
                 usage_events=usage_events,
             )
             for r in search_results

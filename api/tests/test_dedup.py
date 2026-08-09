@@ -82,3 +82,56 @@ def test_preserves_order_and_passthrough_when_unique():
     ]
     out = _dedupe(items)
     assert [r.url for r in out] == ["http://a.com/1", "http://b.com/2"]
+
+
+def test_collapses_reprinted_hebrew_story():
+    # Same wire story (Hebrew), one word differs (verb form) between the two
+    # re-hosts — exactly the shape a syndicated re-print takes. The old
+    # `[a-z0-9]+` tokenizer matched none of this text (zero tokens throughout),
+    # so it could never clear `_MIN_CLUSTER_TOKENS` and these would never have
+    # clustered before the script-agnostic regex (retro#458 Phase 3).
+    items = [
+        _a(
+            "http://msn.com/he1",
+            "ישראל חותמת הסכם הפסקת אש עם חמאס לאחר משא ומתן ממושך",
+            0.3,
+        ),
+        _a(
+            "http://reuters.com/he1",
+            "ישראל חתמה הסכם הפסקת אש עם חמאס לאחר משא ומתן ממושך",
+            0.9,
+        ),
+    ]
+    out = _dedupe(items)
+    assert len(out) == 1
+    assert out[0].url == "http://reuters.com/he1"  # highest credibility kept
+
+
+def test_collapses_reprinted_russian_story():
+    # Same wire story (Russian), one word differs (synonym) between re-hosts.
+    items = [
+        _a(
+            "http://yahoo.com/ru1",
+            "Центральный банк повысил процентную ставку до рекордного уровня в этом году",
+            0.4,
+        ),
+        _a(
+            "http://ap.com/ru1",
+            "Центральный банк поднял процентную ставку до рекордного уровня в этом году",
+            0.9,
+        ),
+    ]
+    out = _dedupe(items)
+    assert len(out) == 1
+    assert out[0].url == "http://ap.com/ru1"  # highest credibility kept
+
+
+def test_keeps_distinct_non_latin_stories():
+    # Two genuinely different Russian stories sharing only a topic word must
+    # not be merged — the non-Latin analog of test_keeps_distinct_stories_sharing_a_topic_word.
+    items = [
+        _a("http://a.com/ru2", "Правительство объявило новый пакет экономических реформ на следующий год", 0.3),
+        _a("http://b.com/ru3", "Оппозиция раскритиковала бюджетный план правительства перед голосованием в парламенте", 0.3),
+    ]
+    out = _dedupe(items)
+    assert len(out) == 2

@@ -287,3 +287,63 @@ class TestPoolReportingFields:
         assert resp.insufficient_data is False
         assert resp.age_adjusted_mass >= resp.evidence_mass
         assert resp.age_adjusted_mass > resp.evidence_mass  # decay actually bit here
+
+
+class TestSyndicationDedup:
+    """dedupe_syndicated() now runs inside run_pool_aggregate() too (retro#458
+    Phase 3) — previously it only ran on the /forecast path
+    (_run_forecast_inner), so a caller-persisted pool with the same wire story
+    re-hosted under two outlets had zero dedup coverage and could triple its
+    weight. `title_of` here is the claims_detail-derived cluster text (the
+    same derivation the clustering call below already uses) since
+    PoolSourceInput carries no raw title field."""
+
+    _CLAIM = "Central bank raises interest rate to record high"
+    _QUOTE = "the rate hike marks the largest increase in over a decade"
+
+    async def test_near_duplicate_titles_collapse_to_one_row(self):
+        # Same story, two different outlets/URLs, near-identical claims_detail
+        # text (as a re-print of the same wire copy would extract) — the
+        # exact shape run_pool_aggregate previously had zero coverage for.
+        low = _source(
+            stance=0.9, credibility_weight=0.3, evidence_weight=1.0,
+            url="https://aggregator-a.example.test/story",
+            outlet="Aggregator A",
+            claims_detail=[{"claim": self._CLAIM, "quote": self._QUOTE, "stance": 0.9, "certainty": 0.8}],
+        )
+        high = _source(
+            stance=0.9, credibility_weight=1.4, evidence_weight=1.0,
+            url="https://aggregator-b.example.test/story-copy",
+            outlet="Aggregator B",
+            claims_detail=[{"claim": self._CLAIM, "quote": self._QUOTE, "stance": 0.9, "certainty": 0.8}],
+        )
+        collapsed = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=[low, high]))
+        solo_high = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=[high]))
+        assert collapsed.articles_used == 1
+        # The higher-credibility duplicate is the one that survives — same
+        # result as if the low-credibility re-print had never been sent.
+        assert collapsed.mean == pytest.approx(solo_high.mean)
+        assert collapsed.evidence_mass == pytest.approx(solo_high.evidence_mass)
+
+    async def test_exact_duplicate_url_collapses_even_without_claims_detail(self):
+        dup_url = "https://aggregator.example.test/story"
+        a = _source(stance=0.9, credibility_weight=0.3, evidence_weight=1.0, url=dup_url)
+        b = _source(stance=0.9, credibility_weight=1.4, evidence_weight=1.0, url=dup_url)
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=[a, b]))
+        assert resp.articles_used == 1
+
+    async def test_distinct_stories_are_not_merged(self):
+        # Two genuinely different stories (different claims_detail text, no
+        # URL overlap) must both survive — dedup must not be over-eager.
+        a = _source(
+            stance=0.9, credibility_weight=1.0, evidence_weight=1.0,
+            url="https://a.example.test/story-one",
+            claims_detail=[{"claim": "Company reports record quarterly revenue growth", "quote": "revenue climbed across every segment this quarter", "stance": 0.9, "certainty": 0.8}],
+        )
+        b = _source(
+            stance=-0.5, credibility_weight=1.0, evidence_weight=1.0,
+            url="https://b.example.test/story-two",
+            claims_detail=[{"claim": "Regulator opens investigation into unrelated merger deal", "quote": "the inquiry focuses on antitrust concerns raised last month", "stance": -0.5, "certainty": 0.8}],
+        )
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=[a, b]))
+        assert resp.articles_used == 2

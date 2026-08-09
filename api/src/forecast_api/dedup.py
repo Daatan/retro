@@ -20,7 +20,14 @@ from typing import Callable, Sequence, TypeVar
 
 T = TypeVar("T")
 
-_WORD = re.compile(r"[a-z0-9]+")
+# Script-agnostic: `\w` minus digits/underscore matches a "letter" in any
+# script Python's `str.lower()` and `re` know about (Latin, Hebrew, Cyrillic,
+# Arabic, ...), not just ASCII a-z0-9. The old `[a-z0-9]+` silently tokenized
+# non-Latin titles to nothing, so a Hebrew or Russian re-print never cleared
+# `_MIN_CLUSTER_TOKENS` and could never cluster (retro#458 Phase 3).
+# `re.UNICODE` is already the default for a `str` pattern in Python 3 — kept
+# explicit here so the intent reads without needing to know that default.
+_WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
 
 # Jaccard on a handful of tokens is noisy, and a real syndicated headline is long.
 # Below this many meaningful tokens we don't cluster by title (URL-dedup still runs),

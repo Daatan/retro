@@ -1699,6 +1699,32 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
     pool rather than trusting a stale weight from first extraction.
     """
     ref_date = datetime.now().strftime("%Y-%m-%d")
+    # Collapse syndicated near-duplicates BEFORE the per-source loop below builds
+    # the pooled arrays — mirrors the /forecast path's Step 1b (this file, above)
+    # so a wire story re-hosted across aggregators can't triple its weight here
+    # either (retro#458 Phase 3; this path previously had zero dedup coverage).
+    # `PoolSourceInput` carries no title field (see `_cluster_text_of`'s
+    # docstring), so `title_of` reuses the same claims_detail-derived text the
+    # clustering call below already computes for each row — the closest analog
+    # this model has, and reusing it keeps a single source of truth. It is NOT
+    # backed by `outlet`: an outlet name alone can exceed `_MIN_CLUSTER_TOKENS`
+    # (e.g. "Yahoo News UK Edition") and would falsely cluster unrelated
+    # same-outlet stories as reprints. `priority_of` uses `credibility_weight`
+    # directly (already resolved onto the row, unlike the /forecast path which
+    # derives it via a URL lookup) so the highest-credibility duplicate survives.
+    n_before_dedupe = len(req.sources)
+    sources = dedupe_syndicated(
+        req.sources,
+        title_of=lambda s: _cluster_text_of(s) or "",
+        url_of=lambda s: s.url or "",
+        priority_of=lambda s: s.credibility_weight,
+        threshold=settings.syndication_title_similarity,
+    )
+    if len(sources) < n_before_dedupe:
+        logger.info(
+            "event=syndication_dedupe_pool before=%d after=%d collapsed=%d",
+            n_before_dedupe, len(sources), n_before_dedupe - len(sources),
+        )
     stances: list[float] = []
     weights: list[float] = []
     valve_weights: list[float] = []
@@ -1721,8 +1747,11 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
     # ignored) so `cap_source_mass` can group rows by outlet, but only ever
     # AS a grouping key — the identity string itself never enters the pooled
     # math, and the cap is inert at its shipped default like every other
-    # widening on this list.
-    for s in req.sources:
+    # widening on this list. `url` joins `source_id` in retro#458 Phase 3, for
+    # the same reason: the syndication dedup call above groups rows by URL (and
+    # by claims_detail-derived title similarity) before this loop even starts —
+    # again identity only, never a value in the weight formula below.
+    for s in sources:
         rweight = recency_weight(
             s.published_date, ref_date,
             settings.recency_half_life_days, floor=settings.recency_floor,
@@ -1782,7 +1811,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         # This is the first estimator use of claims_detail, which run_pool_aggregate's
         # whitelist comment reserved for exactly this issue (retro#355).
         cluster_ids=_cluster_ids(
-            [_cluster_text_of(s) for s in req.sources], _question_hash(req.question or ""),
+            [_cluster_text_of(s) for s in sources], _question_hash(req.question or ""),
         ),
         cluster_downweight_exponent=settings.cluster_downweight_exponent,
         valve_weights=valve_weights,
@@ -1807,7 +1836,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             agg,
             question=req.question,
             votes_for_index=lambda i: _settlement_votes(
-                req.sources[i].outlet or req.sources[i].url, req.sources[i].claims_detail,
+                sources[i].outlet or sources[i].url, sources[i].claims_detail,
             ),
             rerun=lambda flags: aggregate_pool(stances, weights, relevances, flags, **_pool_kwargs),
             settled_flags=settled_flags,

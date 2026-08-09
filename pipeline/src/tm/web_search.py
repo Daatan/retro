@@ -1167,6 +1167,22 @@ def _extract_bq_terms(query: str) -> list[str]:
     return terms[:8]  # cap to keep SQL manageable
 
 
+def _entity_regex_patterns(terms: List[str]) -> List[str]:
+    """Build case-insensitive REGEXP_CONTAINS patterns for BigQuery entity terms.
+
+    Returns one ``(?i)<escaped term>`` pattern per term, meant to be bound as a
+    BigQuery ``ArrayQueryParameter`` rather than interpolated into SQL text.
+    ``re.escape()`` only neutralises regex metacharacters (so the pattern matches
+    the term literally) — it says nothing about SQL syntax, so the caller must
+    still bind these as parameters, never splice them into the query string.
+
+    Lives here rather than in ``gdelt_bq_ingest`` (where retro#440 first added it)
+    because both BigQuery callers need it and the import already runs this way:
+    ``gdelt_bq_ingest`` imports ``web_search``, not the reverse.
+    """
+    return [f"(?i){re.escape(t)}" for t in terms]
+
+
 def _sql_domain_filter(domains: Optional[List[str]]) -> str:
     """Build an ``AND SourceCommonName IN (...)`` clause, or '' when no domains.
 
@@ -1220,14 +1236,22 @@ def _search_gdelt_bq(
     if not terms:
         raise RuntimeError("GDELT BQ: no extractable entity terms in query")
 
-    # Build entity filter: any term present in any of the four entity columns
-    entity_conditions = " OR ".join(
-        f"REGEXP_CONTAINS(COALESCE(V2Persons,''), r'(?i){re.escape(t)}') "
-        f"OR REGEXP_CONTAINS(COALESCE(V2Locations,''), r'(?i){re.escape(t)}') "
-        f"OR REGEXP_CONTAINS(COALESCE(V2Organizations,''), r'(?i){re.escape(t)}') "
-        f"OR REGEXP_CONTAINS(COALESCE(AllNames,''), r'(?i){re.escape(t)}')"
-        for t in terms
-    )
+    # Entity terms are BOUND, not spliced (retro#462, same fix as retro#440).
+    # re.escape() neutralises regex metacharacters; it is not SQL escaping, and the
+    # only thing that made the old f-string safe was _extract_bq_terms happening to
+    # emit [A-Za-z] — an accidental property of its regexes, not a guarantee anyone
+    # was maintaining. One UNNEST over a parameter array replaces the per-term
+    # OR-chain and matches the four entity columns exactly as before.
+    patterns = _entity_regex_patterns(terms)
+    entity_conditions = """
+        EXISTS (
+            SELECT 1 FROM UNNEST(@patterns) AS pattern
+            WHERE REGEXP_CONTAINS(COALESCE(V2Persons,''), pattern)
+               OR REGEXP_CONTAINS(COALESCE(V2Locations,''), pattern)
+               OR REGEXP_CONTAINS(COALESCE(V2Organizations,''), pattern)
+               OR REGEXP_CONTAINS(COALESCE(AllNames,''), pattern)
+        )
+    """
 
     domain_filter = _sql_domain_filter(domains)
 
@@ -1248,7 +1272,7 @@ def _search_gdelt_bq(
             SourceCommonName   AS source,
             DATE               AS gkg_date
         FROM `gdelt-bq.gdeltv2.gkg_partitioned`
-        WHERE _PARTITIONTIME BETWEEN TIMESTAMP('{ts_from}') AND TIMESTAMP('{ts_to}')
+        WHERE _PARTITIONTIME BETWEEN TIMESTAMP(@date_from) AND TIMESTAMP(@date_to)
           AND ({entity_conditions})
           {domain_filter}
           AND DocumentIdentifier IS NOT NULL
@@ -1260,7 +1284,14 @@ def _search_gdelt_bq(
     logger.debug("GDELT BQ query for %r (terms: %s)", query[:60], terms)
     job = client.query(
         sql,
-        job_config=_bigquery.QueryJobConfig(maximum_bytes_billed=_GDELT_BQ_MAX_BYTES_BILLED),
+        job_config=_bigquery.QueryJobConfig(
+            maximum_bytes_billed=_GDELT_BQ_MAX_BYTES_BILLED,
+            query_parameters=[
+                _bigquery.ScalarQueryParameter("date_from", "STRING", ts_from),
+                _bigquery.ScalarQueryParameter("date_to", "STRING", ts_to),
+                _bigquery.ArrayQueryParameter("patterns", "STRING", patterns),
+            ],
+        ),
     )
     rows = list(job.result())
 

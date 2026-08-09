@@ -378,16 +378,10 @@ async def run_batch(
     )
 
 
-def _entity_regex_patterns(terms: List[str]) -> List[str]:
-    """Build case-insensitive REGEXP_CONTAINS patterns for BigQuery entity terms.
-
-    Returns one ``(?i)<escaped term>`` pattern per term, meant to be bound as a
-    BigQuery ``ArrayQueryParameter`` rather than interpolated into SQL text.
-    ``re.escape()`` only neutralises regex metacharacters (so the pattern matches
-    the term literally) — it says nothing about SQL syntax, so the caller must
-    still bind these as parameters, never splice them into the query string.
-    """
-    return [f"(?i){re.escape(t)}" for t in terms]
+# Moved to tm.web_search in retro#462 so both BigQuery callers share one definition
+# (this module already imports web_search; the reverse would be circular). Re-bound
+# here so `gdelt_bq_ingest._entity_regex_patterns` stays a valid reference.
+_entity_regex_patterns = _ws._entity_regex_patterns
 
 
 async def discover(keywords: str, date_from: str, date_to: str, data_dir: Path):

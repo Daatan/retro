@@ -1300,6 +1300,7 @@ async def _run_forecast_inner(
     all_stances: list[float] = []
     all_weights: list[float] = []
     all_valve_weights: list[float] = []
+    all_age_adjusted_weights: list[float] = []
     relevances: list[float] = []
     all_settled: list[bool] = []
     all_settlement_dates: list[Optional[str]] = []
@@ -1413,10 +1414,17 @@ async def _run_forecast_inner(
             * recency_weight(article_date, ref_date, settings.recency_half_life_days, floor=0.0)
             * relevance_weight(relevance)
         )
+        # Reporting-only twin of `weight` with recency's contribution forced to
+        # neutral (retro#458 Phase 2) — same product as `weight` but with
+        # `rweight` replaced by 1.0, i.e. "what would this row weigh if it had
+        # not aged". Feeds PoolAggregateResult.age_adjusted_mass; nothing in
+        # the pooling math reads it.
+        age_adjusted_weight = credibility * avg_evidence_weight * relevance_weight(relevance)
 
         all_stances.append(avg_stance)
         all_weights.append(weight)
         all_valve_weights.append(valve_weight)
+        all_age_adjusted_weights.append(age_adjusted_weight)
         relevances.append(relevance)
         all_published_dates.append(article_date)
         all_source_ids.append(source_id)
@@ -1481,6 +1489,7 @@ async def _run_forecast_inner(
         ),
         cluster_downweight_exponent=settings.cluster_downweight_exponent,
         valve_weights=all_valve_weights,
+        age_adjusted_weights=all_age_adjusted_weights,
         source_ids=all_source_ids,
         max_source_share=settings.max_source_share,
     )
@@ -1657,6 +1666,9 @@ async def _run_forecast_inner(
         relevance_bar=settings.forecast_relevance_bar,
         token_usage=TokenUsage.from_usages(usage_events),
         debug=debug_info,
+        evidence_mass=round(agg.evidence_mass, 4),
+        n_eff=round(agg.n_eff, 4),
+        age_adjusted_mass=round(agg.age_adjusted_mass, 4),
     )
 
     forecast_cache.set(cache_key, response)
@@ -1690,6 +1702,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
     stances: list[float] = []
     weights: list[float] = []
     valve_weights: list[float] = []
+    age_adjusted_weights: list[float] = []
     relevances: list[float] = []
     settled_flags: list[bool] = []
     settlement_dates: list[Optional[str]] = []
@@ -1733,9 +1746,13 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             * recency_weight(s.published_date, ref_date, settings.recency_half_life_days, floor=0.0)
             * relevance_weight(s.relevance_score)
         )
+        # Reporting-only twin with recency forced to neutral — see the
+        # /forecast path above (retro#458 Phase 2).
+        age_adjusted_weight = s.credibility_weight * evidence_weight * relevance_weight(s.relevance_score)
         stances.append(s.stance)
         weights.append(weight)
         valve_weights.append(valve_weight)
+        age_adjusted_weights.append(age_adjusted_weight)
         relevances.append(s.relevance_score)
         settled_flags.append(s.settled)
         settlement_dates.append(s.settlement_event_date)
@@ -1769,6 +1786,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         ),
         cluster_downweight_exponent=settings.cluster_downweight_exponent,
         valve_weights=valve_weights,
+        age_adjusted_weights=age_adjusted_weights,
         source_ids=source_ids,
         max_source_share=settings.max_source_share,
     )
@@ -1804,6 +1822,13 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         return PoolAggregateResponse(
             mean=0.0, std=0.0, ci_low=-0.2, ci_high=0.2, articles_used=agg.n,
             settled=False, insufficient_data=True, reason=agg.insufficient_reason,
+            # The pool the abstention judged unusable still had a shape — see
+            # PoolAggregateResult's docstring on why evidence_mass/thin_evidence
+            # ride along on an insufficient result (retro#458 Phase 2 extends
+            # that to n_eff/age_adjusted_mass).
+            evidence_mass=round(agg.evidence_mass, 4),
+            n_eff=round(agg.n_eff, 4),
+            age_adjusted_mass=round(agg.age_adjusted_mass, 4),
         )
 
     logger.info(
@@ -1817,6 +1842,9 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         settlement_suppressed=agg.settlement_suppressed,
         settlement_suppression_reason=agg.suppression_reason,
         settlement_votes_demoted=len(agg.settlement_demotions),
+        evidence_mass=round(agg.evidence_mass, 4),
+        n_eff=round(agg.n_eff, 4),
+        age_adjusted_mass=round(agg.age_adjusted_mass, 4),
     )
 
 

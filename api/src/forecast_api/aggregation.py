@@ -616,6 +616,12 @@ class PoolAggregateResult(NamedTuple):
     the fields carry the pin (retro#396). ``thin_evidence`` and
     ``evidence_mass`` still describe the pool the pin overrode, so a caller
     logging them sees the abstention that was outranked.
+
+    ``n_eff`` and ``age_adjusted_mass`` are reporting-only additions
+    (retro#458 Phase 2): nothing in this module or its callers reads them back
+    into the pooled estimate, they exist so a caller can report on the pool's
+    shape without re-deriving it. Both are computed on every branch, including
+    abstained/off-topic results, mirroring ``evidence_mass``/``valve_mass``.
     """
     mean: float
     std: float
@@ -623,6 +629,12 @@ class PoolAggregateResult(NamedTuple):
     ci_high: float
     settled: bool
     n: int
+    # Kish's effective sample size of the voting `weights` (retro#458 Phase 2):
+    # exactly `n` for equal weights, shrinking toward 1 as one row dominates.
+    # See effective_sample_size() — this is that exact call's result, computed
+    # once and reused for the CI floor's divisor below so the two can never
+    # disagree about how many sources a pool really has.
+    n_eff: float
     evidence_mass: float
     thin_evidence: bool
     # The mass the VALVES actually read (retro#397): recency-weighted and
@@ -632,6 +644,14 @@ class PoolAggregateResult(NamedTuple):
     # to say" vs "do we still know anything" — and collapsing them is exactly
     # the defect §6.1 records.
     valve_mass: float
+    # Reporting-only twin of `evidence_mass` with time decay switched off
+    # (retro#458 Phase 2): `credibility * evidence_weight * relevance_weight**2`,
+    # no `recency_weight` factor. Answers "how much would this pool weigh if
+    # nothing had aged" — a caller-visible signal of how much of the pool's
+    # current mass is a function of elapsed time rather than the evidence
+    # itself. Equal to `evidence_mass` when the caller supplies no
+    # `age_adjusted_weights`, same fallback convention as `valve_mass`.
+    age_adjusted_mass: float
     insufficient_reason: Optional[str]
     # Settlement diagnostics for callers that want to log the outcome without
     # re-deriving settled_directions themselves. settlement_suppressed is True
@@ -1064,6 +1084,7 @@ def aggregate_pool(
     cluster_ids: Optional[Sequence[int]] = None,
     cluster_downweight_exponent: float = 0.0,
     valve_weights: Optional[Sequence[float]] = None,
+    age_adjusted_weights: Optional[Sequence[float]] = None,
     source_ids: Optional[Sequence[str]] = None,
     max_source_share: float = 1.0,
 ) -> Optional[PoolAggregateResult]:
@@ -1096,6 +1117,12 @@ def aggregate_pool(
     equivalent of). The one exception is a pool that also carries a valid
     settlement pin: the pin outranks abstention (retro#396), so that result is
     returned settled and usable rather than insufficient.
+
+    ``age_adjusted_weights`` (retro#458 Phase 2) is a reporting-only third
+    weights list, mirroring how ``valve_weights`` is threaded through: when
+    supplied it feeds ``PoolAggregateResult.age_adjusted_mass`` and nothing
+    else — it is never read by the pooling math itself, exactly like
+    ``valve_weights``.
     """
     if not stances:
         return None
@@ -1131,6 +1158,11 @@ def aggregate_pool(
     all_off_topic = relevance_mass < relevance_weight_floor
 
     evidence_mass = sum(weights)
+    # Kish's effective sample size of the voting weights (retro#458 Phase 2),
+    # computed once here and reused below as the CI floor's divisor (`floor_n`)
+    # so the reporting field and the pooling math can never disagree about how
+    # many sources this pool really has.
+    n_eff = effective_sample_size(weights)
     # The VALVE mass (retro#397, system-model §6.1). `weights` carry recency
     # floored at `recency_floor` (0.02), which exists so an old row's *voting*
     # influence never goes to exactly zero. Reusing that floored mass to decide
@@ -1145,6 +1177,12 @@ def aggregate_pool(
     # behaviour — so a caller that has not been taught to compute it is
     # unchanged rather than silently switched to a stricter rule.
     valve_mass = sum(valve_weights) if valve_weights is not None else evidence_mass
+    # Reporting-only twin of evidence_mass with recency decay switched off
+    # (retro#458 Phase 2) — see PoolAggregateResult.age_adjusted_mass. Same
+    # fallback convention as valve_mass: absent, it equals evidence_mass.
+    age_adjusted_mass = (
+        sum(age_adjusted_weights) if age_adjusted_weights is not None else evidence_mass
+    )
     # Glide-eligible AND still running: a deadline-shaped question whose
     # deadline has not passed. After it passes there is no glide left to
     # protect, so the carve-out below stops applying and a stale pool may
@@ -1225,8 +1263,8 @@ def aggregate_pool(
             )
             return PoolAggregateResult(
                 mean=pinned_mean, std=pinned_std, ci_low=pinned_lo, ci_high=pinned_hi,
-                settled=True, n=len(stances), evidence_mass=evidence_mass,
-                valve_mass=valve_mass,
+                settled=True, n=len(stances), n_eff=n_eff, evidence_mass=evidence_mass,
+                valve_mass=valve_mass, age_adjusted_mass=age_adjusted_mass,
                 thin_evidence=thin_evidence, insufficient_reason=None,
                 settled_sources=decision.settled_sources,
                 settlement_suppressed=False,
@@ -1244,7 +1282,8 @@ def aggregate_pool(
         # this result needs to be able to tell apart from "no votes at all".
         return PoolAggregateResult(
             mean=0.0, std=0.0, ci_low=0.0, ci_high=0.0, settled=False,
-            n=len(stances), evidence_mass=evidence_mass, valve_mass=valve_mass,
+            n=len(stances), n_eff=n_eff, evidence_mass=evidence_mass, valve_mass=valve_mass,
+            age_adjusted_mass=age_adjusted_mass,
             thin_evidence=thin_evidence,
             insufficient_reason=reason, settled_sources=0,
             settlement_suppressed=decision.suppressed,
@@ -1278,7 +1317,7 @@ def aggregate_pool(
     # while k alone overcounts a pool one heavy row dominates. The min is
     # conservative in both failure modes. Falls back to n_eff alone when
     # decisiveness_floor is switched off (k needs a positive cap).
-    floor_n = effective_sample_size(weights)
+    floor_n = n_eff
     if decisiveness_floor > 0:
         floor_n = min(floor_n, capped_weight_count(weights, decisiveness_floor))
     ci_low, ci_high, std = widen_ci_for_unresolved_dispersion(
@@ -1307,7 +1346,8 @@ def aggregate_pool(
 
     return PoolAggregateResult(
         mean=mean, std=std, ci_low=ci_low, ci_high=ci_high, settled=settled,
-        n=n, evidence_mass=evidence_mass, valve_mass=valve_mass,
+        n=n, n_eff=n_eff, evidence_mass=evidence_mass, valve_mass=valve_mass,
+        age_adjusted_mass=age_adjusted_mass,
         thin_evidence=thin_evidence,
         insufficient_reason=None, settled_sources=decision.settled_sources,
         settlement_suppressed=decision.suppressed,

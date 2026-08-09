@@ -743,6 +743,76 @@ class TestSourceMassCap:
         assert capped.mean < uncapped.mean
 
 
+class TestPoolReportingFields:
+    """n_eff / age_adjusted_mass on PoolAggregateResult (retro#458 Phase 2) —
+    reporting-only additions, nothing here feeds back into mean/std/ci."""
+
+    def test_n_eff_matches_effective_sample_size_of_the_voting_weights(self):
+        weights = [1.0, 0.5, 0.25]
+        result = aggregate_pool(
+            [0.5, 0.3, -0.1], weights, [1.0, 1.0, 1.0], [False, False, False],
+            **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.n_eff == pytest.approx(effective_sample_size(weights))
+
+    def test_n_eff_is_populated_on_an_abstained_result_too(self):
+        # evidence_mass/thin_evidence ride along on an abstained result
+        # (F14/no_usable_weight); n_eff does the same.
+        result = aggregate_pool(
+            [0.9, 0.7], [0.0, 0.0], [1.0, 1.0], [False, False],
+            **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.insufficient_reason == "no_usable_weight"
+        assert result.n_eff == pytest.approx(effective_sample_size([0.0, 0.0]))
+
+    def test_age_adjusted_mass_falls_back_to_evidence_mass_without_the_param(self):
+        result = aggregate_pool(
+            [0.5, 0.3], [0.8, 0.6], [1.0, 1.0], [False, False],
+            **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.age_adjusted_mass == pytest.approx(result.evidence_mass)
+
+    def test_age_adjusted_mass_uses_the_supplied_weights_when_given(self):
+        result = aggregate_pool(
+            [0.5, 0.3], [0.8, 0.6], [1.0, 1.0], [False, False],
+            age_adjusted_weights=[1.2, 0.9],
+            **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.age_adjusted_mass == pytest.approx(2.1)
+        # Independent of evidence_mass, which still reads the voting weights.
+        assert result.evidence_mass == pytest.approx(1.4)
+
+    def test_age_adjusted_mass_is_ge_evidence_mass_when_recency_decayed_the_pool(self):
+        """The sanity invariant: removing recency decay can only ever increase
+        weight relative to the recency-discounted sum, never decrease it.
+        Exercised with a real decay gap (a half-life-scale-old article), not a
+        same-day pool where the two would trivially tie."""
+        credibility, evidence_weight, relevance = 1.0, 0.6, 1.0
+        article_date = "2026-06-01"
+        ref_date = "2026-08-08"  # well past one recency half-life
+        rweight = recency_weight(
+            article_date, ref_date, api_settings.recency_half_life_days,
+            floor=api_settings.recency_floor,
+        )
+        assert rweight < 1.0, "fixture must actually exercise time decay"
+        decayed_weight = credibility * evidence_weight * rweight
+        undecayed_weight = credibility * evidence_weight  # recency forced to 1.0
+
+        result = aggregate_pool(
+            [0.6], [decayed_weight], [relevance], [False],
+            age_adjusted_weights=[undecayed_weight],
+            **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.age_adjusted_mass >= result.evidence_mass
+        assert result.age_adjusted_mass == pytest.approx(undecayed_weight)
+        assert result.evidence_mass == pytest.approx(decayed_weight)
+
+
 class TestEffectiveSampleSize:
     """Kish's n_eff — defect (a) of F16 / retro#365."""
 

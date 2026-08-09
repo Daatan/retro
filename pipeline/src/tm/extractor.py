@@ -581,6 +581,14 @@ moving against the event — bears on the event and is scored as a graded negati
 Reserve the extreme negative for facts that establish the event cannot happen, exactly as \
 the extreme positive is reserved for the event itself having occurred; between the \
 extremes, grade contrary facts with the same discipline as supporting ones.
+DEADLINE-DEFERRED INTENT — a reported fact or statement that pushes the event's timing to a \
+point you can place AFTER the claim deadline bears AGAINST a by-deadline claim, and must be \
+graded like any other negative precursor, not nulled — even when the deferral is anchored to \
+another named milestone or event ("after the elections", "once the review concludes") rather \
+than a calendar date the DATES section's arithmetic can compare directly. You do not need a \
+resolvable event_date to score this: recognizing that the referenced milestone falls at or \
+after the deadline IS the fact. A firm, unconditional deferral grades stronger than a vague or \
+hedged one, under the same discipline as any other negative precursor.
 Discipline fact_signal by three tests, and record the facets that justify each:
   - DYAD. Name WHO acts (event_actors) and the TARGET of the action (event_target) in the \
 fact. A fact whose actor-target pair is NOT the claim's pair — a strike by a different \

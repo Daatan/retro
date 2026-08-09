@@ -317,6 +317,27 @@ def test_negative_precursor_ladder_present():
     assert "The one EXCEPTION — DECIDER STATEMENTS" in PROMPT_PREFIX
 
 
+def test_deadline_deferred_intent_section_present():
+    """retro#352: a fact that defers the event past the claim deadline bears
+    against a by-deadline claim even when the deferral is anchored to another
+    named milestone ("after the elections") rather than a calendar date the
+    DATES section's arithmetic can compare directly — `enforce_deadline_arithmetic`
+    only fires on a parseable `event_date`, and a milestone-relative deferral
+    never produces one. A/B'd 2026-08-09 on live Haiku (harness = retro#470):
+    a hard variant with no explicit date ("wait until after the parliamentary
+    elections") consistently nulled fact_signal (5/5 baseline runs) rather
+    than grading it negative; patched 5/5 negative, zero regression on the
+    sibling explicit-date/no-harm/decider cases. See
+    pipeline/scripts/ab_cases/deadline_and_resolution_rules.json,
+    case `deadline-direction-named-event-hard`.
+    """
+    assert "DEADLINE-DEFERRED INTENT" in PROMPT_PREFIX
+    assert "bears AGAINST a by-deadline claim" in PROMPT_PREFIX
+    assert "You do not need a resolvable event_date to score this" in PROMPT_PREFIX
+    # Must stay inside the fact_signal negative-precursor discipline, not a separate rule.
+    assert "under the same discipline as any other negative precursor" in PROMPT_PREFIX
+
+
 def test_quantitative_estimate_share_exclusion_present():
     """retro#362 (lane-soundness F5): shares must never enter quantitative_estimate.
 

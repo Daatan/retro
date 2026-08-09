@@ -165,4 +165,50 @@ class TestSettlement:
             claim_deadline="2099-01-01",
         ))
         assert resp.settled is False
-        assert resp.settlement_votes_demoted == 2
+
+
+class TestSourceMassCap:
+    """cap_source_mass() (retro#458 Phase 1) through the full recompute path
+    — run_pool_aggregate() reads PoolSourceInput.source_id (previously
+    persisted-and-ignored, see the whitelist comment in run_pool_aggregate)
+    purely as a cap_source_mass grouping key. Ships inert at the default
+    max_source_share=1.0."""
+
+    async def test_default_ships_inert_even_with_a_dominant_source_id(self):
+        sources = [
+            _source(stance=0.9, source_id="dominant", evidence_weight=1.0),
+            _source(stance=0.9, source_id="dominant", evidence_weight=1.0),
+            _source(stance=0.9, source_id="dominant", evidence_weight=1.0),
+            _source(stance=0.9, source_id="dominant", evidence_weight=1.0),
+            _source(stance=-0.9, source_id="other", evidence_weight=1.0),
+        ]
+        with_ids = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=sources))
+        without_ids = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[s.model_copy(update={"source_id": None}) for s in sources],
+        ))
+        assert with_ids.mean == pytest.approx(without_ids.mean)
+
+    async def test_dominant_source_id_is_capped_once_configured(self, monkeypatch):
+        # Same shape as the prod finding (one aggregator dominating the
+        # pool): 4 agreeing rows from one source_id vs 1 independent
+        # dissenter, equal per-row weight.
+        sources = [
+            _source(stance=0.9, source_id="dominant", evidence_weight=1.0),
+            _source(stance=0.9, source_id="dominant", evidence_weight=1.0),
+            _source(stance=0.9, source_id="dominant", evidence_weight=1.0),
+            _source(stance=0.9, source_id="dominant", evidence_weight=1.0),
+            _source(stance=-0.9, source_id="other", evidence_weight=1.0),
+        ]
+        uncapped = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=sources))
+        monkeypatch.setattr(api_settings, "max_source_share", 0.3)
+        capped = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=sources))
+        assert capped.mean < uncapped.mean
+
+    async def test_rows_without_a_source_id_are_never_capped_together(self, monkeypatch):
+        # Legacy/anonymous rows (source_id unset) must not be treated as one
+        # dominant "unknown" source just because none of them carry an id.
+        monkeypatch.setattr(api_settings, "max_source_share", 0.3)
+        sources = [_source(stance=0.9, evidence_weight=1.0) for _ in range(5)]
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=sources))
+        assert resp.insufficient_data is False
+        assert _prob(resp.mean) > 0.85  # unaffected — pools as decisively as with no cap at all

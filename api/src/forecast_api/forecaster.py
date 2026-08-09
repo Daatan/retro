@@ -1304,6 +1304,7 @@ async def _run_forecast_inner(
     all_settled: list[bool] = []
     all_settlement_dates: list[Optional[str]] = []
     all_published_dates: list[Optional[str]] = []
+    all_source_ids: list[Optional[str]] = []
     ref_date = datetime.now().strftime("%Y-%m-%d")
     # S2 cutover (retro docs/ORACLE_VARIABLES.md §5) — evidence_class now drives
     # `weight` below via evidence_class_weight(); this dict remains for
@@ -1418,6 +1419,7 @@ async def _run_forecast_inner(
         all_valve_weights.append(valve_weight)
         relevances.append(relevance)
         all_published_dates.append(article_date)
+        all_source_ids.append(source_id)
 
         source_signals.append(SourceSignal(
             source_id=source_id,
@@ -1479,6 +1481,8 @@ async def _run_forecast_inner(
         ),
         cluster_downweight_exponent=settings.cluster_downweight_exponent,
         valve_weights=all_valve_weights,
+        source_ids=all_source_ids,
+        max_source_share=settings.max_source_share,
     )
     agg = aggregate_pool(all_stances, all_weights, relevances, all_settled, **_pool_kwargs)
     if agg is not None:
@@ -1690,6 +1694,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
     settled_flags: list[bool] = []
     settlement_dates: list[Optional[str]] = []
     published_dates: list[Optional[str]] = []
+    source_ids: list[Optional[str]] = []
     # Whitelist, deliberately: only the eight scalars below reach the
     # estimator. PoolSourceInput also carries identity and per-claim data
     # (url / source_id / outlet / evidence_class / fact_signal + facets /
@@ -1698,7 +1703,12 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
     # weighting (R1) remains the issue that gets to spend this data next;
     # claims_detail is already spent, deliberately and with its own R8 movement
     # report each time, by retro#355 (clustering, via _cluster_text_of below)
-    # and retro#372 (the settlement count over those clusters).
+    # and retro#372 (the settlement count over those clusters). `source_id` is
+    # spent the same way as of retro#458: read below (not merely persisted and
+    # ignored) so `cap_source_mass` can group rows by outlet, but only ever
+    # AS a grouping key — the identity string itself never enters the pooled
+    # math, and the cap is inert at its shipped default like every other
+    # widening on this list.
     for s in req.sources:
         rweight = recency_weight(
             s.published_date, ref_date,
@@ -1730,6 +1740,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         settled_flags.append(s.settled)
         settlement_dates.append(s.settlement_event_date)
         published_dates.append(s.published_date)
+        source_ids.append(s.source_id)
 
     _pool_kwargs = dict(
         relevance_weight_floor=settings.relevance_weight_floor,
@@ -1758,6 +1769,8 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         ),
         cluster_downweight_exponent=settings.cluster_downweight_exponent,
         valve_weights=valve_weights,
+        source_ids=source_ids,
+        max_source_share=settings.max_source_share,
     )
     agg = aggregate_pool(stances, weights, relevances, settled_flags, **_pool_kwargs)
     if agg is not None:

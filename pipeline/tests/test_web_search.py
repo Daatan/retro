@@ -11,6 +11,7 @@ boto3) are not installed in the test environment.
 import ast
 import importlib
 import inspect
+import logging
 import re
 import sys
 import time
@@ -470,8 +471,82 @@ class TestNewsIndexerProvider:
         assert ws.get_last_search_provider() == "gdelt"
         assert "news_indexer" in ws.get_last_search_provider_chain()
 
+    # ── The /search contract (retro#459) ──────────────────────────────────────────────
+    #
+    # `SearchResult(**h)` turned news-indexer's response into a strict schema enforced by
+    # TypeError, inside a bare `except Exception`. One added key upstream would take the
+    # free first-in-chain provider offline for every retro caller, move the Oracle onto
+    # paid SERP, and swap the local semantic index for GDELT keyword matching — with no
+    # counter moving and only a WARNING line to show for it. news-indexer has already
+    # widened the sibling `/context` payload twice (relevance/isPrediction, then
+    # personId/outletId); daatan survived both only because Zod strips unknown keys.
+
+    def test_documented_search_payload_shape_is_the_contract(self):
+        """The five keys news-indexer's /search returns today. This test is the tripwire:
+        if SearchResult's public fields change, check the other side of the wire before
+        editing this set — the two repos have no shared schema to enforce it."""
+        from tm.web_search import _SEARCH_RESULT_WIRE_FIELDS
+        assert _SEARCH_RESULT_WIRE_FIELDS == {
+            "title", "url", "snippet", "source", "published_date",
+        }
+
+    def test_unknown_key_does_not_take_the_provider_offline(self, monkeypatch, caplog):
+        """The actual regression. An added upstream key must be ignored, not fatal —
+        and must still be visible in the log, because it means the contract moved."""
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        hit = [{
+            "title": "T", "url": "http://x.com/1", "snippet": "S",
+            "source": "x.com", "published_date": "2026-06-01",
+            "relevance": 0.82, "personId": "p-1",     # the next widening, whatever it is
+        }]
+        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(200, hit))
+        gdelt_spy = MagicMock(return_value=[])
+        with caplog.at_level(logging.WARNING), patch.multiple(ws, _search_gdelt=gdelt_spy):
+            res = ws.search_articles("some query")
+
+        assert res and res[0].url == "http://x.com/1"
+        assert ws.get_last_search_provider() == "news_indexer"
+        assert not gdelt_spy.called, "an unknown key must not push us onto a paid provider"
+        assert any("personId" in r.getMessage() for r in caplog.records), \
+            "the widening must still be logged"
+
+    def test_provider_drop_logs_at_error_not_warning(self, monkeypatch, caplog):
+        """Losing this provider is a silent cost + quality change, so the one signal that
+        exists has to be alarm-able. WARNING was not."""
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+
+        def _boom(*a, **k):
+            raise RuntimeError("connection reset")
+
+        monkeypatch.setattr(ws.httpx, "get", _boom)
+        with caplog.at_level(logging.DEBUG), patch.multiple(ws,
+            _search_gdelt=MagicMock(return_value=[]),
+            _search_gdelt_bq=MagicMock(return_value=[]),
+            _search_serpapi_news=MagicMock(return_value=[]),
+            _search_serper_news=MagicMock(return_value=[]),
+            _search_brave_news=MagicMock(return_value=[]),
+            _search_tavily=MagicMock(return_value=[]),
+            _search_brightdata=MagicMock(return_value=[]),
+            _search_nimbleway=MagicMock(return_value=[]),
+            _search_scrapingbee=MagicMock(return_value=[]),
+            _search_newsdata_io=MagicMock(return_value=[]),
+            _search_dataforseo=MagicMock(return_value=[]),
+            _search_ddg_news=MagicMock(return_value=[]),
+        ):
+            ws.search_articles("some query")
+
+        drops = [r for r in caplog.records if "news_indexer failed" in r.getMessage()]
+        assert drops, "the provider drop must be logged"
+        assert all(r.levelno >= logging.ERROR for r in drops), \
+            f"expected ERROR, got {[r.levelname for r in drops]}"
+
     def test_falls_through_on_http_error(self, monkeypatch):
-        """Network/HTTP error → warning logged, fall through to GDELT; no exception raised."""
+        """Network/HTTP error → logged (at ERROR since retro#459), fall through to GDELT;
+        no exception raised."""
         ws = _fresh_ws()
         ws.NEWS_INDEXER_URL = "http://ni.local"
         ws.NEWS_INDEXER_API_KEY = "secret"

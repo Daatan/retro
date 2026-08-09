@@ -83,7 +83,7 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields as _dataclass_fields, replace
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -500,6 +500,32 @@ class SearchResult:
     # gatekeeper/extractor prompts as a hint (retro#417). Unused by the pipeline's own
     # search providers.
     _language: Optional[str] = field(default=None)
+
+
+# The keys a remote provider payload is allowed to set, derived from the dataclass itself
+# so it cannot drift as fields are added. Underscore-prefixed fields are caller-supplied
+# in-process (prefetched text, gatekeeper verdict, language hint) and are deliberately
+# NOT settable from a wire payload — `**h` could never have reached them anyway.
+_SEARCH_RESULT_WIRE_FIELDS = frozenset(
+    f.name for f in _dataclass_fields(SearchResult) if not f.name.startswith("_")
+)
+
+
+def _search_result_from_payload(h: dict) -> tuple["SearchResult", set[str]]:
+    """Build a SearchResult from a provider's JSON object, ignoring keys we don't know.
+
+    retro#459. The naive `SearchResult(**h)` makes every remote response a strict schema
+    contract enforced by `TypeError` — so one added key on news-indexer's `/search` would
+    take the whole free first-in-chain provider offline, push the Oracle onto paid SERP,
+    and say so only in a WARNING line. news-indexer has already widened a *different*
+    payload (`/context`) twice this way; daatan survived both because Zod strips unknown
+    keys. This gives the search path the same tolerance.
+
+    Returns the result plus the set of keys that were ignored, so the caller can log a
+    real schema drift without failing on it.
+    """
+    unknown = set(h) - _SEARCH_RESULT_WIRE_FIELDS
+    return SearchResult(**{k: v for k, v in h.items() if k in _SEARCH_RESULT_WIRE_FIELDS}), unknown
 
 
 # ──────────────────────────────────────────────
@@ -1665,7 +1691,16 @@ def _search_articles_chain(
                 timeout=httpx.Timeout(connect=2.0, read=8.0, write=2.0, pool=2.0),
             )
             r.raise_for_status()
-            hits = [SearchResult(**h) for h in r.json()]
+            _parsed = [_search_result_from_payload(h) for h in r.json()]
+            hits = [res for res, _ in _parsed]
+            _unknown = set().union(*(u for _, u in _parsed)) if _parsed else set()
+            if _unknown:
+                # Tolerated, not fatal — but this IS the upstream widening its contract,
+                # and it should be visible before the ignored field turns out to matter.
+                logger.warning(
+                    "news_indexer: ignoring unknown /search field(s) %s — SearchResult may "
+                    "need widening", sorted(_unknown),
+                )
             if hits:
                 _provider_local.name = "news_indexer"
                 logger.debug(
@@ -1678,8 +1713,13 @@ def _search_articles_chain(
                 int((time.perf_counter() - _t0) * 1000), query[:60],
             )
         except Exception as exc:
-            logger.warning(
-                "news_indexer failed %dms: %s",
+            # ERROR, not WARNING (retro#459). Losing this provider is not a degraded
+            # nicety: it silently moves every retro caller onto paid SERP, swapping the
+            # local semantic index for GDELT keyword matching. No counter moves when it
+            # happens, so the log line is the only signal there is — it has to be one
+            # that can alarm.
+            logger.error(
+                "news_indexer failed, falling back to paid providers %dms: %s",
                 int((time.perf_counter() - _t0) * 1000), exc,
             )
 

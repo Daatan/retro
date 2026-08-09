@@ -212,3 +212,78 @@ class TestSourceMassCap:
         resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=sources))
         assert resp.insufficient_data is False
         assert _prob(resp.mean) > 0.85  # unaffected — pools as decisively as with no cap at all
+
+
+class TestPoolReportingFields:
+    """evidence_mass/n_eff/age_adjusted_mass on PoolAggregateResponse
+    (retro#458 Phase 2) — reporting-only visibility, not new estimator
+    behaviour: mean/std/ci are unaffected by any of this class."""
+
+    async def test_evidence_mass_and_n_eff_populated_on_a_normal_pool(self):
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[
+                _source(stance=0.6, evidence_weight=1.0),
+                _source(stance=0.5, evidence_weight=1.0),
+                _source(stance=0.4, evidence_weight=1.0),
+            ],
+        ))
+        assert resp.insufficient_data is False
+        assert resp.evidence_mass > 0.0
+        # Equal-weight rows: n_eff == articles_used (Kish's ESS is exact here).
+        assert resp.n_eff == pytest.approx(resp.articles_used, abs=1e-6)
+
+    async def test_n_eff_shrinks_when_one_row_dominates(self):
+        dominated = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[
+                _source(stance=0.6, evidence_weight=1.0),
+                _source(stance=0.5, evidence_weight=0.001),
+                _source(stance=0.4, evidence_weight=0.001),
+            ],
+        ))
+        assert dominated.insufficient_data is False
+        assert dominated.articles_used == 3
+        assert dominated.n_eff < 1.5  # near-1, one row carries almost all the mass
+
+    async def test_evidence_mass_and_n_eff_still_reported_on_an_insufficient_pool(self):
+        # F14/no_usable_weight: the pool that abstains still had a shape (see
+        # aggregation.PoolAggregateResult's docstring) — evidence_mass reads
+        # 0.0 (every row was blocked), but n_eff is still Kish's ESS of that
+        # same zero-weight vector, not silently dropped.
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[
+                _source(stance=0.9, credibility_weight=0.0),
+                _source(stance=0.7, credibility_weight=0.0),
+            ],
+        ))
+        assert resp.insufficient_data is True
+        assert resp.reason == "no_usable_weight"
+        assert resp.evidence_mass == 0.0
+
+    async def test_age_adjusted_mass_equals_evidence_mass_with_no_decay_in_play(self):
+        # published today: recency_weight's age gap is exactly zero, so
+        # switching off decay changes nothing for this pool.
+        today = date.today().isoformat()
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[
+                _source(stance=0.6, evidence_weight=1.0, published_date=today),
+                _source(stance=0.4, evidence_weight=1.0, published_date=today),
+            ],
+        ))
+        assert resp.insufficient_data is False
+        assert resp.age_adjusted_mass == pytest.approx(resp.evidence_mass, rel=1e-6)
+
+    async def test_age_adjusted_mass_exceeds_evidence_mass_for_a_stale_pool(self):
+        # The sanity invariant this phase adds: removing recency decay can
+        # only ever raise a pool's mass relative to the recency-discounted
+        # sum, never lower it. Exercised with a real decay gap (well past one
+        # recency half-life), not a same-day pool where the two trivially tie.
+        stale = (date.today() - timedelta(days=250)).isoformat()
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[
+                _source(stance=0.6, evidence_weight=1.0, published_date=stale),
+                _source(stance=0.4, evidence_weight=1.0, published_date=stale),
+            ],
+        ))
+        assert resp.insufficient_data is False
+        assert resp.age_adjusted_mass >= resp.evidence_mass
+        assert resp.age_adjusted_mass > resp.evidence_mass  # decay actually bit here

@@ -544,7 +544,16 @@ program in 2019") passes topical relevance with full marks.
 ### 4.2 What exactly do we do with the range (CI)?
 
 Computed in retro (`pool_sources`: weighted SEM in probability space, 1.96×,
-then thin-evidence widening; settlement pins substitute a fixed narrow band),
+then thin-evidence widening, then the F16 `pool_dispersion_floor` widening;
+settlement pins substitute a fixed narrow band and are **exempt-by-design**
+from the dispersion floor — `_settlement_pin` runs after it and replaces the
+interval outright, deliberately, per its own docstring (retro#383). The
+alternative (move the floor after the pin) would shift `ci_high` on 85.4% of
+settled snapshots in prod for no epistemic gain, since the pinned mean is
+already inside the pool clamp. Matrix case C11 pins the exemption as an
+invariant: at that case's `n_eff ≈ 2`, the floor would otherwise demand a
+published width of ~0.277 (stance scale); the settlement pin instead
+publishes ~0.17.
 persisted twice (snapshot JSON + denormalized `Prediction.aiCiLow/High`),
 displayed in three places, and **consumed by no decision anywhere** — not the
 glide anchor, not alerts, not commitment locks, not scoring.

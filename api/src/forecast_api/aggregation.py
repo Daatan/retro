@@ -22,10 +22,12 @@ Stance is on [-1, 1] (−1 = event won't happen, +1 = will happen); probability 
 """
 from __future__ import annotations
 
+import logging
 import math
 from datetime import date, datetime, timedelta
 from typing import NamedTuple, Optional, Sequence
 
+logger = logging.getLogger(__name__)
 
 # Two-sided 95% normal quantile. Hoisted so the pooled standard error and the
 # dispersion floor provably use the same one.
@@ -733,6 +735,113 @@ def cluster_downweight_factors(
     return [sizes[cid] ** -exponent for cid in cluster_ids]
 
 
+def cap_source_mass(
+    weights: Sequence[float],
+    source_ids: Optional[Sequence[str]],
+    max_share: float,
+) -> list[float]:
+    """Per-row weights after capping any one source's share of total pool mass (retro#458).
+
+    Distinct from `cluster_downweight_factors` above, which discounts near-
+    duplicate TEXT ("two outlets wrote up one wire report"): this caps
+    identity. A source that supplies many rows of genuinely distinct
+    coverage — five different analysts quoted across five articles, none of
+    them echoing each other's text — still contributes one outlet's editorial
+    judgment about which analysts to platform, and a text-similarity check
+    has nothing to say about that. Measured on prod 2026-08-08: one live pool
+    (the S&P-crash forecast) carried 87.4% of its evidence mass from a single
+    aggregator (finance.yahoo.com), with no near-duplicate text in sight —
+    exactly the shape clustering cannot catch.
+
+    Unlike `cluster_downweight_factors`, which returns per-row multipliers
+    because a cluster's discount needs nothing else to change, this returns
+    absolute weights: capping a dominant source only means something if the
+    mass it loses is handed back to every other row, so `sum(weights)` is
+    unchanged and every downstream consumer (evidence_mass, the decisiveness
+    floor, pool_sources, effective_sample_size) keeps reading one honest
+    number instead of a pool that quietly lost mass.
+
+    For any `source_id` group whose share of total weight exceeds
+    `max_share`, that group's weights are scaled down so its total equals
+    exactly `max_share * total_weight`; the freed mass is redistributed
+    proportionally over every row NOT in a capped group (whether or not that
+    row's own source is still under the bar), preserving the grand total. A
+    row with no `source_id` (legacy pool rows predating retro#364, or a
+    caller that never threaded the join key through) cannot be attributed to
+    any outlet, so it is treated as its own singleton group rather than
+    lumped in with every other anonymous row — lumping would cap unrelated,
+    unidentified sources together on an identity none of them actually
+    share.
+
+    If redistributing one group's excess pushes another group over the same
+    bar (several large sources at once), that group is capped in a later
+    pass too — this repeats until every remaining group clears the bar. If a
+    pass finds every remaining group over the bar (most simply: the whole
+    pool is one source), there is no surviving group left to hand the freed
+    mass to, so capping would have to shrink the grand total to enforce the
+    share — which the contract above forbids. That pass's offenders are left
+    uncapped instead: a single-source pool cannot be capped down to a
+    minority share of itself without inventing evidence that isn't there.
+
+    No-op (returns `weights` as a fresh, unmodified ``list``) when
+    `source_ids is None` (no identity to group on) or `max_share >= 1.0` (no
+    cap configured — the shipped default). Mirrors
+    `cluster_downweight_factors`'s inert-by-default contract: nothing moves
+    until both an identity column AND a sub-1.0 share are supplied.
+    """
+    if source_ids is None or max_share >= 1.0:
+        return list(weights)
+    n = len(weights)
+    if n == 0 or len(source_ids) != n:
+        return list(weights)
+    total = sum(weights)
+    if total <= 0:
+        return list(weights)
+
+    groups: dict[object, list[int]] = {}
+    for i, sid in enumerate(source_ids):
+        key = sid if sid is not None else object()
+        groups.setdefault(key, []).append(i)
+
+    out = list(weights)
+    cap_amount = max_share * total
+    capped: set[object] = set()
+    # Each pass caps at least one more group or exits, so this always
+    # terminates within len(groups) passes.
+    for _ in range(len(groups)):
+        free = [k for k in groups if k not in capped]
+        sums = {k: sum(out[i] for i in groups[k]) for k in free}
+        offenders = [k for k in free if sums[k] > cap_amount]
+        if not offenders:
+            break
+        survivors = [k for k in free if k not in offenders]
+        if not survivors:
+            # No group left anywhere to receive the freed mass without
+            # shrinking the grand total — leave these rows as they are.
+            break
+        for k in offenders:
+            gsum = sums[k]
+            share = gsum / total
+            factor = cap_amount / gsum
+            for i in groups[k]:
+                out[i] *= factor
+            capped.add(k)
+            logger.info(
+                "event=source_mass_capped source_id=%s pre_cap_share=%.4f "
+                "max_share=%.2f rows=%d total_weight=%.4f",
+                k if isinstance(k, str) else None,
+                share, max_share, len(groups[k]), total,
+            )
+        freed = sum(sums[k] for k in offenders) - cap_amount * len(offenders)
+        survivor_indices = [i for k in survivors for i in groups[k]]
+        survivor_total = sum(out[i] for i in survivor_indices)
+        if survivor_total > 0:
+            scale = (survivor_total + freed) / survivor_total
+            for i in survivor_indices:
+                out[i] *= scale
+    return out
+
+
 def _settlement_pin(
     settlement_stance: float, direction: float,
 ) -> tuple[float, float, float, float]:
@@ -955,6 +1064,8 @@ def aggregate_pool(
     cluster_ids: Optional[Sequence[int]] = None,
     cluster_downweight_exponent: float = 0.0,
     valve_weights: Optional[Sequence[float]] = None,
+    source_ids: Optional[Sequence[str]] = None,
+    max_source_share: float = 1.0,
 ) -> Optional[PoolAggregateResult]:
     """Pool a set of already-extracted, already-weighted per-source signals
     into a final estimate: the relevance off-topic safety net, logit
@@ -1002,6 +1113,15 @@ def aggregate_pool(
     factors = cluster_downweight_factors(cluster_ids, cluster_downweight_exponent)
     if factors is not None and len(factors) == len(weights):
         weights = [w * f for w, f in zip(weights, factors)]
+
+    # Per-source mass cap (retro#458, Phase 1), applied AFTER the cluster
+    # discount so a correlated cluster's rows are judged on their
+    # already-discounted weight, not their raw pre-cluster weight — otherwise
+    # a cluster that clustering already shrank could get penalized twice for
+    # the same echo (once by the discount, again by a cap computed as if the
+    # discount hadn't happened). Inert at the shipped default
+    # (max_source_share = 1.0 ⇒ cap_source_mass is a no-op); see config.py.
+    weights = cap_source_mass(weights, source_ids, max_source_share)
 
     # NOT discounted, deliberately — same reasoning as retro#404 kept it on the
     # raw square: this answers "is the whole set off-topic", a question about

@@ -353,6 +353,15 @@ class PoolSourceInput(BaseModel):
     # persists is the pool that can later be re-scored, clustered (#355),
     # attributed per claim, or replayed against an outcome — none of which
     # is possible from eight anonymous scalars.
+    #
+    # `source_id` is the one exception as of retro#458: `run_pool_aggregate`
+    # now reads it — as a grouping key ONLY, never as a value that itself
+    # enters the pooled math — so `cap_source_mass` can bound how much of a
+    # pool's weight one outlet supplies. The bit-identical guarantee above
+    # still holds at the shipped default (`max_source_share = 1.0`, a true
+    # no-op regardless of whether `source_id` is present); it stops holding
+    # only once a caller lowers that setting below 1.0, exactly like every
+    # other inert-by-default seam on this list.
     url: Optional[str] = Field(default=None, description="The article's URL — row identity, and what makes duplicate/echo detection possible over a persisted pool")
     source_id: Optional[str] = Field(default=None, description="Outlet id as the leaderboard keys it (SourceSignal.source_id); the join key for per-source credibility attribution")
     outlet: Optional[str] = Field(default=None, description="Human-readable outlet/source name (SourceSignal.source_name)")

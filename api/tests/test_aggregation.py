@@ -13,6 +13,7 @@ import pytest
 
 from forecast_api.aggregation import (
     aggregate_pool,
+    cap_source_mass,
     capped_weight_count,
     claim_weighted_stance,
     effective_sample_size,
@@ -620,6 +621,126 @@ class TestAggregatePool:
         )
         assert result is not None
         assert result.settled is False
+
+
+class TestSourceMassCap:
+    """cap_source_mass() bounds how much of a pool's weight one source_id can
+    supply (retro#458 Phase 1) — the seam a live pool at 87.4% single-
+    aggregator mass motivated. Ships inert (max_source_share=1.0); these
+    tests both pin that inert default and, separately, that the mechanism is
+    correct once switched on, so enabling it later is not a fresh,
+    unreviewed change.
+    """
+
+    # ── cap_source_mass() directly ──────────────────────────────────────
+
+    def test_no_source_ids_is_the_identity(self):
+        assert cap_source_mass([1.0, 2.0, 3.0], None, 0.3) == [1.0, 2.0, 3.0]
+
+    def test_max_share_one_is_the_identity(self):
+        weights = [1.0] * 100
+        source_ids = ["a"] * 50 + [f"s{i}" for i in range(50)]
+        assert cap_source_mass(weights, source_ids, 1.0) == weights
+
+    def test_fifty_distinct_sources_are_unaffected(self):
+        weights = [1.0] * 50
+        source_ids = [f"s{i}" for i in range(50)]
+        out = cap_source_mass(weights, source_ids, 0.3)
+        assert out == pytest.approx(weights)
+
+    def test_fifty_rows_from_one_source_cap_out_at_the_configured_share(self):
+        # 50 rows from a single dominant source plus 50 rows each from a
+        # distinct source — the shape of the prod finding (one aggregator at
+        # 87.4%), scaled down to a clean round-number test.
+        weights = [1.0] * 100
+        source_ids = ["dominant"] * 50 + [f"s{i}" for i in range(50)]
+        out = cap_source_mass(weights, source_ids, 0.3)
+        dominant_total = sum(out[:50])
+        other_total = sum(out[50:])
+        assert dominant_total == pytest.approx(30.0)
+        assert other_total == pytest.approx(70.0)
+        # The freed mass is spread evenly over the 50 equal-weight survivors.
+        assert out[50] == pytest.approx(out[99])
+
+    def test_grand_total_weight_is_preserved(self):
+        weights = [3.0, 1.0, 1.0, 1.0, 0.5, 2.0]
+        source_ids = ["a", "a", "a", "b", "c", "c"]
+        out = cap_source_mass(weights, source_ids, 0.4)
+        assert sum(out) == pytest.approx(sum(weights))
+
+    def test_a_capped_group_lands_exactly_on_the_share_boundary(self):
+        weights = [10.0, 10.0, 10.0, 1.0, 1.0]
+        source_ids = ["a", "a", "a", "b", "c"]
+        out = cap_source_mass(weights, source_ids, 0.5)
+        assert sum(out[:3]) / sum(out) == pytest.approx(0.5)
+
+    def test_none_source_id_rows_are_singleton_groups_not_lumped_together(self):
+        # Two anonymous rows must not be capped together as though they shared
+        # an identity neither of them actually carries: combined they are 50%
+        # of the pool (would trip a 30% cap if lumped), but each alone is
+        # only 25%, under the bar.
+        weights = [1.0, 1.0, 1.0, 1.0]
+        source_ids = [None, None, "b", "c"]
+        out = cap_source_mass(weights, source_ids, 0.3)
+        assert out == pytest.approx(weights)
+
+    def test_a_single_source_pool_cannot_be_capped_below_itself(self):
+        # No surviving group exists to receive the freed mass, so enforcing
+        # the cap would have to shrink the grand total — refused instead.
+        weights = [1.0, 1.0, 1.0]
+        source_ids = ["only", "only", "only"]
+        out = cap_source_mass(weights, source_ids, 0.3)
+        assert out == pytest.approx(weights)
+
+    def test_a_mismatched_source_ids_length_is_ignored_rather_than_crashing(self):
+        # Defensive: a caller bug must degrade to today's behaviour, not 500 a forecast.
+        weights = [1.0, 1.0]
+        out = cap_source_mass(weights, ["a"], 0.3)
+        assert out == weights
+
+    def test_binding_cap_logs_the_source_id_and_pre_cap_share(self, caplog):
+        weights = [3.0, 3.0, 3.0, 1.0]
+        source_ids = ["dominant", "dominant", "dominant", "other"]
+        with caplog.at_level("INFO"):
+            cap_source_mass(weights, source_ids, 0.5)
+        assert "event=source_mass_capped" in caplog.text
+        assert "source_id=dominant" in caplog.text
+
+    # ── wired into aggregate_pool() ─────────────────────────────────────
+
+    def test_ships_inert_default_moves_no_number_even_with_a_dominant_source(self):
+        stances = [0.9, 0.9, 0.9, 0.9, -0.9]
+        weights = [1.0] * 5
+        relevances = [0.7] * 5
+        settled = [False] * 5
+        source_ids = ["dominant"] * 4 + ["other"]
+        baseline = aggregate_pool(stances, weights, relevances, settled, **_aggregate_kwargs())
+        with_ids = aggregate_pool(
+            stances, weights, relevances, settled,
+            source_ids=source_ids,  # max_source_share defaults to 1.0 — still inert
+            **_aggregate_kwargs(),
+        )
+        assert with_ids == baseline
+
+    def test_a_dominant_source_no_longer_swamps_a_minority_dissent_once_capped(self):
+        # 4 agreeing rows from one dominant source vs one independent
+        # dissenter from a different source, equal per-row weight.
+        stances = [0.9, 0.9, 0.9, 0.9, -0.9]
+        weights = [1.0] * 5
+        relevances = [0.7] * 5
+        settled = [False] * 5
+        source_ids = ["dominant"] * 4 + ["other"]
+        uncapped = aggregate_pool(
+            stances, weights, relevances, settled,
+            source_ids=source_ids, **_aggregate_kwargs(),
+        )
+        capped = aggregate_pool(
+            stances, weights, relevances, settled,
+            source_ids=source_ids, max_source_share=0.3,
+            **_aggregate_kwargs(),
+        )
+        assert uncapped is not None and capped is not None
+        assert capped.mean < uncapped.mean
 
 
 class TestEffectiveSampleSize:

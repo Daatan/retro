@@ -193,6 +193,28 @@ class ApiSettings(BaseSettings):
     cluster_downweight_exponent: float = 0.0
     cluster_jaccard_threshold: float = 0.5
     cluster_shingle_size: int = 3
+    # ── Per-source mass cap (retro#458, Phase 1) ────────────────────────────
+    # Distinct from clustering above: clustering discounts near-duplicate TEXT
+    # ("two outlets wrote up one wire report"); this caps the total pooled
+    # weight one SOURCE ID can hold regardless of how many distinct, non-
+    # echoing articles it contributed — a single aggregator quoting five
+    # different analysts is five independent-looking rows but still one
+    # outlet's editorial judgment about which analysts to quote. Measured on
+    # prod 2026-08-08: one live pool (the S&P-crash forecast) carried 87.4% of
+    # its evidence mass from a single aggregator (finance.yahoo.com) — cluster
+    # downweighting alone doesn't catch this because the rows weren't
+    # near-duplicate text, just the same outlet's repeated coverage.
+    #
+    # `max_source_share` = 1.0 is the identity: no group's share is ever
+    # capped, so this is a no-op and the shipped default. Same reasoning as
+    # `cluster_downweight_exponent` above and retro#404 before it: the
+    # threshold that would actually change a published forecast needs a
+    # resolved-forecast backtest to justify, and as of 2026-08-08 there isn't
+    # one powered enough to pick a number by. This PR ships the mechanism and
+    # the observability (an `event=source_mass_capped` log line the moment it
+    # would bind) so the threshold can be chosen from prod evidence, not a
+    # guess — the same two-step retro#355 and retro#404 already took.
+    max_source_share: float = 1.0
     # When a caller supplies a gatekeeper verdict on an ArticleInput (relevance +
     # is_prediction — news-indexer's POST /relevance result, threaded through daatan),
     # reuse it instead of re-running check_is_prediction. The SAME claim-aware judge already

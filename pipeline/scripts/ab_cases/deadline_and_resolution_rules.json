@@ -12,7 +12,28 @@
       "fact_signal_sign": -1,
       "is_occurrence": false
     },
-    "tags": ["retro-352", "deadline-direction"]
+    "tags": [
+      "retro-352",
+      "deadline-direction"
+    ]
+  },
+  {
+    "id": "deadline-direction-named-event-hard",
+    "event_name": "An official mobilisation order is issued in Country R by 2026-09-05",
+    "event_description": "Only a formal, on-record government mobilisation order counts. Informal call-ups, covert recruitment, or personnel-policy changes at state-linked companies do not.",
+    "claim_deadline": "2026-09-05",
+    "article_date": "2026-08-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "In a televised address, the president said any decision on further mobilisation steps would have to wait until after the parliamentary elections, adding that 'all options remain open' once the vote is behind us. He gave no further timeline.",
+    "expect": {
+      "fact_signal_sign": -1
+    },
+    "tags": [
+      "retro-352",
+      "deadline-direction",
+      "hard-variant"
+    ]
   },
   {
     "id": "deadline-direction-fact-before-deadline-control",
@@ -27,12 +48,16 @@
       "fact_signal_sign": 1,
       "is_occurrence": true
     },
-    "tags": ["retro-352", "deadline-direction", "no-harm-control"]
+    "tags": [
+      "retro-352",
+      "deadline-direction",
+      "no-harm-control"
+    ]
   },
   {
     "id": "decider-denial-regression-sentinel",
-    "event_name": "Country R's government formally denies the mobilisation is imminent",
-    "event_description": "A denial by the head of government or an authorized spokesperson counts. A denial by an opponent or an unnamed source does not.",
+    "event_name": "An official mobilisation order is issued in Country R by 2026-12-31",
+    "event_description": "A denial by the head of government or an authorized spokesperson counts as evidence against. A denial by an opponent or an unnamed source does not.",
     "claim_deadline": "2026-12-31",
     "article_date": "2026-08-20",
     "source_name": "Test",
@@ -42,7 +67,11 @@
       "fact_signal_sign": -1,
       "is_occurrence": false
     },
-    "tags": ["retro-351", "decider-statement", "regression-sentinel"]
+    "tags": [
+      "retro-351",
+      "decider-statement",
+      "regression-sentinel"
+    ]
   },
   {
     "id": "resolution-rules-covert-recruitment-vs-official-announcement",
@@ -55,6 +84,10 @@
     "journalist": "unknown",
     "article_text": "A state-linked security contractor has stepped up coercive recruitment drives in several regions, workers say, pressuring employees to sign up under threat of dismissal. The government has made no public statement on the matter.",
     "expect": {},
-    "tags": ["retro-353", "resolution-rules", "control-arm-reference"]
+    "tags": [
+      "retro-353",
+      "resolution-rules",
+      "control-arm-reference"
+    ]
   }
 ]

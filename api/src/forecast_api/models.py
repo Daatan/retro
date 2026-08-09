@@ -132,6 +132,17 @@ class ForecastRequest(BaseModel):
         default=None,
         description="Caller's identifier for the prediction this forecast relates to (e.g. daatan's context_snapshots key). Log correlation only — never used in scoring.",
     )
+    resolution_criteria: Optional[str] = Field(
+        default=None,
+        description="How the caller's prediction is resolved (retro#353) — rendered to the "
+                    "extractor as the related event's description, mirroring the batch "
+                    "pipeline's llm_referee_criteria. Additive and fail-open: omitted or "
+                    "empty falls back to the bare question, today's behavior. Populating it "
+                    "lets the extractor apply scope/announcement/threshold rules the question "
+                    "text alone doesn't carry — e.g. 'only an official government "
+                    "announcement counts' — instead of scoring adjacent-but-non-qualifying "
+                    "evidence as if it were on-point.",
+    )
 
 
 class ClaimDetail(BaseModel):

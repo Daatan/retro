@@ -730,6 +730,126 @@ verbatim in the original language, `claim` is your English rendering, exactly as
 above.
 """
 
+# --- Conditional extraction (Phase 1 capture plan; conditional-capture-phase1.md §3.2) ---
+# Lexical pre-filter: cheap check for conditional language before requesting extraction.
+# Gated at the prompt level: when lexicon matches, the CONDITIONAL instruction block is
+# included; when it doesn't, the block is omitted and the model is expected to null all
+# 9 conditional fields. 5% bypass probe (random 5% of non-matching articles get the block
+# anyway) measures the pre-filter's false-negative rate.
+
+CONDITIONAL_LEXICON = frozenset({
+    'if', 'unless', 'should', 'provided', 'were', 'in the event',
+    'absent', 'barring', 'contingent', 'depends', 'assuming', 'so long as'
+})
+
+def has_conditional_language(text: str) -> bool:
+    """Cheap lexical pre-filter: check if text contains conditional keywords.
+
+    Word-boundary check (\\b) to avoid matching "if" in "life", "depends" in "independent", etc.
+    Case-insensitive. Returns True if ANY keyword is found.
+    """
+    if not text:
+        return False
+    text_lower = text.lower()
+    # Split into words and check for matches
+    words = re.findall(r'\b\w+\b', text_lower)
+    return bool(CONDITIONAL_LEXICON & set(words))
+
+# Appended when conditional language is detected in the article (or on the 5% bypass probe).
+# Instruction block for extracting conditional fields; all 9 fields are nullable, so this
+# block is purely informational — when omitted, the model defaults them to null.
+# PRE-RESOLUTION: these fields are recorded BEFORE the enforce_* chain (conditional-capture-phase1.md §3.3).
+_CONDITIONAL_BLOCK = """
+
+## CONDITIONAL (v1.1 — Phase 1 capture)
+
+When this section appears, extract conditional claims: assertions whose truth or relevance is \
+contingent on an antecedent. All fields below are OPTIONAL and nullable.
+
+**is_conditional** (bool): True when this claim is conditional on an antecedent.
+
+**antecedent_text** (string): The VERBATIM "if"-clause or conditional expression as written \
+in the article, IN THE ARTICLE'S ORIGINAL LANGUAGE. Examples: "if the ceasefire collapses", \
+"unless negotiations succeed", "were Trump to withdraw support". Copy exactly as it appears; \
+do not paraphrase or translate here.
+
+**antecedent_text_en** (string): RESTATE the antecedent as a standalone ENGLISH PROPOSITION, \
+stated POSITIVELY. This is the ONLY field used for embedding/linking. Negation lives in \
+`antecedent_polarity`, NOT in this field — one canonical form so negations cluster. Example: \
+if the article says "if X does NOT happen", store `antecedent_text_en: "X happens"` and \
+`antecedent_polarity: false`. If the antecedent is already affirmative ("if the election is \
+held"), `antecedent_text_en: "the election is held"` and `antecedent_polarity: true` or null.
+
+**antecedent_polarity** (bool): False when the antecedent is negated ("if X does NOT happen"). \
+True or null for affirmative form. This field captures the negation so all affirmative statements \
+in `antecedent_text_en` cluster together, and negation is separated into one field.
+
+**relation** (string, enum): How the antecedent relates to the consequent. One of:
+  - "raises" — the antecedent makes the consequent MORE likely (evidential).
+  - "lowers" — the antecedent makes the consequent LESS likely (evidential).
+  - "requires" — the antecedent is NECESSARY for the consequent (logical constraint).
+  - "precludes" — the antecedent makes the consequent IMPOSSIBLE (logical constraint).
+  - "unclear" — the direction or type of dependence is ambiguous.
+
+**strength** (string, enum): Source's stated strength when no explicit probability is given. \
+One of: "certain", "likely", "possible", "unlikely". Omit if the source gives a numerical \
+probability instead; use `stated_probability` for those.
+
+**stated_probability** (float, 0-1): P(consequent | antecedent) when the source explicitly \
+states a number. Example: "analysts put it at 70% if the ceasefire holds". Null if the source \
+does not quantify the conditional probability.
+
+**is_counterfactual** (bool): True for "had X not happened" or "if X had happened" — past-directed, \
+different epistemic object than a forward conditional. False or null for forward-looking conditionals.
+
+**speaker** (string): Who asserted the conditional — outlet name (e.g. "Reuters", "BBC") or analyst's \
+name if the claim is a direct quote (e.g. "General Smith", "Analyst John Doe"). For attribution.
+
+### Examples
+
+**Example 1: Causal conditional (raises)**
+  Article: "If the ceasefire holds, Likud is expected to gain 15 seats in the next election, analysts say."
+  Claim: "Likud gains 15 seats"
+  is_conditional: true
+  antecedent_text: "if the ceasefire holds"
+  antecedent_text_en: "the ceasefire holds"
+  antecedent_polarity: true
+  relation: "raises"
+  strength: null
+  stated_probability: null
+  is_counterfactual: false
+  speaker: "Analysts"
+
+**Example 2: Negated antecedent (lowers)**
+  Article: "Unless a diplomatic breakthrough occurs, escalation looks inevitable."
+  Claim: "Escalation occurs"
+  is_conditional: true
+  antecedent_text: "unless a diplomatic breakthrough occurs"
+  antecedent_text_en: "a diplomatic breakthrough occurs"
+  antecedent_polarity: false
+  relation: "lowers"
+  strength: null
+  stated_probability: null
+  is_counterfactual: false
+  speaker: null
+
+**Example 3: Explicit probability (requires)**
+  Article: "A trade war would require the withdrawal of China's ambassador, sources say."
+  Claim: "China withdraws ambassador"
+  is_conditional: true
+  antecedent_text: "if a trade war occurs"
+  antecedent_text_en: "a trade war occurs"
+  antecedent_polarity: true
+  relation: "requires"
+  strength: null
+  stated_probability: null
+  is_counterfactual: false
+  speaker: "Sources"
+
+When there is no conditional language, leave all nine fields null (do not include them, or \
+set them to null — either is correct).
+"""
+
 
 async def extract_predictions(
     article_text: str,
@@ -741,6 +861,7 @@ async def extract_predictions(
     claim_deadline: Optional[str] = None,
     short_form: bool = False,
     language: Optional[str] = None,
+    include_conditional_block: Optional[bool] = None,
 ) -> tuple["ExtractionOutput", dict]:
     """Returns (ExtractionOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
 
@@ -756,6 +877,11 @@ async def extract_predictions(
     ``language`` (retro#417) is an optional caller-supplied hint ("Hebrew", "ru", …) appended
     to the prompt so the model is told the text is non-English instead of having to notice.
     Also append-only; None keeps the prompt unchanged.
+
+    ``include_conditional_block`` (v1.1, Phase 1 capture) optionally includes the conditional
+    extraction instruction block. When None (default), the block is conditionally included based
+    on lexical pre-filter (has_conditional_language). When True, always include. When False, never
+    include. Append-only; None/False keeps existing behavior unchanged for backward compat.
     """
     prompt = PROMPT_SUFFIX.format(
         article_text=article_text,
@@ -770,6 +896,16 @@ async def extract_predictions(
         prompt += _SHORT_FORM_OVERRIDE
     if language:
         prompt += _LANGUAGE_HINT.format(language=language)
+
+    # Conditional block: lexical pre-filter gates the instruction block.
+    # When None (default): check text for conditional lexicon; include if found.
+    # When True: always include (used for 5% bypass probe).
+    # When False: never include (backward compat; default if lexicon check fails).
+    if include_conditional_block is None:
+        include_conditional_block = has_conditional_language(article_text)
+    if include_conditional_block:
+        prompt += _CONDITIONAL_BLOCK
+
     return await complete_structured(
         settings.extractor_model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
         cached_prefix=PROMPT_PREFIX,

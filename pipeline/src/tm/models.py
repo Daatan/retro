@@ -155,6 +155,47 @@ class PredictionExtraction(BaseModel):
     time_horizon_days: Optional[int] = Field(default=None)
     prediction_type: Optional[PredictionType] = Field(default=None)
     source_authority: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    # --- Conditional fields (v1.1, Phase 1 capture plan; see conditionals.md §4.4 + conditional-capture-phase1.md §3) ---
+    # PRE-RESOLUTION: recorded BEFORE enforce_* chain (unlike other PredictionExtraction fields which are post-resolution)
+    is_conditional: Optional[bool] = Field(
+        default=None,
+        description="True when the claim is conditional on an antecedent; the gate for step 4 (attenuation)"
+    )
+    antecedent_text: Optional[str] = Field(
+        default=None,
+        description="Verbatim 'if'-clause from the article, original language; unrecoverable if not captured now"
+    )
+    antecedent_text_en: Optional[str] = Field(
+        default=None,
+        description="Antecedent as standalone English proposition, stated positively (v1.1). "
+                    "Negation lives in antecedent_polarity. THE ONLY FIELD used for embedding/linking (§3.4)"
+    )
+    antecedent_polarity: Optional[bool] = Field(
+        default=None,
+        description="False for 'if X does NOT happen', True/None for affirmative form"
+    )
+    relation: Optional[str] = Field(
+        default=None,
+        description="How antecedent relates to consequent: 'raises'/'lowers' (evidential), "
+                    "'requires'/'precludes' (logical), 'unclear'. Plain string so new values don't fail callers"
+    )
+    strength: Optional[str] = Field(
+        default=None,
+        description="Source's stated strength when no explicit probability: 'certain'/'likely'/'possible'/'unlikely'. "
+                    "Plain string to match relation enum pattern"
+    )
+    stated_probability: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="P(consequent|antecedent) when source explicitly states a number. Null otherwise"
+    )
+    is_counterfactual: Optional[bool] = Field(
+        default=None,
+        description="True for 'had X not happened' — past-directed, different epistemic object than conditional"
+    )
+    speaker: Optional[str] = Field(
+        default=None,
+        description="Who asserted the conditional: outlet name or quoted analyst. For attribution"
+    )
 
     @model_validator(mode="before")
     @classmethod

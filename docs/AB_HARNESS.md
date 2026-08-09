@@ -1,0 +1,134 @@
+# Extractor prompt A/B harness (retro#470)
+
+Every extractor prompt edit changes behavior on every prediction, live. Two
+edits shipped this way already — PR#309 and PR#314, both by hand: a fixed
+case sample, run against the live model before and after the edit, diffed on
+the facets that matter, zero-regression required. `eval_extractor_adjacent_events.py`
+formalized one narrow slice of that (false-settlement rate across models).
+This harness formalizes the general shape, so the next extractor prompt edit
+doesn't start from a blank page — starting with retro#352 (deadline-direction
+blindness) and retro#353 (resolution rules never reach the live extractor),
+both of which were blocked on this.
+
+Code: `pipeline/src/tm/ab_harness.py` (pure, unit-tested, no network) +
+`pipeline/scripts/ab_extractor_prompt.py` (the live-model driver — **not** a
+CI test, it calls Bedrock).
+
+## Running it
+
+Baseline and patched are two different git checkouts, so this is two runs
+plus one comparison:
+
+```bash
+cd pipeline
+
+# 1. On the baseline checkout (e.g. origin/main):
+AWS_REGION=us-east-1 .venv/bin/python scripts/ab_extractor_prompt.py \
+    run scripts/ab_cases/deadline_and_resolution_rules.json \
+    --out /tmp/baseline.json --label baseline
+
+# 2. On your patched branch:
+AWS_REGION=us-east-1 .venv/bin/python scripts/ab_extractor_prompt.py \
+    run scripts/ab_cases/deadline_and_resolution_rules.json \
+    --out /tmp/patched.json --label patched
+
+# 3. Compare (pure, no network, either checkout):
+.venv/bin/python scripts/ab_extractor_prompt.py compare /tmp/baseline.json /tmp/patched.json
+```
+
+The exit code of `compare` **is** the zero-regression gate: `0` means no
+in-scope case lost a facet it used to satisfy. Improvements and no-change
+cases print but never fail the gate — only regressions do.
+
+### The same-prompt/same-model control arm
+
+retro#353's fix (pass the real resolution rules as `event_description`
+instead of the bare question) doesn't touch the prompt text at all — the bug
+is entirely in what `forecaster.py` passes as an argument. For a case like
+that, add a `control_event_description` and run with
+`--use-control-description`:
+
+```bash
+.venv/bin/python scripts/ab_extractor_prompt.py \
+    run scripts/ab_cases/deadline_and_resolution_rules.json \
+    --out /tmp/control.json --label control --use-control-description
+
+.venv/bin/python scripts/ab_extractor_prompt.py compare /tmp/baseline.json /tmp/control.json
+```
+
+Both runs use the exact same checkout, model, and prompt text — the only
+variable is the input content, isolating the effect to exactly the thing
+retro#353 changes. Every case's `event_description` should already be the
+correct, patched-behavior text (this is what the live extractor gets today);
+`control_event_description` holds the alternative you're comparing against.
+
+### Temporal-leakage cases
+
+A case whose `article_date` postdates its own `claim_deadline` is flagged
+`[LEAKAGE]` and excluded from the gate by default — AVeriTeC prior art
+(cited in retro#352): hindsight evidence can make a patched prompt look
+better than it actually is at forecast time. Pass `--allow-leakage` to
+include such cases in the gate anyway.
+
+## Adding a case
+
+Cases live in JSON files under `pipeline/scripts/ab_cases/`. Each case:
+
+```json
+{
+  "id": "unique-slug",
+  "event_name": "...",
+  "event_description": "...",
+  "claim_deadline": "2026-09-05",
+  "article_date": "2026-08-20",
+  "article_text": "...",
+  "expect": {"fact_signal_sign": -1, "is_occurrence": false},
+  "control_event_description": null,
+  "tags": ["retro-352"]
+}
+```
+
+`expect` names the facets a correct extraction must get right — see
+`_FACET_READERS` in `ab_harness.py` for the current set (`stance_sign`,
+`fact_signal_sign`, `fact_signal_null`, `is_occurrence`, `verified`,
+`settled`, `evidence_class`). A facet is satisfied if **any** prediction, in
+**any** run, matches the expected value — matching how one correct signal
+among several extracted predictions (or one correct run among several,
+given LLM non-determinism) is enough.
+
+**`expect: {}` is a legitimate pattern** — a reference case with no automated
+assertion, included so a genuinely disputed or nuanced scenario (e.g. "how
+negative should this be, exactly?") is on hand to eyeball manually rather
+than forcing a premature numeric call into the case file. It never
+regresses and never gates.
+
+Follow the house de-naming convention (`Country R`, `Group M`, `Company X` —
+see `eval_extractor_adjacent_events.py` and `tests/test_extractor_prompt.py`)
+for synthetic cases; real article bodies that reproduced a live incident
+(PR#314's approach) can be pulled in at run time instead of committed
+verbatim.
+
+## Reading the output
+
+```
+  improved   deadline-direction-fact-after-deadline: fixed ['fact_signal_sign']
+  pass       deadline-direction-fact-before-deadline-control
+  REGRESSION decider-denial-regression-sentinel: lost ['fact_signal_sign', 'is_occurrence']
+  no change  some-other-case: still failing ['stance_sign']
+
+Gate: FAIL (1 in-scope regression(s), leakage cases excluded)
+```
+
+- **REGRESSION** — baseline satisfied this facet, patched no longer does.
+  This is what blocks a merge.
+- **improved** — baseline failed, patched now passes.
+- **no change** — still failing the same facets on both sides (informational).
+- **pass** — every named facet satisfied on both sides.
+
+## Non-goals
+
+Not the backtest harness over the replayed claim layer (retro#403) — that
+one answers "does the estimator score well over history" and is blocked on
+corpus/outcome overlap until ~Dec 2026. This is a prompt-diff harness: does
+*this specific edit* change *these specific facets* in the intended
+direction, with no regressions, before it ships.

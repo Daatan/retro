@@ -1,0 +1,60 @@
+[
+  {
+    "id": "deadline-direction-fact-after-deadline",
+    "event_name": "An official mobilisation order is issued in Country R by 2026-09-05",
+    "event_description": "Only a formal, on-record government mobilisation order counts. Informal call-ups, covert recruitment, or personnel-policy changes at state-linked companies do not.",
+    "claim_deadline": "2026-09-05",
+    "article_date": "2026-08-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "A senior government spokesperson said Wednesday that any decision on a formal mobilisation order would come only after the parliamentary elections, which are scheduled for around September 20 -- after which, the spokesperson said, 'all options remain on the table.' No order has been signed or announced.",
+    "expect": {
+      "fact_signal_sign": -1,
+      "is_occurrence": false
+    },
+    "tags": ["retro-352", "deadline-direction"]
+  },
+  {
+    "id": "deadline-direction-fact-before-deadline-control",
+    "event_name": "An official mobilisation order is issued in Country R by 2026-09-05",
+    "event_description": "Only a formal, on-record government mobilisation order counts. Informal call-ups, covert recruitment, or personnel-policy changes at state-linked companies do not.",
+    "claim_deadline": "2026-09-05",
+    "article_date": "2026-08-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "The government signed a formal mobilisation order Tuesday, state television reported, calling up reservists effective next week.",
+    "expect": {
+      "fact_signal_sign": 1,
+      "is_occurrence": true
+    },
+    "tags": ["retro-352", "deadline-direction", "no-harm-control"]
+  },
+  {
+    "id": "decider-denial-regression-sentinel",
+    "event_name": "Country R's government formally denies the mobilisation is imminent",
+    "event_description": "A denial by the head of government or an authorized spokesperson counts. A denial by an opponent or an unnamed source does not.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-08-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "The president dismissed rumors of an imminent mobilisation as 'baseless speculation' during a press conference Monday, ruling out any such move for the foreseeable future.",
+    "expect": {
+      "fact_signal_sign": -1,
+      "is_occurrence": false
+    },
+    "tags": ["retro-351", "decider-statement", "regression-sentinel"]
+  },
+  {
+    "id": "resolution-rules-covert-recruitment-vs-official-announcement",
+    "event_name": "An official government mobilisation announcement is made in Country R by 2026-09-05",
+    "event_description": "Will there be a mobilisation announcement?",
+    "control_event_description": "Only a formal, on-record government mobilisation ANNOUNCEMENT counts. Recruitment by irregular units, informal drives, or personnel-policy changes at state-linked companies do NOT count, even when coercive -- they are, if anything, evidence the government is avoiding a formal announcement.",
+    "claim_deadline": "2026-09-05",
+    "article_date": "2026-08-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "A state-linked security contractor has stepped up coercive recruitment drives in several regions, workers say, pressuring employees to sign up under threat of dismissal. The government has made no public statement on the matter.",
+    "expect": {},
+    "tags": ["retro-353", "resolution-rules", "control-arm-reference"]
+  }
+]

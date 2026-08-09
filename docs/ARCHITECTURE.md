@@ -261,6 +261,8 @@ git push → GitHub Actions → GitHub Pages
 
 All defaults via AWS Bedrock. Override via env vars in `pipeline/src/tm/config.py`. The `model_api_base` and `model_api_key` settings allow routing through any LiteLLM-compatible provider (OpenRouter, etc.).
 
+Before shipping ANY extractor prompt edit, run the A/B harness against a fixed case sample on the live model — see [`docs/AB_HARNESS.md`](./AB_HARNESS.md) (retro#470).
+
 ---
 
 ## Scoring

@@ -981,7 +981,7 @@
         "R7",
         "M1"
       ],
-      "notes": "settlement_min_sources is 2. Two articles each reporting the outcome as an accomplished fact, dated and settlement-grade, pass aggregation-time revalidation and pin the mean to +settlement_stance (0.94) with a tight asymmetric band — pooling alone could never reach there.",
+      "notes": "settlement_min_sources is 2. Two articles each reporting the outcome as an accomplished fact, dated and settlement-grade, pass aggregation-time revalidation and pin the mean to +settlement_stance (0.94) with a tight asymmetric band — pooling alone could never reach there. retro#383: this case's own n_eff (~2) is also the exact scenario the F16 dispersion floor would otherwise widen to ~0.277 (4 * 1.96 * pool_dispersion_floor=0.05 / sqrt(n_eff), stance scale) — the settlement pin is exempt-by-design (_settlement_pin runs AFTER the floor and replaces the interval outright, see its docstring and docs/ORACLE_VARIABLES.md §4.2), so the published width stays the pin's own ~0.17 band instead. The invariant below is the regression guard for that exemption: if a future change moves the floor after the pin (the alternative retro#383 declined), this case's width jumps well past 0.2 and the diff has to explain it.",
       "articles": [
         {
           "source": "alpha",
@@ -1016,7 +1016,8 @@
       ],
       "invariants": [
         "settled is True",
-        "abs(mean - 0.94) < 1e-9"
+        "abs(mean - 0.94) < 1e-9",
+        "ci_high - ci_low < 0.2"
       ],
       "expect": {
         "insufficient_data": false,

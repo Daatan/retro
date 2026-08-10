@@ -356,6 +356,34 @@ def reduce_article(
     )
 
 
+def _settlement_vote_verified(claims_detail: Optional[list[ClaimDetail]]) -> Optional[bool]:
+    """The `verified` flag off the specific claim that cleared the settlement
+    gate for this source (retro#449 Stage A) — deliberately NOT
+    ``SourceSignal.verified``/``ArticleReduction.verified``, which is a
+    DIFFERENT rollup: the fact-lane's dominant-claim facet, `None` whenever
+    no claim in the article carries a `fact_signal` at all, regardless of
+    whether the settlement claim itself was independently verified. #449's
+    own gap is specifically about `verified=null` settlement votes, so
+    reusing the fact-lane field here would report `None` on the vast
+    majority of settled rows for a reason unrelated to the question being
+    asked, defeating the point of the measurement.
+    """
+    if not claims_detail:
+        return None
+    settlement_claim = next(
+        (
+            c for c in claims_detail
+            if c.settled and settlement_grade(
+                c.stance, c.certainty,
+                min_stance=settings.settlement_min_claim_stance,
+                min_certainty=settings.settlement_min_claim_certainty,
+            )
+        ),
+        None,
+    )
+    return settlement_claim.verified if settlement_claim is not None else None
+
+
 def derive_settlement_event_date(
     settled_preds: list[ClaimDetail],
     avg_stance: float,
@@ -1540,6 +1568,23 @@ async def _run_forecast_inner(
         source_ids=all_source_ids,
         max_source_share=settings.max_source_share,
     )
+    # F12 residual instrumentation (retro#449 Stage A): every settlement-voting
+    # row, unconditionally — mirroring event=evidence_clusters (retro#412),
+    # which logs every request regardless of outcome so a later measurement
+    # (here: the real weight distribution of verified=null vs true/false
+    # settlement votes) has something to query. Nothing reads this today;
+    # #449's own 2026-08-09 investigation found no existing log line captures
+    # (weight, verified) together for a settlement vote, which is what any
+    # real threshold fix (Stage B) needs to be calibrated against rather than
+    # guessed.
+    for idx, is_settled in enumerate(all_settled):
+        if is_settled:
+            logger.info(
+                "event=settlement_vote_weight source=%s weight=%.4f credibility=%.3f verified=%s",
+                source_signals[idx].url, all_weights[idx],
+                source_signals[idx].credibility_weight,
+                _settlement_vote_verified(source_signals[idx].claims_detail),
+            )
     agg = aggregate_pool(all_stances, all_weights, relevances, all_settled, **_pool_kwargs)
     if agg is not None:
         for idx, demotion_reason in agg.settlement_demotions:
@@ -1866,6 +1911,16 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         source_ids=source_ids,
         max_source_share=settings.max_source_share,
     )
+    # F12 residual instrumentation (retro#449 Stage A) — same event as the
+    # live path above, recompute-path twin.
+    for idx, is_settled in enumerate(settled_flags):
+        if is_settled:
+            logger.info(
+                "event=settlement_vote_weight source=%s weight=%.4f credibility=%.3f verified=%s",
+                sources[idx].url, weights[idx],
+                sources[idx].credibility_weight,
+                _settlement_vote_verified(sources[idx].claims_detail),
+            )
     agg = aggregate_pool(stances, weights, relevances, settled_flags, **_pool_kwargs)
     if agg is not None:
         for idx, demotion_reason in agg.settlement_demotions:

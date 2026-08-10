@@ -589,7 +589,12 @@ than a calendar date the DATES section's arithmetic can compare directly. You do
 resolvable event_date to score this: recognizing that the referenced milestone falls at or \
 after the deadline IS the fact. A firm, unconditional deferral grades stronger than a vague or \
 hedged one, under the same discipline as any other negative precursor.
-Discipline fact_signal by three tests, and record the facets that justify each:
+Discipline fact_signal by four tests, and record the facets that justify each:
+  - FACET. Classify the reported fact as announcement (it establishes the event happening or \
+having happened), denial (it establishes the event will not or did not happen), or neither \
+(it bears on the event without asserting either polarity — a precursor, a capability, an \
+escalation). A decider statement of intent or commitment is an announcement; a decider's \
+denial, refusal, or ruling-out is a denial. Omit facet when fact_signal itself is omitted.
   - DYAD. Name WHO acts (event_actors) and the TARGET of the action (event_target) in the \
 fact. A fact whose actor-target pair is NOT the claim's pair — a strike by a different \
 country, on a different country — is context only: keep |fact_signal| small and never treat \

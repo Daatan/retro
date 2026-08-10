@@ -238,6 +238,63 @@ class TestFacetsAreClaimLevel:
         assert [c.event_actors for c in s.claims_detail] == ["Alpha", "Beta"]
 
 
+class TestFacetRidesTheDominantClaim:
+    """retro#485: `facet` (announcement/denial/neither) is wired end-to-end —
+    schema-only since #483, now actually populated by reduce_article() and
+    threaded onto SourceSignal, same dominant-claim rule as the other facets."""
+
+    async def test_article_level_facet_is_the_dominant_claims(self, monkeypatch):
+        s = await _one_source(monkeypatch, [
+            _claim(claim="A minor precursor.", fact_signal=0.15,
+                   is_occurrence=False, facet="neither"),
+            _claim(claim="The event was announced.", fact_signal=0.6,
+                   is_occurrence=True, facet="announcement"),
+        ], "[F1-485-facet] Will the event occur?")
+
+        assert s.facet == "announcement"
+        assert [c.facet for c in s.claims_detail] == ["neither", "announcement"]
+
+    async def test_facet_is_absent_when_no_claim_scored_a_fact_signal(self, monkeypatch):
+        s = await _one_source(monkeypatch, [
+            _claim(claim="Nothing bears on the event.",
+                   fact_signal_absent_reason="no_fact_found"),
+        ], "[F1-485-no-facet] Will the event occur?")
+
+        assert s.fact_signal is None
+        assert s.facet is None
+
+    async def test_r8_estimate_unchanged_by_facet(self, monkeypatch):
+        """R8: facet is pure shadow metadata (retro#485) — nothing in
+        aggregation reads it, so the published estimate must be bit-identical
+        regardless of which facet (or none) rides the dominant claim."""
+        async def _forecast(question: str, **claim_kwargs):
+            _patch(monkeypatch, [_claim(
+                claim="The event was announced.", fact_signal=0.6,
+                is_occurrence=True, **claim_kwargs,
+            )])
+            return await forecaster.run_forecast(ForecastRequest(
+                question=question,
+                articles=[ArticleInput(
+                    url="https://fixture.example.test/a1",
+                    title="Vellum sonata dispatch",
+                    snippet="Fixture snippet, long enough to be usable by the pipeline.",
+                    source="fixture",
+                    published_date="2026-07-28",
+                    text=_BODY,
+                )],
+            ))
+
+        resp_a = await _forecast("[F1-485-r8-a] Will the event occur?", facet="announcement")
+        resp_b = await _forecast("[F1-485-r8-b] Will the event occur?", facet="denial")
+
+        assert resp_a.mean == resp_b.mean
+        assert resp_a.ci_low == resp_b.ci_low
+        assert resp_a.ci_high == resp_b.ci_high
+        assert resp_a.settled == resp_b.settled
+        assert resp_a.sources[0].facet == "announcement"
+        assert resp_b.sources[0].facet == "denial"
+
+
 class TestFactSignalNullIsDistinguishable:
     """retro#471: fact_signal's null must not conflate 'no relevant fact',
     'a contrary fact too weak to anchor a value', and 'opinion' — a consumer
@@ -389,6 +446,7 @@ class TestTheReductionReplaysFromPersistedClaims:
         assert replayed.is_occurrence == signal.is_occurrence
         assert replayed.verified == signal.verified
         assert replayed.fact_signal_absent_reason == signal.fact_signal_absent_reason
+        assert replayed.facet == signal.facet
 
     async def test_every_scalar_replays_on_the_ordinary_path(self, monkeypatch):
         """Mixed classes, mixed fact-bearing, one anchor — the five reductions

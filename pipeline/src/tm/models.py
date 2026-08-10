@@ -99,6 +99,16 @@ class PredictionExtraction(BaseModel):
                     "no reported fact bearing on the event. Omit entirely when fact_signal "
                     "is present.",
     )
+    facet: Optional[Literal["announcement", "denial", "neither"]] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow (retro#354 D2a/D2c) — whether the reported fact "
+                    "behind fact_signal ANNOUNCES the event happening/happened, DENIES it "
+                    "will/did happen, or is NEITHER (bears on the event without asserting "
+                    "either polarity, e.g. a precursor or a decider's on-record statement "
+                    "that doesn't itself confirm or deny). Lets a future magnitude refit "
+                    "(D2b/D3) compare |fact_signal| separately for announcement vs. denial "
+                    "claims. Omit when fact_signal is None.",
+    )
     event_actors: Optional[str] = Field(
         default=None,
         description="EXPERIMENTAL, shadow — WHO acts in the reported fact behind fact_signal "

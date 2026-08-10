@@ -33,6 +33,21 @@ class Settings(BaseSettings):
     # literal, changed only by a deliberate policy decision. See retro#367.
     fact_signal_precursor_cap: float = 0.3
 
+    # ── decider-statement facet caps (retro#354 D2c, ship inert) ─────────────
+    # A decider statement of intent scores as a precursor today — same
+    # `enforce_precursor_cap` (0.3) as any physical precursor, symmetric for an
+    # announcement ("we will act") and a denial ("we will not"). D2's design
+    # calls for splitting that into two independently-calibrated magnitudes once
+    # `facet` (retro#483/#485) has accrued enough real announcement/denial rows
+    # to refit against — that refit is #486, explicitly not this issue. These
+    # two constants exist so the code is facet-keyed and #486 has somewhere to
+    # write a real number; both default to today's symmetric
+    # `fact_signal_precursor_cap` so introducing them changes no output. Same
+    # "ship inert, calibrate later" pattern as `max_source_share` /
+    # `cluster_downweight_exponent`. NOT YET enforced anywhere — #486's job.
+    decider_statement_announcement_cap: float = 0.3
+    decider_statement_denial_cap: float = 0.3
+
     # ── interested-party stance (retro#368, lane-soundness F20) ──────────────
     # Magnitude ceiling for a claim the extractor marked `verified=false` — the
     # dominant fact is only ASSERTED by an interested party, not independently

@@ -228,6 +228,7 @@ class ArticleReduction:
     event_target: Optional[str]
     is_occurrence: Optional[bool]
     verified: Optional[bool]
+    fact_signal_absent_reason: Optional[str]
 
 
 def reduce_article(
@@ -314,10 +315,20 @@ def reduce_article(
         dominant = max(fact_claims, key=lambda c: abs(c.fact_signal))
         event_actors, event_target = dominant.event_actors, dominant.event_target
         is_occurrence, verified = dominant.is_occurrence, dominant.verified
+        # fact_signal is present on the dominant claim, so by
+        # fact_signal_absent_reason's own contract (retro#471) it has none.
+        fact_signal_absent_reason = None
     else:
         fact_signal = None
         event_actors = event_target = None
         is_occurrence = verified = None
+        # No claim in `scored` carried a fact_signal here, so every one of
+        # them should carry the reason why (retro#471's extractor contract).
+        # Most-common vote across the subset, same tie-break as
+        # `representative_class` above; defensively falls back to None if a
+        # claim didn't comply with the contract.
+        reasons = [c.fact_signal_absent_reason for c in scored if c.fact_signal_absent_reason is not None]
+        fact_signal_absent_reason = Counter(reasons).most_common(1)[0][0] if reasons else None
 
     return ArticleReduction(
         stance=stance,
@@ -336,6 +347,7 @@ def reduce_article(
         event_target=event_target,
         is_occurrence=is_occurrence,
         verified=verified,
+        fact_signal_absent_reason=fact_signal_absent_reason,
     )
 
 
@@ -1480,6 +1492,7 @@ async def _run_forecast_inner(
             event_target=reduction.event_target,
             is_occurrence=reduction.is_occurrence,
             verified=reduction.verified,
+            fact_signal_absent_reason=reduction.fact_signal_absent_reason,
             # F1/F15 (retro#364): the claims every scalar above was reduced
             # FROM, kept instead of discarded. Additive — nothing in
             # aggregation reads it.

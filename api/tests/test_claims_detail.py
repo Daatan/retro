@@ -273,6 +273,74 @@ class TestFactSignalNullIsDistinguishable:
         assert s.claims_detail[0].fact_signal == -0.4
         assert s.claims_detail[0].fact_signal_absent_reason is None
 
+    async def test_article_level_reason_with_no_ambiguity(self, monkeypatch):
+        """retro#481: the article-level reduction mirrors a single claim's
+        reason directly when there is nothing to disambiguate."""
+        s = await _one_source(monkeypatch, [
+            _claim(claim="Nothing bears on the event.",
+                   fact_signal_absent_reason="no_fact_found"),
+        ], "[F1-481-single] Will the event occur?")
+
+        assert s.fact_signal is None
+        assert s.fact_signal_absent_reason == "no_fact_found"
+
+    async def test_article_level_reason_picks_the_most_common(self, monkeypatch):
+        """retro#481: with several fact_signal-null claims disagreeing on
+        why, the article-level reason is the majority vote (same Counter
+        tie-break as `evidence_class`'s `representative_class`)."""
+        s = await _one_source(monkeypatch, [
+            _claim(claim="Nothing bears on the event, take one.",
+                   fact_signal_absent_reason="no_fact_found"),
+            _claim(claim="Nothing bears on the event, take two.",
+                   fact_signal_absent_reason="no_fact_found"),
+            _claim(claim="Pure opinion column.",
+                   evidence_class="opinion", fact_signal_absent_reason="opinion"),
+        ], "[F1-481-majority] Will the event occur?")
+
+        assert s.fact_signal is None
+        assert s.fact_signal_absent_reason == "no_fact_found"
+
+    async def test_article_level_reason_is_absent_when_fact_signal_is_present(self, monkeypatch):
+        """retro#481: a scored article has a real fact_signal, so the
+        article-level absent-reason is None, mirroring the per-claim rule."""
+        s = await _one_source(monkeypatch, [
+            _claim(claim="A graded fact.", fact_signal=-0.4, is_occurrence=True),
+        ], "[F1-481-scored] Will the event occur?")
+
+        assert s.fact_signal == -0.4
+        assert s.fact_signal_absent_reason is None
+
+    async def test_r8_estimate_unchanged_by_fact_signal_absent_reason(self, monkeypatch):
+        """R8: fact_signal_absent_reason is pure shadow metadata (retro#481)
+        — nothing in aggregation reads it, so the published estimate must be
+        bit-identical regardless of which reason (or none) is carried."""
+        async def _forecast(question: str, **claim_kwargs):
+            _patch(monkeypatch, [_claim(claim="Nothing bears on the event.", **claim_kwargs)])
+            return await forecaster.run_forecast(ForecastRequest(
+                question=question,
+                articles=[ArticleInput(
+                    url="https://fixture.example.test/a1",
+                    title="Vellum sonata dispatch",
+                    snippet="Fixture snippet, long enough to be usable by the pipeline.",
+                    source="fixture",
+                    published_date="2026-07-28",
+                    text=_BODY,
+                )],
+            ))
+
+        # Distinct questions — forecast_cache keys on (question, articles_hash),
+        # not on the stubbed claim fields, so a shared question would make the
+        # second call return the first call's cached response.
+        resp_a = await _forecast("[F1-481-r8-a] Will the event occur?", fact_signal_absent_reason="no_fact_found")
+        resp_b = await _forecast("[F1-481-r8-b] Will the event occur?", fact_signal_absent_reason="opinion")
+
+        assert resp_a.mean == resp_b.mean
+        assert resp_a.ci_low == resp_b.ci_low
+        assert resp_a.ci_high == resp_b.ci_high
+        assert resp_a.settled == resp_b.settled
+        assert resp_a.sources[0].fact_signal_absent_reason == "no_fact_found"
+        assert resp_b.sources[0].fact_signal_absent_reason == "opinion"
+
 
 class TestTheReductionReplaysFromPersistedClaims:
     """Item 3 of F1: the scalars are DERIVED from the per-claim layer.
@@ -320,6 +388,7 @@ class TestTheReductionReplaysFromPersistedClaims:
         assert replayed.event_target == signal.event_target
         assert replayed.is_occurrence == signal.is_occurrence
         assert replayed.verified == signal.verified
+        assert replayed.fact_signal_absent_reason == signal.fact_signal_absent_reason
 
     async def test_every_scalar_replays_on_the_ordinary_path(self, monkeypatch):
         """Mixed classes, mixed fact-bearing, one anchor — the five reductions

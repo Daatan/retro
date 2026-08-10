@@ -1013,6 +1013,25 @@ async def _process_article(
     )
 
 
+def build_claim_meta(req: ForecastRequest) -> Optional[str]:
+    """Cache-key discriminator for request metadata that changes the answer.
+
+    ``claim_direction`` and ``claim_deadline`` are folded in because the settlement
+    direction guard makes the estimate depend on them. ``resolution_criteria``
+    (retro#353) joins them for the same reason: it changes what the extractor is
+    told the question means, so a criteria-less response must not be served to a
+    criteria-bearing request or vice versa (retro#510).
+
+    The criteria segment is *appended* rather than interpolated so that requests
+    without it hash exactly as they did before #510 — the live cache survives the
+    deploy instead of being invalidated wholesale.
+    """
+    parts = [req.claim_direction or "", str(req.claim_deadline or "")]
+    if req.resolution_criteria:
+        parts.append(req.resolution_criteria)
+    return "|".join(parts) if any(parts) else None
+
+
 async def run_forecast(
     req: ForecastRequest,
     client: Optional[ApiKeyClient] = None,
@@ -1045,7 +1064,7 @@ async def run_forecast(
         articles_hash = hashlib.md5(
             "|".join(sorted(a.url for a in req.articles)).encode()
         ).hexdigest()[:12]
-    claim_meta = f"{req.claim_direction or ''}|{req.claim_deadline or ''}" if (req.claim_direction or req.claim_deadline) else None
+    claim_meta = build_claim_meta(req)
     # Keyed on the EFFECTIVE limit, not the raw request value — two keys with
     # different caps must not alias to the same cached response.
     cache_key = forecast_cache.make_key(req.question, limit, articles_hash, claim_meta)

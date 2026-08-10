@@ -1346,9 +1346,17 @@ def enforce_anchor_provenance(
     exposure itself, so absence of provenance costs the premium; the claim keeps
     its stance and certainty and still votes as ordinary evidence.
 
-    Interim by construction (retro#369): R5's provenance axis makes "who stands
-    behind this" a field rather than a text scan, and this function should be
-    deleted then, not migrated.
+    Permanent, not interim. This was written expecting R5's provenance axis to
+    make "who stands behind this" a stored field, at which point the function
+    would be deleted rather than migrated. That axis was rejected on 2026-08-10
+    (retro#479, closing #402): `evidence_class` stays a flat 5-class enum, so the
+    text scan IS the mechanism.
+
+    Which makes its known false-*retention* path a permanent accepted limit, not
+    a countdown: the scan reads the whole quote, so a quote naming an allowlisted
+    source *alongside* an unrelated percentage passes and keeps both the 4.0 and
+    the stance rewrite. Closing that means tightening this scan — proximity
+    between the name and the number — not waiting for a field.
 
     Shadow by default. With ``anchor_provenance_enforced`` off, the check runs
     and logs every claim it *would* demote but changes nothing — which is what

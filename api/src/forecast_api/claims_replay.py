@@ -39,7 +39,7 @@ _ROUNDED_3DP = ("stance", "certainty", "evidence_weight", "fact_signal")
 COMPARED_FIELDS = _ROUNDED_3DP + (
     "evidence_class", "settled", "settlement_event_date", "quantitative_estimate",
     "claims", "event_actors", "event_target", "is_occurrence", "verified",
-    "fact_signal_absent_reason",
+    "fact_signal_absent_reason", "facet",
 )
 
 

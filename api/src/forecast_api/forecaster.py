@@ -189,6 +189,7 @@ def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDe
             event_date=p.event_date,
             fact_signal=p.fact_signal,
             fact_signal_absent_reason=p.fact_signal_absent_reason,
+            facet=p.facet,
             event_actors=p.event_actors,
             event_target=p.event_target,
             is_occurrence=p.is_occurrence,
@@ -229,6 +230,7 @@ class ArticleReduction:
     is_occurrence: Optional[bool]
     verified: Optional[bool]
     fact_signal_absent_reason: Optional[str]
+    facet: Optional[str]
 
 
 def reduce_article(
@@ -315,6 +317,7 @@ def reduce_article(
         dominant = max(fact_claims, key=lambda c: abs(c.fact_signal))
         event_actors, event_target = dominant.event_actors, dominant.event_target
         is_occurrence, verified = dominant.is_occurrence, dominant.verified
+        facet = dominant.facet
         # fact_signal is present on the dominant claim, so by
         # fact_signal_absent_reason's own contract (retro#471) it has none.
         fact_signal_absent_reason = None
@@ -322,6 +325,7 @@ def reduce_article(
         fact_signal = None
         event_actors = event_target = None
         is_occurrence = verified = None
+        facet = None
         # No claim in `scored` carried a fact_signal here, so every one of
         # them should carry the reason why (retro#471's extractor contract).
         # Most-common vote across the subset, same tie-break as
@@ -348,6 +352,7 @@ def reduce_article(
         is_occurrence=is_occurrence,
         verified=verified,
         fact_signal_absent_reason=fact_signal_absent_reason,
+        facet=facet,
     )
 
 
@@ -1493,6 +1498,7 @@ async def _run_forecast_inner(
             is_occurrence=reduction.is_occurrence,
             verified=reduction.verified,
             fact_signal_absent_reason=reduction.fact_signal_absent_reason,
+            facet=reduction.facet,
             # F1/F15 (retro#364): the claims every scalar above was reduced
             # FROM, kept instead of discarded. Additive — nothing in
             # aggregation reads it.

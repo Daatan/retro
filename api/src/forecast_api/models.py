@@ -185,6 +185,7 @@ class ClaimDetail(BaseModel):
     event_target: Optional[str] = Field(default=None, description="EXPERIMENTAL shadow — the TARGET of the action in this claim's reported fact; with event_actors, the fact's dyad")
     is_occurrence: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when this claim's fact IS the event itself, False when it is only a precursor/precondition/escalation")
     verified: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when independently reported, False when only claimed by an interested party. Per-claim: the article-level field is the dominant claim's, so a lone over-cap interested-party claim diluted by in-contract siblings is invisible above this layer (retro#378)")
+    facet: Optional[Literal["announcement", "denial", "neither"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#354 D2a) — whether this claim's reported fact ANNOUNCES the event, DENIES it, or is NEITHER. Per-claim: SourceSignal.facet is the dominant claim's only")
     # --- Conditional fields (v1.1, Phase 1 capture plan; see conditionals.md §4.4 + conditional-capture-phase1.md §3) ---
     # PRE-RESOLUTION: recorded BEFORE enforce_* chain (asymmetric with other ClaimDetail fields; documented per §3.3)
     is_conditional: Optional[bool] = Field(

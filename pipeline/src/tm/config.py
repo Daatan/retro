@@ -79,9 +79,12 @@ class Settings(BaseSettings):
     # certainty, with no check on WHO produced the number: one sentence of "a
     # market prices this at 80%" in any article we crawl buys the strongest
     # evidence class in the system. The allowlist is what may claim that
-    # provenance — venues whose figure a reader could go and verify. Interim by
-    # design: R5 replaces it with a provenance axis and this should then be
-    # DELETED, not migrated, so do not grow it into a general source registry.
+    # provenance — venues whose figure a reader could go and verify. PERMANENT:
+    # R5's provenance axis was rejected on 2026-08-10 (retro#479, closing #402) —
+    # `evidence_class` stays a flat 5-class enum, so this list is the end state,
+    # not a stopgap awaiting a field. Still do not grow it into a general source
+    # registry: it exists to answer "could a reader verify this figure", which is
+    # a much shorter list than "is this outlet any good".
     #
     # Matched case-insensitively on word boundaries against the claim's verbatim
     # `quote`. Seeded from what the live pool actually cites (prod audit

@@ -49,7 +49,7 @@ async def _generate_keywords(question: str, settings: Settings) -> list[str]:
             settings.gatekeeper_model,
             KEYWORD_PROMPT.format(question=question),
             max_tokens=150,
-            temperature=0.3,
+            temperature=0,
         )).strip()
         # Extract JSON array from response
         match = re.search(r'\[.*?\]', text, re.DOTALL)

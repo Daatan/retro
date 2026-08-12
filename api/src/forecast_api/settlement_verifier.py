@@ -188,6 +188,7 @@ async def verify_settlement(
             build_prompt(question, votes, answer=answer),
             max_tokens=200,
             timeout=timeout_s,
+            temperature=0,
         )
     except Exception as exc:  # noqa: BLE001 - fail-open is the point
         logger.warning("event=settlement_verifier_error err=%r", exc)

@@ -109,6 +109,7 @@ async def complete_structured(
     max_tokens: int,
     timeout: int,
     cached_prefix: str | None = None,
+    temperature: float = 0,
 ):
     """Make one structured-output LLM call and return ``(output, usage)``.
 
@@ -116,6 +117,11 @@ async def complete_structured(
     token-usage extraction shared by the gatekeeper, extractor and aggregator.
     Wrapped in :func:`retry_on_rate_limit`, so callers get the shared backoff for
     free. ``usage`` is ``{}`` when the backend reports none.
+
+    ``temperature`` defaults to 0: every current caller is a classification/
+    extraction/aggregation task where the same input should reliably produce the
+    same output, not a creative-generation one. Pass a higher value explicitly if
+    a future caller needs otherwise.
 
     ``cached_prefix``, when given and ``settings.enable_prompt_cache`` is on, is sent
     as its own Bedrock/Anthropic cache-marked content block ahead of ``prompt`` — for
@@ -143,6 +149,7 @@ async def complete_structured(
         max_tokens=max_tokens,
         timeout=timeout,
         max_retries=1,
+        temperature=temperature,
     ))
     output, completion = await client.chat.completions.create_with_completion(**kwargs)
     return output, extract_usage(completion)

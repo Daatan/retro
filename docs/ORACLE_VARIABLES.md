@@ -222,6 +222,40 @@ by then asserting that month-old coverage may pin. Their dates are now relative 
 `api/tests/test_settlement_revalidation.py`; quality-floor fixtures:
 `TestQualityFloor` in the same file.
 
+#### The residual the floor does not close — `verified=null` pins (retro#449)
+
+The floor scores **mass**, not provenance, so a pin carried entirely by claims the extractor
+never independently verified clears it on weight alone. F20's `enforce_interested_party_stance_cap`
+is the only thing that touches the `verified` flag, and it keys on `verified is False` —
+`None` is untouched. Fixture case **B21** is the shape: two moderate-credibility reports,
+`verified` absent, independently phrased (so they form two clusters rather than one echo),
+summing to 0.656 against a 0.20 floor. It pins at 0.94 and is tagged `known_bad`.
+
+**Stage A instrumentation** (`event=settlement_vote_weight`, retro#449/PR#515, live since
+2026-08-10) logs weight/credibility/verified for every settlement vote on both the live and
+recompute paths. Its first measurement — **987 votes across 176 forecasts, 2026-08-11/12** —
+established four things worth not re-deriving:
+
+| Measured | Value |
+|---|---|
+| Settlement votes with `verified=false` | **0 of 987** — F20's clamp keeps them below settlement grade entirely |
+| Settlement votes with `verified=null` | 523 (53%) · mean weight 0.0435 · median 0.0269 · max 0.2153 |
+| Forecasts pinned on `verified=null` evidence **only** | **0 of 176** (the 6 null-only vote sets all sum ≤ 0.0193, ~10× under the floor) |
+| Live pins removed by downweighting null votes ×0.5 / ×0.75 | **0 of 78** — nothing sits near the floor |
+| Live pins removed by excluding null votes outright | **22 of 78 (28%)**, nearly all legitimate |
+
+Note the 53% null rate is a *current-traffic* figure; the frequently-quoted 87% is over the
+historical pool, which is dominated by rows predating 2026-07-09, when the flag started being
+written (never backfilled).
+
+**No threshold ships, by decision (2026-08-12).** The measurement closes the question in both
+directions: a graded discount is inert, and the only mechanism that bites suppresses legitimate
+pins at 28%. Calibrating a number here would be fitting to an empty cell. The exposure is
+instead **watched**: `event=unverified_only_pin` (WARNING, both paths, emitted *after* the match
+gate so a pin that never shipped cannot raise it) fires on the first prod instance. The real fix
+belongs to Phase 2 / R7 — settlement decided once at claim level — rather than to another
+`verified`-keyed patch on an article-level rollup.
+
 **The settlement match gate** (retro#388/#360, `api/src/forecast_api/settlement_verifier.py`,
 applied in `_apply_settlement_match_gate`). Everything above is arithmetic and temporal: it
 counts votes, re-proves anchors, weighs mass. None of it can ask the one question that both

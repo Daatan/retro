@@ -994,7 +994,8 @@
               "certainty": 0.95,
               "settled": true,
               "event_date": "2026-07-29",
-              "evidence_class": "reported_fact"
+              "evidence_class": "reported_fact",
+              "verified": true
             }
           ]
         },
@@ -1009,7 +1010,8 @@
               "certainty": 0.95,
               "settled": true,
               "event_date": "2026-07-29",
-              "evidence_class": "reported_fact"
+              "evidence_class": "reported_fact",
+              "verified": true
             }
           ]
         }
@@ -1748,7 +1750,8 @@
               "settled": true,
               "event_date": "2026-07-30",
               "evidence_class": "cited_probability",
-              "quote": "Polymarket resolved the market to YES on the official result."
+              "quote": "Polymarket resolved the market to YES on the official result.",
+              "verified": true
             }
           ]
         },
@@ -1764,7 +1767,8 @@
               "settled": true,
               "event_date": "2026-07-30",
               "evidence_class": "cited_probability",
-              "quote": "Polymarket has settled the contract affirmatively following certification of the official outcome."
+              "quote": "Polymarket has settled the contract affirmatively following certification of the official outcome.",
+              "verified": true
             }
           ]
         },

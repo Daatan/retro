@@ -15,7 +15,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Sequence
+from typing import Callable, Optional, Sequence
 from urllib.parse import urlparse
 
 import httpx
@@ -57,6 +57,7 @@ EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 
 from .auth import ApiKeyClient
 from .aggregation import (
+    PoolAggregateResult,
     aggregate_pool,
     claim_weighted_stance,
     evidence_class_weight,
@@ -382,6 +383,37 @@ def _settlement_vote_verified(claims_detail: Optional[list[ClaimDetail]]) -> Opt
         None,
     )
     return settlement_claim.verified if settlement_claim is not None else None
+
+
+def unverified_only_pin_votes(
+    agg: PoolAggregateResult,
+    verified_for_index: Callable[[int], Optional[bool]],
+) -> tuple[int, ...]:
+    """The winning settlement votes when EVERY one of them is `verified=None`.
+
+    retro#449 Stage B, and deliberately a detector rather than a guard. Stage
+    A's prod measurement (2026-08-12, 987 settlement votes over 176 forecasts)
+    found this shape zero times, and closed the threshold question in both
+    directions: downweighting null votes moves 0 of 78 live pins (none sit
+    near `settlement_quality_floor`), while excluding them outright removes 22
+    of 78 — nearly all legitimate. So there is no threshold to calibrate, only
+    an exposure to watch: `verified=None` is the ordinary state of ~53% of
+    live settlement votes, not a fabrication signal, and the real fix is
+    Phase 2 / R7 (settlement decided once at claim level). This fires on the
+    first prod instance so the re-scope rests on continuing evidence rather
+    than on one 1.8-day window. Fixture case B21 is the shape.
+
+    Returns the offending indices (empty when there is no pin, when the pin is
+    not carried exclusively by unverified votes, or when the legacy non-
+    revalidation path left `settlement_vote_indices` unpopulated — this reads
+    the recorded winning direction, it never re-derives one).
+    """
+    if not agg.settled or not agg.settlement_vote_indices:
+        return ()
+    votes = tuple(agg.settlement_vote_indices)
+    if all(verified_for_index(i) is None for i in votes):
+        return votes
+    return ()
 
 
 def derive_settlement_event_date(
@@ -1680,6 +1712,19 @@ async def _run_forecast_inner(
             ),
             settled_flags=all_settled,
         )
+        # retro#449 Stage B detector. After the match gate, not before: the
+        # gate can re-run aggregation and drop the pin, and an alert for a pin
+        # that never shipped is a false one.
+        unverified_votes = unverified_only_pin_votes(
+            agg, lambda i: _settlement_vote_verified(source_signals[i].claims_detail),
+        )
+        if unverified_votes:
+            logger.warning(
+                "event=unverified_only_pin question=%s votes=%d weight=%.4f urls=%s",
+                _question_hash(req.question), len(unverified_votes),
+                sum(all_weights[i] for i in unverified_votes),
+                ",".join(source_signals[i].url or "?" for i in unverified_votes),
+            )
 
     if agg is None or agg.insufficient_reason is not None:
         # Outcome histogram tells us *why* we got nothing — were articles
@@ -2010,6 +2055,19 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             rerun=lambda flags: aggregate_pool(stances, weights, relevances, flags, **_pool_kwargs),
             settled_flags=settled_flags,
         )
+        # retro#449 Stage B detector — recompute-path twin of the live path's,
+        # same placement rationale (after the gate). No `url` guarantee here, so
+        # the row index is the identifier, as with this path's other log lines.
+        unverified_votes = unverified_only_pin_votes(
+            agg, lambda i: _settlement_vote_verified(sources[i].claims_detail),
+        )
+        if unverified_votes:
+            logger.warning(
+                "event=unverified_only_pin question=%s votes=%d weight=%.4f source_indices=%s",
+                _question_hash(req.question or ""), len(unverified_votes),
+                sum(weights[i] for i in unverified_votes),
+                ",".join(str(i) for i in unverified_votes),
+            )
 
     if agg is None:
         return PoolAggregateResponse(

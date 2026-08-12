@@ -236,7 +236,7 @@ def _llm(prompt: str) -> Optional[dict]:
             _tm_settings.extractor_model,
             prompt,
             max_tokens=350,
-            temperature=0.15,
+            temperature=0,
             timeout=40,
         ))
         # Strip markdown code fences if the model wraps JSON in them

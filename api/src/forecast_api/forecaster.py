@@ -605,6 +605,7 @@ async def _distill_query(question: str) -> tuple[str, dict]:
             prompt,
             max_tokens=40,
             timeout=20,
+            temperature=0,
         )
         keywords = text.strip()
         if keywords:

@@ -119,6 +119,24 @@ class ApiSettings(BaseSettings):
     # sit deeper, so we keep a generous window before latency/$$ diminish returns.
     max_article_chars: int = 4000
 
+    # Publishers whose LIVE re-fetch is known (measured, retro#520) to fail almost
+    # always — paywalls/bot-challenges that serve the crawler fine at ingest but block
+    # a second visit. Comma-separated bare hostnames (no scheme, no `www.`). For a
+    # listed host, article fetch skips straight to news-indexer's archived-S3-text
+    # lookup (news-indexer#277) instead of attempting — and paying the latency for —
+    # a live fetch we already have strong evidence will fail; a miss there still falls
+    # through to the normal live fetch, so a stale/wrong entry only costs a missed
+    # optimization, never a correctness regression. Seeded from a full prod
+    # oracle_log.txt sweep (96,587 article_fetch events, 2026-08-12): aa.com.tr 2,681
+    # fallbacks, reuters.com 1,594, nytimes.com ~1,495, bloomberg.com 500, lemonde.fr
+    # 501, plus msn.com/thehill.com/israelnationalnews.com/middleeasteye.net/phys.org/
+    # aljazeera.net. Not auto-derived from live failure rates (yet) — static list,
+    # revisit if it needs frequent tuning.
+    degraded_fetch_domains: str = (
+        "aa.com.tr,reuters.com,nytimes.com,bloomberg.com,lemonde.fr,msn.com,"
+        "thehill.com,israelnationalnews.com,middleeasteye.net,phys.org,aljazeera.net"
+    )
+
     # ── Aggregation (logit pooling + recency) ──────────────────────────────
     # Sources are pooled in log-odds space, weighted by credibility ×
     # evidence_class_weight × recency × relevance². (Certainty is not a factor
@@ -544,6 +562,10 @@ class ApiSettings(BaseSettings):
     @property
     def cognito_allowed_client_id_set(self) -> set[str]:
         return {c.strip() for c in self.cognito_allowed_client_ids.split(",") if c.strip()}
+
+    @property
+    def degraded_fetch_domain_set(self) -> set[str]:
+        return {d.strip().lower() for d in self.degraded_fetch_domains.split(",") if d.strip()}
 
     @property
     def mcp_enabled(self) -> bool:

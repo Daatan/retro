@@ -41,7 +41,7 @@ from tm.extractor import (
     PROMPT_SUFFIX as _EXTRACTOR_PROMPT_SUFFIX,
 )
 from tm.models import GatekeeperOutput, PredictionExtraction
-from tm.web_search import SearchResult, search_capturing
+from tm.web_search import NEWS_INDEXER_API_KEY, NEWS_INDEXER_URL, SearchResult, search_capturing
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once_with_usage
 from tm.net_guard import UnsafeURLError, safe_get
@@ -617,7 +617,41 @@ async def _distill_query(question: str) -> tuple[str, dict]:
     return question, {}
 
 
-def _fetch_article_text(url: str, fallback: str) -> str:
+def _is_known_degraded_domain(url: str) -> bool:
+    """True when ``url``'s host is on ``settings.degraded_fetch_domains`` (retro#520) —
+    a publisher whose live re-fetch is measured to fail almost always (paywalls/bot-
+    challenges that serve news-indexer's crawler fine at ingest, then block a second
+    visit). Used to skip a live fetch we already have strong evidence will fail."""
+    host = urlparse(url).netloc.lower().removeprefix("www.")
+    return host in settings.degraded_fetch_domain_set
+
+
+def _fetch_archived_text(url: str) -> str | None:
+    """Look up ``url``'s body via news-indexer's archived-S3-text lookup
+    (``GET /articles/text``, Daatan/news-indexer#277/retro#520).
+
+    S3-only on news-indexer's side — never an origin re-fetch — so this never
+    duplicates a live fetch we made or are about to make. Inert (returns ``None``
+    immediately) when news-indexer isn't configured; best-effort on any other
+    failure, since the caller always has its own fallback (live fetch or snippet).
+    """
+    if not (NEWS_INDEXER_URL and NEWS_INDEXER_API_KEY):
+        return None
+    try:
+        resp = httpx.get(
+            f"{NEWS_INDEXER_URL}/articles/text",
+            params={"url": url},
+            headers={"x-api-key": NEWS_INDEXER_API_KEY},
+            timeout=httpx.Timeout(connect=2.0, read=5.0, write=2.0, pool=2.0),
+        )
+        resp.raise_for_status()
+        return resp.json().get("text")
+    except Exception as exc:
+        logger.debug("archived-text lookup failed for %s: %s", url, exc)
+        return None
+
+
+def _fetch_article_text(url: str, fallback: str, *, try_archived: bool = True) -> str:
     """Fetch full article body with trafilatura; return fallback on error.
 
     Upgraded from a naive ``httpx.get(...).text`` pipeline:
@@ -632,6 +666,12 @@ def _fetch_article_text(url: str, fallback: str) -> str:
       paywall marker.
     - Each fetch now logs its outcome at INFO so we can measure from
       production how often paywalls / 404s cost us an article.
+
+    ``try_archived`` (retro#520): on any failure below, try news-indexer's
+    archived-text lookup before giving up to ``fallback``. Set False by
+    ``_process_article``'s known-degraded-domain pre-check, which already tried
+    and missed that same lookup — avoids a redundant second call for a URL that's
+    on the degraded-domain list but was never archived.
     """
     outcome = "ok"
     status: int | None = None
@@ -671,6 +711,20 @@ def _fetch_article_text(url: str, fallback: str) -> str:
     except Exception as exc:
         outcome = "fetch_error"
         logger.debug("Article fetch failed for %s: %s", url, exc)
+
+    # An SSRF-guard rejection has nothing to do with fetchability, so skip the
+    # archived lookup there; otherwise, before giving up to the thin snippet
+    # fallback, see if news-indexer already has this URL's body archived from
+    # ingest (retro#520).
+    if try_archived and outcome != "blocked_unsafe_url":
+        archived = _fetch_archived_text(url)
+        if archived and len(archived) > len(fallback):
+            logger.info(
+                "event=article_fetch outcome=%s url=%s status=%s extracted_len=%d using=archived",
+                outcome, url, status, extracted_len,
+            )
+            return archived
+
     logger.info(
         "event=article_fetch outcome=%s url=%s status=%s extracted_len=%d using=fallback",
         outcome, url, status, extracted_len,
@@ -798,6 +852,18 @@ async def _process_article(
         # per-host throttle slot. news-indexer's rematch.py documents the same fact.
         text = fallback
         logger.info("event=article_fetch outcome=short_form_no_fetch url=%s", result.url)
+    elif _is_known_degraded_domain(result.url):
+        # Pre-check (retro#520): this domain's live re-fetch is measured to fail almost
+        # always (paywalls/bot-challenges), so try the archive first and skip straight to
+        # a live fetch only on a miss — saves the ~always-wasted request+throttle slot.
+        archived = await asyncio.to_thread(_fetch_archived_text, result.url)
+        if archived and len(archived) > len(fallback):
+            text = archived
+            logger.info("event=article_fetch outcome=archived_precheck url=%s", result.url)
+        else:
+            # No archive for this specific URL — fall through to a normal live fetch.
+            # try_archived=False: we already tried and missed the same lookup above.
+            text = await asyncio.to_thread(_fetch_article_text, result.url, fallback, try_archived=False)
     else:
         text = await asyncio.to_thread(_fetch_article_text, result.url, fallback)
     fetch_ms = (time.perf_counter() - fetch_start) * 1000

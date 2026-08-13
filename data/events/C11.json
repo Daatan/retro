@@ -7,6 +7,10 @@
     "תקיפה ישראלית מתקני גרעין איראן",
     "Israel strike Iran nuclear facilities"
   ],
+  "duel_keywords": [
+    "Netanyahu Iran retaliation",
+    "Isfahan nuclear facility strike"
+  ],
   "llm_referee_criteria": "Mark False if Israel's retaliation did not strike Iranian nuclear sites; the Apr 19 Isfahan strike that avoided nuclear facilities counts as False.",
   "predictive_window_days": 30,
   "category": [

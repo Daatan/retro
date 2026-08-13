@@ -7,6 +7,10 @@
     "מיתון בישראל 2024",
     "Israel recession 2024 GDP"
   ],
+  "duel_keywords": [
+    "Bank of Israel Amir Yaron",
+    "Israel recession GDP contraction"
+  ],
   "llm_referee_criteria": "Mark False if Israel did not enter a technical recession (two consecutive quarters of GDP contraction) during 2024.",
   "predictive_window_days": 30,
   "category": [

@@ -110,6 +110,45 @@ Backfill the 78.5% empty Atlas cells and — the actual validity gate — **hunt
 NO-outcome events** (predicted-then-fizzled) to break the 69/70-YES imbalance.
 Re-run `backtest.py`; the results are now reproducible run-to-run.
 
+**Phase 3a — NO-event curation pass (retro#509). ✅ DONE (this PR).** `pipeline/scripts/seed_no_events_batch1.py`
+had speculatively seeded 6 candidate NO-events (`A20`, `B14`, `C10`, `C11`, `C13`, `D07`)
+"pending Oracle in-window validation ... events that return no in-window coverage
+get pruned." Running that validation surfaced a tooling bug, not a coverage
+problem:
+
+- `--events A20 B14 C10 C11 C13 D07` reported **0 GKG rows for 4 of the 6**
+  (`A20`, `B14`, `C11`, `D07`) — `_extract_bq_terms` (`web_search.py`) filters
+  generic single words ("Israel", "Iran", "Gaza", …) as too-common, and those
+  4 events' `search_keywords` had no *other* proper noun, so the BigQuery query
+  never even ran (`RuntimeError: no extractable entity terms in query`,
+  silently indistinguishable from "GDELT has no coverage" in the batch summary).
+- Live `--discover` (bypasses the fetch step, reports raw GKG row counts) over
+  each event's predictive window, seeded with a real named entity per event,
+  showed **heavy genuine coverage for all 6** — hundreds of articles across a
+  dozen-plus tracked outlets each (e.g. `C13` "Israel Hezbollah" Jan 2024:
+  haaretz 202, ynet 171, maariv 165, …; `D07` "Amir Yaron" Dec 2024: ynet 253,
+  maariv 121, jpost 73, …). None qualifies for pruning.
+- **Fix**: added a `duel_keywords` entry with one real named entity to each of
+  the 4 blocked events (`A20`→"Netanyahu", "Knesset"; `B14`→"Netanyahu",
+  "Hamas"; `C11`→"Netanyahu", "Isfahan"; `D07`→"Amir Yaron", Bank of Israel's
+  governor) — the same pattern already used by `A19`/`B05`/`B08`/`B09`/`B10`/
+  `C07`/`C08`/`C09`. Verified locally: `_extract_bq_terms` now returns
+  non-empty terms for all 4, and a full `--events` run (not just `--discover`)
+  executes the BigQuery scan for all 6 (previously 4 errored before the query
+  even ran). **Wayback fetch yield is still low** (2 articles saved across all
+  6 events in this run) — most GKG-indexed URLs from this period either have
+  no pre-outcome Wayback snapshot or fail `_MIN_TEXT_CHARS`; that is a
+  fetch-layer problem for the real backfill (retro#508, `--allow-live` /
+  wider `--limit` territory), separate from the curation question this issue
+  answers.
+- **Outcome: 6/6 kept, 0 pruned.** All 6 batch-1 NO-events are confirmed
+  GDELT-queryable with real predictive-window coverage (via `--discover`,
+  which counts raw GKG rows independent of fetch success) and ready to feed
+  the actual backfill (retro#508). A regression test
+  (`TestNoEventEntityExtractability` in `test_gdelt_bq_ingest.py`) now fails
+  CI if a future NO-event is added without at least one extractable entity
+  term, so this gap can't silently reopen.
+
 ---
 
 ## Caveats / risks

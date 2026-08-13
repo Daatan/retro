@@ -1589,7 +1589,8 @@
               "certainty": 0.95,
               "settled": true,
               "event_date": "2026-07-30",
-              "evidence_class": "reported_fact"
+              "evidence_class": "reported_fact",
+              "verified": true
             }
           ]
         },
@@ -1604,7 +1605,8 @@
               "certainty": 0.95,
               "settled": true,
               "event_date": "2026-07-30",
-              "evidence_class": "reported_fact"
+              "evidence_class": "reported_fact",
+              "verified": true
             }
           ]
         },
@@ -2838,6 +2840,105 @@
             "fact_signal": -1.0,
             "is_occurrence": true,
             "verified": true,
+            "author_lean": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "B21",
+      "name": "a coordinated unverified fabrication pins on weight alone",
+      "traces": [
+        "F12",
+        "R7"
+      ],
+      "notes": "B7's hoax with exactly one field changed: `verified` is absent (null) instead of false. That single difference is the whole of retro#449. F20's `enforce_interested_party_stance_cap` keys on `verified is False`, so it does not fire here: the claims keep stance 1.0, clear the settlement grade gate, and — being independently phrased — form two clusters rather than one echo, satisfying `settlement_min_sources`. Their summed weight (0.328 x 2) clears `settlement_quality_floor` (0.20) three times over, so the pin fires and the pooled mean is discarded. Nothing shipped as of 2026-08-12 stands in the way. Distinct phrasing is the threat model, not an artifact: near-identical copies collapse to one cluster and fail the count, which is exactly what a coordinated campaign avoids.",
+      "articles": [
+        {
+          "source": "alpha",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 0.4,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-29",
+              "evidence_class": "reported_fact",
+              "fact_signal": 1.0,
+              "is_occurrence": true
+            }
+          ]
+        },
+        {
+          "source": "bravo",
+          "published_date": "2026-07-30",
+          "relevance": 1.0,
+          "credibility": 0.4,
+          "claims": [
+            {
+              "stance": 1.0,
+              "certainty": 0.95,
+              "settled": true,
+              "event_date": "2026-07-29",
+              "evidence_class": "reported_fact",
+              "fact_signal": 1.0,
+              "is_occurrence": true
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "settled is True",
+        "mean > 0.9"
+      ],
+      "known_bad": {
+        "finding": "F12",
+        "expected_behavior": "A pin should require evidence that is positively corroborated, not merely un-contradicted. `verified=null` means the extractor never established the claim either way, which is the ordinary state of roughly half of live settlement votes (523 of 987 in the 2026-08-12 prod measurement) — so it cannot be read as a soft pass. NOT FIXED, and deliberately not fixed by a threshold: the same measurement found that downweighting null votes changes 0 of 78 live pins (nothing sits near the floor) while excluding them outright removes 22 of 78, nearly all legitimate. A `verified`-keyed patch is therefore either inert or over-broad, and this case must keep failing until Phase 2 / R7 decides settlement once at claim level. Until then the shape is watched, not guarded: `event=unverified_only_pin` (retro#449 Stage B) fires the first time it happens in prod — it never has as of 2026-08-12."
+      },
+      "expect": {
+        "insufficient_data": false,
+        "reason": null,
+        "articles_used": 2,
+        "settled": true,
+        "mean": 0.94,
+        "std": 0.06,
+        "ci_low": 0.82,
+        "ci_high": 0.99,
+        "sources": [
+          {
+            "source": "alpha",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 0.4,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.328,
+            "settled": true,
+            "settlement_event_date": "2026-07-29",
+            "fact_signal": 1.0,
+            "is_occurrence": true,
+            "verified": null,
+            "author_lean": null
+          },
+          {
+            "source": "bravo",
+            "stance": 1.0,
+            "certainty": 0.95,
+            "credibility_weight": 0.4,
+            "evidence_class": "reported_fact",
+            "evidence_weight": 1.0,
+            "recency_weight": 0.82,
+            "relevance_score": 1.0,
+            "weight": 0.328,
+            "settled": true,
+            "settlement_event_date": "2026-07-29",
+            "fact_signal": 1.0,
+            "is_occurrence": true,
+            "verified": null,
             "author_lean": null
           }
         ]

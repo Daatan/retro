@@ -340,7 +340,7 @@ exactly when the recompute becomes a writer. Fixtures: `api/tests/test_settlemen
 | variable | scale | role | notes |
 |---|---|---|---|
 | `is_prediction` | bool | hard in/out gate | binary form of the same judgment as `relevance_score` |
-| `relevance_score` | 0..1, default **1.0** | graded "how much would a forecaster update" | fail-open default; squared downstream |
+| `relevance_score` | 0..1, default **1.0** when `is_prediction=true`, **0.0** when `is_prediction=false` | graded "how much would a forecaster update" | default is is_prediction-dependent (retro#524) — an unscored rejection can never read as "relevant" to a caller that checks only this field; an explicitly graded score (e.g. a 0.1 near-miss on a rejection) always passes through unchanged; squared downstream |
 | `prediction_count_estimate` | int | debug only | — |
 
 **Content-free input is rejected before the model is called** (retro#359, 2026-08-02).

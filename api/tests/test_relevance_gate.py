@@ -39,6 +39,21 @@ class TestGatekeeperRelevanceScore:
         with pytest.raises(ValidationError):
             GatekeeperOutput(is_prediction=True, reason="r", relevance_score=-0.1)
 
+    def test_unscored_rejection_defaults_relevance_to_zero(self):
+        # A rejected article that the model left unscored must never read as
+        # "relevant" to a caller that only checks relevance_score (e.g. the
+        # /relevance endpoint response) without also checking is_prediction —
+        # the 1.0 "neutral" default is for the PASSING case only.
+        g = GatekeeperOutput(is_prediction=False, reason="off-topic")
+        assert g.relevance_score == 0.0
+
+    def test_rejection_preserves_an_explicit_graded_score(self):
+        # A graded near-miss on a rejection (e.g. 0.1) is meaningful — a rescue
+        # path that can't hear a low-but-nonzero "no" would push everything it
+        # looked at. Only the OMITTED case gets the is_prediction-aware default.
+        g = GatekeeperOutput(is_prediction=False, reason="off-topic", relevance_score=0.1)
+        assert g.relevance_score == 0.1
+
 
 # --- run_forecast wiring ----------------------------------------------------
 

@@ -23,14 +23,26 @@ class GatekeeperOutput(BaseModel):
     relevance_score: float = Field(
         default=1.0, ge=0.0, le=1.0,
         description="Graded topic relevance of the article to the event [0,1]; "
-                    "its square multiplies the source's aggregation weight. "
-                    "Defaults to 1.0 (neutral) when a caller/model omits it.",
+                    "its square multiplies the source's aggregation weight. When "
+                    "a caller/model OMITS it entirely, the default is is_prediction- "
+                    "dependent: 1.0 (neutral) on a passing gate, 0.0 on a rejection — "
+                    "so an unscored rejection can never read as relevant to a caller "
+                    "(e.g. the /relevance endpoint response, or ledger analysis) that "
+                    "doesn't also check is_prediction. An EXPLICITLY supplied score is "
+                    "never overridden, at any value — a graded near-miss on a "
+                    "rejection (e.g. relevance=0.1) is meaningful and must survive.",
     )
 
     @model_validator(mode="before")
     @classmethod
     def _unwrap_envelope(cls, data: Any) -> Any:
         return _unwrap_properties_envelope(data)
+
+    @model_validator(mode="after")
+    def _default_relevance_to_zero_on_unscored_rejection(self) -> "GatekeeperOutput":
+        if not self.is_prediction and "relevance_score" not in self.model_fields_set:
+            self.relevance_score = 0.0
+        return self
 
 
 class PredictionType(str, Enum):

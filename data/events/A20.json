@@ -8,6 +8,10 @@
     "Israel early elections 2024",
     "government collapse"
   ],
+  "duel_keywords": [
+    "Netanyahu coalition collapse",
+    "Knesset early elections"
+  ],
   "llm_referee_criteria": "Mark False if the 37th government did not fall and no early Knesset election was called during 2024.",
   "predictive_window_days": 30,
   "category": [

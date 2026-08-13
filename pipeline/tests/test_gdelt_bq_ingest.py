@@ -7,6 +7,7 @@ added to ``_search_gdelt_bq``. Skipped only when core deps are absent.
 
 import json
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,6 +18,8 @@ pytest.importorskip("google.cloud.bigquery")
 
 from tm import gdelt_bq_ingest as g
 from tm import web_search as ws
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class TestNormHost:
@@ -233,3 +236,51 @@ class TestDiscoverSqlInjectionSafety:
         assert "@patterns" in sql_text
         # No raw TIMESTAMP('...') literal left over from the old f-string form.
         assert "TIMESTAMP('" not in sql_text
+
+
+class TestNoEventEntityExtractability:
+    """retro#509 — GDELT NO-event curation pass.
+
+    A NO-outcome event whose keywords yield no extractable BQ entity terms
+    (``_extract_bq_terms`` empty) can never be scanned at all — ``ingest_event``
+    raises before the query even runs (see ``RuntimeError`` in
+    ``_search_gdelt_bq``), so the event silently vanishes from any
+    ``--all``/``--events`` backfill with no article ever fetched. This bit the
+    batch-1 seeded NO-events (retro#281/#509): ``_extract_bq_terms`` filters
+    generic single words like "Israel"/"Iran"/"Gaza" as too-common
+    (``_common`` stopword set in ``web_search.py``), and 4 of the 6 events had
+    no other proper noun in their keywords, so their queries never ran —
+    indistinguishable from "GDELT has no coverage" unless you look closely.
+    Live discovery (``--discover``) confirmed all 6 candidates actually have
+    heavy genuine predictive-window GKG coverage (100s of articles across a
+    dozen+ tracked outlets each) once given an extractable keyword — the gap
+    was tooling, not missing news coverage. Fixed by adding ``duel_keywords``
+    with a real named entity (e.g. "Netanyahu", "Amir Yaron") to each of the
+    4 affected events. This test is the regression barrier: every committed
+    NO-outcome event must keep at least one extractable entity term so a
+    future NO-event addition can't reintroduce the same silent gap.
+    """
+
+    def _no_events(self):
+        events_dir = REPO_ROOT / "data" / "events"
+        for f in sorted(events_dir.glob("*.json")):
+            event = json.loads(f.read_text())
+            if event.get("outcome") is False:
+                yield event
+
+    def test_every_no_event_has_extractable_entity_terms(self):
+        keywords_by_bad_event = {}
+        for event in self._no_events():
+            keywords = event.get("duel_keywords") or event.get("search_keywords") or []
+            query = " ".join(keywords)
+            terms = ws._extract_bq_terms(query)
+            if not terms:
+                keywords_by_bad_event[event["id"]] = keywords
+        assert keywords_by_bad_event == {}, (
+            f"NO-events with no extractable GDELT entity term (add duel_keywords "
+            f"with a real proper noun): {keywords_by_bad_event}"
+        )
+
+    def test_at_least_one_no_event_exists(self):
+        # A vacuous pass above (empty NO-event set) would hide a regression.
+        assert len(list(self._no_events())) > 0

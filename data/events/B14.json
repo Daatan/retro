@@ -7,6 +7,10 @@
     "עסקת חטופים והפסקת אש כוללת",
     "Gaza comprehensive ceasefire hostage deal"
   ],
+  "duel_keywords": [
+    "Netanyahu Hamas hostage deal",
+    "Gaza ceasefire negotiations"
+  ],
   "llm_referee_criteria": "Mark False if no comprehensive ceasefire-and-hostage agreement was concluded by this date; partial or phased talks do not count.",
   "predictive_window_days": 30,
   "category": [

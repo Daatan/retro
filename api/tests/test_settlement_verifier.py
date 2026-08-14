@@ -32,7 +32,13 @@ import pytest
 
 from forecast_api import forecaster
 from forecast_api.config import settings as api_settings
-from forecast_api.models import ArticleInput, ForecastRequest, PoolAggregateRequest, PoolSourceInput
+from forecast_api.models import (
+    ArticleInput,
+    ClaimDetail,
+    ForecastRequest,
+    PoolAggregateRequest,
+    PoolSourceInput,
+)
 from forecast_api.settlement_verifier import (
     SettlementVote,
     Verdict,
@@ -294,6 +300,147 @@ class TestItSkipsRatherThanGuesses:
         assert called == []
 
 
+# Deliberately dissimilar wording per row: the recompute path collapses
+# syndicated near-duplicates on claims_detail-derived text BEFORE pooling
+# (retro#458 Phase 3, syndication_title_similarity=0.8), and two rows that
+# differ only by an index read as one wire story re-hosted — one vote, no pin.
+_POOL_CLAIMS = [
+    ("The harbour accord was ratified by the assembly yesterday",
+     "Delegates confirmed the harbour accord passed its final reading"),
+    ("A cobalt export statute took effect across the federation at noon",
+     "Customs officials began enforcing the new cobalt statute at midday"),
+]
+
+
+def _pool_request(question: str, *, variant: str = "a") -> PoolAggregateRequest:
+    """A recompute-path request whose rows carry the per-claim layer the gate
+    needs. `variant` changes the claim text — i.e. the vote-set — without
+    changing the question."""
+    return PoolAggregateRequest(
+        question=question,
+        sources=[
+            PoolSourceInput(
+                url=f"https://source-{i}.example.test/{variant}",
+                stance=0.95, certainty=0.95, credibility_weight=1.0,
+                relevance_score=1.0, evidence_weight=1.0, published_date=_FRESH,
+                settled=True, settlement_event_date=_FRESH_EVENT,
+                claims_detail=[ClaimDetail(
+                    claim=f"{claim}, variant {variant}.",
+                    quote=f"{quote}, variant {variant}.",
+                    stance=1.0, certainty=0.95, settled=True, event_date=_FRESH_EVENT,
+                )],
+            )
+            for i, (claim, quote) in enumerate(_POOL_CLAIMS)
+        ],
+    )
+
+
+class TestVerdictStore:
+    """retro#532: decide once, remember, never re-roll an unchanged input.
+
+    Exercised through `/pool/aggregate` — the recompute path daatan replays —
+    because that is exactly where the re-roll ratchet lived. The store is
+    off suite-wide (conftest) and pointed at a tmp_path here, so nothing
+    leaks between tests or runs.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _store_on(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(api_settings, "settlement_verifier_enabled", True)
+        monkeypatch.setattr(api_settings, "settlement_verifier_enforce", True)
+        monkeypatch.setattr(api_settings, "settlement_verdict_cache_enabled", True)
+        monkeypatch.setattr(api_settings, "settlement_verdict_cache_path", tmp_path / "verdicts")
+        # Same rationale as _patch: the fixture rows' near-identical claim text
+        # would cluster as syndication (one vote, retro#372) and the pin this
+        # suite needs would never fire.
+        monkeypatch.setattr(api_settings, "cluster_jaccard_threshold", 1.1)
+
+    def _stub_verify(self, monkeypatch, verdicts: list[Verdict]) -> list:
+        """Each call consumes the next scripted verdict; the last one repeats."""
+        calls: list = []
+
+        async def fake_verify(question, votes, **kwargs):
+            v = verdicts[min(len(calls), len(verdicts) - 1)]
+            calls.append(v)
+            return v
+
+        monkeypatch.setattr(forecaster, "verify_settlement", fake_verify)
+        return calls
+
+    async def test_an_unchanged_vote_set_is_decided_once(self, monkeypatch):
+        calls = self._stub_verify(monkeypatch, [Verdict(settles=True, reason="reported as done")])
+        first = await forecaster.run_pool_aggregate(_pool_request("[store-once] Will the step be taken?"))
+        second = await forecaster.run_pool_aggregate(_pool_request("[store-once] Will the step be taken?"))
+        assert (first.settled, second.settled) == (True, True)
+        assert len(calls) == 1, "the second recompute must reuse the decision, not re-roll it"
+
+    async def test_a_veto_is_sticky(self, monkeypatch):
+        """The ratchet, killed: a NO cannot be out-rolled by recomputing until
+        it flips — the exact mechanism behind the 1-True/31-False latched pin."""
+        calls = self._stub_verify(monkeypatch, [
+            Verdict(settles=False, reason="announced, not carried out"),
+            Verdict(settles=True, reason="the lucky roll that must never be asked for"),
+        ])
+        first = await forecaster.run_pool_aggregate(_pool_request("[store-veto] Will the step be taken?"))
+        second = await forecaster.run_pool_aggregate(_pool_request("[store-veto] Will the step be taken?"))
+        assert (first.settled, second.settled) == (False, False)
+        assert len(calls) == 1
+
+    async def test_a_changed_vote_set_rolls_fresh(self, monkeypatch):
+        calls = self._stub_verify(monkeypatch, [Verdict(settles=False, reason="precursor only")])
+        await forecaster.run_pool_aggregate(_pool_request("[store-votes] Will the step be taken?", variant="a"))
+        await forecaster.run_pool_aggregate(_pool_request("[store-votes] Will the step be taken?", variant="b"))
+        assert len(calls) == 2, "new evidence is a new decision — a stale veto must not outlive its vote-set"
+
+    async def test_a_config_change_rolls_fresh(self, monkeypatch):
+        calls = self._stub_verify(monkeypatch, [Verdict(settles=True, reason="reported as done")])
+        await forecaster.run_pool_aggregate(_pool_request("[store-config] Will the step be taken?"))
+        monkeypatch.setattr(api_settings, "settlement_quality_floor",
+                            api_settings.settlement_quality_floor + 0.01)
+        await forecaster.run_pool_aggregate(_pool_request("[store-config] Will the step be taken?"))
+        assert len(calls) == 2, "a config change must miss the store, never reuse a stale verdict"
+
+    async def test_an_errored_verdict_is_never_remembered(self, monkeypatch):
+        """Fail-open must stay transient: caching it would turn one timeout
+        into a permanent pin-keeper."""
+        calls = self._stub_verify(monkeypatch, [
+            Verdict(settles=True, reason="verifier call failed", errored=True),
+        ])
+        first = await forecaster.run_pool_aggregate(_pool_request("[store-err] Will the step be taken?"))
+        second = await forecaster.run_pool_aggregate(_pool_request("[store-err] Will the step be taken?"))
+        assert (first.settled, second.settled) == (True, True), "errored verdicts fail open, as before"
+        assert len(calls) == 2, "…but nothing was remembered, so the next recompute asks again"
+
+    async def test_majority_of_three_decides_and_is_remembered(self, monkeypatch):
+        monkeypatch.setattr(api_settings, "settlement_verifier_votes", 3)
+        calls = self._stub_verify(monkeypatch, [
+            Verdict(settles=False, reason="announced, not carried out"),
+            Verdict(settles=False, reason="announced, not carried out"),
+            Verdict(settles=True, reason="the minority sample"),
+        ])
+        first = await forecaster.run_pool_aggregate(_pool_request("[store-kofn] Will the step be taken?"))
+        second = await forecaster.run_pool_aggregate(_pool_request("[store-kofn] Will the step be taken?"))
+        assert (first.settled, second.settled) == (False, False), "2-of-3 vetoes win over the outlier"
+        assert len(calls) == 3, "three first-roll samples, then a hit — never four"
+
+    async def test_a_roll_degraded_by_errors_is_not_remembered(self, monkeypatch):
+        """One timeout inside a 3-sample roll: the surviving majority still
+        decides THIS recompute, but a degraded decision procedure must not
+        become permanent — the next recompute rolls all three again."""
+        monkeypatch.setattr(api_settings, "settlement_verifier_votes", 3)
+        calls = self._stub_verify(monkeypatch, [
+            Verdict(settles=True, reason="verifier call failed", errored=True),
+            Verdict(settles=False, reason="announced, not carried out"),
+            Verdict(settles=False, reason="announced, not carried out"),
+        ])
+        first = await forecaster.run_pool_aggregate(_pool_request("[store-degraded] Will the step be taken?"))
+        assert first.settled is False, "the two decided samples still veto this recompute"
+        assert len(calls) == 3
+        second = await forecaster.run_pool_aggregate(_pool_request("[store-degraded] Will the step be taken?"))
+        assert second.settled is False
+        assert len(calls) == 6, "nothing was remembered — the decision is re-taken in full"
+
+
 class TestShippedDefaults:
     """The flag defaults ARE the safety contract — pin them explicitly.
 
@@ -316,3 +463,17 @@ class TestShippedDefaults:
         """
         from forecast_api.config import ApiSettings
         assert ApiSettings.model_fields["settlement_verifier_enforce"].default is True
+
+    def test_verdict_store_ships_enabled(self):
+        """retro#532: without the store, an unchanged vote-set is re-rolled on
+        every recompute against a one-way latch — a ratchet that latches any
+        question on its first lucky YES. Off is the legacy behaviour, and a
+        deliberate rollback, not a tidy-up."""
+        from forecast_api.config import ApiSettings
+        assert ApiSettings.model_fields["settlement_verdict_cache_enabled"].default is True
+
+    def test_first_decisions_ship_with_majority_sampling(self):
+        from forecast_api.config import ApiSettings
+        default = ApiSettings.model_fields["settlement_verifier_votes"].default
+        assert default == 3
+        assert default % 2 == 1, "an even sample count can tie, and a tie decides nothing"

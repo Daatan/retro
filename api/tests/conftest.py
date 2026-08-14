@@ -24,3 +24,12 @@ os.environ.setdefault("CACHE_DIR", tempfile.mkdtemp(prefix="oracle-forecast-cach
 # assertions still hold — but each attempt costs a real timeout). Tests that
 # exercise the gate turn it on explicitly.
 os.environ.setdefault("SETTLEMENT_VERIFIER_ENABLED", "false")
+
+# The verdict store (retro#532) also ships enabled, and is also OFF under test
+# by default, for two reasons of its own: suites assert on verify-call counts,
+# which a cross-test cache hit would silently satisfy; and the default path
+# lives under data_dir, which does not exist on a dev box. Cache tests turn it
+# on explicitly against a tmp_path store. Single-shot sampling for the same
+# call-count reason; majority tests raise it explicitly.
+os.environ.setdefault("SETTLEMENT_VERDICT_CACHE_ENABLED", "false")
+os.environ.setdefault("SETTLEMENT_VERIFIER_VOTES", "1")

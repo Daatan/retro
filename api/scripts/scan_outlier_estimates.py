@@ -145,14 +145,42 @@ def load_records(path: Path) -> list[dict]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
+#: What "today's rules" is made of. `outlier_scan.py` is excluded on purpose: it
+#: is read by nothing in the estimator, so a branch that only adds the scanner
+#: still computes exactly the numbers prod computes.
+ESTIMATOR_PATHS = (
+    "api/src/forecast_api",
+    "pipeline/src/tm",
+    ":(exclude)api/src/forecast_api/outlier_scan.py",
+)
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _git(*args: str) -> str:
+    return subprocess.run(
+        ["git", *args], capture_output=True, text=True, check=True, cwd=str(REPO_ROOT)
+    ).stdout.strip()
+
+
 def git_head() -> str:
     try:
-        return subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True,
-            cwd=str(Path(__file__).resolve().parent),
-        ).stdout.strip()
+        return _git("rev-parse", "HEAD")
     except Exception:  # noqa: BLE001 — provenance is best-effort, not a gate
         return "unknown"
+
+
+def estimator_drift_vs(sha: str) -> list[str]:
+    """Estimator files that differ between the deployed commit and local HEAD.
+
+    Deliberately NOT a HEAD-vs-deployed sha comparison. Those shas never match
+    on a feature branch — including the branch that adds this script — so a
+    literal equality check would make the tool unrunnable everywhere and get
+    switched off, which is the worst outcome for a gate. What actually has to
+    hold is narrower and checkable: the code that decides the numbers must be
+    byte-identical to what is serving. Raises if git cannot answer, because an
+    unanswerable gate must fail closed.
+    """
+    return [f for f in _git("diff", "--name-only", sha, "HEAD", "--", *ESTIMATOR_PATHS).splitlines() if f]
 
 
 def _fmt(v: float) -> str:
@@ -192,14 +220,20 @@ def print_top(rows: list[ScanRow], k: int) -> None:
 
 async def run_score(args: argparse.Namespace) -> int:
     local_head = git_head()
-    if args.deployed_commit and not local_head.startswith(args.deployed_commit[:12]):
-        print(
-            f"ABORT: deployed commit {args.deployed_commit[:12]} != local HEAD "
-            f"{local_head[:12]}. An in-process recompute is only 'today's rules' "
-            "while the two match; re-run after rebasing onto the deployed commit.",
-            file=sys.stderr,
-        )
-        return 2
+    if args.deployed_commit:
+        try:
+            drift = estimator_drift_vs(args.deployed_commit)
+        except Exception as exc:  # noqa: BLE001 — an unanswerable gate fails closed
+            print(f"ABORT: could not compare against {args.deployed_commit[:12]}: {exc}", file=sys.stderr)
+            return 2
+        if drift:
+            print(
+                f"ABORT: estimator code differs from deployed {args.deployed_commit[:12]}:\n  "
+                + "\n  ".join(drift)
+                + "\nAn in-process recompute is only 'today's rules' while these match.",
+                file=sys.stderr,
+            )
+            return 2
 
     from forecast_api.forecaster import run_pool_aggregate
 

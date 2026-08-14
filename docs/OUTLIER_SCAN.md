@@ -79,6 +79,14 @@ This is only legitimate while **local code equals deployed code** — otherwise
 "today's rules" describes a system nobody is running. `--deployed-commit` makes
 that a gate that aborts, not a warning.
 
+The gate compares **estimator files**, not commit shas: `git diff <deployed>
+HEAD -- api/src/forecast_api pipeline/src/tm`, excluding `outlier_scan.py`
+itself. A literal sha equality never holds on a feature branch — including the
+branch that added this script — so it would make the tool unrunnable everywhere
+and get switched off, which is the worst outcome for a gate. What must actually
+hold is narrower and checkable: the code that decides the numbers is byte-
+identical to what is serving. If git cannot answer, the gate fails closed.
+
 ## The universe: the frozen roster
 
 Every estimate is scored against `context_snapshots.oracle_snapshot.sources[]`

@@ -324,6 +324,28 @@ LLM outage cannot silently change published numbers. Because of that, a totally 
 vetoes nothing"; the script now exits non-zero and says so rather than letting the absence of a
 result be quoted as one.
 
+**Decided once, remembered (retro#532).** The verdict is an LLM judgment, and it is not
+idempotent even at `temperature=0`: of the 13 questions the gate had seen more than once by
+2026-08-14, **6 returned both verdicts on an unchanged vote-set** (the US–Saudi sequence: four
+NOs at an unchanged 2-vote set, then a YES ninety minutes later — the YES is what published
+97%). Combined with daatan's one-way `settled` latch, re-rolling per recompute was a ratchet:
+a question the gate vetoes 31 times out of 32 still pins permanently on its one lucky roll.
+Since retro#532 the gate therefore asks once per *input*, not once per recompute. A first
+decision samples the model `settlement_verifier_votes` times (default 3, keep it odd) and takes
+the majority; the result is stored (`settlement_verdict_store.py` — diskcache under `data_dir`,
+cross-worker, survives deploys) keyed on the **built prompt** (question, direction, votes,
+prefix text — so editing the prompt invalidates naturally) plus model, sample count and the
+settlement-config fingerprint. Both directions are sticky: a YES and a NO are equally durable
+until the vote-set, config, model or prompt changes — determinism is the property being bought,
+and a veto that could be out-rolled by recomputing until it flips would be no latch at all.
+Never stored: **errored** verdicts (fail-open must stay transient — caching one would turn a
+timeout into a permanent pin-keeper) and **undecided rolls** (a sample errored or the decided
+samples tied; the roll stays fail-open for that recompute and is re-taken in full next time).
+Kill switch `SETTLEMENT_VERDICT_CACHE_ENABLED=false` restores the legacy roll-every-time
+behaviour without a deploy; deleting the store directory on the box is the manual invalidation
+lever. The `event=settlement_verifier` log line carries `cached=`, `samples=` and `agree=` so a
+hit, a fresh majority roll and a degraded roll are all distinguishable in the log.
+
 **Coverage caveat.** The gate needs the claim text and per-claim `claims_detail`. On `/forecast`
 it has both (`question` is required; `claims_detail` comes from the in-process extraction), and
 that is the path that publishes pins. On `/pool/aggregate` both fields are optional and daatan
@@ -389,7 +411,7 @@ separately: one source, two computations, free to drift.
 | `evidence_mass = Σ weight` | thin-evidence CI widening (floor 0.5, inflation 0.45) |
 | `n_eff`, `age_adjusted_mass` (retro#458 Phase 2, reporting-only) | `n_eff` is Kish's `effective_sample_size(weight)` — the *exact* call the CI floor's `floor_n` divisor already uses, computed once and reused rather than twice. `age_adjusted_mass` is `evidence_mass` recomputed with `rweight` forced to 1.0 (`credibility × avg_evidence_weight × relevance_weight(relevance)`, no recency term) — "how much would this pool weigh if nothing had aged," always ≥ `evidence_mass`. Both are exposed on `ForecastResponse`/`PoolAggregateResponse` alongside `evidence_mass` (previously computed internally but never returned to callers); **neither feeds back into `mean`/`std`/`ci_low`/`ci_high`** — visibility only. Still populated on an abstained/off-topic result, mirroring `evidence_mass`/`thin_evidence`. |
 | `relevance_mass = Σ relevance²` | off-topic abstention (floor 0.05). **Deliberately still the raw square, not `relevance_weight`** (retro#394): this asks a different question — *is the whole set off-topic* — and its 0.05 floor was tuned against Σ`relevance²`. Routing it through the band table would silently retune the floor the moment those weights are changed. If the band weights are ever retuned, revisit this floor in the same commit. |
-| `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — the count is over **independent clusters**, not rows, whenever a cluster assignment exists (retro#372: two syndicated copies of one report are one observation; rows without claim text stay singletons, so a missing claim layer never costs a vote; matrix case C19). **Revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at (scheduled), claim_deadline]` and ≤ its article's date; a non-occurrence vote needs a closed window (dated anchors at most `settlement_post_deadline_grace_days` past it, or an undated vote from an article published within that grace — else `stale_undated_foreclosure`) or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Count alone isn't enough either: `settlement_quality_floor` (default 0 = off) additionally requires the winning direction's combined per-source weight to clear a bar, else the pin is suppressed (`settlement_quality_floor`). Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
+| `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — the count is over **independent clusters**, not rows, whenever a cluster assignment exists (retro#372: two syndicated copies of one report are one observation; rows without claim text stay singletons, so a missing claim layer never costs a vote; matrix case C19). **Revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at (scheduled), claim_deadline]` and ≤ its article's date; a non-occurrence vote needs a closed window (dated anchors at most `settlement_post_deadline_grace_days` past it, or an undated vote from an article published within that grace — else `stale_undated_foreclosure`) or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Count alone isn't enough either: `settlement_quality_floor` (**0.20** since 2026-08-02, retro#279/#372 — calibrated against every pin production had published; 0 disables) additionally requires the winning direction's combined per-source weight to clear a bar, else the pin is suppressed (`settlement_quality_floor`). Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
 | `cluster_ids → weight × k^-exponent` | correlated-evidence discount (retro#355). Pool rows echoing one development are grouped by shingle-Jaccard over their `claims_detail` text (`clustering.py`), and each member of a cluster of size `k` is scaled by `k^-exponent`, so the cluster carries `k^(1-exponent)` rows' worth instead of `k`. **`cluster_downweight_exponent=0.0` ships it inert** — the identity — so nothing has moved. Applied FIRST, before `evidence_mass`, so the decisiveness floor is judged on independent mass rather than on echo. `relevance_mass` is deliberately NOT discounted (same reasoning as the band table above). |
 | `insufficient_data, reason, placeholder, articles_used/found` | abstention encoding |
 

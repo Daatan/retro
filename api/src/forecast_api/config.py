@@ -491,6 +491,29 @@ class ApiSettings(BaseSettings):
     # the adjacent-event A/B (see docs/ORACLE_VARIABLES.md). Prod's oracle-api
     # drop-in overrides extractor_model to Claude Haiku 4.5, so this follows it.
     settlement_verifier_model: Optional[str] = None
+    # retro#532 — decide each verdict ONCE, then remember it. The gate's
+    # verdict is not idempotent even at temperature=0 (6 of the 13 questions
+    # it ever saw twice returned both verdicts on an unchanged vote-set), and
+    # daatan's `settled` latch is one-way, so re-rolling on every recompute is
+    # a ratchet: a question the gate mostly vetoes still pins permanently on
+    # its first lucky YES. Three knobs:
+    #   - `votes`: samples per FIRST decision, majority wins (variance
+    #     reduction exactly where it is cheap — once per vote-set, not per
+    #     recompute). Keep it odd; a tie or an errored sample leaves the roll
+    #     undecided (fail-open for this recompute, nothing cached). 1 =
+    #     single-shot, the pre-#532 behaviour.
+    #   - `cache_enabled`: the verdict store (settlement_verdict_store.py).
+    #     Keyed on the built prompt + model + sample count + the settlement
+    #     config fingerprint; BOTH verdict directions are sticky until the
+    #     vote-set, config, model or prompt changes. Kill switch, no deploy —
+    #     off restores the legacy roll-every-time behaviour.
+    #   - `cache_path`: a diskcache DIRECTORY (not a file), default under
+    #     data_dir so verdicts survive reloads and deploys like the pin
+    #     ledger does. Deleting the directory on the box is the manual
+    #     invalidation lever.
+    settlement_verifier_votes: int = 3
+    settlement_verdict_cache_enabled: bool = True
+    settlement_verdict_cache_path: Path = Path("")  # empty = data_dir/settlement_verdict_cache
 
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.
@@ -667,6 +690,12 @@ class ApiSettings(BaseSettings):
         if self.settlement_pin_ledger_path != Path(""):
             return self.settlement_pin_ledger_path
         return self.data_dir / "settlement_pin_ledger.jsonl"
+
+    @property
+    def resolved_settlement_verdict_cache_path(self) -> Path:
+        if self.settlement_verdict_cache_path != Path(""):
+            return self.settlement_verdict_cache_path
+        return self.data_dir / "settlement_verdict_cache"
 
 
 settings = ApiSettings()

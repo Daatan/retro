@@ -83,7 +83,8 @@ from .models import (
     TokenUsage,
 )
 from .config import settings
-from .settlement_verifier import SettlementVote, verify_settlement
+from .settlement_verdict_store import get_verdict, put_verdict, verdict_key
+from .settlement_verifier import SettlementVote, Verdict, build_prompt, verify_settlement
 
 logger = logging.getLogger(__name__)
 
@@ -522,6 +523,21 @@ def _settlement_votes(
     ]
 
 
+def _settlement_config_fingerprint() -> str:
+    """The settlement-relevant config, flattened into the verdict-store key
+    (retro#532): a cached verdict must never outlive a config change that
+    could alter what the gate is judging. The model, sample count and the
+    prompt text itself are keyed separately (``verdict_key``); enforce is
+    deliberately absent — it decides what a verdict DOES, not what it is."""
+    s = settings
+    return "|".join(str(v) for v in (
+        s.settlement_min_sources, s.settlement_stance,
+        s.settlement_min_claim_stance, s.settlement_min_claim_certainty,
+        s.settlement_revalidate, s.settlement_post_deadline_grace_days,
+        s.settlement_quality_floor,
+    ))
+
+
 async def _apply_settlement_match_gate(
     agg,
     *,
@@ -536,6 +552,17 @@ async def _apply_settlement_match_gate(
     ``settlement_verifier_enforce`` is set, which it has been since 2026-08-03
     (see ``settlement_verifier`` for the evidence, and for why the check is
     semantic rather than a field comparison).
+
+    Asked ONCE per input, not once per recompute (retro#532): the verdict is
+    an LLM judgment that returns both answers on an unchanged vote-set often
+    enough that re-rolling it against daatan's one-way ``settled`` latch is a
+    ratchet — any question the gate mostly vetoes still pins permanently on
+    its first lucky YES. A first decision samples
+    ``settlement_verifier_votes`` times and takes the majority; the result is
+    remembered (``settlement_verdict_store``) and every later recompute over
+    the same prompt/model/config reuses it, in both directions. Errored and
+    undecided rolls stay fail-open for the current recompute and are never
+    remembered.
 
     Enforcement re-runs the *same* ``aggregate_pool`` with the vetoed votes'
     ``settled`` flags cleared, rather than editing the pinned result in place.
@@ -559,18 +586,66 @@ async def _apply_settlement_match_gate(
     # The direction matters as much as the match: facts that decide the question
     # the OTHER way are not proof of the answer about to be published (the
     # France-World-Cup pin, found by replaying this gate over past pins).
-    verdict = await verify_settlement(
-        question, votes,
-        model=settings.settlement_verifier_model or _pipeline_settings.extractor_model,
-        timeout_s=settings.settlement_verifier_timeout_seconds,
-        answer="YES" if agg.mean >= 0 else "NO",
-    )
+    model = settings.settlement_verifier_model or _pipeline_settings.extractor_model
+    answer = "YES" if agg.mean >= 0 else "NO"
+    samples = max(1, settings.settlement_verifier_votes)
+
+    verdict: Optional[Verdict] = None
+    key = store_path = None
+    rolled = agree = 0
+    if settings.settlement_verdict_cache_enabled:
+        store_path = settings.resolved_settlement_verdict_cache_path
+        key = verdict_key(
+            build_prompt(question, votes, answer=answer),
+            model=model, samples=samples,
+            config_fingerprint=_settlement_config_fingerprint(),
+        )
+        cached = await get_verdict(store_path, key)
+        if cached is not None:
+            verdict = Verdict(
+                settles=bool(cached.get("settles")),
+                reason=str(cached.get("reason") or ""),
+            )
+    if verdict is None:
+        results = await asyncio.gather(*(
+            verify_settlement(
+                question, votes, model=model,
+                timeout_s=settings.settlement_verifier_timeout_seconds,
+                answer=answer,
+            )
+            for _ in range(samples)
+        ))
+        rolled = len(results)
+        decided = [r for r in results if not r.errored]
+        yes = [r for r in decided if r.settles]
+        no = [r for r in decided if not r.settles]
+        if not decided:
+            verdict = results[0]  # every sample errored — fail-open, nothing remembered
+        elif len(yes) == len(no):
+            # Even split (only reachable when errored samples thinned an odd
+            # roll): genuinely undecided. Fail-open like an error — a tie must
+            # not veto — and remember nothing, so the next recompute re-rolls.
+            verdict = Verdict(settles=True, reason="verifier samples split evenly", errored=True)
+        else:
+            winner = yes if len(yes) > len(no) else no
+            agree = len(winner)
+            verdict = winner[0]
+            # Remember only completed decisions: all samples answered and a
+            # strict majority exists. A roll degraded by timeouts is a worse
+            # decision procedure than the one configured, and caching it would
+            # make its verdict permanent.
+            if key is not None and len(decided) == rolled:
+                await put_verdict(
+                    store_path, key,
+                    settles=verdict.settles, reason=verdict.reason,
+                    model=model, agree=agree, samples=rolled,
+                )
     logger.warning(
         "event=settlement_verifier settles=%s errored=%s enforced=%s votes=%d "
-        "question=%s reason=%r",
+        "cached=%s samples=%d agree=%d question=%s reason=%r",
         verdict.settles, verdict.errored,
         settings.settlement_verifier_enforce and not verdict.settles and not verdict.errored,
-        len(votes), _question_hash(question), verdict.reason[:200],
+        len(votes), rolled == 0, rolled, agree, _question_hash(question), verdict.reason[:200],
     )
     if verdict.settles or verdict.errored or not settings.settlement_verifier_enforce:
         return agg

@@ -896,6 +896,24 @@ async def _process_article_bounded(
         return None
 
 
+def _may_supply_verdict(client: Optional[ApiKeyClient]) -> bool:
+    """True when ``client`` is allowlisted to hand the Oracle its own gatekeeper verdict
+    (retro#536).
+
+    ``reuse_supplied_relevance`` alone only said "reuse is on"; it never asked WHOSE verdict
+    was being reused, so any holder of any valid API key could skip claim-aware judging for
+    its own requests just by setting ``relevance``/``is_prediction`` on the request body.
+    The allowlist is the missing half: in practice only the daatan backend (the primary key,
+    ``"default"``) threads news-indexer's POST /relevance verdict, and it is the only caller
+    that runs a real upstream gatekeeper pass before pushing.
+
+    ``client is None`` = an in-process caller (the MCP lane, tests), which never carries an
+    API key; it is treated as the primary client, exactly as the per-key cap does.
+    """
+    name = client.name if client else "default"
+    return name in settings.relevance_reuse_allowed_client_set
+
+
 def _supplied_verdict(result: SearchResult) -> tuple[bool, float] | None:
     """The caller's gatekeeper verdict carried on the SearchResult (news-indexer's POST
     /relevance result, threaded through daatan), or None when absent/incomplete. Both
@@ -1273,6 +1291,25 @@ async def run_forecast(
                 client.name, len(req.articles), cap,
             )
             req.articles = req.articles[:cap]
+    # Caller allowlist for supplied gatekeeper verdicts (retro#536). `ArticleInput.relevance`
+    # / `.is_prediction` let a caller hand the Oracle a verdict and skip the real judge
+    # entirely; strip them here, at the trust boundary where the request meets the caller's
+    # identity, so `_supplied_verdict` downstream can only ever see a verdict we accepted.
+    # Fail-safe: a dropped verdict costs one gatekeeper call and lands on the pre-existing
+    # judge-it path — never a 4xx, so an un-allowlisted caller degrades instead of breaking.
+    if req.articles and not _may_supply_verdict(client):
+        supplied = sum(
+            1 for a in req.articles if a.relevance is not None or a.is_prediction is not None
+        )
+        if supplied:
+            logger.warning(
+                "event=supplied_verdict_dropped client=%s articles=%d reason=client_not_allowlisted",
+                client.name if client else "default", supplied,
+            )
+            req.articles = [
+                a.model_copy(update={"relevance": None, "is_prediction": None})
+                for a in req.articles
+            ]
     total_start = time.perf_counter()
 
     # Step 0a: forecast cache lookup.

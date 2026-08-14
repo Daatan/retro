@@ -255,6 +255,18 @@ class ApiSettings(BaseSettings):
     # Oracle-discovered (SERP/GDELT) articles carry no verdict and are always judged.
     # Design: news-indexer docs/MATCHING_ARCHITECTURE.md §3.
     reuse_supplied_relevance: bool = True
+    # Caller allowlist for the reuse path above (retro#536). Comma-separated ApiKeyClient
+    # names (auth.py) permitted to hand the Oracle a gatekeeper verdict. The flag above
+    # says "reuse is on"; this says WHOSE verdict may be reused — without it any holder of
+    # any valid API key could skip claim-aware judging for its own requests just by
+    # setting relevance/is_prediction on the request body. Defaults to the primary key
+    # ("default") — the daatan backend that threads news-indexer's POST /relevance result,
+    # the only caller that legitimately runs an upstream gatekeeper pass — so production
+    # behaviour is unchanged while named/third-party keys can no longer self-certify.
+    # Fail-safe, not fail-closed: a non-allowlisted caller's verdict is dropped and the
+    # article is judged normally (today's behaviour for callers that supply nothing), never
+    # a 4xx. Empty string = nobody may reuse, equivalent to REUSE_SUPPLIED_RELEVANCE=false.
+    relevance_reuse_allowed_clients: str = "default"
     # ── Evidence-class weighting (S2 cutover, retro docs/ORACLE_VARIABLES.md §5) ─
     # Per-claim weight component for the cross-article `weight` term, keyed by
     # PredictionExtraction.evidence_class. Replaces the old certainty-as-weight
@@ -585,6 +597,10 @@ class ApiSettings(BaseSettings):
     @property
     def cognito_allowed_client_id_set(self) -> set[str]:
         return {c.strip() for c in self.cognito_allowed_client_ids.split(",") if c.strip()}
+
+    @property
+    def relevance_reuse_allowed_client_set(self) -> set[str]:
+        return {c.strip() for c in self.relevance_reuse_allowed_clients.split(",") if c.strip()}
 
     @property
     def degraded_fetch_domain_set(self) -> set[str]:

@@ -58,6 +58,15 @@ async def test_interested_party_stance_and_certainty_are_clamped():
     assert out.predictions[0].certainty == pytest.approx(0.5)
 
 
+async def test_decider_intent_stance_is_clamped():
+    preds = [PredictionExtraction(
+        quote="q", claim="c", stance=0.9, certainty=0.8,
+        fact_signal=0.25, is_occurrence=False, facet="announcement", verified=True,
+    )]
+    out = await _run_with_predictions(preds)
+    assert out.predictions[0].stance == pytest.approx(0.3)
+
+
 async def test_unanchored_cited_probability_is_demoted():
     preds = [PredictionExtraction(
         quote="a poll-aggregator model gives it 80%", claim="c",

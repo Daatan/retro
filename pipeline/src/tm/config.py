@@ -89,6 +89,23 @@ class Settings(BaseSettings):
     # that it did.
     interested_party_certainty_cap: float = 0.5
 
+    # ── decider-intent stance cap (retro#518, F20 sibling) ───────────────────
+    # A decider's own stated future intent ("we will act" / "we will not") is a
+    # capped precursor in the fact lane — enforce_precursor_cap clamps its
+    # fact_signal to ±0.3 — but voted at FULL magnitude in the stance lane, the
+    # lane that prices forecasts: F20 above keys on `verified=false`, and a
+    # decider's on-record statement is usually verified true (it demonstrably
+    # happened) or unjudged. Prod audit 2026-08-15: of 119 pool rows with
+    # `is_occurrence=false` and facet announcement/denial, 71 (60%) voted above
+    # 0.3, max |0.85| — every one against a fact lane already capped at ±0.3
+    # (the Netanyahu/Le Monde asymmetry, elections#141). Value deliberately
+    # equals fact_signal_precursor_cap (decision on retro#518, 2026-08-15): the
+    # audit found violations of the stance prompt's own expectations/threats
+    # contract, not evidence for a stricter number. A SEPARATE constant from
+    # decider_statement_announcement/denial_cap above — those are FACT-lane
+    # knobs reserved for #486's facet refit; this is stance-lane policy.
+    decider_intent_stance_cap: float = 0.3
+
     # ── cited_probability provenance (retro#369, lane-soundness F4) ──────────
     # `cited_probability` carries the highest class weight (4.0) and forces
     # certainty, with no check on WHO produced the number: one sentence of "a

@@ -12,6 +12,7 @@ from .gatekeeper import check_is_prediction
 from .extractor import (
     extract_predictions,
     enforce_anchor_provenance,
+    enforce_decider_intent_stance_cap,
     enforce_interested_party_certainty,
     enforce_interested_party_stance_cap,
     enforce_precursor_cap,
@@ -100,6 +101,9 @@ async def run_article(article: ArticleInput) -> PipelineResult:
             extraction.predictions,
         )
         extraction.predictions = enforce_interested_party_certainty(
+            extraction.predictions,
+        )
+        extraction.predictions = enforce_decider_intent_stance_cap(
             extraction.predictions,
         )
         # Deterministic winner-entity check (retro#401): does the dominant

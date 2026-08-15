@@ -4658,8 +4658,8 @@
     "E04:toi": {
       "event_id": "E04",
       "source_id": "toi",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "E04:walla": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-15T22:25:45.511849"
+  "last_updated": "2026-08-15T22:26:13.731221"
 }

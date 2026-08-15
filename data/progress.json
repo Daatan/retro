@@ -12428,7 +12428,7 @@
     "I01:n12": {
       "event_id": "I01",
       "source_id": "n12",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-15T22:30:40.169336"
+  "last_updated": "2026-08-15T22:39:23.268012"
 }

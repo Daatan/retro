@@ -30,6 +30,7 @@ from tm.extractor import (
     extract_predictions,
     enforce_anchor_provenance,
     enforce_deadline_arithmetic,
+    enforce_decider_intent_stance_cap,
     enforce_interested_party_certainty,
     enforce_interested_party_stance_cap,
     enforce_precursor_cap,
@@ -1163,6 +1164,13 @@ async def _process_article(
         # location and certainty is its weight — different consequences, and the
         # two must move R8 cases separately attributably.
         extraction.predictions = enforce_interested_party_certainty(
+            extraction.predictions,
+        )
+        # A decider's own stated future intent is a capped precursor in the fact
+        # lane but voted at full magnitude here — the stance lane had no guardrail
+        # for it, since the interested-party cap above keys on verified=false and
+        # a decider's on-record statement is usually verified=true (retro#518).
+        extraction.predictions = enforce_decider_intent_stance_cap(
             extraction.predictions,
         )
         # Deterministic winner-entity check (retro#401): for a two-named-actor

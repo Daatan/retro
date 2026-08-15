@@ -1313,6 +1313,69 @@ def enforce_interested_party_certainty(
     return predictions
 
 
+def enforce_decider_intent_stance_cap(
+    predictions: list[PredictionExtraction],
+) -> list[PredictionExtraction]:
+    """A decider's stated future intent may not vote at full stance magnitude.
+
+    The fact lane already treats a decider's on-record commitment as a capped
+    precursor: the FACET rule in the prompt marks "a decider statement of intent
+    or commitment" as an ``announcement`` and "a denial, refusal, or ruling-out"
+    as a ``denial``, and :func:`enforce_precursor_cap` clamps its ``fact_signal``
+    to ±0.3. The stance lane — the lane a vote's location actually comes from —
+    had no guardrail for the same rows: :func:`enforce_interested_party_stance_cap`
+    keys on ``verified=false``, and a decider's own statement is usually
+    ``verified=true`` (the statement demonstrably happened) or unjudged. So
+    "I intend to win" was ±0.3 evidence in one lane and up to ±0.85 in the other
+    (retro#518, surfaced by the Netanyahu/Le Monde case, elections#141).
+
+    Prod audit (2026-08-15): 119 pool rows carry ``is_occurrence=false`` with
+    facet ``announcement``/``denial``; 71 of them — 60% — vote above the cap,
+    reaching |0.85|, and every over-cap row sits against a ``fact_signal``
+    already clamped to ±0.3. The population is dominated by exactly the contract
+    shape: ministers' "we will not withdraw" statements at 0.69–0.83,
+    "Netanyahu stated there will be no Palestinian state" at 0.70.
+
+    Keyed on the extractor's own markers (``is_occurrence`` + ``facet``), never
+    an inferred signature — the same lesson as F20 (the high-|stance|/
+    low-certainty key was tested and defeated, retro#368). Known collateral,
+    measured and accepted: the model sometimes labels polls and measured
+    indicators ``announcement``/``denial`` where the facet contract says
+    ``neither`` (~4 of the 14 worst over-cap rows in the audit); the fix for
+    that is facet labeling in the prompt, not a narrower key here.
+
+    Forward-only by decision: ``facet`` exists on 1.9% of stored pool rows
+    (shipped 2026-08-10, never backfilled), so this covers new extractions and
+    legacy rows age out — the ``verified``-marker precedent.
+
+    Only stance moves, sign preserved — a decider committing to act is genuine
+    evidence about the event; how far their say-so may push the estimate is
+    policy (``decider_intent_stance_cap``, config.py — deliberately equal to
+    ``fact_signal_precursor_cap``, and a separate constant from the fact-lane
+    ``decider_statement_*_cap`` knobs reserved for retro#486). Fail-open in the
+    same asymmetry as the siblings: ``is_occurrence`` of None (unjudged) or True
+    (the fact IS the event), or a facet of None/``neither``, leaves the claim
+    exactly as the model returned it.
+    """
+    cap = settings.decider_intent_stance_cap
+    for p in predictions:
+        if p.is_occurrence is not False:
+            continue
+        if p.facet not in ("announcement", "denial"):
+            continue
+        if abs(p.stance) <= cap:
+            continue
+        clamped = cap if p.stance > 0 else -cap
+        logger.warning(
+            "event=decider_intent_stance_clamped stance=%+.2f -> %+.2f cap=%.2f "
+            "facet=%s verified=%s certainty=%.2f claim=%r",
+            p.stance, clamped, cap, p.facet, p.verified, p.certainty, p.claim[:120],
+        )
+        p.stance = clamped
+
+    return predictions
+
+
 def _names_allowlisted_source(text: str) -> Optional[str]:
     """The allowlisted source named in ``text``, or None. Word-boundary and
     case-insensitive; internal spaces match any run of whitespace so a name

@@ -12071,8 +12071,8 @@
     "H09:aljazeera": {
       "event_id": "H09",
       "source_id": "aljazeera",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "H09:axios": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-15T22:28:49.100319"
+  "last_updated": "2026-08-15T22:30:40.169336"
 }

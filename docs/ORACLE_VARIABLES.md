@@ -379,7 +379,14 @@ shape cost 644 judgments and 247 downstream Oracle runs. The guard sits inside
 `check_is_prediction`, so it covers `/forecast` and `POST /relevance` alike — the latter
 matters because news-indexer persists that verdict and it can be reused in place of a
 fresh judgment (`reuse_supplied_relevance`), so a confabulated 1.0 does not stay
-contained. Bare domains (`ynet.co.il`) are deliberately **not** stripped: the pattern that
+contained. **Reuse is allowlisted by caller** (retro#536, 2026-08-15):
+`relevance_reuse_allowed_clients` (default `"default"`, the primary `ORACLE_API_KEY` that
+the daatan backend uses) names the API-key clients whose supplied verdict may be reused.
+`reuse_supplied_relevance` only ever said *reuse is on*, never *whose verdict* — so any
+holder of any valid key could skip claim-aware judging for its own requests by setting
+`relevance`/`is_prediction` on the request body. A non-allowlisted caller's verdict is
+dropped at the API boundary (`event=supplied_verdict_dropped`) and the article is judged
+normally: fail-safe, never a 4xx. Bare domains (`ynet.co.il`) are deliberately **not** stripped: the pattern that
 catches them also eats ordinary abbreviations, and over-rejection here silently loses a
 curated journalist's scoop, which is the failure news-indexer's rescue path exists to undo.
 

@@ -1872,8 +1872,8 @@
     "A01:israel_hayom": {
       "event_id": "A01",
       "source_id": "israel_hayom",
-      "status": "failed",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A01:jpost": {
@@ -1900,8 +1900,8 @@
     "A01:n12": {
       "event_id": "A01",
       "source_id": "n12",
-      "status": "failed",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "A01:reuters": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-15T22:40:26.122116"
+  "last_updated": "2026-08-15T22:48:32.647824"
 }

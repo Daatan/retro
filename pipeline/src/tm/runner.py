@@ -5,6 +5,7 @@ Pipeline runner: orchestrates gatekeeper → extraction for one article.
 import asyncio
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import urlparse
 
 from rich.console import Console
 
@@ -52,6 +53,15 @@ class PipelineResult:
 async def run_article(article: ArticleInput) -> PipelineResult:
     update_cell(article.event_id, article.source_id, CellStatus.in_progress)
 
+    # A t.me post is short-form (retro#297): same one-liner as forecaster.py's live path and
+    # news-indexer's rematch.py — duplicated on purpose rather than threading a flag through
+    # three repos. Without it the batch pipeline judged terse Telegram posts on the long-form
+    # prompts, whose ~200-word floor rejects (or confabulates on) exactly that class (retro#542).
+    # Forward-only: cached extractions keep their pre-fix results — see the issue's cache caveat.
+    short_form = (
+        urlparse(article.article_url or "").netloc.lower().removeprefix("www.") == "t.me"
+    )
+
     try:
         # Stage 1: Gatekeeper
         gate, _ = await check_is_prediction(
@@ -59,6 +69,7 @@ async def run_article(article: ArticleInput) -> PipelineResult:
             source_name=article.source_name,
             article_date=article.article_date,
             event_name=article.event_name,
+            short_form=short_form,
         )
 
         if not gate.is_prediction:
@@ -77,6 +88,7 @@ async def run_article(article: ArticleInput) -> PipelineResult:
             event_name=article.event_name,
             event_description=article.event_description,
             journalist=article.journalist or "unknown",
+            short_form=short_form,
         )
 
         # Same enforce_*/flag_* chain forecaster.py runs on the live Oracle path

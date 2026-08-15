@@ -13457,8 +13457,8 @@
     "D07:guardian": {
       "event_id": "D07",
       "source_id": "guardian",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 4,
       "error": null
     },
     "D07:haaretz": {
@@ -13520,7 +13520,7 @@
     "D07:walla": {
       "event_id": "D07",
       "source_id": "walla",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-15T23:05:49.929049"
+  "last_updated": "2026-08-15T23:11:15.595216"
 }

@@ -12827,7 +12827,7 @@
     "A20:n12": {
       "event_id": "A20",
       "source_id": "n12",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-15T23:23:56.355664"
+  "last_updated": "2026-08-15T23:33:24.541538"
 }

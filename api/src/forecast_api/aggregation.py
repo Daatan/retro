@@ -256,9 +256,11 @@ def settlement_vote_validity(
       vote asserts the underlying event HAPPENED): must carry a parseable
       ``settlement_event_date``; the date must not fall after ``claim_deadline``
       (an occurrence after the window contradicts an arrival claim rather than
-      settling it), must not precede ``claim_created_at`` on a ``scheduled``
-      claim (a dated fact about an EARLIER instance of the recurring event —
-      the 2021/2022-article class), and must not post-date the article that
+      settling it), must not precede ``claim_created_at`` — any archetype
+      since 2026-08-16; previously ``scheduled`` only (a dated fact from
+      before the claim existed: the 2021/2022-article class, and the
+      2024-election rows that pinned the survival-class Putin claim) — and
+      must not post-date the article that
       "reported" it (a schedule, not a fact — re-asserting the extraction
       guard on stored rows).
     - **Non-occurrence-direction** (arrival:−, survival:+ — the vote asserts
@@ -287,6 +289,11 @@ def settlement_vote_validity(
       for whatever slips through. An undated vote from an article published
       within grace of the deadline is unaffected — that is the ordinary,
       honest "window closed quietly" case.
+
+    Both directions share the creation-date lower bound
+    (``event_before_claim_window``): any DATED vote whose event precedes
+    ``claim_created_at`` is demoted, on every archetype (widened from
+    ``scheduled``-only after the 2026-08-16 audit — see the inline comment).
 
     Every individual check is fail-open on absent metadata (no deadline → no
     deadline comparison), but the date requirement itself is fail-closed: an
@@ -340,14 +347,28 @@ def settlement_vote_validity(
                 return "post_window_occurrence"
             # Within grace: the flipped late arrival — the occurrence itself
             # proves the event missed the window.
-    if claim_archetype == "scheduled":
-        # Both directions: a dated fact from before this claim existed belongs
-        # to an EARLIER instance of the scheduled event — it can neither settle
-        # nor foreclose this one (2021 "Bennett formed the government" rows
-        # were negative votes on 2026 claims).
-        created = _parse_date(claim_created_at)
-        if created is not None and event < created:
-            return "event_before_claim_window"
+    # Both directions, EVERY archetype: a dated fact from before this claim
+    # existed can neither settle nor foreclose it. Originally scoped to
+    # ``scheduled`` claims (2021 "Bennett formed the government" rows voting
+    # on 2026 claims), on the theory that a threshold may legitimately be
+    # crossed before its claim is created (models.py records that rationale
+    # as historical). The 2026-08-16 pool audit showed the un-scoped
+    # archetypes leak the identical failure: the survival-class
+    # "Putin not president" claim pinned at 57% by two articles about the
+    # 2024 election (events 2024-03-17/21), a 2022 maritime-deal story
+    # re-pinning the 2026 Lebanon-agreement claim at 97%, and a 2022
+    # swearing-in article voting on the Netanyahu-2026 claim. Ruling
+    # (2026-08-16): a claim created mid-window reads future-facing — a
+    # pre-creation crossing may inform the pooled mean (demoted rows still
+    # vote as ordinary evidence) but must not settle. Strict ``<`` at date
+    # granularity keeps creation-day events valid (the Brent $100 pin,
+    # event on its claim's creation day, survives). Fail-open when
+    # ``claim_created_at`` is absent or unparseable. The undated-foreclosure
+    # branches above return earlier and are deliberately out of scope — they
+    # carry no event date to bound.
+    created = _parse_date(claim_created_at)
+    if created is not None and event < created:
+        return "event_before_claim_window"
     if published is not None and event > published:
         return "event_after_article"
     return None

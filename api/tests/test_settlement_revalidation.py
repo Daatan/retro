@@ -78,12 +78,49 @@ class TestVoteValidity:
             "2026-05-19", "scheduled", today=TODAY,
         ) == "event_before_claim_window"
 
-    def test_threshold_claim_accepts_an_event_predating_its_creation(self):
-        # Bitcoin-$100k: the threshold crossed before the claim existed still
-        # settles a "by DATE" claim.
+    def test_threshold_claim_now_also_rejects_an_event_predating_its_creation(self):
+        # FLIPPED 2026-08-16 (was: Bitcoin-$100k, an early crossing settles a
+        # "by DATE" claim). Ruling: a claim created mid-window reads
+        # future-facing — the pre-creation crossing informs the mean but must
+        # not settle. The pin arrives when a post-creation article reasserts
+        # the fact.
         assert settlement_vote_validity(
             1.0, "2024-12-05", "2026-07-04", "arrival", "2026-12-31",
             "2026-02-13", "threshold", today=TODAY,
+        ) == "event_before_claim_window"
+
+    def test_survival_claim_rejects_a_pre_creation_settlement_vote(self):
+        # The Putin-not-president pin (2026-08-16 audit): a survival claim
+        # settled NEGATIVE (occurrence direction — the event "president
+        # again" happened) by articles about the 2024 election, events dated
+        # two years before the claim existed.
+        assert settlement_vote_validity(
+            -1.0, "2024-03-17", "2026-08-01", "survival", "2026-12-31",
+            "2026-06-01", "none", today="2026-08-16",
+        ) == "event_before_claim_window"
+
+    def test_unclassified_claim_rejects_a_pre_creation_event(self):
+        # The Lebanon re-pin (2026-08-16 audit): a 2022 maritime-deal story
+        # settling a 2026 claim that carries no archetype at all.
+        assert settlement_vote_validity(
+            1.0, "2022-10-27", "2022-10-27", "arrival", "2026-12-31",
+            "2026-05-01", None, today="2026-08-16",
+        ) == "event_before_claim_window"
+
+    def test_missing_created_at_fails_open_on_all_archetypes(self):
+        # No creation date → no lower bound, whatever the archetype.
+        for archetype in (None, "none", "threshold", "diffuse", "scheduled"):
+            assert settlement_vote_validity(
+                1.0, "2020-01-01", "2026-07-04", "arrival", "2026-12-31",
+                None, archetype, today=TODAY,
+            ) is None
+
+    def test_event_on_creation_day_is_not_demoted(self):
+        # The Brent-$100 shape: event on the claim's creation day. Strict <
+        # at date granularity — same-day settles.
+        assert settlement_vote_validity(
+            1.0, "2026-07-23", "2026-07-29", "arrival", "2026-12-31",
+            "2026-07-23T14:05:00Z", "threshold", today="2026-08-16",
         ) is None
 
     def test_scheduled_claim_also_rejects_a_pre_creation_foreclosure(self):
@@ -220,7 +257,9 @@ class TestWindowCase:
         assert agg.settled is False
         assert len(agg.settlement_demotions) == 2
 
-    def test_threshold_claim_counts_the_same_early_events(self):
+    def test_threshold_claim_now_demotes_the_same_early_events(self):
+        # FLIPPED 2026-08-16: the creation-date lower bound applies to every
+        # archetype, so the early crossings that used to pin now demote.
         agg = _pool(
             [1.0, 1.0],
             [True, True],
@@ -229,7 +268,8 @@ class TestWindowCase:
             claim_direction="arrival", claim_deadline="2099-12-31",
             claim_created_at="2026-02-13", claim_archetype="threshold",
         )
-        assert agg.settled is True
+        assert agg.settled is False
+        assert len(agg.settlement_demotions) == 2
 
 
 class TestKnessetFlipResidue:

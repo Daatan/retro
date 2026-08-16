@@ -125,11 +125,11 @@ class ForecastRequest(BaseModel):
     )
     claim_created_at: Optional[str] = Field(
         default=None,
-        description="When the caller's prediction was created (ISO date or timestamp). With claim_archetype='scheduled', a settlement event dated before it cannot settle the claim — it belongs to an earlier instance of the recurring event, not this one. Accepted now, enforced by settlement revalidation.",
+        description="When the caller's prediction was created (ISO date or timestamp). A settlement event dated before it cannot settle the claim, on every archetype (widened from scheduled-only after the 2026-08-16 audit) — the demoted row still votes as ordinary evidence. Fail-open when absent. Enforced by settlement revalidation.",
     )
     claim_archetype: Optional[Literal["scheduled", "diffuse", "threshold", "none"]] = Field(
         default=None,
-        description="Temporal archetype from the caller's claim classifier. 'scheduled' claims (an election, a match) bound settlement event dates to [claim_created_at, claim_deadline]; other archetypes bound only the deadline side (a threshold may legitimately have been crossed before the claim was created). Accepted now, enforced by settlement revalidation.",
+        description="Temporal archetype from the caller's claim classifier. All archetypes now bound settlement event dates to [claim_created_at, claim_deadline] (previously 'scheduled' bounded both sides while others bounded only the deadline, on the theory that a threshold may legitimately have been crossed before the claim was created — overridden 2026-08-16: a claim created mid-window reads future-facing, so a pre-creation crossing informs the mean but does not settle). Accepted now, enforced by settlement revalidation.",
     )
     prediction_id: Optional[str] = Field(
         default=None,

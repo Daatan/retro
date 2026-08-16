@@ -12827,8 +12827,8 @@
     "A20:n12": {
       "event_id": "A20",
       "source_id": "n12",
-      "status": "failed",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A20:nyt": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-16T01:07:20.855656"
+  "last_updated": "2026-08-16T01:12:48.180933"
 }

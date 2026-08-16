@@ -13520,8 +13520,8 @@
     "D07:walla": {
       "event_id": "D07",
       "source_id": "walla",
-      "status": "failed",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "D07:ynet": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-16T00:48:58.616235"
+  "last_updated": "2026-08-16T00:49:52.223864"
 }

@@ -11931,7 +11931,7 @@
     "H06:ynet": {
       "event_id": "H06",
       "source_id": "ynet",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-16T00:52:16.959818"
+  "last_updated": "2026-08-16T00:53:48.129371"
 }

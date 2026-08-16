@@ -12204,7 +12204,7 @@
     "H10:aljazeera": {
       "event_id": "H10",
       "source_id": "aljazeera",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12267,7 +12267,7 @@
     "H10:haaretz": {
       "event_id": "H10",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12302,14 +12302,14 @@
     "H10:nyt": {
       "event_id": "H10",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
     "H10:reuters": {
       "event_id": "H10",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-16T00:59:07.516671"
+  "last_updated": "2026-08-16T01:01:21.263379"
 }

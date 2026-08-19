@@ -374,6 +374,64 @@ def settlement_vote_validity(
     return None
 
 
+def evidence_window_outside(
+    n: int,
+    settlement_event_dates: Optional[Sequence[Optional[str]]],
+    published_dates: Optional[Sequence[Optional[str]]],
+    claim_created_at: Optional[str],
+    claim_deadline: Optional[str],
+    claim_archetype: Optional[str],
+    *,
+    lookback_days: int,
+) -> tuple:
+    """Which rows fall outside the claim's evidence window
+    ``[claim_created_at − lookback_days, claim_deadline]`` — as
+    ``((index, reason), …)``, empty when every row is inside.
+
+    Shadow instrumentation for retro#545 slice (iii), per the 2026-08-19
+    Gate-0 decision (Daatan/docs decisions.md): nothing here excludes or
+    demotes anything — the caller logs the result so the movement of
+    bounding the window can be measured before it is enforced (the F4/F20
+    pattern). The lookback keeps legitimate precursor/trend coverage that
+    makes a young forecast estimable; rows before it are the adjacent-event
+    class — an earlier, similar incident counted as evidence for the
+    forecasted one.
+
+    Scoped to non-``scheduled`` archetypes: the decision bounds the window
+    exactly where today's is ``(−∞, deadline]``, and ``scheduled`` claims
+    already consult ``claim_created_at`` in :func:`settlement_vote_validity`
+    under their own historical rationale (models.py records it).
+
+    A row's date is its ``settlement_event_date`` when parseable, else its
+    ``published_date``; a row with neither is skipped (fail-open on absent
+    metadata, matching every other check in this module — an unboundable row
+    is not evidence *against* the window). Reasons: ``before_window`` (date
+    precedes ``created − lookback``) and ``after_deadline`` (date past the
+    deadline — expected ≈0 in the shadow numbers if the upper edge is as
+    bound as believed; a non-zero count is itself a finding). Negative
+    ``lookback_days`` disables the check entirely (the config kill switch).
+    """
+    if lookback_days < 0 or claim_archetype == "scheduled":
+        return ()
+    created = _parse_date(claim_created_at)
+    if created is None:
+        return ()
+    deadline = _parse_date(claim_deadline)
+    window_start = created - timedelta(days=lookback_days)
+    outside: list[tuple[int, str]] = []
+    for i in range(n):
+        date = _parse_date(settlement_event_dates[i]) if settlement_event_dates else None
+        if date is None:
+            date = _parse_date(published_dates[i]) if published_dates else None
+        if date is None:
+            continue
+        if date < window_start:
+            outside.append((i, "before_window"))
+        elif deadline is not None and date > deadline:
+            outside.append((i, "after_deadline"))
+    return tuple(outside)
+
+
 def evidence_class_weight(
     evidence_class: Optional[str],
     certainty: float,
@@ -695,6 +753,12 @@ class PoolAggregateResult(NamedTuple):
     # validity rules (retro#388's match gate reads exactly these rows) —
     # aggregation itself neither logs nor judges them.
     settlement_vote_indices: tuple = ()
+    # Shadow instrumentation only (retro#545 slice iii): (source index, reason)
+    # per row dated outside the claim's evidence window — see
+    # evidence_window_outside(). Nothing in this module reads it back into the
+    # pooled estimate; callers log it, same contract as settlement_demotions.
+    # Empty when the check is disabled or nothing falls outside.
+    evidence_window_outside_rows: tuple = ()
 
 
 # Layer C's weight, per relevance band (retro#394).
@@ -1108,6 +1172,7 @@ def aggregate_pool(
     age_adjusted_weights: Optional[Sequence[float]] = None,
     source_ids: Optional[Sequence[str]] = None,
     max_source_share: float = 1.0,
+    evidence_window_lookback_days: int = -1,
 ) -> Optional[PoolAggregateResult]:
     """Pool a set of already-extracted, already-weighted per-source signals
     into a final estimate: the relevance off-topic safety net, logit
@@ -1147,6 +1212,16 @@ def aggregate_pool(
     """
     if not stances:
         return None
+
+    # Shadow-only (retro#545 slice iii): which rows sit outside the evidence
+    # window. Computed on every branch, like n_eff — a pool that abstains or
+    # pins still has a window worth measuring — and read back by nothing here.
+    # Disabled at this function's default (-1); Settings turns it on.
+    window_outside = evidence_window_outside(
+        len(stances), settlement_event_dates, published_dates,
+        claim_created_at, claim_deadline, claim_archetype,
+        lookback_days=evidence_window_lookback_days,
+    )
 
     # Correlated-evidence discount (retro#355), applied FIRST so that every
     # downstream consumer — evidence_mass, the decisiveness floor, pool_sources,
@@ -1292,6 +1367,7 @@ def aggregate_pool(
                 suppression_reason=None,
                 settlement_demotions=decision.demotions,
                 settlement_vote_indices=decision.vote_indices,
+                evidence_window_outside_rows=window_outside,
             )
         reason = (
             "all_articles_off_topic" if all_off_topic
@@ -1311,6 +1387,7 @@ def aggregate_pool(
             suppression_reason=decision.suppression_reason,
             settlement_demotions=decision.demotions,
             settlement_vote_indices=(),
+            evidence_window_outside_rows=window_outside,
         )
 
     n = len(stances)
@@ -1375,4 +1452,5 @@ def aggregate_pool(
         suppression_reason=decision.suppression_reason,
         settlement_demotions=decision.demotions,
         settlement_vote_indices=decision.vote_indices,
+        evidence_window_outside_rows=window_outside,
     )

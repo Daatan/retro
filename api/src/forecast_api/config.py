@@ -420,6 +420,17 @@ class ApiSettings(BaseSettings):
     # about the window, and ground truth there was YES). Undated expiry votes
     # are unaffected.
     settlement_post_deadline_grace_days: int = 14
+    # Evidence-window shadow instrumentation (retro#545 slice iii, Gate-0
+    # decision 2026-08-19, Daatan/docs decisions.md): rows dated outside
+    # ``[claim_created_at − this, claim_deadline]`` on non-scheduled archetypes
+    # are LOGGED (event=evidence_window_outside), never excluded or demoted —
+    # measure first, enforce after the shadow numbers are reviewed, the F4/F20
+    # pattern. 30 is deliberate: it keeps the precursor/trend coverage that
+    # makes a young forecast estimable while catching the adjacent-event class
+    # (an earlier, similar incident counted as the forecasted one). This is the
+    # tunable knob of the eventual enforcement. Set negative to disable
+    # (EVIDENCE_WINDOW_LOOKBACK_DAYS=-1 in the env, restart oracle-api.service).
+    evidence_window_lookback_days: int = 30
     # Aggregate quality floor (retro#279): settlement_min_sources only counts
     # HOW MANY valid votes agree, not how much evidence they carry — a pool of
     # uniformly weak sources (low credibility, thin relevance, recency-decayed)

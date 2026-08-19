@@ -131,3 +131,19 @@ async def test_winner_entity_conflict_is_neutralised_using_article_event_name():
     out = result.extraction.predictions[0]
     assert out.stance == 0.0
     assert out.settled is False
+
+
+async def test_settlement_contradicting_its_own_fact_lane_is_neutralised():
+    """retro#545: a `settled` claim whose `fact_signal` opposes its own stance is
+    self-contradictory — the live 41-row Burnham cluster, `stance=-1.00 settled`
+    off articles reporting he took office. Neutralised, not inverted, and the
+    batch path must run it like the live Oracle path (the batch feeds the atlas
+    and Brier/ELO scoring, and caches its extraction indefinitely)."""
+    preds = [PredictionExtraction(
+        quote="q", claim="Burnham will remain PM", stance=-1.0, certainty=0.95,
+        settled=True, event_date="2026-08-01", fact_signal=1.0, is_occurrence=True,
+    )]
+    out = await _run_with_predictions(preds)
+    assert out.predictions[0].stance == 0.0
+    assert out.predictions[0].settled is False
+    assert out.predictions[0].certainty == pytest.approx(0.95)

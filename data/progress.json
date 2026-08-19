@@ -13877,7 +13877,7 @@
     "I04:jpost": {
       "event_id": "I04",
       "source_id": "jpost",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-19T17:15:28.687903"
+  "last_updated": "2026-08-19T17:20:14.430361"
 }

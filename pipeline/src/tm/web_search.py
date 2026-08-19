@@ -1732,6 +1732,24 @@ def _search_articles_chain(
                     "news_indexer: ignoring unknown /search field(s) %s — SearchResult may "
                     "need widening", sorted(_unknown),
                 )
+            # news-indexer's /search accepts no date params and only holds recent
+            # articles, so a caller's window was silently a no-op on this leg while
+            # every SERP leg honored it — backward-looking dated queries (resolution
+            # research, MCP search_news) got answered with this week's coverage
+            # (retro#559; the Brent-$100 resolution failure). Post-filter like the
+            # DataForSEO leg does; zero survivors fall through to the providers that
+            # can actually scope by date.
+            if hits and (date_from or date_to):
+                _pre = len(hits)
+                hits = _filter_by_date(hits, date_from, date_to)
+                if len(hits) != _pre:
+                    logger.info(
+                        "news_indexer: %d/%d hits outside requested window "
+                        "[%s, %s], dropped: %s",
+                        _pre - len(hits), _pre,
+                        date_from.date() if date_from else "-inf",
+                        date_to.date() if date_to else "now", query[:60],
+                    )
             if hits:
                 _provider_local.name = "news_indexer"
                 logger.debug(

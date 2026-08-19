@@ -578,6 +578,71 @@ class TestNewsIndexerProvider:
         assert captured["params"] == {"q": "ukraine war", "limit": 5}
         assert captured["headers"].get("x-api-key") == "mykey"
 
+    # ── Date-window post-filter (retro#559) ──────────────────────────────────────────
+    #
+    # news-indexer's /search accepts no date params and only holds recent articles, so a
+    # caller's window was silently a no-op on this leg while every SERP leg honored it.
+    # Backward-looking dated queries (resolution research, MCP search_news) got answered
+    # with this week's coverage — the Brent-$100 resolution failure. The leg now
+    # post-filters its hits to the requested window; zero survivors fall through to the
+    # providers that can actually scope by date.
+
+    def test_out_of_window_hits_fall_through(self, monkeypatch):
+        """All ni hits outside the requested window → filtered to zero → GDELT serves."""
+        from datetime import datetime
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        from tm.web_search import SearchResult
+        recent = [
+            {"title": "T1", "url": "http://x.com/1", "snippet": "S", "source": "x.com", "published_date": "2026-08-19"},
+            {"title": "T2", "url": "http://x.com/2", "snippet": "S", "source": "x.com", "published_date": "2026-08-18"},
+        ]
+        gdelt_hit = [SearchResult(title="G", url="http://g.com/1", snippet="gdelt")]
+        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(200, recent))
+        with patch.multiple(ws,
+            _search_gdelt=MagicMock(return_value=gdelt_hit),
+            _search_gdelt_bq=MagicMock(return_value=[]),
+        ):
+            res = ws.search_articles(
+                "brent crosses 100", date_from=datetime(2026, 7, 20), date_to=datetime(2026, 7, 28),
+            )
+        assert res[0].url == "http://g.com/1"
+        assert ws.get_last_search_provider() == "gdelt"
+        assert "news_indexer" in ws.get_last_search_provider_chain()
+
+    def test_in_window_hits_survive_and_undated_kept(self, monkeypatch):
+        """Only in-window hits are returned; an undated hit keeps the benefit of the doubt."""
+        from datetime import datetime
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        mixed = [
+            {"title": "old", "url": "http://x.com/old", "snippet": "S", "source": "x.com", "published_date": "2026-06-01"},
+            {"title": "in", "url": "http://x.com/in", "snippet": "S", "source": "x.com", "published_date": "2026-07-23"},
+            {"title": "undated", "url": "http://x.com/undated", "snippet": "S", "source": "x.com", "published_date": ""},
+        ]
+        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(200, mixed))
+        gdelt_spy = MagicMock(return_value=[])
+        with patch.multiple(ws, _search_gdelt=gdelt_spy):
+            res = ws.search_articles(
+                "q", date_from=datetime(2026, 7, 20), date_to=datetime(2026, 7, 28),
+            )
+        assert [r.url for r in res] == ["http://x.com/in", "http://x.com/undated"]
+        assert ws.get_last_search_provider() == "news_indexer"
+        assert not gdelt_spy.called
+
+    def test_no_window_means_no_filter(self, monkeypatch):
+        """Undated request → hits returned exactly as served, however old."""
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        old = [{"title": "old", "url": "http://x.com/old", "snippet": "S", "source": "x.com", "published_date": "2024-01-01"}]
+        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(200, old))
+        res = ws.search_articles("q")
+        assert [r.url for r in res] == ["http://x.com/old"]
+        assert ws.get_last_search_provider() == "news_indexer"
+
 
 # ---------------------------------------------------------------------------
 # news-indexer cache-fill (warm /enqueue after a paid hit)

@@ -18,6 +18,13 @@ DATA_DIR="$WORKDIR/data"
 PIPELINE_DIR="$WORKDIR/pipeline"
 SLEEP_INTERVAL=300   # seconds between cycles (5 min — short pause to avoid hammering APIs)
 
+# This script is one long-running process (`while true` below), so syncing the tree
+# updates ec2_run.sh ON DISK while the loop keeps executing the version it started
+# with — forever, since systemd only restarts on exit. A fix merged to main is then
+# "shipped" but inert. Record our own hash now so a cycle can notice and re-exec.
+SELF="$WORKDIR/infra/ec2_run.sh"
+SELF_HASH_AT_START="$(sha256sum "$SELF" 2>/dev/null | cut -d' ' -f1 || echo unknown)"
+
 # Load secrets
 set -a; source "$WORKDIR/.env"; set +a
 export DATA_DIR
@@ -68,16 +75,93 @@ except: print(0)
   fi
 }
 
+# A git process that dies mid-operation leaves .git/index.lock behind, and every
+# later git op in this tree then fails on it — including the `reset --hard` that is
+# supposed to be the sync's own fallback. The tree keeps running whatever code it
+# last had, indefinitely, while the loop reports only a generic "cycle failed".
+#
+# Seen twice: 2026-07-02 → 08-16 (six weeks on stale code, no atlas pushes) and
+# 2026-08-17 → 08-19, the second time stranding retro#549's settlement guard on the
+# API checkout while this tree — the larger producer — kept emitting the rows the
+# guard exists to neutralise (retro#553).
+#
+# Reap it only when it is provably nobody's: no live git process in this repo, and
+# the lock older than a full cycle (a lock younger than that may belong to a job
+# still starting up).
+reap_stale_git_lock() {
+  local lock="$WORKDIR/.git/index.lock"
+  [[ -e "$lock" ]] || return 0
+
+  if pgrep -a git 2>/dev/null | grep -q "$WORKDIR"; then
+    log "WARNING: .git/index.lock present but a git process is live here — leaving it"
+    return 0
+  fi
+
+  local age=$(( $(date +%s) - $(stat -c %Y "$lock") ))
+  if (( age < SLEEP_INTERVAL )); then
+    log "WARNING: .git/index.lock is only ${age}s old — leaving it for now"
+    return 0
+  fi
+
+  log "ERROR: reaping stale .git/index.lock (age ${age}s, no live git process)"
+  rm -f "$lock"
+}
+
+# Bring the tree to origin/main and PROVE it landed there. Without the assertion a
+# failed sync is indistinguishable from a successful one — which is exactly how the
+# tree ran two-day-old code while every cycle logged a generic failure.
+sync_to_main() {
+  reap_stale_git_lock
+
+  git fetch origin main
+  git merge --ff-only origin/main || {
+    log "WARNING: fast-forward failed — force-syncing to origin/main"
+    # Tolerated deliberately. `run_pipeline` is called as `run_pipeline || log ...`,
+    # and bash SUSPENDS errexit inside a function invoked that way — so a failing
+    # reset here never aborted anything; the loop simply carried on and ran the
+    # pipeline on stale code. That is the whole bug. Swallow it explicitly and let
+    # the assertion below be the thing that decides, in both calling contexts.
+    git reset --hard origin/main || log "WARNING: force-sync also failed"
+  }
+
+  local head origin behind
+  head=$(git rev-parse HEAD)
+  origin=$(git rev-parse origin/main)
+  if [[ "$head" != "$origin" ]]; then
+    behind=$(git rev-list --count "HEAD..origin/main" 2>/dev/null || echo "?")
+    log "ERROR: batch tree did NOT sync — HEAD ${head:0:9} is ${behind} commit(s) behind origin/main ${origin:0:9}; REFUSING to run on stale code"
+    return 1
+  fi
+  log "Synced to origin/main ${head:0:9}"
+}
+
+# Re-exec into a newly synced copy of ourselves. Safe only here — at the top of a
+# cycle, before any pipeline work starts, so there is no in-flight state to lose.
+# If exec fails the process dies and systemd restarts it (Restart=always), which
+# lands in the same place.
+reexec_if_self_changed() {
+  local now
+  now="$(sha256sum "$SELF" 2>/dev/null | cut -d' ' -f1 || echo unknown)"
+
+  # Written as plain `if`s, and always returning 0, so behaviour does not depend on
+  # whether errexit happens to be suspended in the caller — misreading exactly that
+  # is what let this class of bug hide in the first place.
+  if [[ "$now" != "unknown" && "$SELF_HASH_AT_START" != "unknown" && "$now" != "$SELF_HASH_AT_START" ]]; then
+    log "ec2_run.sh changed on disk (${SELF_HASH_AT_START:0:9} -> ${now:0:9}) — re-exec'ing into the new version"
+    exec /bin/bash "$SELF"
+  fi
+  return 0
+}
+
 run_pipeline() {
   cd "$WORKDIR"
 
   # ── 1. Pull latest event/source definitions ───────────────────────────────
+  # `|| return 1` is load-bearing: errexit is suspended inside this function (see
+  # sync_to_main), so a bare call would log the refusal and then run anyway.
   log "Pulling latest from main..."
-  git fetch origin main
-  git merge --ff-only origin/main || {
-    log "WARNING: fast-forward failed — force-syncing to origin/main"
-    git reset --hard origin/main
-  }
+  sync_to_main || return 1
+  reexec_if_self_changed
 
   # ── 2. Ingest: fetch articles in batches of 10 events per cycle ─────────
   log "Ingest starting — $(cell_stats)"

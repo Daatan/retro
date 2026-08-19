@@ -7,11 +7,8 @@ on:
 
 jobs:
   # Gate: the api/ + pipeline/ + bayesoracle/ suites must pass before we trust
-  # today's data run. A PR opened with the default GITHUB_TOKEN (below) does
-  # NOT trigger tests.yml's own `pull_request` handler — GitHub suppresses
-  # workflow runs caused by GITHUB_TOKEN to prevent recursive triggering — so
-  # this is the actual gate, not the PR's (absent) checks. Mirrors
-  # deploy-oracle.yml's use of the same reusable workflow.
+  # today's data run. This is the ONLY gate — see the commit step below for why
+  # there is no PR. Mirrors deploy-oracle.yml's use of the same reusable workflow.
   test:
     uses: ./.github/workflows/tests.yml
 
@@ -20,9 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # For the explicit deploy-atlas dispatch at the end of this job — a push
+      # made with GITHUB_TOKEN does NOT trigger other workflows, so the Pages
+      # republish has to be asked for by name. `workflow_dispatch` is the
+      # documented exception to that suppression rule.
+      actions: write
     outputs:
       changed: ${{ steps.diff.outputs.changed }}
-      branch: ${{ steps.diff.outputs.branch }}
 
     steps:
       - uses: actions/checkout@v6
@@ -49,10 +50,28 @@ jobs:
         # wildly oversized diff stops here, before anything is committed.
         run: python bayesoracle/validate_refresh.py
 
-      - name: Commit to a branch if the data changed
-        # PR-only, per this repo's hard rule (CLAUDE.md) — main deploys on
-        # merge (deploy-atlas.yml, bayesoracle/**), so a bad regression run
-        # used to ship straight to bayes.daatan.com with nothing to catch it.
+      - name: Commit the refreshed data if it changed
+        # DELIBERATE, DOCUMENTED EXCEPTION to the repo's PR-only rule — the one
+        # automated path allowed to push to `main`, scoped to `bayesoracle/`
+        # data files. Why (retro#551): this job used to open a PR, but the
+        # Daatan org policy forbids GitHub Actions from creating pull requests
+        # ("The organization does not allow GitHub Actions to create or approve
+        # pull requests", HTTP 409 — and it cannot be relaxed per-repo). The
+        # PR-opening step therefore failed every single day from 2026-08-09 to
+        # 2026-08-19 while `test` and `refresh` stayed green, leaving ten
+        # orphaned branches and the public bayes.daatan.com data stale for ten
+        # days. Silent staleness is worse than an unreviewed data commit.
+        #
+        # What still protects `main` (both #430's original asks, unchanged):
+        #   1. `tests.yml` — the full api/pipeline/bayesoracle suites, above.
+        #   2. `validate_refresh.py` — fails closed on NaN/inf, out-of-range
+        #      probabilities, or an oversized diff, before anything is staged.
+        # Only `bayesoracle/` is ever staged, so a compromised or buggy run
+        # cannot reach code paths outside the data it recomputes.
+        #
+        # Restore the PR flow the moment a token that may open PRs exists (a
+        # GitHub App installation token or a fine-grained PAT in `GH_TOKEN`) —
+        # that is the preferred end state, tracked in retro#551.
         id: diff
         run: |
           git config user.name "github-actions[bot]"
@@ -63,26 +82,27 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          branch="automated/pm-analysis-refresh-$(date -u +%Y-%m-%d)"
-          git checkout -b "$branch"
           git commit -m "chore(pm-analysis): daily data refresh $(date -u +%Y-%m-%d)"
-          git push -u origin "$branch"
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+          # `main` can move under a ~10-minute run (the atlas pipeline commits
+          # here too), so rebase-then-push, once, rather than failing the day.
+          for attempt in 1 2; do
+            if git push origin HEAD:main; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "push rejected (attempt $attempt) — rebasing onto origin/main"
+            git pull --rebase origin main
+          done
+          echo "::error::could not push the refresh to main after 2 attempts"
+          exit 1
 
-  open-pr:
-    needs: refresh
-    if: needs.refresh.outputs.changed == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v6
-      - env:
+      - name: Republish the Pages site
+        # deploy-atlas.yml normally fires on `push` to main under bayesoracle/**,
+        # but GitHub suppresses workflow runs caused by a GITHUB_TOKEN push — so
+        # without this the data would land on main and bayes.daatan.com would
+        # keep serving yesterday's numbers, which is the silent-staleness bug
+        # retro#551 is about. workflow_dispatch is exempt from the suppression.
+        if: steps.diff.outputs.changed == 'true'
+        env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh pr create \
-            --title "chore(pm-analysis): daily data refresh $(date -u +%Y-%m-%d)" \
-            --body "Automated PM-analysis refresh. \`bayesoracle/validate_refresh.py\` sanity checks and the \`tests.yml\` suite both passed before this branch was pushed (see the triggering run)." \
-            --base main \
-            --head "${{ needs.refresh.outputs.branch }}"
+        run: gh workflow run deploy-atlas.yml --ref main

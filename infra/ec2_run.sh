@@ -68,16 +68,74 @@ except: print(0)
   fi
 }
 
+# A git process that dies mid-operation leaves .git/index.lock behind, and every
+# later git op in this tree then fails on it — including the `reset --hard` that is
+# supposed to be the sync's own fallback. The tree keeps running whatever code it
+# last had, indefinitely, while the loop reports only a generic "cycle failed".
+#
+# Seen twice: 2026-07-02 → 08-16 (six weeks on stale code, no atlas pushes) and
+# 2026-08-17 → 08-19, the second time stranding retro#549's settlement guard on the
+# API checkout while this tree — the larger producer — kept emitting the rows the
+# guard exists to neutralise (retro#553).
+#
+# Reap it only when it is provably nobody's: no live git process in this repo, and
+# the lock older than a full cycle (a lock younger than that may belong to a job
+# still starting up).
+reap_stale_git_lock() {
+  local lock="$WORKDIR/.git/index.lock"
+  [[ -e "$lock" ]] || return 0
+
+  if pgrep -a git 2>/dev/null | grep -q "$WORKDIR"; then
+    log "WARNING: .git/index.lock present but a git process is live here — leaving it"
+    return 0
+  fi
+
+  local age=$(( $(date +%s) - $(stat -c %Y "$lock") ))
+  if (( age < SLEEP_INTERVAL )); then
+    log "WARNING: .git/index.lock is only ${age}s old — leaving it for now"
+    return 0
+  fi
+
+  log "ERROR: reaping stale .git/index.lock (age ${age}s, no live git process)"
+  rm -f "$lock"
+}
+
+# Bring the tree to origin/main and PROVE it landed there. Without the assertion a
+# failed sync is indistinguishable from a successful one — which is exactly how the
+# tree ran two-day-old code while every cycle logged a generic failure.
+sync_to_main() {
+  reap_stale_git_lock
+
+  git fetch origin main
+  git merge --ff-only origin/main || {
+    log "WARNING: fast-forward failed — force-syncing to origin/main"
+    # Tolerated deliberately. `run_pipeline` is called as `run_pipeline || log ...`,
+    # and bash SUSPENDS errexit inside a function invoked that way — so a failing
+    # reset here never aborted anything; the loop simply carried on and ran the
+    # pipeline on stale code. That is the whole bug. Swallow it explicitly and let
+    # the assertion below be the thing that decides, in both calling contexts.
+    git reset --hard origin/main || log "WARNING: force-sync also failed"
+  }
+
+  local head origin behind
+  head=$(git rev-parse HEAD)
+  origin=$(git rev-parse origin/main)
+  if [[ "$head" != "$origin" ]]; then
+    behind=$(git rev-list --count "HEAD..origin/main" 2>/dev/null || echo "?")
+    log "ERROR: batch tree did NOT sync — HEAD ${head:0:9} is ${behind} commit(s) behind origin/main ${origin:0:9}; REFUSING to run on stale code"
+    return 1
+  fi
+  log "Synced to origin/main ${head:0:9}"
+}
+
 run_pipeline() {
   cd "$WORKDIR"
 
   # ── 1. Pull latest event/source definitions ───────────────────────────────
+  # `|| return 1` is load-bearing: errexit is suspended inside this function (see
+  # sync_to_main), so a bare call would log the refusal and then run anyway.
   log "Pulling latest from main..."
-  git fetch origin main
-  git merge --ff-only origin/main || {
-    log "WARNING: fast-forward failed — force-syncing to origin/main"
-    git reset --hard origin/main
-  }
+  sync_to_main || return 1
 
   # ── 2. Ingest: fetch articles in batches of 10 events per cycle ─────────
   log "Ingest starting — $(cell_stats)"

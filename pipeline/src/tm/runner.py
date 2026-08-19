@@ -19,6 +19,7 @@ from .extractor import (
     enforce_precursor_cap,
     enforce_relative_date_resolution,
     enforce_settlement_event_date,
+    enforce_settlement_fact_signal_agreement,
     enforce_winner_entity_consistency,
     flag_claim_stance_sign_conflicts,
 )
@@ -124,6 +125,15 @@ async def run_article(article: ArticleInput) -> PipelineResult:
         # #313 facets that were populated but never read before this.
         extraction.predictions = enforce_winner_entity_consistency(
             extraction.predictions, article.event_name,
+        )
+        # A settlement whose own fact lane points the other way is contradicting
+        # itself (retro#545): 46 live rows carry `settled` with a `fact_signal`
+        # of the opposite sign, 41 of them on one ACTIVE forecast. Neutralised,
+        # not inverted — the sign is untrustworthy, but which of the two lanes
+        # is wrong is not knowable here. Runs last, so the demotions above have
+        # already taken their rows out of the net.
+        extraction.predictions = enforce_settlement_fact_signal_agreement(
+            extraction.predictions,
         )
 
         update_cell(

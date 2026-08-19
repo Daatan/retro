@@ -1681,3 +1681,81 @@ def enforce_winner_entity_consistency(
         p.stance = 0.0
 
     return predictions
+
+
+# A settlement whose own fact lane points the other way is contradicting itself.
+# 0.5 is the anchoring bar the FACT_SIGNAL prompt already uses for a graded
+# reading: below it a value is "bears on the event" rather than "establishes it",
+# and `enforce_precursor_cap` has already clamped precursor rows to ±0.3, so a
+# fact_signal that survives at |0.5| or more is an announcement/denial-grade
+# reading of the event itself — the only kind that can contradict a settlement.
+_SETTLEMENT_FACT_SIGNAL_ANCHOR = 0.5
+
+
+def enforce_settlement_fact_signal_agreement(
+    predictions: list[PredictionExtraction],
+) -> list[PredictionExtraction]:
+    """A settlement vote may not contradict its own fact lane.
+
+    retro#545's sign-error class: the extractor commits to a strong settled
+    stance whose direction is the opposite of what the article reports. The
+    flagship case is live and public — 41 pool rows on the ACTIVE "Andy Burnham
+    will REMAIN Prime Minister until 2028" forecast, every one of them
+    ``stance=-1.00 settled`` off articles reporting that he *took office*, which
+    is evidence for the claim, not the foreclosure of it. Settle-pinned rows
+    clamp the published probability to floor/ceiling rather than nudging a
+    weighted mean, so each of those 41 is a wrong number on a public page.
+
+    The check costs no LLM call because the model already tells us it disagrees
+    with itself. ``fact_signal`` is the fact-lane counterpart of ``stance`` on
+    the *same* axis — "+1 the facts establish the event happened or is
+    happening, -1 the facts establish it will not or cannot" — so for a
+    ``settled`` claim, which asserts an accomplished fact rather than a reading
+    of one, the two must carry the same sign. Opposite signs mean one of the two
+    is mis-signed, and nothing here can tell which.
+
+    So a caught claim is NEUTRALISED, not inverted, exactly as in
+    :func:`enforce_winner_entity_consistency`: ``settled`` is stripped and
+    ``stance`` zeroed, because the single thing this function is sure of is that
+    the existing sign is untrustworthy. ``certainty``, ``fact_signal``,
+    ``evidence_class`` and the facets are untouched, so the row keeps its weight
+    and stays fully auditable in ``claims_detail``.
+
+    Prod audit (2026-08-19, head rows, COMPLETE): 230 settled rows carry a
+    ``fact_signal``; **46 of them oppose their own stance** at |fact_signal| >=
+    0.5, across just **3 ACTIVE forecasts** — 41 Burnham, 3 "no Arab ministers",
+    2 "Netanyahu will be PM on 31 Dec". Every one of the 46 already sits at
+    |stance| >= 0.7, so no separate strong-stance gate is needed; the population
+    is strong by construction. 45 of the 46 were written in the last 30 days,
+    and 96% of settled rows written in that window carry a ``fact_signal``, so
+    coverage on current traffic is effectively complete even though the field
+    exists on only 58% of settled rows historically (it is a shadow field that
+    was never backfilled — the ``verified``-marker precedent, forward-only).
+
+    Fail-open in the same asymmetry as its siblings: a claim that is not
+    ``settled``, has no ``fact_signal`` (legitimately omitted for opinion and
+    advocacy rows), carries one below the anchor, or has a zero stance is left
+    exactly as the model returned it. Runs last, after
+    :func:`enforce_settlement_event_date` has demoted undated settlements and
+    :func:`enforce_precursor_cap` has clamped precursor fact_signals below the
+    anchor — both of which correctly keep their rows out of this net.
+    """
+    for p in predictions:
+        if p.settled is not True:
+            continue
+        if p.fact_signal is None or abs(p.fact_signal) < _SETTLEMENT_FACT_SIGNAL_ANCHOR:
+            continue
+        if p.stance == 0.0:
+            continue
+        if (p.fact_signal > 0) == (p.stance > 0):
+            continue
+
+        logger.warning(
+            "event=settlement_fact_signal_conflict stance=%+.2f fact_signal=%+.2f "
+            "certainty=%.2f facet=%s verified=%s claim=%r",
+            p.stance, p.fact_signal, p.certainty, p.facet, p.verified, p.claim[:120],
+        )
+        p.settled = False
+        p.stance = 0.0
+
+    return predictions

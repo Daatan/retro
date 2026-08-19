@@ -24,7 +24,7 @@ consequences of that redundancy, not of any single bug.
 | `stance` | −1..1 | direction & strength of "event will happen" | pydantic-bounded, no clamping (out-of-range ⇒ article dropped) |
 | `certainty` | 0..1 | linguistic confidence (0 = hedged, 1 = absolute) | weight factor AND within-article claim weight |
 | `quantitative_estimate` | 0..1, optional | cited model/market probability of the event itself (never a vote share/seat count — those are `cited_share`) | overrides stance+certainty via `resolve_stance_certainty` ONLY when `evidence_class=cited_probability` (retro#362); that class carries the 4× premium — and, since retro#369, only if the claim's `quote` names a source on `cited_probability_source_allowlist` (`tm/config.py`); an unattributed figure is demoted by `enforce_anchor_provenance`, which also costs it the rewrite. **Shadow until `anchor_provenance_enforced`.** |
-| `settled` | bool | outcome reported as accomplished fact | feeds the ±0.94 settlement pin; a POSITIVE settlement is demoted unless dated — see `enforce_settlement_event_date` below |
+| `settled` | bool | outcome reported as accomplished fact | feeds the ±0.94 settlement pin; a POSITIVE settlement is demoted unless dated — see `enforce_settlement_event_date` below; and a settlement whose `fact_signal` opposes its own stance is neutralised — see `enforce_settlement_fact_signal_agreement` |
 | `event_date` | ISO date, optional | when the article says the event itself occurs/occurred | compared against `claim_deadline` by `enforce_deadline_arithmetic`; REQUIRED for a positive `settled`; for a NEGATIVE `settled` it carries the FORECLOSING event's date when the article dates it (the rival's win, the elimination — optional: time-expiry impossibilities stay undated) — see below |
 | `event_date_reference` | text, optional | the article's verbatim relative expression behind `event_date` ("on Friday", "yesterday") | code redoes the calendar walk from it and overrides a disagreeing `event_date` (`enforce_relative_date_resolution`) — see below |
 | `specificity` | 0..1, optional | **dead** — live extractor never emits it; defaults 1.0 | remove |
@@ -122,6 +122,44 @@ carries the `event_date` of the highest-certainty settlement-grade claim whose s
 the article's collapsed stance (`derive_settlement_event_date`, forecaster.py). Callers
 persist it next to `settled` and send it back on `/pool/aggregate`
 (`PoolSourceInput.settlement_event_date`).
+
+#### A settlement may not contradict its own fact lane — `enforce_settlement_fact_signal_agreement`
+
+The sign-error class (retro#545): a strong `settled` stance pointing the opposite way from what
+the article actually reports. Live flagship — 41 pool rows on the ACTIVE *"Andy Burnham will
+REMAIN Prime Minister until 2028"* forecast, every one `stance=-1.00 settled` off articles
+reporting that he **took office**, i.e. evidence *for* the claim read as its foreclosure. A
+settle-pinned row clamps the published probability to floor/ceiling rather than nudging a
+weighted mean, so each of those rows is a wrong number on a public page, and the sources
+agreeing with each other is no defence (the same correlated-error hole `settlement_min_sources`
+has against a shared narrative).
+
+No second LLM call is needed because the model already tells us it disagrees with itself:
+`fact_signal` is the fact-lane counterpart of `stance` on the *same* axis (+1 the facts
+establish the event happened, −1 they establish it cannot). A `settled` claim asserts an
+accomplished fact rather than a reading of one, so the two must share a sign. When they don't,
+one of them is mis-signed and nothing deterministic can say which — so the claim is
+**neutralised, not inverted** — `settled` stripped, `stance` zeroed, and
+`event=settlement_fact_signal_conflict` logged — the `enforce_winner_entity_consistency` precedent.
+`certainty`, `fact_signal`, `evidence_class` and the facets survive, so the row keeps its
+weight and stays auditable in `claims_detail`.
+
+Prod audit 2026-08-19 (head rows, complete): 230 settled rows carry a `fact_signal`; **46
+oppose their own stance** at |`fact_signal`| ≥ **0.5** (`_SETTLEMENT_FACT_SIGNAL_ANCHOR`),
+across exactly **3 ACTIVE forecasts** — 41 Burnham, 3 *"no Arab ministers"*, 2 *"Netanyahu will
+be PM on 31 Dec"*. All 46 already sit at |stance| ≥ 0.7, so no separate strong-stance gate is
+needed: the caught population is strong by construction. Coverage is effectively complete on
+current traffic (96% of settled rows written in the last 30 days carry a `fact_signal`) even
+though the shadow field exists on only 58% of settled rows historically — never backfilled, so
+this guard is **forward-only** like the `facet`-keyed caps, and the stored 46 are a remediation
+question, not a code one.
+
+Fail-open on the same asymmetry as its siblings: not `settled`, no `fact_signal` (legitimately
+omitted on opinion/advocacy rows — the null is not a zero), a `fact_signal` below the anchor, or
+a zero stance all pass through untouched. Runs **last** in the `enforce_*` chain, so
+`enforce_settlement_event_date` has already demoted undated settlements and `enforce_precursor_cap`
+has already clamped precursor fact_signals below the anchor — both correctly keeping their rows
+out of this net.
 
 #### Claim/stance sign conflicts are logged, not corrected — `flag_claim_stance_sign_conflicts`
 

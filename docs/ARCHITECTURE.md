@@ -189,7 +189,16 @@ Consumers globbing `vault2/extractions/` must filter markers via
 ### Prediction (extracted by LLM)
 Each prediction has: `quote`, `claim`, `stance` (−1 to +1, event probability), `certainty`, `settled` (bool — true when the source reports the outcome as an accomplished fact, not a prediction; the prompt explicitly excludes historical background such as a past removal/ban, see #244), and `quantitative_estimate` (optional [0,1] — an explicit modeled probability, poll number, or market price the source cites for the event itself; carries the quantitative-anchor weight premium).
 
-Also requested, EXPERIMENTAL/shadow (Phase 2 of the author-scoring redesign, not yet consumed by any estimator): `evidence_class` (reported_fact / cited_probability / cited_share / reporting / opinion — S2, see `docs/ORACLE_VARIABLES.md` §5), `fact_signal` (−1 to +1, what the reported facts alone imply, un-fused from the author's framing), `event_actors` / `event_target` (the fact's actor-target dyad, for cross-checking against the claim), `is_occurrence` (is the reported fact the event itself, or only a precursor), `verified` (independently reported vs. merely claimed by an interested party), `event_date` / `event_date_reference` (resolved absolute date + the article's original relative expression). Full field docs: `PredictionExtraction` in `pipeline/src/tm/models.py`.
+Also requested, EXPERIMENTAL/shadow (Phase 2 of the author-scoring redesign — none of these fields pools, i.e. no aggregation step reads them; `fact_signal` and its facets are nonetheless consumed at EXTRACTION time, see below): `evidence_class` (reported_fact / cited_probability / cited_share / reporting / opinion — S2, see `docs/ORACLE_VARIABLES.md` §5), `fact_signal` (−1 to +1, what the reported facts alone imply, un-fused from the author's framing), `event_actors` / `event_target` (the fact's actor-target dyad, for cross-checking against the claim), `is_occurrence` (is the reported fact the event itself, or only a precursor), `verified` (independently reported vs. merely claimed by an interested party), `event_date` / `event_date_reference` (resolved absolute date + the article's original relative expression). Full field docs: `PredictionExtraction` in `pipeline/src/tm/models.py`.
+
+**"Shadow" does not mean inert.** `fact_signal` was accepted as a **diagnostic/guardrail lane, not a
+pricing lane in waiting** (retro#533, 2026-08-15 — corr(stance, fact_signal) 0.905 on precursor rows,
+n=2,645; `Daatan/docs/decisions.md`). The estimator-cutover framing is retired, but the lane is load-
+bearing inside the `enforce_*` chain that runs before fusion: `enforce_precursor_cap` clamps
+|`fact_signal`| to `fact_signal_precursor_cap` (0.3) when `is_occurrence=false` (retro#367), and
+`is_occurrence` + `facet` key `enforce_decider_intent_stance_cap`, which clamps **`stance` itself** —
+a live-estimate effect (retro#518). `verified` likewise keys both interested-party clamps
+(retro#368/#378). Per-field status and the re-opening bar live in `docs/ORACLE_VARIABLES.md`.
 
 Older atlas entries also carry: `sentiment`, `specificity`, `hedge_ratio`, `conditionality`, `magnitude`, `time_horizon`, `prediction_type`, `source_authority` (these fields were dropped from the extractor prompt in PR #102 to reduce latency; retained as Optional for backward compatibility).
 

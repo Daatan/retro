@@ -1010,3 +1010,108 @@ class TestRelevanceBandWeights:
         bands = sorted(RELEVANCE_BAND_WEIGHTS)
         weights = [RELEVANCE_BAND_WEIGHTS[b] for b in bands]
         assert weights == sorted(weights)
+
+
+class TestEvidenceWindowShadow:
+    """retro#545 slice (iii): the evidence-window shadow check
+    (``[claim_created_at − lookback, deadline]``, Gate-0 decision 2026-08-19).
+    Log-only — these tests pin that it reports and never alters the estimate.
+    """
+
+    def _outside(self, **kw):
+        from forecast_api.aggregation import evidence_window_outside
+        defaults = dict(
+            n=3,
+            settlement_event_dates=None,
+            published_dates=["2026-05-01", "2026-06-01", "2026-07-01"],
+            claim_created_at="2026-06-01",
+            claim_deadline="2026-12-31",
+            claim_archetype="diffuse",
+            lookback_days=30,
+        )
+        defaults.update(kw)
+        return evidence_window_outside(**defaults)
+
+    def test_row_before_the_lookback_is_flagged(self):
+        # created 06-01, lookback 30 ⇒ window opens 05-02; a 05-01 row is out,
+        # 06-01 and 07-01 are in.
+        assert self._outside() == ((0, "before_window"),)
+
+    def test_row_inside_the_lookback_is_kept(self):
+        # The lookback exists to keep precursor coverage: 05-15 is pre-creation
+        # but inside the 30 days, so it is NOT the adjacent-event class.
+        assert self._outside(published_dates=["2026-05-15"], n=1) == ()
+
+    def test_event_date_outranks_published_date(self):
+        # An in-window article reporting an out-of-window event is the
+        # adjacent-event shape itself — the event date is the evidence's date.
+        assert self._outside(
+            n=1,
+            settlement_event_dates=["2026-03-01"],
+            published_dates=["2026-06-15"],
+        ) == ((0, "before_window"),)
+
+    def test_row_past_the_deadline_is_flagged(self):
+        assert self._outside(published_dates=["2027-01-15"], n=1) == (
+            (0, "after_deadline"),
+        )
+
+    def test_undated_row_is_skipped(self):
+        # Fail-open on absent metadata: no date at all is not evidence against
+        # the window.
+        assert self._outside(published_dates=[None], n=1) == ()
+        assert self._outside(published_dates=None, n=1) == ()
+
+    def test_scheduled_archetype_is_out_of_scope(self):
+        # The decision bounds non-scheduled archetypes only; scheduled already
+        # consults claim_created_at in settlement_vote_validity.
+        assert self._outside(claim_archetype="scheduled") == ()
+
+    def test_missing_created_at_disables_the_check(self):
+        assert self._outside(claim_created_at=None) == ()
+
+    def test_negative_lookback_is_the_kill_switch(self):
+        assert self._outside(lookback_days=-1) == ()
+
+    def test_missing_deadline_leaves_the_upper_edge_open(self):
+        assert self._outside(
+            published_dates=["2027-06-01"], n=1, claim_deadline=None,
+        ) == ()
+
+    def _pool(self, **kw):
+        defaults = dict(
+            relevance_weight_floor=0.0,
+            decisiveness_floor=0.0,
+            thin_evidence_ci_inflation=0.0,
+            defer_on_thin_evidence=False,
+            settlement_min_sources=2,
+            settlement_stance=0.97,
+            logit_clamp=0.02,
+            pool_dispersion_floor=0.0,
+            claim_created_at="2026-06-01",
+            claim_deadline="2026-12-31",
+            claim_archetype="diffuse",
+            published_dates=["2026-01-01", "2026-07-01"],
+        )
+        defaults.update(kw)
+        return aggregate_pool(
+            [0.6, 0.4], [1.0, 1.0], [0.8, 0.8], [False, False], **defaults,
+        )
+
+    def test_aggregate_pool_reports_rows_without_touching_the_estimate(self):
+        shadow = self._pool(evidence_window_lookback_days=30)
+        baseline = self._pool()
+        assert shadow.evidence_window_outside_rows == ((0, "before_window"),)
+        assert baseline.evidence_window_outside_rows == ()
+        # Log-only: every published quantity is identical with the shadow on.
+        assert shadow._replace(evidence_window_outside_rows=()) == baseline
+
+    def test_aggregate_pool_reports_on_an_abstaining_pool(self):
+        # Computed on every branch, like n_eff — an abstained pool still has a
+        # window worth measuring.
+        agg = self._pool(
+            evidence_window_lookback_days=30,
+            relevance_weight_floor=10.0,
+        )
+        assert agg.insufficient_reason == "all_articles_off_topic"
+        assert agg.evidence_window_outside_rows == ((0, "before_window"),)

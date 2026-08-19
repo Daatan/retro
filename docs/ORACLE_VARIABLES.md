@@ -223,6 +223,20 @@ reason per row). Valid votes in **both** directions suppress the pin entirely
 facts are not decided by outvoting; the England 4-vs-1 stance-inversion pool is the
 canonical case). The pin then requires `settlement_min_sources` **unanimous** valid votes.
 
+**Evidence-window shadow** (retro#545 slice iii, Gate-0 decision 2026-08-19): separately from
+the settlement rules above — which demote *votes* — the *estimation* evidence window for
+non-`scheduled` archetypes is decided to become `[claim_created_at − evidence_window_lookback_days,
+claim_deadline]` (today it is effectively `(−∞, deadline]`). Currently **log-only**: every pool
+aggregation reports rows dated outside the window (`event=evidence_window_outside`, reason
+`before_window`/`after_deadline`; a row's date is its `settlement_event_date` when parseable,
+else `published_date`, and undated rows are skipped) plus one `event=evidence_window_shadow`
+summary per pool so the review has a denominator. Nothing is excluded or demoted — enforce only
+after the shadow numbers are reviewed. The lookback (default **30**, `EVIDENCE_WINDOW_LOOKBACK_DAYS`,
+negative disables) is the tunable knob: it keeps the precursor/trend coverage that makes a young
+forecast estimable while catching the adjacent-event class (an earlier, similar incident counted
+as evidence for the forecasted one — the Baltic-drone case, where the incident the claim was
+anchored on settled it at 97%).
+
 Clearing `settlement_min_sources` is a **count**, not a quality check — a pool of uniformly
 weak sources (low credibility, thin relevance, recency-decayed) that each barely clear
 settlement grade could still out-count its way to a pin. `settlement_quality_floor`

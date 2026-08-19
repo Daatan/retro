@@ -1796,6 +1796,7 @@ async def _run_forecast_inner(
         age_adjusted_weights=all_age_adjusted_weights,
         source_ids=all_source_ids,
         max_source_share=settings.max_source_share,
+        evidence_window_lookback_days=settings.evidence_window_lookback_days,
     )
     # F12 residual instrumentation (retro#449 Stage A): every settlement-voting
     # row, unconditionally — mirroring event=evidence_clusters (retro#412),
@@ -1816,6 +1817,24 @@ async def _run_forecast_inner(
             )
     agg = aggregate_pool(all_stances, all_weights, relevances, all_settled, **_pool_kwargs)
     if agg is not None:
+        # Evidence-window shadow (retro#545 slice iii): per-row lines plus one
+        # per-pool summary — the summary logs on EVERY pool so the review has a
+        # denominator (share of pools affected), same rationale as
+        # event=evidence_clusters logging every request (retro#412). Log-only;
+        # the rows still voted.
+        for idx, window_reason in agg.evidence_window_outside_rows:
+            logger.info(
+                "event=evidence_window_outside reason=%s url=%s stance=%+.2f "
+                "event_date=%s published=%s created=%s deadline=%s",
+                window_reason, source_signals[idx].url, all_stances[idx],
+                all_settlement_dates[idx], all_published_dates[idx],
+                req.claim_created_at, req.claim_deadline,
+            )
+        logger.info(
+            "event=evidence_window_shadow question=%s outside=%d n=%d lookback_days=%d",
+            _question_hash(req.question), len(agg.evidence_window_outside_rows),
+            agg.n, settings.evidence_window_lookback_days,
+        )
         for idx, demotion_reason in agg.settlement_demotions:
             logger.warning(
                 "event=settlement_vote_demoted reason=%s url=%s stance=%+.2f event_date=%s",
@@ -2152,6 +2171,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         age_adjusted_weights=age_adjusted_weights,
         source_ids=source_ids,
         max_source_share=settings.max_source_share,
+        evidence_window_lookback_days=settings.evidence_window_lookback_days,
     )
     # F12 residual instrumentation (retro#449 Stage A) — same event as the
     # live path above, recompute-path twin.
@@ -2165,6 +2185,22 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             )
     agg = aggregate_pool(stances, weights, relevances, settled_flags, **_pool_kwargs)
     if agg is not None:
+        # Evidence-window shadow (retro#545 slice iii) — recompute-path twin of
+        # the live path's lines above; the row index is the identifier, as with
+        # this path's other log lines.
+        for idx, window_reason in agg.evidence_window_outside_rows:
+            logger.info(
+                "event=evidence_window_outside reason=%s source_index=%d stance=%+.2f "
+                "event_date=%s published=%s created=%s deadline=%s",
+                window_reason, idx, stances[idx],
+                settlement_dates[idx], published_dates[idx],
+                req.claim_created_at, req.claim_deadline,
+            )
+        logger.info(
+            "event=evidence_window_shadow question=%s outside=%d n=%d lookback_days=%d",
+            _question_hash(req.question or ""), len(agg.evidence_window_outside_rows),
+            agg.n, settings.evidence_window_lookback_days,
+        )
         for idx, demotion_reason in agg.settlement_demotions:
             logger.warning(
                 "event=settlement_vote_demoted reason=%s source_index=%d stance=%+.2f event_date=%s",

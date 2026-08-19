@@ -12225,7 +12225,7 @@
     "H10:bloomberg": {
       "event_id": "H10",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-19T22:55:44.363034"
+  "last_updated": "2026-08-19T22:58:24.427194"
 }

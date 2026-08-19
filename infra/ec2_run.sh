@@ -18,6 +18,13 @@ DATA_DIR="$WORKDIR/data"
 PIPELINE_DIR="$WORKDIR/pipeline"
 SLEEP_INTERVAL=300   # seconds between cycles (5 min — short pause to avoid hammering APIs)
 
+# This script is one long-running process (`while true` below), so syncing the tree
+# updates ec2_run.sh ON DISK while the loop keeps executing the version it started
+# with — forever, since systemd only restarts on exit. A fix merged to main is then
+# "shipped" but inert. Record our own hash now so a cycle can notice and re-exec.
+SELF="$WORKDIR/infra/ec2_run.sh"
+SELF_HASH_AT_START="$(sha256sum "$SELF" 2>/dev/null | cut -d' ' -f1 || echo unknown)"
+
 # Load secrets
 set -a; source "$WORKDIR/.env"; set +a
 export DATA_DIR
@@ -128,6 +135,24 @@ sync_to_main() {
   log "Synced to origin/main ${head:0:9}"
 }
 
+# Re-exec into a newly synced copy of ourselves. Safe only here — at the top of a
+# cycle, before any pipeline work starts, so there is no in-flight state to lose.
+# If exec fails the process dies and systemd restarts it (Restart=always), which
+# lands in the same place.
+reexec_if_self_changed() {
+  local now
+  now="$(sha256sum "$SELF" 2>/dev/null | cut -d' ' -f1 || echo unknown)"
+
+  # Written as plain `if`s, and always returning 0, so behaviour does not depend on
+  # whether errexit happens to be suspended in the caller — misreading exactly that
+  # is what let this class of bug hide in the first place.
+  if [[ "$now" != "unknown" && "$SELF_HASH_AT_START" != "unknown" && "$now" != "$SELF_HASH_AT_START" ]]; then
+    log "ec2_run.sh changed on disk (${SELF_HASH_AT_START:0:9} -> ${now:0:9}) — re-exec'ing into the new version"
+    exec /bin/bash "$SELF"
+  fi
+  return 0
+}
+
 run_pipeline() {
   cd "$WORKDIR"
 
@@ -136,6 +161,7 @@ run_pipeline() {
   # sync_to_main), so a bare call would log the refusal and then run anyway.
   log "Pulling latest from main..."
   sync_to_main || return 1
+  reexec_if_self_changed
 
   # ── 2. Ingest: fetch articles in batches of 10 events per cycle ─────────
   log "Ingest starting — $(cell_stats)"

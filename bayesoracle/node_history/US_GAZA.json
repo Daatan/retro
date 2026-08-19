@@ -974,6 +974,50 @@
     {
       "date": "2026-08-08",
       "probability": 0.09
+    },
+    {
+      "date": "2026-08-09",
+      "probability": 0.095
+    },
+    {
+      "date": "2026-08-10",
+      "probability": 0.085
+    },
+    {
+      "date": "2026-08-11",
+      "probability": 0.075
+    },
+    {
+      "date": "2026-08-12",
+      "probability": 0.085
+    },
+    {
+      "date": "2026-08-13",
+      "probability": 0.09
+    },
+    {
+      "date": "2026-08-14",
+      "probability": 0.08
+    },
+    {
+      "date": "2026-08-15",
+      "probability": 0.095
+    },
+    {
+      "date": "2026-08-16",
+      "probability": 0.08
+    },
+    {
+      "date": "2026-08-17",
+      "probability": 0.08
+    },
+    {
+      "date": "2026-08-18",
+      "probability": 0.07
+    },
+    {
+      "date": "2026-08-19",
+      "probability": 0.11
     }
   ]
 }

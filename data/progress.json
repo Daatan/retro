@@ -11553,14 +11553,14 @@
     "H04:bbc": {
       "event_id": "H04",
       "source_id": "bbc",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "H04:bloomberg": {
       "event_id": "H04",
       "source_id": "bloomberg",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-20T20:42:18.304180"
+  "last_updated": "2026-08-20T20:43:40.519075"
 }

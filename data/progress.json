@@ -12582,7 +12582,7 @@
     "I02:toi": {
       "event_id": "I02",
       "source_id": "toi",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-20T20:51:01.318102"
+  "last_updated": "2026-08-20T20:51:47.773017"
 }

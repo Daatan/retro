@@ -13464,8 +13464,8 @@
     "D07:haaretz": {
       "event_id": "D07",
       "source_id": "haaretz",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "D07:israel_hayom": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-20T13:16:24.203893"
+  "last_updated": "2026-08-20T13:17:28.186872"
 }

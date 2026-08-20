@@ -12582,8 +12582,8 @@
     "I02:toi": {
       "event_id": "I02",
       "source_id": "toi",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "I02:walla": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-20T21:06:27.432043"
+  "last_updated": "2026-08-20T21:11:25.933686"
 }

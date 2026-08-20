@@ -218,7 +218,11 @@ settlement vote re-proves its anchor inside `aggregate_pool()` on every call —
   unaffected — that stays the ordinary, honest "window closed quietly" case.
 
 Demoted votes keep their stance (ordinary evidence; `event=settlement_vote_demoted` with a
-reason per row). Valid votes in **both** directions suppress the pin entirely
+reason per row — plus, since retro#554, the audit fields that tie a demotion back to its
+forecast: `question=` (question hash), the claim-window bounds actually compared against
+(`created=`/`deadline=`), and `event_date_state=absent|unparseable|parsed`, which separates an
+article that genuinely carried no date from one whose date string failed ISO parsing). Valid
+votes in **both** directions suppress the pin entirely
 (`settlement_suppressed`, `settlement_conflict` — one extraction is provably wrong, and
 facts are not decided by outvoting; the England 4-vs-1 stance-inversion pool is the
 canonical case). The pin then requires `settlement_min_sources` **unanimous** valid votes.

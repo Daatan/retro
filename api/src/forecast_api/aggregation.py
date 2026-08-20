@@ -78,6 +78,25 @@ def _parse_date(value: Optional[str]) -> Optional[date]:
         return None
 
 
+def event_date_state(value: Optional[str]) -> str:
+    """``absent`` | ``unparseable`` | ``parsed`` — HOW a settlement vote's
+    ``settlement_event_date`` reached ``settlement_vote_validity`` (retro#554).
+
+    The undated demotion reasons (``missing_event_date``,
+    ``undated_foreclosure``, ``stale_undated_foreclosure``) all fire on
+    ``_parse_date(...) is None``, which conflates two very different inputs:
+    an article that genuinely carried no date (``absent``) and one whose date
+    string exists but fails ISO parsing (``unparseable`` — a fixable
+    extraction defect, not a property of the article). Audit log lines carry
+    this alongside the raw value so the two populations can be separated
+    read-only. ``parsed`` is the ordinary dated case, present so the field
+    can ride on every demotion line, not just the undated reasons.
+    """
+    if not value or not str(value).strip():
+        return "absent"
+    return "parsed" if _parse_date(value) is not None else "unparseable"
+
+
 def recency_weight(
     article_date: Optional[str],
     ref_date: Optional[str],

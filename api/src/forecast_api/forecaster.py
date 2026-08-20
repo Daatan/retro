@@ -62,6 +62,7 @@ from .aggregation import (
     PoolAggregateResult,
     aggregate_pool,
     claim_weighted_stance,
+    event_date_state,
     evidence_class_weight,
     recency_weight,
     relevance_weight,
@@ -1835,11 +1836,18 @@ async def _run_forecast_inner(
             _question_hash(req.question), len(agg.evidence_window_outside_rows),
             agg.n, settings.evidence_window_lookback_days,
         )
+        # question (hash) + the claim-window bounds the rule actually compared
+        # against, so a demotion can be tied back to its forecast and audited
+        # for false positives; event_date_state separates genuinely undated
+        # articles from parse failures (retro#554). Field names match the
+        # evidence_window_outside / evidence_window_shadow lines above.
         for idx, demotion_reason in agg.settlement_demotions:
             logger.warning(
-                "event=settlement_vote_demoted reason=%s url=%s stance=%+.2f event_date=%s",
+                "event=settlement_vote_demoted reason=%s url=%s stance=%+.2f "
+                "event_date=%s event_date_state=%s question=%s created=%s deadline=%s",
                 demotion_reason, source_signals[idx].url, all_stances[idx],
-                all_settlement_dates[idx],
+                all_settlement_dates[idx], event_date_state(all_settlement_dates[idx]),
+                _question_hash(req.question), req.claim_created_at, req.claim_deadline,
             )
         if agg.settlement_suppressed:
             logger.warning(
@@ -2201,10 +2209,15 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             _question_hash(req.question or ""), len(agg.evidence_window_outside_rows),
             agg.n, settings.evidence_window_lookback_days,
         )
+        # Recompute-path twin of the live path's demotion line: question hash +
+        # claim-window bounds + event_date_state, same rationale (retro#554).
         for idx, demotion_reason in agg.settlement_demotions:
             logger.warning(
-                "event=settlement_vote_demoted reason=%s source_index=%d stance=%+.2f event_date=%s",
+                "event=settlement_vote_demoted reason=%s source_index=%d stance=%+.2f "
+                "event_date=%s event_date_state=%s question=%s created=%s deadline=%s",
                 demotion_reason, idx, stances[idx], settlement_dates[idx],
+                event_date_state(settlement_dates[idx]),
+                _question_hash(req.question or ""), req.claim_created_at, req.claim_deadline,
             )
         if agg.settlement_suppressed:
             logger.warning("event=settlement_suppressed reason=%s sources=%d", agg.suppression_reason, agg.n)

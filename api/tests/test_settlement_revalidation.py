@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from forecast_api.aggregation import aggregate_pool, settlement_vote_validity
+from forecast_api.aggregation import aggregate_pool, event_date_state, settlement_vote_validity
 from forecast_api.config import settings as api_settings
 
 TODAY = "2026-07-17"
@@ -667,3 +667,21 @@ class TestClusterCountedVotes:
         agg = self._pin(cluster_ids=(0, 0), weights=[0.15, 0.15])
         assert agg.settled is False
         assert agg.suppression_reason is None
+
+
+class TestEventDateState:
+    """retro#554 — the audit field separating "article carried no date" from
+    "date present but failed to parse". The undated demotion reasons stay
+    stable; this classifier rides alongside them on the log line."""
+
+    @pytest.mark.parametrize("value", [None, "", "   "])
+    def test_absent(self, value):
+        assert event_date_state(value) == "absent"
+
+    @pytest.mark.parametrize("value", ["mid-July 2026", "unknown", "07/19/2026"])
+    def test_unparseable(self, value):
+        assert event_date_state(value) == "unparseable"
+
+    @pytest.mark.parametrize("value", ["2026-07-19", "2026-07-19T12:00:00Z"])
+    def test_parsed(self, value):
+        assert event_date_state(value) == "parsed"

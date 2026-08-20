@@ -10,6 +10,7 @@ test_settlement_hardening.py) rather than through TestClient.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 
 import pytest
@@ -165,6 +166,69 @@ class TestSettlement:
             claim_deadline="2099-01-01",
         ))
         assert resp.settled is False
+
+
+class TestDemotionAuditLog:
+    """retro#554: every ``settlement_vote_demoted`` line must identify its
+    forecast (question hash) and the claim-window bounds the rule actually
+    compared against — without them a demotion cannot be audited for false
+    positives — and must separate a genuinely undated article from one whose
+    date string failed to parse (``event_date_state``)."""
+
+    @staticmethod
+    def _demotion_lines(caplog):
+        return [
+            r.message for r in caplog.records
+            if "event=settlement_vote_demoted" in r.message
+        ]
+
+    async def test_demotion_line_carries_question_hash_and_window_bounds(self, caplog):
+        caplog.set_level(logging.WARNING, logger=forecaster.logger.name)
+        question = "Will the treaty be signed by end of 2026?"
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[_source(stance=0.95, settled=True, settlement_event_date="2020-01-01")],
+            question=question,
+            claim_created_at="2026-06-01",
+            claim_deadline="2026-12-31",
+        ))
+        assert resp.settlement_votes_demoted == 1
+        (line,) = self._demotion_lines(caplog)
+        assert "reason=event_before_claim_window" in line
+        assert f"question={forecaster._question_hash(question)}" in line
+        assert "created=2026-06-01" in line
+        assert "deadline=2026-12-31" in line
+        assert "event_date=2020-01-01" in line
+        assert "event_date_state=parsed" in line
+
+    async def test_absent_date_is_distinguished_from_a_parse_failure(self, caplog):
+        # Both rows demote as missing_event_date (the reason string stays
+        # stable for downstream grep), but the new field tells them apart:
+        # no date at all vs. a date string that failed ISO parsing.
+        caplog.set_level(logging.WARNING, logger=forecaster.logger.name)
+        await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[
+                _source(stance=0.95, settled=True),
+                _source(stance=0.9, settled=True, settlement_event_date="mid-July 2026"),
+            ],
+        ))
+        absent, unparseable = self._demotion_lines(caplog)
+        assert "reason=missing_event_date" in absent
+        assert "event_date_state=absent" in absent
+        assert "reason=missing_event_date" in unparseable
+        assert "event_date_state=unparseable" in unparseable
+        assert "event_date=mid-July 2026" in unparseable
+
+    async def test_undated_foreclosure_carries_the_state_field_too(self, caplog):
+        caplog.set_level(logging.WARNING, logger=forecaster.logger.name)
+        await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[_source(stance=-0.95, settled=True)],
+            claim_direction="arrival",
+            claim_deadline="2099-01-01",
+        ))
+        (line,) = self._demotion_lines(caplog)
+        assert "reason=undated_foreclosure" in line
+        assert "event_date_state=absent" in line
+        assert "deadline=2099-01-01" in line
 
 
 class TestSourceMassCap:

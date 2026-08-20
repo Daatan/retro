@@ -11602,8 +11602,8 @@
     "H04:haaretz": {
       "event_id": "H04",
       "source_id": "haaretz",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "H04:israel_hayom": {
@@ -11651,7 +11651,7 @@
     "H04:toi": {
       "event_id": "H04",
       "source_id": "toi",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-20T04:51:25.006157"
+  "last_updated": "2026-08-20T04:52:42.556989"
 }

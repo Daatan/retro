@@ -1033,3 +1033,98 @@ class TestSecretLoadingLogsLoudly:
             ws._log_unresolved_secrets()
 
         assert not any(r.levelname == "WARNING" for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# retro#562 — date windows must survive to the SERP providers, and relative
+# dates must be filterable
+# ---------------------------------------------------------------------------
+
+class TestGoogleTbs:
+    """_google_tbs builds a cdr range for either or both bounds — a
+    date_to-only window (the born-true pre-creation research leg) must not
+    silently drop the restriction (retro#562)."""
+
+    @needs_deps
+    def test_date_to_only_builds_cd_max(self):
+        from datetime import datetime
+        ws = _fresh_ws()
+        assert ws._google_tbs(None, datetime(2026, 7, 23)) == "cdr:1,cd_max:7/23/2026"
+
+    @needs_deps
+    def test_date_from_only_builds_cd_min(self):
+        from datetime import datetime
+        ws = _fresh_ws()
+        assert ws._google_tbs(datetime(2026, 6, 1), None) == "cdr:1,cd_min:6/1/2026"
+
+    @needs_deps
+    def test_both_bounds(self):
+        from datetime import datetime
+        ws = _fresh_ws()
+        assert ws._google_tbs(datetime(2026, 6, 1), datetime(2026, 7, 23)) == (
+            "cdr:1,cd_min:6/1/2026,cd_max:7/23/2026"
+        )
+
+    @needs_deps
+    def test_no_bounds_is_none(self):
+        ws = _fresh_ws()
+        assert ws._google_tbs(None, None) is None
+
+
+class TestRelativeDates:
+    """SerpAPI/Serper return '1 day ago'-style dates; _filter_by_date's
+    %Y-%m-%d parse treated them as unparseable (kept), making the post-filter
+    inert on exactly the legs that needed it (retro#562). Fixtures use a
+    frozen `now` so they don't decay."""
+
+    @staticmethod
+    def _now():
+        from datetime import datetime
+        return datetime(2026, 8, 20, 12, 0, 0)
+
+    @needs_deps
+    def test_absolutizes_days_weeks_months(self):
+        ws = _fresh_ws()
+        now = self._now()
+        assert ws._absolutize_relative_date("1 day ago", now=now) == "2026-08-19"
+        assert ws._absolutize_relative_date("3 weeks ago", now=now) == "2026-07-30"
+        assert ws._absolutize_relative_date("2 months ago", now=now) == "2026-06-21"
+        assert ws._absolutize_relative_date("5 hours ago", now=now) == "2026-08-20"
+
+    @needs_deps
+    def test_passes_through_absolute_and_unknown(self):
+        ws = _fresh_ws()
+        now = TestRelativeDates._now()
+        assert ws._absolutize_relative_date("2026-07-22", now=now) == "2026-07-22"
+        assert ws._absolutize_relative_date("Jul 22, 2026", now=now) == "Jul 22, 2026"
+        assert ws._absolutize_relative_date("", now=now) == ""
+
+    @needs_deps
+    def test_filter_by_date_drops_fresh_relative_results_from_historical_window(self, monkeypatch):
+        """The live repro: a strictly historical window (date_to only) answered
+        with results dated '1 day ago' must filter them out, not keep them."""
+        ws = _fresh_ws()
+        monkeypatch.setattr(ws, "datetime", _FrozenDatetime)
+        results = [
+            ws.SearchResult(title="fresh", url="https://a", snippet="", source="a",
+                            published_date="1 day ago"),
+            ws.SearchResult(title="historical", url="https://b", snippet="", source="b",
+                            published_date="2026-07-20"),
+            ws.SearchResult(title="undated", url="https://c", snippet="", source="c",
+                            published_date=""),
+        ]
+        out = ws._filter_by_date(results, None, _FrozenDatetime(2026, 7, 23))
+        titles = [r.title for r in out]
+        assert "fresh" not in titles       # 2026-08-19 > 2026-07-23 → dropped
+        assert "historical" in titles
+        assert "undated" in titles         # benefit of the doubt preserved
+
+
+from datetime import datetime as _real_datetime
+
+
+class _FrozenDatetime(_real_datetime):
+    """datetime whose now() is pinned — keeps relative-date fixtures from decaying."""
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2026, 8, 20, 12, 0, 0)

@@ -84,7 +84,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, fields as _dataclass_fields, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 from urllib.parse import urlencode
@@ -542,13 +542,57 @@ def _date_query_suffix(date_from: Optional[datetime], date_to: Optional[datetime
     return (" " + " ".join(parts)) if parts else ""
 
 
+def _google_tbs(date_from: Optional[datetime], date_to: Optional[datetime]) -> Optional[str]:
+    """Google custom-date-range ``tbs`` value for either or both bounds.
+
+    ``cdr:1`` with only ``cd_max:`` (or only ``cd_min:``) is valid Google
+    syntax. A date_to-only window — the born-true pre-creation research leg —
+    must NOT silently drop the restriction and answer a strictly historical
+    query with this week's news (retro#562).
+    """
+    if not date_from and not date_to:
+        return None
+    parts = ["cdr:1"]
+    if date_from:
+        parts.append(f"cd_min:{date_from.month}/{date_from.day}/{date_from.year}")
+    if date_to:
+        parts.append(f"cd_max:{date_to.month}/{date_to.day}/{date_to.year}")
+    return ",".join(parts)
+
+
+_RELATIVE_DATE_RE = re.compile(
+    r"^\s*(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago\s*$", re.IGNORECASE
+)
+_RELATIVE_DATE_UNIT_DAYS = {
+    "minute": 0, "hour": 0, "day": 1, "week": 7, "month": 30, "year": 365,
+}
+
+
+def _absolutize_relative_date(published: str, now: Optional[datetime] = None) -> str:
+    """Convert a SERP relative date ('1 day ago', '3 weeks ago') to YYYY-MM-DD.
+
+    SerpAPI/Serper return relative strings that ``_filter_by_date``'s %Y-%m-%d
+    parse can't act on (ValueError → kept as benefit of the doubt), which made
+    the post-filter inert on exactly the legs that needed it (retro#562).
+    Anything unrecognized passes through unchanged, keeping the benefit of the
+    doubt for genuinely undated or oddly-dated entries.
+    """
+    m = _RELATIVE_DATE_RE.match(published or "")
+    if not m:
+        return published
+    n, unit = int(m.group(1)), m.group(2).lower()
+    dt = (now or datetime.now()) - timedelta(days=n * _RELATIVE_DATE_UNIT_DAYS[unit])
+    return dt.strftime("%Y-%m-%d")
+
+
 def _filter_by_date(
     results: List["SearchResult"],
     date_from: Optional[datetime],
     date_to: Optional[datetime],
 ) -> List["SearchResult"]:
     """Post-filter results to the requested window using published_date.
-    Entries without a parseable date are kept (benefit of the doubt).
+    Relative dates are absolutized first; entries without a parseable date are
+    kept (benefit of the doubt).
     """
     if not date_from and not date_to:
         return results
@@ -558,7 +602,9 @@ def _filter_by_date(
             out.append(r)
             continue
         try:
-            d = datetime.strptime(r.published_date[:10], "%Y-%m-%d")
+            d = datetime.strptime(
+                _absolutize_relative_date(r.published_date)[:10], "%Y-%m-%d"
+            )
             if date_from and d < date_from:
                 continue
             if date_to and d > date_to:
@@ -659,10 +705,9 @@ def _search_serpapi_news(
         "num": min(limit, 100),
         "api_key": SERPAPI_API_KEY,
     }
-    if date_from:
-        params["tbs"] = f"cdr:1,cd_min:{date_from.month}/{date_from.day}/{date_from.year}"
-        if date_to:
-            params["tbs"] += f",cd_max:{date_to.month}/{date_to.day}/{date_to.year}"
+    tbs = _google_tbs(date_from, date_to)
+    if tbs:
+        params["tbs"] = tbs
 
     r = httpx.get(
         "https://serpapi.com/search.json",
@@ -685,7 +730,7 @@ def _search_serpapi_news(
             url=item.get("link", ""),
             snippet=item.get("snippet", ""),
             source=item.get("source", _extract_domain(item.get("link", ""))),
-            published_date=item.get("date", ""),
+            published_date=_absolutize_relative_date(item.get("date", "")),
         )
         for item in items[:limit]
         if item.get("link")
@@ -708,11 +753,11 @@ def _search_serper_news(
         raise RuntimeError("SERPER_API_KEY not set")
 
     body: dict = {"q": query, "num": limit}
-    if date_from and date_to:
-        # Serper tbs date range: cdr:1,cd_min:M/D/YYYY,cd_max:M/D/YYYY
-        def _fmt(dt: datetime) -> str:
-            return f"{dt.month}/{dt.day}/{dt.year}"
-        body["tbs"] = f"cdr:1,cd_min:{_fmt(date_from)},cd_max:{_fmt(date_to)}"
+    # Serper tbs date range: cdr:1[,cd_min:M/D/YYYY][,cd_max:M/D/YYYY] — either
+    # bound alone is valid (retro#562).
+    tbs = _google_tbs(date_from, date_to)
+    if tbs:
+        body["tbs"] = tbs
 
     r = httpx.post(
         "https://google.serper.dev/news",
@@ -734,7 +779,7 @@ def _search_serper_news(
             url=item.get("link", ""),
             snippet=item.get("snippet", ""),
             source=_clean_source("", item.get("link", "")),
-            published_date=item.get("date", ""),
+            published_date=_absolutize_relative_date(item.get("date", "")),
         )
         for item in items[:limit]
         if item.get("link")

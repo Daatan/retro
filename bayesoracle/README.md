@@ -215,3 +215,16 @@ See `DESIGN.md` for the full target architecture. Items not yet built:
 - **Oracle API integration** — `/forecast` returning both `base_forecast` and `bayes_forecast`
 - **Correlated parents / Gaussian copula** — multi-parent joint distributions
 - **`bayes_graph.html`** drilldown per DESIGN spec (current `graph.html` is a working prototype)
+
+## Daily Oracle node series (retro#577)
+
+`series/log_nodes.py` asks the v1 Oracle (`POST /forecast`) every node question in
+`series/questions.json` once per UTC day and appends one JSON line per node to a JSONL
+file (`{date,node_id,question,probability,ci,articles_used,confidence,insufficient_data,sources}`).
+Idempotent per day, sequential with a sleep. Runs from cron on the Oracle box
+(`06:30 UTC`, output `/home/ubuntu/oracle-series/nodes.jsonl`). API key from
+`ORACLE_API_KEY` (env or repo `.env`).
+
+```
+cd bayesoracle && ../pipeline/.venv/bin/python series/log_nodes.py --out /home/ubuntu/oracle-series/nodes.jsonl
+```

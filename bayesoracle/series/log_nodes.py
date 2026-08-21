@@ -108,19 +108,30 @@ def logged_today(out: Path, date: str) -> set[str]:
     return done
 
 
+def _to_prob(x):
+    """Oracle stance mean/ci are on [-1, 1]; probability = (mean + 1) / 2."""
+    return None if x is None else round((float(x) + 1) / 2, 4)
+
+
 def make_record(date: str, node_id: str, question: str, resp: dict) -> dict:
-    ci = resp.get("ci")
-    if isinstance(ci, dict):
-        ci = [ci.get("lower", ci.get("low")), ci.get("upper", ci.get("high"))]
+    insufficient = bool(resp.get("insufficient_data", False))
+    ci = None
+    if resp.get("ci_low") is not None and resp.get("ci_high") is not None:
+        ci = [_to_prob(resp["ci_low"]), _to_prob(resp["ci_high"])]
     return {
         "date": date,
         "node_id": node_id,
         "question": question,
-        "probability": resp.get("probability"),
-        "ci": ci,
+        "probability": None if insufficient else _to_prob(resp.get("mean")),
+        "ci": None if insufficient else ci,
         "articles_used": resp.get("articles_used"),
-        "confidence": resp.get("confidence"),
-        "insufficient_data": bool(resp.get("insufficient_data", False)),
+        # no scalar confidence field on /forecast; keep the dispersion + pool-size telemetry
+        "confidence": None if insufficient else {
+            "std": resp.get("std"), "n_eff": resp.get("n_eff"), "evidence_mass": resp.get("evidence_mass"),
+        },
+        "insufficient_data": insufficient,
+        "reason": resp.get("reason"),
+        "settled": bool(resp.get("settled", False)),
         "sources": [s.get("url") for s in resp.get("sources") or [] if isinstance(s, dict) and s.get("url")],
     }
 

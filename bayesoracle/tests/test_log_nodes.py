@@ -28,8 +28,8 @@ def test_loader_rejects_bad_length(tmp_path):
 
 def _fake(question):
     return {
-        "probability": 0.42, "ci": {"lower": 0.3, "upper": 0.55}, "confidence": "medium",
-        "articles_used": 3, "insufficient_data": False,
+        "mean": -0.16, "std": 0.2, "ci_low": -0.4, "ci_high": 0.1, "n_eff": 2.5, "evidence_mass": 1.1,
+        "articles_used": 3, "insufficient_data": False, "reason": None, "settled": False,
         "sources": [{"url": "https://example.com/a", "title": "A"}, {"title": "no url"}],
     }
 
@@ -53,8 +53,9 @@ def test_run_is_idempotent_per_day(tmp_path):
     rec = lines[0]
     assert rec == {
         "date": "2026-08-21", "node_id": "pm.A", "question": "Will A happen by 2027?",
-        "probability": 0.42, "ci": [0.3, 0.55], "articles_used": 3, "confidence": "medium",
-        "insufficient_data": False, "sources": ["https://example.com/a"],
+        "probability": 0.42, "ci": [0.3, 0.55], "articles_used": 3,
+        "confidence": {"std": 0.2, "n_eff": 2.5, "evidence_mass": 1.1},
+        "insufficient_data": False, "reason": None, "settled": False, "sources": ["https://example.com/a"],
     }
 
 
@@ -72,3 +73,10 @@ def test_run_skips_failures_and_refills(tmp_path):
     state["fail_b"] = False
     assert log_nodes.run(qs, out, fc, date="2026-08-21", sleep_s=0, log=lambda *_: None) == 1
     assert log_nodes.logged_today(out, "2026-08-21") == {"pm.A", "pm.B"}
+
+
+def test_insufficient_data_has_null_probability():
+    rec = log_nodes.make_record("2026-08-21", "pm.A", "q?", {"mean": 0.0, "ci_low": -1, "ci_high": 1,
+                                "articles_used": 0, "insufficient_data": True, "reason": "no_search_results"})
+    assert rec["probability"] is None and rec["ci"] is None and rec["confidence"] is None
+    assert rec["insufficient_data"] and rec["reason"] == "no_search_results"

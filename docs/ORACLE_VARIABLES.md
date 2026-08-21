@@ -1620,3 +1620,80 @@ once enough accumulate, tracked separately from this shipment.
   on every call). Defaults to contradicted pins only;
   `?include_confirmed=true` returns the full ledger for a precision
   denominator.
+
+## 2026-08-21 — shadow hazard prior for diffuse arrival claims (retro#356)
+
+No article-driven extractor will ever emit *"the deadline is approaching and
+nothing has happened"* — yet for a by-deadline claim, sustained absence of
+occurrence evidence **is** evidence against. The pool only ever accumulates
+positive article signals, so a rumor-heavy claim holds its elevated P right up
+to the deadline. This adds a shadow re-drift of the pooled mean toward the
+resolved base rate as the claim's window elapses.
+
+**Shadow only, off by default.** `PoolAggregateResult.hazard_shadow_mean` sits
+under the same compute-but-don't-use contract as `n_eff` / `age_adjusted_mass`
+(retro#458 Phase 2): nothing in `aggregation.py` or its callers reads it back
+into the pooled estimate. `test_hazard_never_moves_the_published_mean` asserts
+exactly that — hazard off vs on, every published field byte-identical.
+
+### Scope: `diffuse` only
+
+`claim_archetype` (`scheduled | diffuse | threshold | none`) already existed and
+was already threaded into `aggregate_pool`, where it gated settlement votes. The
+hazard reuses it:
+
+- **`diffuse`** — the pure "X happens by deadline, no scheduled date" arrival
+  claim. The only archetype the hazard applies to.
+- **`scheduled`** — must NOT decay. The event has a known date, so the open
+  question is the *outcome*, not the *arrival*.
+- **`threshold`** — arguably hazard-shaped, but a threshold can be crossed and
+  un-crossed. Revisit against shadow Briers.
+- **`none` / absent** — off, per design rule R3 (missing data never increases
+  influence).
+
+Also skipped whenever `any(settled_flags)`: the hazard exists to price
+*absence*, and a settlement-grade row **is** occurrence evidence. The extractor's
+`is_occurrence` would be the sharper signal, but it is itself still an
+EXPERIMENTAL shadow field — building one shadow on top of another would compound
+uncertainty rather than measure it.
+
+### Decay target: the resolved base rate, shrunk toward a prior
+
+`archetype_base_rate()` (`resolution_scorer.py`) computes
+`(successes + prior_n * prior_p) / (n + prior_n)` over resolved records of that
+archetype — the same shrinkage construction as `resolution_shadow_brier_prior_n`,
+and for the same reason: it degrades smoothly rather than at a minimum-n cliff.
+
+The target is deliberately **not** 0.5 (maximum uncertainty is not a base rate,
+and would *raise* P on any claim currently below it — the exact inverse of the
+point), and not the claim's own P at creation (which anchors on the very
+estimate this issue suspects is rumor-inflated).
+
+Note that a strict Poisson arrival model would decay toward **0**, not toward a
+base rate: if nothing has arrived by `t`, `P(arrive before T) = 1 - exp(-λ(T-t))`,
+which vanishes as `t → T`. Shrinking toward the resolved base rate is the
+deliberately more conservative choice. **The functional form is a dial to re-fit
+against shadow Briers, not a claim to have been calibrated.**
+
+### The ingest dependency
+
+`IngestResolutionRequest` gained optional `claim_archetype`, persisted into
+`resolution_feedback.jsonl`. Until **daatan** sends it, no record matches any
+archetype and the base rate *is* `hazard_shadow_prior_p` by construction — the
+correct behaviour, not a stall. As of 2026-08-21 the file holds 13 resolutions
+(7 True / 6 False), none carrying an archetype.
+
+### Config (`api/src/forecast_api/config.py`)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `hazard_shadow_enabled` | `False` | Master switch. While off, the resolution-feedback file is never read on the forecast path. |
+| `hazard_shadow_prior_p` | `0.15` | Base rate before shrinkage — "most rumored by-deadline events do not happen by the deadline". |
+| `hazard_shadow_prior_n` | `10.0` | Pseudo-resolutions of shrinkage toward `prior_p`. |
+| `hazard_shadow_half_life_fraction` | `0.5` | Fraction of the `[created_at, deadline]` window at which half the excess over the base rate has decayed. |
+
+Decay is exponential in elapsed **fraction** of the claim's own window, reusing
+`recency_weight`'s `0.5 ** (x / half_life)` idiom. Fraction rather than absolute
+days because the deadline is what the claim is *about*: a 3-day and a 2-year
+window are both fully elapsed at their deadline, and absolute-time decay would
+leave the short claim essentially untouched.

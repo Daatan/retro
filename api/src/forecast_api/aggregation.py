@@ -114,6 +114,84 @@ def recency_weight(
     return max(floor, w)
 
 
+def shadow_hazard_mean(
+    mean: float,
+    *,
+    claim_archetype: Optional[str],
+    claim_created_at: Optional[str],
+    claim_deadline: Optional[str],
+    base_rate: Optional[float],
+    half_life_fraction: float,
+    occurrence_seen: bool,
+    today: Optional[date] = None,
+) -> Optional[float]:
+    """Shadow-only (retro#356): what the pooled ``mean`` would be if sustained
+    ABSENCE of occurrence evidence counted against a by-deadline arrival claim.
+
+    No article-driven extractor ever emits "the deadline is approaching and
+    nothing has happened", so the pool only ever accumulates positive article
+    signals and a rumor-heavy claim holds its elevated P right up to the
+    deadline. This drifts that P toward the resolved base rate as the claim's
+    window elapses with no occurrence on record.
+
+    **Nothing reads this back into the published estimate.** It rides
+    ``PoolAggregateResult.hazard_shadow_mean`` under the same
+    compute-but-don't-use contract as ``age_adjusted_mass`` / ``n_eff``
+    (retro#458 Phase 2), so its Brier can be compared against the live P's once
+    resolutions accumulate — this issue's own calibration path.
+
+    Returns ``None`` — meaning "no shadow opinion", not "no decay" — whenever
+    the hazard does not apply. Every such gate is deliberate:
+
+    * ``base_rate is None`` or ``half_life_fraction <= 0``: the feature is off.
+    * ``claim_archetype != "diffuse"``: scope decision on the issue. A
+      ``scheduled`` claim has a known event date, so its open question is the
+      OUTCOME, not the ARRIVAL, and decaying it would be simply wrong;
+      ``threshold`` is arguably hazard-shaped but a threshold can be crossed
+      and un-crossed; ``none``/absent stays off per design rule R3 (missing
+      data never increases influence).
+    * ``occurrence_seen``: the hazard's whole claim is about absence. Once a
+      settlement-grade row exists, the pool HAS occurrence evidence and there
+      is no absence to price.
+    * Unparseable/degenerate window: fail-open, again R3.
+
+    The decay is exponential in elapsed FRACTION of the claim's own window,
+    reusing :func:`recency_weight`'s ``0.5 ** (x / half_life)`` idiom — at
+    ``half_life_fraction`` of the way to the deadline, half the excess over the
+    base rate is gone. Fraction rather than absolute days because the deadline
+    is what the claim is *about*: a 3-day window and a 2-year window are both
+    fully elapsed at their deadline, and absolute-time decay would leave the
+    short claim essentially untouched.
+
+    Worth stating plainly, since it is the most likely thing to revisit: a
+    strict Poisson arrival model would decay toward **0**, not toward a base
+    rate (if nothing has arrived by ``t``, ``P(arrive before T) = 1 -
+    exp(-lambda(T - t))``, which vanishes as ``t -> T``). Shrinking toward the
+    resolved base rate instead is the deliberately more conservative choice
+    this issue and its design decision both specify. The functional form is a
+    dial to re-fit against shadow Briers, not a claim to have been calibrated.
+    """
+    if base_rate is None or half_life_fraction <= 0:
+        return None
+    if (claim_archetype or "").strip().lower() != "diffuse":
+        return None
+    if occurrence_seen:
+        return None
+    created = _parse_date(claim_created_at)
+    deadline = _parse_date(claim_deadline)
+    if created is None or deadline is None:
+        return None
+    window_days = (deadline - created).days
+    if window_days <= 0:
+        return None
+    ref = today or datetime.now().date()
+    elapsed = clamp(float((ref - created).days), 0.0, float(window_days))
+    decay = 0.5 ** ((elapsed / window_days) / half_life_fraction)
+    p_live = stance_to_prob(mean)
+    p_shadow = base_rate + (p_live - base_rate) * decay
+    return prob_to_stance(clamp(p_shadow, 0.0, 1.0))
+
+
 def weighted_mean(values: Sequence[float], weights: Sequence[float]) -> float:
     """Weighted arithmetic mean; falls back to a plain mean when weights sum to 0."""
     total = sum(weights)
@@ -759,6 +837,15 @@ class PoolAggregateResult(NamedTuple):
     # pooled estimate; callers log it, same contract as settlement_demotions.
     # Empty when the check is disabled or nothing falls outside.
     evidence_window_outside_rows: tuple = ()
+    # Shadow instrumentation only (retro#356): the pooled mean re-drifted toward
+    # the resolved base rate for a `diffuse` by-deadline claim whose window has
+    # elapsed with no occurrence evidence — see shadow_hazard_mean(). None when
+    # the hazard does not apply (feature off, wrong archetype, occurrence
+    # already on record, or an unusable window), which is "no shadow opinion",
+    # NOT "no decay". Nothing in this module or its callers reads it back into
+    # the pooled estimate; same compute-but-don't-use contract as
+    # age_adjusted_mass.
+    hazard_shadow_mean: Optional[float] = None
 
 
 # Layer C's weight, per relevance band (retro#394).
@@ -1173,6 +1260,8 @@ def aggregate_pool(
     source_ids: Optional[Sequence[str]] = None,
     max_source_share: float = 1.0,
     evidence_window_lookback_days: int = -1,
+    hazard_shadow_base_rate: Optional[float] = None,
+    hazard_shadow_half_life_fraction: float = 0.5,
 ) -> Optional[PoolAggregateResult]:
     """Pool a set of already-extracted, already-weighted per-source signals
     into a final estimate: the relevance off-topic safety net, logit
@@ -1279,6 +1368,26 @@ def aggregate_pool(
     age_adjusted_mass = (
         sum(age_adjusted_weights) if age_adjusted_weights is not None else evidence_mass
     )
+    # Shadow hazard prior (retro#356) — reporting-only, see
+    # PoolAggregateResult.hazard_shadow_mean and shadow_hazard_mean().
+    # `occurrence_seen` reads the settlement-grade flags the caller already
+    # supplies rather than a new parameter: a settled row IS occurrence
+    # evidence, and this hazard exists only to price its ABSENCE. (The
+    # extractor's `is_occurrence` would be the sharper signal, but it is itself
+    # still an EXPERIMENTAL shadow field and is not threaded here — building
+    # one shadow on top of another would compound, not measure, uncertainty.)
+    _occurrence_seen = any(settled_flags)
+
+    def _hazard(m: float) -> Optional[float]:
+        return shadow_hazard_mean(
+            m,
+            claim_archetype=claim_archetype,
+            claim_created_at=claim_created_at,
+            claim_deadline=claim_deadline,
+            base_rate=hazard_shadow_base_rate,
+            half_life_fraction=hazard_shadow_half_life_fraction,
+            occurrence_seen=_occurrence_seen,
+        )
     # Glide-eligible AND still running: a deadline-shaped question whose
     # deadline has not passed. After it passes there is no glide left to
     # protect, so the carve-out below stops applying and a stale pool may
@@ -1368,6 +1477,7 @@ def aggregate_pool(
                 settlement_demotions=decision.demotions,
                 settlement_vote_indices=decision.vote_indices,
                 evidence_window_outside_rows=window_outside,
+                hazard_shadow_mean=_hazard(pinned_mean),
             )
         reason = (
             "all_articles_off_topic" if all_off_topic
@@ -1388,6 +1498,11 @@ def aggregate_pool(
             settlement_demotions=decision.demotions,
             settlement_vote_indices=(),
             evidence_window_outside_rows=window_outside,
+            # Deliberately None rather than _hazard(0.0): this branch computed
+            # no pooled mean at all (the placeholder zeros above), so there is
+            # nothing for the hazard to drift. Decaying the placeholder would
+            # manufacture a shadow estimate for a pool that abstained.
+            hazard_shadow_mean=None,
         )
 
     n = len(stances)
@@ -1453,4 +1568,5 @@ def aggregate_pool(
         settlement_demotions=decision.demotions,
         settlement_vote_indices=decision.vote_indices,
         evidence_window_outside_rows=window_outside,
+        hazard_shadow_mean=_hazard(mean),
     )

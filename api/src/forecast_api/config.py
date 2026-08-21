@@ -93,6 +93,31 @@ class ApiSettings(BaseSettings):
     resolution_shadow_weight_min: float = 0.25
     resolution_shadow_weight_max: float = 2.0
 
+    # ── Shadow hazard prior (retro#356) ──────────────────────────────────
+    # Absence of occurrence evidence IS evidence against a by-deadline arrival
+    # claim, but no article-driven extractor will ever emit "nothing has
+    # happened", so a rumor-heavy claim holds its elevated P until the deadline
+    # passes. These configure a SHADOW re-drift of the pooled mean toward the
+    # resolved base rate — computed alongside the live estimate and read by
+    # nothing, so its Brier can be compared once resolutions accumulate. Same
+    # compute-but-don't-use contract as the resolution-shadow board above.
+    #
+    # Off by default: this is new modelling behaviour, not a bug fix, and it
+    # cannot be calibrated on the 13 resolutions on record today.
+    hazard_shadow_enabled: bool = False
+    # Where a diffuse claim's P drifts TO, before shrinkage. 0.15 encodes "most
+    # rumored by-deadline events do not happen by the deadline". Deliberately
+    # NOT 0.5: that is maximum uncertainty rather than a base rate, and would
+    # RAISE P on any claim currently below it — the exact inverse of the point.
+    hazard_shadow_prior_p: float = 0.15
+    # Pseudo-resolutions of shrinkage toward hazard_shadow_prior_p, mirroring
+    # resolution_shadow_brier_prior_n. Higher = more conservative.
+    hazard_shadow_prior_n: float = 10.0
+    # Fraction of the claim's own [created_at, deadline] window at which half
+    # the excess over the base rate has decayed. 0.5 = half gone at the window's
+    # midpoint, a quarter of the excess left at the deadline.
+    hazard_shadow_half_life_fraction: float = 0.5
+
     max_articles: int = 10
     host: str = "127.0.0.1"
     port: int = 8001

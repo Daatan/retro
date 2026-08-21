@@ -76,6 +76,55 @@ def count_resolutions(ingest_path: Path) -> int:
     return sum(1 for record in _load_records(ingest_path) if _usable_sources(record))
 
 
+def archetype_base_rate(
+    ingest_path: Path,
+    archetype: str,
+    *,
+    prior_p: float,
+    prior_n: float,
+) -> tuple[float, int]:
+    """Resolved base rate for one claim archetype, shrunk toward ``prior_p``.
+
+    ``(successes + prior_n * prior_p) / (n + prior_n)`` — the same shrinkage
+    construction as ``resolution_shadow_brier_prior_n`` (config.py), and for
+    the same reason: it degrades smoothly rather than at a minimum-n cliff. The
+    retro#356 hazard needs a base rate to drift toward, and demanding a
+    calibrated one before shipping anything would block the shadow
+    indefinitely — with zero resolved claims of this archetype the rate simply
+    IS ``prior_p``, and it earns its way toward the empirical value as
+    resolutions land.
+
+    Returns ``(rate, n)`` where ``n`` counts records actually matching the
+    archetype, so a caller can report how much of the rate is real evidence
+    rather than prior. Records with no ``claim_archetype`` (every push that
+    predates daatan sending it) match nothing and are excluded — absence is not
+    evidence for any particular archetype.
+
+    Unlike :func:`count_resolutions` this deliberately does NOT filter on
+    ``_usable_sources``: that gate asks "can this record score per-source
+    credibility", which needs usable source rows, while a base rate asks only
+    "how did the claim resolve" — a resolution with no scoreable sources still
+    resolved, and dropping it would bias the rate toward claims that happened
+    to attract usable coverage.
+    """
+    want = (archetype or "").strip().lower()
+    n = 0
+    successes = 0
+    for record in _load_records(ingest_path):
+        if (record.get("claim_archetype") or "").strip().lower() != want:
+            continue
+        outcome = record.get("outcome")
+        if outcome is None:
+            continue
+        n += 1
+        if outcome is True:
+            successes += 1
+    denom = n + prior_n
+    if denom <= 0:
+        return prior_p, n
+    return (successes + prior_n * prior_p) / denom, n
+
+
 def rescore_from_disk(ingest_path: Path, output_path: Path) -> dict:
     """
     Replay every ingested resolution through a fresh PlackettLuce model and

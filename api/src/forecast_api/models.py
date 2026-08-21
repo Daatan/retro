@@ -523,6 +523,7 @@ class IngestResolutionRequest(BaseModel):
     sources: list[ResolutionSourceInput] = Field(default_factory=list)
     author_signals: list[AuthorSignalInput] = Field(default_factory=list)
     settlement_snapshot: Optional[SettlementSnapshotInput] = Field(default=None, description="The settlement pin's snapshot at forecast time, when this claim had one — feeds the settlement-pin ledger (retro#361 Phase 1: pins contradicted by resolution). Omit when the claim was never settlement-pinned; the ledger then records nothing for this prediction_id.")
+    claim_archetype: Optional[Literal["scheduled", "diffuse", "threshold", "none"]] = Field(default=None, description="Temporal archetype of the resolved claim, same enum as ForecastRequest.claim_archetype. Recorded so a resolved base rate can be conditioned on archetype (retro#356 — the shadow hazard prior drifts a `diffuse` by-deadline claim toward the base rate of resolved `diffuse` claims). Optional and fail-open: an older daatan that does not send it leaves the record unconditioned, and such records simply do not count toward any archetype's rate.")
 
 
 class IngestResolutionResponse(BaseModel):

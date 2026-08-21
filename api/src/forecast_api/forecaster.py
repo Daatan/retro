@@ -85,8 +85,29 @@ from .models import (
     TokenUsage,
 )
 from .config import settings
+from .resolution_scorer import archetype_base_rate
 from .settlement_verdict_store import get_verdict, put_verdict, verdict_key
 from .settlement_verifier import SettlementVote, Verdict, build_prompt, verify_settlement
+
+
+def _hazard_shadow_base_rate() -> Optional[float]:
+    """Base rate the retro#356 shadow hazard drifts a `diffuse` claim toward,
+    or None when the feature is off (the default).
+
+    Returning None when disabled is what keeps this free: aggregation treats a
+    None base rate as "no shadow opinion" and skips the hazard entirely, so the
+    resolution-feedback file is never read on the forecast path unless someone
+    has deliberately switched HAZARD_SHADOW_ENABLED on.
+    """
+    if not settings.hazard_shadow_enabled:
+        return None
+    rate, _n = archetype_base_rate(
+        settings.resolved_resolution_feedback_path,
+        "diffuse",
+        prior_p=settings.hazard_shadow_prior_p,
+        prior_n=settings.hazard_shadow_prior_n,
+    )
+    return rate
 
 logger = logging.getLogger(__name__)
 
@@ -1797,6 +1818,9 @@ async def _run_forecast_inner(
         published_dates=all_published_dates,
         claim_created_at=req.claim_created_at,
         claim_archetype=req.claim_archetype,
+        # retro#356 shadow hazard — reporting-only, gated off by default.
+        hazard_shadow_base_rate=_hazard_shadow_base_rate(),
+        hazard_shadow_half_life_fraction=settings.hazard_shadow_half_life_fraction,
         settlement_revalidate=settings.settlement_revalidate,
         settlement_post_deadline_grace_days=settings.settlement_post_deadline_grace_days,
         settlement_quality_floor=settings.settlement_quality_floor,
@@ -2168,6 +2192,9 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         published_dates=published_dates,
         claim_created_at=req.claim_created_at,
         claim_archetype=req.claim_archetype,
+        # retro#356 shadow hazard — reporting-only, gated off by default.
+        hazard_shadow_base_rate=_hazard_shadow_base_rate(),
+        hazard_shadow_half_life_fraction=settings.hazard_shadow_half_life_fraction,
         settlement_revalidate=settings.settlement_revalidate,
         settlement_post_deadline_grace_days=settings.settlement_post_deadline_grace_days,
         settlement_quality_floor=settings.settlement_quality_floor,

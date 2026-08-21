@@ -106,6 +106,11 @@ async def ingest_resolution(path: Path, req: IngestResolutionRequest) -> IngestR
         "resolved_at": req.resolved_at,
         "sources": [s.model_dump() for s in req.sources],
         "author_signals": [s.model_dump() for s in req.author_signals],
+        # retro#356: recorded so archetype_base_rate() can condition on it.
+        # None for any push that predates daatan sending it — those records are
+        # simply not counted toward an archetype's rate rather than being
+        # guessed into one.
+        "claim_archetype": req.claim_archetype,
     }
     await asyncio.to_thread(_append_line_to_disk, path, json.dumps(record))
 

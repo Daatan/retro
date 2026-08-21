@@ -198,6 +198,18 @@ def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDe
             event_target=p.event_target,
             is_occurrence=p.is_occurrence,
             verified=p.verified,
+            # Phase 1 conditional capture (#504) — pre-resolution shadow fields.
+            # Omitted here from 2026-08-09 to retro#566: the prompt asked, the
+            # model answered, and this projection dropped all nine on the wire.
+            is_conditional=p.is_conditional,
+            antecedent_text=p.antecedent_text,
+            antecedent_text_en=p.antecedent_text_en,
+            antecedent_polarity=p.antecedent_polarity,
+            relation=p.relation,
+            strength=p.strength,
+            stated_probability=p.stated_probability,
+            is_counterfactual=p.is_counterfactual,
+            speaker=p.speaker,
         )
         for p in predictions
     ]

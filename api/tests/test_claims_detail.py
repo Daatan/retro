@@ -678,6 +678,40 @@ class TestConditionalFields:
         assert claim.relation == "raises"
         assert claim.speaker == "Analysts"
 
+    def test_build_claims_detail_carries_the_conditional_fields(self):
+        """retro#566: the projection onto the wire must copy all 9 fields.
+
+        The three tests above exercise only the ClaimDetail model; the
+        projection in ``forecaster.build_claims_detail`` was never covered, and
+        it silently dropped every conditional field from 2026-08-09 until this
+        test existed — 12 days of prod rows with the keys present and all null.
+        """
+        p = PredictionExtraction(
+            claim="Likud gains 15 seats.",
+            quote="If the ceasefire holds, Likud is expected to gain 15 seats.",
+            stance=0.4,
+            certainty=0.6,
+            is_conditional=True,
+            antecedent_text="if the ceasefire holds",
+            antecedent_text_en="the ceasefire holds",
+            antecedent_polarity=True,
+            relation="raises",
+            strength="likely",
+            stated_probability=0.7,
+            is_counterfactual=False,
+            speaker="Analysts",
+        )
+        (d,) = forecaster.build_claims_detail([p])
+        assert d.is_conditional is True
+        assert d.antecedent_text == "if the ceasefire holds"
+        assert d.antecedent_text_en == "the ceasefire holds"
+        assert d.antecedent_polarity is True
+        assert d.relation == "raises"
+        assert d.strength == "likely"
+        assert d.stated_probability == 0.7
+        assert d.is_counterfactual is False
+        assert d.speaker == "Analysts"
+
     def test_conditional_fields_round_trip_through_json(self):
         """ClaimDetail with conditionals survives JSON serialization."""
         claim = ClaimDetail(

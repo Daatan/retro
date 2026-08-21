@@ -28,6 +28,7 @@ from tm.gatekeeper import (
 )
 from tm.extractor import (
     extract_predictions,
+    CacheWriteCoordinator,
     enforce_anchor_provenance,
     enforce_deadline_arithmetic,
     enforce_decider_intent_stance_cap,
@@ -902,6 +903,8 @@ async def _process_article_bounded(
     prediction_id: str | None = None,
     resolution_criteria: str | None = None,
     usage_events: list[dict] | None = None,
+    is_single_article: bool = False,
+    cache_coordinator: CacheWriteCoordinator | None = None,
 ) -> tuple[SearchResult, float, list, float | None, float | None] | None:
     """Run _process_article under a per-article wall-clock ceiling.
 
@@ -922,6 +925,8 @@ async def _process_article_bounded(
                 prediction_id=prediction_id,
                 resolution_criteria=resolution_criteria,
                 usage_events=usage_events,
+                is_single_article=is_single_article,
+                cache_coordinator=cache_coordinator,
             ),
             timeout=timeout_s,
         )
@@ -973,6 +978,8 @@ async def _process_article(
     prediction_id: str | None = None,
     resolution_criteria: str | None = None,
     usage_events: list[dict] | None = None,
+    is_single_article: bool = False,
+    cache_coordinator: CacheWriteCoordinator | None = None,
 ) -> tuple[SearchResult, float, list, float | None, float | None] | None:
     """
     Run gatekeeper + extractor for one article.
@@ -1148,6 +1155,8 @@ async def _process_article(
             claim_deadline=claim_deadline,
             short_form=short_form,
             language=language,
+            is_single_article=is_single_article,
+            cache_coordinator=cache_coordinator,
         )
         if usage_events is not None and extract_usage:
             usage_events.append(extract_usage)
@@ -1598,6 +1607,12 @@ async def _run_forecast_inner(
     process_start = time.perf_counter()
     timings: list[dict] = []
     article_debugs: list[ArticleDebug] = []
+    is_single_article = len(search_results) == 1
+    # retro#564: coordinator gates only the FIRST extractor call so it writes the cache;
+    # every other call in the batch waits for that one write, then proceeds concurrently,
+    # reading from the now-warm cache (no further serialization). Single-article requests
+    # skip caching entirely (is_single_article above), so no coordinator is needed there.
+    cache_coordinator = None if is_single_article else CacheWriteCoordinator()
     outcomes = await asyncio.gather(
         *[
             _process_article_bounded(
@@ -1612,6 +1627,8 @@ async def _run_forecast_inner(
                 prediction_id=req.prediction_id,
                 resolution_criteria=req.resolution_criteria,
                 usage_events=usage_events,
+                is_single_article=is_single_article,
+                cache_coordinator=cache_coordinator,
             )
             for r in search_results
         ],

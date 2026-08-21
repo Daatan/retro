@@ -92,6 +92,7 @@ def _wire(monkeypatch, articles, certainty: float = 0.8, evidence_class=None):
         result, question, *, max_article_chars, timings, article_debugs, timeout_s,
         claim_deadline=None, claim_direction=None, prediction_id=None,
         resolution_criteria=None, usage_events=None,
+        is_single_article=False, cache_coordinator=None,
     ):
         rel, stance = by_url[result.url]
         timings.append({"url": result.url, "outcome": "ok"})

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from datetime import date, timedelta
@@ -867,6 +868,8 @@ async def extract_predictions(
     short_form: bool = False,
     language: Optional[str] = None,
     include_conditional_block: Optional[bool] = None,
+    is_single_article: bool = False,
+    cache_coordinator: Optional["CacheWriteCoordinator"] = None,
 ) -> tuple["ExtractionOutput", dict]:
     """Returns (ExtractionOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
 
@@ -887,6 +890,16 @@ async def extract_predictions(
     extraction instruction block. When None (default), the block is conditionally included based
     on lexical pre-filter (has_conditional_language). When True, always include. When False, never
     include. Append-only; None/False keeps existing behavior unchanged for backward compat.
+
+    ``is_single_article`` (retro#564) skips prompt caching when true (single article in a request
+    has no cache reuse opportunity within the 5-minute TTL). Defaults to False for backward compat.
+
+    ``cache_coordinator`` (retro#564) when provided, gates ONLY the first extractor call in a
+    request: that call writes the cache while everyone else waits, then all remaining calls
+    proceed concurrently reading from the now-warm cache. Unlike a plain Semaphore(1), this does
+    not serialize the whole batch — only the single write is on the critical path, preserving the
+    batch's original parallelism for every call after the first. None means no coordination
+    (backward compat).
     """
     prompt = PROMPT_SUFFIX.format(
         article_text=article_text,
@@ -911,10 +924,45 @@ async def extract_predictions(
     if include_conditional_block:
         prompt += _CONDITIONAL_BLOCK
 
-    return await complete_structured(
-        settings.extractor_model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
-        cached_prefix=PROMPT_PREFIX,
-    )
+    async def _call_extractor():
+        return await complete_structured(
+            settings.extractor_model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
+            cached_prefix=None if is_single_article else PROMPT_PREFIX,
+        )
+
+    if cache_coordinator is not None:
+        return await cache_coordinator.run(_call_extractor)
+    return await _call_extractor()
+
+
+class CacheWriteCoordinator:
+    """Per-request coordinator (retro#564): the first ``run()`` call executes immediately and
+    primes the cache; every other call in the same request waits for that one to finish, then
+    proceeds concurrently (no further serialization) reading from the now-warm cache.
+
+    A plain ``asyncio.Semaphore(1)`` held around the whole call would serialize every article's
+    extractor call end-to-end, turning N parallel LLM round-trips into a sequential chain — this
+    only puts the *first* write on the critical path.
+
+    Construct one instance per forecast request (state is not safe to share across requests).
+    """
+
+    def __init__(self) -> None:
+        self._claim_lock = asyncio.Lock()
+        self._claimed = False
+        self._primed = asyncio.Event()
+
+    async def run(self, call):
+        async with self._claim_lock:
+            is_first = not self._claimed
+            self._claimed = True
+        if is_first:
+            try:
+                return await call()
+            finally:
+                self._primed.set()
+        await self._primed.wait()
+        return await call()
 
 
 def _parse_iso_date(value: Optional[str]) -> Optional[date]:

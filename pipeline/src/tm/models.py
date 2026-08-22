@@ -45,6 +45,51 @@ class GatekeeperOutput(BaseModel):
         return self
 
 
+class PairRelationOutput(BaseModel):
+    """Signed relation type between two independent forecasting questions (retro#574).
+
+    Cosine-similarity + shared-tag candidate pairs are typed with this to catch what
+    embeddings miss: negation. "H happens" and "H does not happen" score as near-duplicates
+    by cosine, so a coherence engine built on similarity alone pulls them toward each other
+    instead of toward P(H)+P(not H)=1 — this is the classifier that tells them apart.
+    """
+    relation_type: Literal["alias", "nested", "complement", "implies", "independent"] = Field(
+        description="alias: A and B assert the same underlying proposition (see polarity for "
+                    "same- vs opposite-phrased). nested: one is a strict logical subset of the "
+                    "other (later deadline, added conjunct, looser threshold). complement: "
+                    "different mutually-exclusive outcomes of the same situation, neither a "
+                    "negation nor a subset of the other. implies: A being true forces B's truth "
+                    "value (or its negation) without the reverse constraint. independent: merely "
+                    "topically related, no logical constraint either way.",
+    )
+    direction: Optional[Literal["a_to_b", "b_to_a"]] = Field(
+        default=None,
+        description="nested: which side is the narrower/subset one. implies: which side is the "
+                    "trigger/cause. Null for alias, complement, and independent — those relations "
+                    "are symmetric.",
+    )
+    polarity: Optional[Literal["same", "opposite"]] = Field(
+        default=None,
+        description="'opposite' when the relation only holds once one side is mentally negated "
+                    "— the field that catches an alias pair phrased as affirmation vs negation "
+                    "('withdraws' vs 'maintains presence') instead of it being missed entirely. "
+                    "'same' when the relation holds between A and B exactly as stated. Null for "
+                    "independent, where polarity has no meaning.",
+    )
+    quote_a: Optional[str] = Field(
+        default=None, description="Shortest verbatim span from claim A's own text justifying "
+                                   "the judgment (usually the key predicate). Null only when the "
+                                   "whole (short) claim text is itself the justification.",
+    )
+    quote_b: Optional[str] = Field(default=None, description="Same as quote_a, for claim B.")
+    reason: str = Field(description="One-sentence justification.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _unwrap_envelope(cls, data: Any) -> Any:
+        return _unwrap_properties_envelope(data)
+
+
 class PredictionType(str, Enum):
     binary = "binary"
     continuous = "continuous"

@@ -187,12 +187,14 @@ Question (the target):
 <question>
 {question}
 </question>
+Today: {today}
 Target deadline: {deadline}
 
 List 2 to {n} PRECURSORS: distinct events or states whose outcome would materially
 change the probability of the target. Rules:
 - Each precursor is ONE positive English proposition, resolvable by a news reader,
   and resolvable BEFORE or around the target's deadline.
+- Nothing that has already happened as of today; events must still be open.
 - Not a rewording of the target, not its negation, not a trivial necessary
   condition ("the world still exists").
 - Prefer precursors that are themselves forecastable from news and that are
@@ -207,7 +209,8 @@ Respond ONLY with JSON:
 async def _decompose(job: dict, node: dict, req: V2ForecastRequest) -> list[dict]:
     model = req.decompose_model or _pipeline_settings.extractor_model
     prompt = DECOMPOSE_PROMPT.format(
-        question=node["text"], deadline=req.claim_deadline or "not stated", n=max(req.max_precursors * 2, 4)
+        question=node["text"], today=datetime.now(timezone.utc).date().isoformat(),
+        deadline=req.claim_deadline or "not stated", n=max(req.max_precursors * 2, 4)
     )
     messages = [{"role": "user", "content": prompt}]
     entry = {

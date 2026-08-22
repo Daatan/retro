@@ -79,6 +79,21 @@
     /* Detail panel */
     #detail-empty { font-size: 12px; color: #6e7681; font-style: italic; }
     #detail-content { display: none; }
+    #d-resolved-banner {
+      display: none;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 8px;
+      border-radius: 5px;
+      margin-bottom: 8px;
+      background: rgba(88,101,242,0.12);
+      border: 1px solid #3a4152;
+      color: #a8b3cf;
+    }
+    #d-resolved-banner.yes { background: rgba(63,185,80,0.12); border-color: #2ea043; color: #7ee2a8; }
+    #d-resolved-banner.no  { background: rgba(248,81,73,0.12); border-color: #b62324; color: #ff9d97; }
+    .forecast-link { display: inline-block; margin-top: 4px; margin-left: 12px; font-size: 11px; color: #d2a8ff; text-decoration: none; }
+    .forecast-link:hover { text-decoration: underline; }
     .detail-row {
       display: flex;
       justify-content: space-between;
@@ -202,6 +217,12 @@
       color: #8b949e;
       white-space: nowrap;
       flex-shrink: 0;
+    }
+    .div-resolved-note {
+      font-size: 10px;
+      color: #6e7681;
+      font-style: italic;
+      padding: 3px 4px 6px;
     }
     .div-prices .rec { color: #e6edf3; font-weight: 600; }
     .div-num  { font-family: monospace; font-size: 10px; width: 34px; text-align: right; flex-shrink: 0; }
@@ -340,12 +361,16 @@
         <div class="sb-title">Node Detail</div>
         <div id="detail-empty">Click a node to inspect</div>
         <div id="detail-content">
+          <div id="d-resolved-banner"></div>
           <div id="d-question" style="font-size:12px;color:#e6edf3;line-height:1.45;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid #21262d;"></div>
-          <div class="detail-row"><span class="lbl">PM price</span><span id="d-pm" class="val">—</span></div>
-          <div class="detail-row"><span class="lbl">BayesOracle</span><span id="d-bayes" class="val">—</span></div>
-          <div class="detail-row"><span class="lbl">Divergence</span><span id="d-div" class="val">—</span></div>
-          <div class="detail-row"><span class="lbl">Primary parent</span><span id="d-parent" class="val">—</span></div>
-          <div><a id="d-pm-link" class="pm-link" href="#" target="_blank" rel="noopener">View on Polymarket →</a></div>
+          <div class="detail-row" title="Polymarket's crowd-consensus price — what traders are paying for this outcome"><span class="lbl">PM price</span><span id="d-pm" class="val">—</span></div>
+          <div class="detail-row" title="This node's probability implied by its parent(s) via the Law of Total Probability — see formula below"><span class="lbl">BayesOracle</span><span id="d-bayes" class="val">—</span></div>
+          <div class="detail-row" title="|BayesOracle − PM price| — how much the network model disagrees with the raw market"><span class="lbl">Divergence</span><span id="d-div" class="val">—</span></div>
+          <div class="detail-row" title="The parent node whose probability drives this node's Bayes estimate (weight 1.0); other parents below contribute at weight 0.5"><span class="lbl">Primary parent</span><span id="d-parent" class="val">—</span></div>
+          <div>
+            <a id="d-pm-link" class="pm-link" href="#" target="_blank" rel="noopener">View on Polymarket →</a>
+            <a id="d-forecast-link" class="forecast-link" href="#" target="_blank" rel="noopener" style="display:none">View Daatan forecast →</a>
+          </div>
           <table class="cond-table" id="d-cond-table">
             <thead><tr><th>Parent</th><th>If YES</th><th>If NO</th><th>R²</th></tr></thead>
             <tbody id="d-cond-body"></tbody>
@@ -380,6 +405,8 @@
           <p><b style="color:#c9d1d9">BayesOracle formula:</b><br>P(child) = pY × P(parent) + pN × (1 − P(parent))</p>
           <p><b style="color:#c9d1d9">Root nodes</b> (grey border) have no parents — PM price is used as the prior. Click one to set a hypothetical value with the slider.</p>
           <p><b style="color:#c9d1d9">pY/pN sources:</b> bin = from historical price bins (≥8 days), reg = regression, llm = LLM-estimated only. Source and R² shown in the detail panel.</p>
+          <p><b style="color:#c9d1d9">🏁 Resolved markets</b> (grey nodes, ✓/✗ badge) have closed on Polymarket — their price is now settled fact, not a live estimate, so they're excluded from the surprise ranking and their slider is disabled. Checked automatically on page load, plus on every 🔄 Poll live.</p>
+          <p><b style="color:#c9d1d9">Daatan forecast link</b> appears in the detail panel when this exact question is also tracked as a Daatan forecast — click any node to check.</p>
           <p><b style="color:#c9d1d9">📊 Refresh cond.</b> recomputes pY/pN from cached all.json — works offline.<br>
           <b style="color:#c9d1d9">🔄 Poll live</b> fetches fresh PM prices — needs direct internet access.</p>
         </div>
@@ -395,40 +422,40 @@
 
   const NODES = [
     // Layer 0 — Exogenous roots (no Bayes computation; PM price is the prior)
-    { id:'IRAN_DEAL',     label:'Iran Deal',          question:'US–Iran nuclear deal signed before 2027',                              pmId:'665325',  pm:1.0, layer:0, slug:'us-iran-nuclear-deal-before-2027',                                       clobToken:'102936224134271070189104847090829839924697394514566827387181305960175107677216' },
-    { id:'CEASEFIRE_X',   label:'Ceasefire Breaks',   question:'Israel–Hamas ceasefire cancelled by June 30 2026',                    pmId:'1090489', pm:0.0, layer:0, slug:'israel-x-hamas-ceasefire-cancelled-by-june-30',                          clobToken:'63808367585655921040786645798394416641162584754134130888507371817017552687973' },
-    { id:'TRUMP_IL',      label:'Trump Backs IL',      question:'Donald Trump visits Israel in 2026',                                  pmId:'665260',  pm:0.215, layer:0, slug:'will-donald-trump-visit-israel-in-2026',                                  clobToken:'17310312046830507121308439157055105976196613647072768511530359658718851345502' },
+    { id:'IRAN_DEAL',     label:'Iran Deal',          question:'US–Iran nuclear deal signed before 2027',                              pmId:'665325',  pm:1.0, layer:0, slug:'us-iran-nuclear-deal-before-2027',                                       clobToken:'102936224134271070189104847090829839924697394514566827387181305960175107677216', resolved:true, resolvedOutcome:'YES' },
+    { id:'CEASEFIRE_X',   label:'Ceasefire Breaks',   question:'Israel–Hamas ceasefire cancelled by June 30 2026',                    pmId:'1090489', pm:0.0, layer:0, slug:'israel-x-hamas-ceasefire-cancelled-by-june-30',                          clobToken:'63808367585655921040786645798394416641162584754134130888507371817017552687973', resolved:true, resolvedOutcome:'NO' },
+    { id:'TRUMP_IL',      label:'Trump Backs IL',      question:'Donald Trump visits Israel in 2026',                                  pmId:'665260',  pm:0.215, layer:0, slug:'will-donald-trump-visit-israel-in-2026',                                  clobToken:'17310312046830507121308439157055105976196613647072768511530359658718851345502', forecastId:'cmt2w02ht00ag01rulekn1p2b' },
     { id:'US_WAR_IRAN',   label:'US-Iran War',         question:'US invades or attacks Iran before 2027',                              pmId:'665374',  pm:0.165, layer:0, slug:'will-the-us-invade-iran-before-2027',                                     clobToken:'55115078421062885512539156303747803058407616201213034911037320915726138659123' },
-    { id:'IRAN_REGIME',   label:'Iran Regime Falls',   question:'Iranian regime collapses or falls by end of 2026',                   pmId:'663583',  pm:0.065, layer:0, slug:'will-the-iranian-regime-fall-by-the-end-of-2026',                        clobToken:'10991849228756847439673778874175365458450913336396982752046655649803657501964' },
-    { id:'IRAN_NUKE',     label:'Iran Nuclear Thresh', question:'Iran conducts a nuclear test before 2027',                            pmId:'665521',  pm:0.045, layer:0, slug:'iran-nuclear-test-before-2027',                                           clobToken:'101371628741119370156433108829627306392734152017027640384155257750266453353351' },
+    { id:'IRAN_REGIME',   label:'Iran Regime Falls',   question:'Iranian regime collapses or falls by end of 2026',                   pmId:'663583',  pm:0.065, layer:0, slug:'will-the-iranian-regime-fall-by-the-end-of-2026',                        clobToken:'10991849228756847439673778874175365458450913336396982752046655649803657501964', forecastId:'cmt2vzlbn00a101ru9d22ms7r' },
+    { id:'IRAN_NUKE',     label:'Iran Nuclear Thresh', question:'Iran conducts a nuclear test before 2027',                            pmId:'665521',  pm:0.045, layer:0, slug:'iran-nuclear-test-before-2027',                                           clobToken:'101371628741119370156433108829627306392734152017027640384155257750266453353351', forecastId:'cmt2vynth009m01rurd73ur43' },
 
     // Layer 1 — Near-term political
     { id:'ELECTIONS', label:'Early Elections',   question:'Israeli parliament dissolved and early elections called by June 30 2026',  pmId:'1280208', pm:0.0, layer:1,
-      primary:'CEASEFIRE_X', pY:0.809, pN:0.354, slug:'israeli-parliament-dissolved-by-june-30-228',      clobToken:'5500958648222024490080262026563017618333773328581609432182941377205770769101' },
+      primary:'CEASEFIRE_X', pY:0.809, pN:0.354, slug:'israeli-parliament-dissolved-by-june-30-228',      clobToken:'5500958648222024490080262026563017618333773328581609432182941377205770769101', resolved:true, resolvedOutcome:'NO' },
     { id:'BIBI_OUT',  label:'Bibi Not PM 2027', question:'Benjamin Netanyahu is no longer Prime Minister before end of 2027',         pmId:'567688',  pm:0.485, layer:1,
       primary:'ELECTIONS', pY:0.58, pN:0.438, slug:'netanyahu-out-before-2027-684-719-226-657',           clobToken:'114694726451307654528948558967898493662917070661203465131156925998487819889437' },
 
     // Layer 2 — PM race (all share primary parent BIBI_OUT)
-    { id:'BIBI_PM',      label:'Bibi PM',      question:'Benjamin Netanyahu becomes the next Prime Minister of Israel',               pmId:'682705', pm:0.285,  layer:2, primary:'BIBI_OUT', pY:0.302,  pN:0.494, slug:'will-benjamin-netanyahu-be-the-next-prime-minister-of-israel',    clobToken:'20006732765674855733524007935991362439352594042415161039767275461950712817548' },
-    { id:'BENNETT_PM',   label:'Bennett PM',   question:'Naftali Bennett becomes the next Prime Minister of Israel',                  pmId:'682706', pm:0.055,  layer:2, primary:'BIBI_OUT', pY:0.442, pN:0.17, slug:'will-naftali-bennett-be-the-next-prime-minister-of-israel',         clobToken:'58945936829392654397399777214757608864525173988558750256164021442231118224154' },
+    { id:'BIBI_PM',      label:'Bibi PM',      question:'Benjamin Netanyahu becomes the next Prime Minister of Israel',               pmId:'682705', pm:0.285,  layer:2, primary:'BIBI_OUT', pY:0.302,  pN:0.494, slug:'will-benjamin-netanyahu-be-the-next-prime-minister-of-israel',    clobToken:'20006732765674855733524007935991362439352594042415161039767275461950712817548', forecastId:'cmnqhj6gz000cdh517owwp0tk' },
+    { id:'BENNETT_PM',   label:'Bennett PM',   question:'Naftali Bennett becomes the next Prime Minister of Israel',                  pmId:'682706', pm:0.055,  layer:2, primary:'BIBI_OUT', pY:0.442, pN:0.17, slug:'will-naftali-bennett-be-the-next-prime-minister-of-israel',         clobToken:'58945936829392654397399777214757608864525173988558750256164021442231118224154', forecastId:'cmt2w349x00i601ruwbr6ibkp' },
     { id:'EIZENKOT_PM',  label:'Eizenkot PM',  question:'Gadi Eizenkot becomes the next Prime Minister of Israel',                   pmId:'682708', pm:0.565,  layer:2, primary:'BIBI_OUT', pY:0.185, pN:0.25, slug:'will-gadi-eizenkot-be-the-next-prime-minister-of-israel',           clobToken:'52487256270918227930942830546248720603566203568229607048093730748840489555808' },
     { id:'LIEBERMAN_PM', label:'Lieberman PM', question:'Avigdor Lieberman becomes the next Prime Minister of Israel',               pmId:'682710', pm:0.0435,  layer:2, primary:'BIBI_OUT', pY:0.072, pN:0.022, slug:'will-avigdor-lieberman-be-the-next-prime-minister-of-israel',       clobToken:'105057524965982907913786325697426001538810836564004836999292309706852745390829' },
     { id:'LAPID_PM',     label:'Lapid PM',     question:'Yair Lapid becomes the next Prime Minister of Israel',                       pmId:'682707', pm:0.0015,  layer:2, primary:'BIBI_OUT', pY:0.077, pN:0.011, slug:'will-yair-lapid-be-the-next-prime-minister-of-israel',               clobToken:'30912854850866302644106316438153629460678506137655559406260043509960678109607' },
 
     // Layer 3 — Policy outcomes (primary parent: BIBI_PM)
-    { id:'ANNEX_WB',     label:'W.Bank Annex',   question:'Israel formally annexes West Bank territory before 2027',                 pmId:'665515', pm:0.09, layer:3, primary:'BIBI_PM', pY:0.354, pN:0.09,  slug:'will-israel-annex-west-bank-territory-before-2027',                clobToken:'77622159301151595600018692169046934155670985348681037776543994015872072881759' },
-    { id:'ANNEX_GAZA',   label:'Gaza Annex',     question:'Israel formally annexes Gaza territory by 2026',                          pmId:'636921', pm:0.0, layer:3, primary:'BIBI_PM', pY:0.171, pN:0.022, slug:'will-israel-annex-gaza-territory-by-2026',                          clobToken:'70359681490276052691112887648329793451326841944052095594051773436187530963436' },
-    { id:'US_GAZA',      label:'US Gaza Admin',  question:'US forces deployed and administering Gaza before 2027',                   pmId:'665485', pm:0.105, layer:3, primary:'BIBI_PM', pY:0.596, pN:0.121, slug:'us-forces-in-gaza-before-2027',                                     clobToken:'105233400859414924844071137932068265322197459969475638102195871238609459335708' },
+    { id:'ANNEX_WB',     label:'W.Bank Annex',   question:'Israel formally annexes West Bank territory before 2027',                 pmId:'665515', pm:0.09, layer:3, primary:'BIBI_PM', pY:0.354, pN:0.09,  slug:'will-israel-annex-west-bank-territory-before-2027',                clobToken:'77622159301151595600018692169046934155670985348681037776543994015872072881759', forecastId:'cmt2w6eug00ou01rufbqv6ium' },
+    { id:'ANNEX_GAZA',   label:'Gaza Annex',     question:'Israel formally annexes Gaza territory by 2026',                          pmId:'636921', pm:0.0, layer:3, primary:'BIBI_PM', pY:0.171, pN:0.022, slug:'will-israel-annex-gaza-territory-by-2026',                          clobToken:'70359681490276052691112887648329793451326841944052095594051773436187530963436', resolved:true, resolvedOutcome:'NO' },
+    { id:'US_GAZA',      label:'US Gaza Admin',  question:'US forces deployed and administering Gaza before 2027',                   pmId:'665485', pm:0.105, layer:3, primary:'BIBI_PM', pY:0.596, pN:0.121, slug:'us-forces-in-gaza-before-2027',                                     clobToken:'105233400859414924844071137932068265322197459969475638102195871238609459335708', forecastId:'cmt2w9ru001c801ru0l88zhld' },
     { id:'TURKEY_CLASH', label:'IL-Turkey Clash',question:'Israel and Turkey engage in a military clash before 2027',                pmId:'665484', pm:0.185, layer:3, primary:'BIBI_PM', pY:0.267,  pN:0.131, slug:'israel-x-turkey-military-clash-before-2027',                        clobToken:'87453347574739433727741310300628833850540987232802276383336752817811816312350' },
 
     // Layer 4 — Downstream outcomes
-    { id:'SAUDI_NORM',    label:'Saudi Norm.',     question:'Israel and Saudi Arabia normalize diplomatic relations before 2027',     pmId:'665218',  pm:0.07, layer:4, primary:'BIBI_PM',     pY:0.435, pN:0.117, slug:'israel-and-saudi-arabia-normalize-relations-before-2027',       clobToken:'86727316187077924188803504745015598973723867072517640274231186919208073176698' },
+    { id:'SAUDI_NORM',    label:'Saudi Norm.',     question:'Israel and Saudi Arabia normalize diplomatic relations before 2027',     pmId:'665218',  pm:0.07, layer:4, primary:'BIBI_PM',     pY:0.435, pN:0.117, slug:'israel-and-saudi-arabia-normalize-relations-before-2027',       clobToken:'86727316187077924188803504745015598973723867072517640274231186919208073176698', forecastId:'cmt2w7bfr00x201ruw3jwn2bv' },
     { id:'SAUDI_ACCORDS', label:'Saudi Accords',   question:'Saudi Arabia joins the Abraham Accords before 2027',                    pmId:'665474',  pm:0.065, layer:4, primary:'BIBI_PM',     pY:0.478, pN:0.094, slug:'will-saudi-arabia-join-the-abraham-accords-before-2027',         clobToken:'44330303251518041570433466737679109932061477358497939773558457869950245007155' },
     { id:'LEBANON_NORM',  label:'Lebanon Norm.',   question:'Israel and Lebanon normalize relations before 2027',                    pmId:'665414',  pm:0.095, layer:4, primary:'BIBI_PM',     pY:0.356, pN:0.159, slug:'israel-and-lebanon-normalize-relations-before-2027',            clobToken:'101831681716333180244111475646971936256198362513844467846876475971510978571235' },
-    { id:'SYRIA_NORM',    label:'Syria Norm.',     question:'Israel and Syria normalize relations by December 31 2026',              pmId:'677273',  pm:0.105, layer:4, primary:'BIBI_PM',     pY:0.37, pN:0.106, slug:'israel-and-syria-normalize-relations-by-december-31-2026-166',  clobToken:'106383854378569763040038727158261681740086130201198677161578651498744312589763' },
+    { id:'SYRIA_NORM',    label:'Syria Norm.',     question:'Israel and Syria normalize relations by December 31 2026',              pmId:'677273',  pm:0.105, layer:4, primary:'BIBI_PM',     pY:0.37, pN:0.106, slug:'israel-and-syria-normalize-relations-by-december-31-2026-166',  clobToken:'106383854378569763040038727158261681740086130201198677161578651498744312589763', forecastId:'cmt2w8a9e014n01rux6zswev8' },
     { id:'STRIKE_5',      label:'Strike on Iran',  question:'Israel conducts a second major military operation against Iran',        pmId:'678748',  pm:0.1875, layer:4, primary:'IRAN_NUKE',   pY:0.28, pN:0.223, slug:'israel-military-action-against-iran-by-167',                    clobToken:'11412542007717408179922453938322356199012298204805894786640983803350145893058' },
-    { id:'PAHLAVI',       label:'Pahlavi Returns', question:'US officially recognizes Reza Pahlavi as leader of Iran in 2026',       pmId:'1115288', pm:0.0475, layer:4, primary:'IRAN_REGIME', pY:0.517, pN:0.099,  slug:'us-recognizes-reza-pahlavi-as-leader-of-iran-in2026',           clobToken:'35782709243786983035694178955131584324960374432781357142873120580614410145650' },
-    { id:'US_DECLARE',    label:'US Declares War', question:'US officially declares war on Iran by December 31 2026',               pmId:'1170144', pm:0.0375, layer:4, primary:'US_WAR_IRAN', pY:0.261, pN:0.065,  slug:'will-the-us-officially-declare-war-on-iran-by-december-31-2026-746', clobToken:'7557290671053949208699445220310834898387867585937374554219472108856099537227' },
+    { id:'PAHLAVI',       label:'Pahlavi Returns', question:'US officially recognizes Reza Pahlavi as leader of Iran in 2026',       pmId:'1115288', pm:0.0475, layer:4, primary:'IRAN_REGIME', pY:0.517, pN:0.099,  slug:'us-recognizes-reza-pahlavi-as-leader-of-iran-in2026',           clobToken:'35782709243786983035694178955131584324960374432781357142873120580614410145650', forecastId:'cmt2w0r7j00aw01ruxnfmdrwk' },
+    { id:'US_DECLARE',    label:'US Declares War', question:'US officially declares war on Iran by December 31 2026',               pmId:'1170144', pm:0.0375, layer:4, primary:'US_WAR_IRAN', pY:0.261, pN:0.065,  slug:'will-the-us-officially-declare-war-on-iran-by-december-31-2026-746', clobToken:'7557290671053949208699445220310834898387867585937374554219472108856099537227', forecastId:'cmt2w1yiu00fq01ruv00khstv' },
   ];
 
   // Store baseline PM prices so sliders can reset
@@ -554,7 +581,9 @@
 
   function pct(v) { return (v * 100).toFixed(1) + '%'; }
 
-  function divColor(d) {
+  function divColor(n) {
+    if (n.resolved) return '#3a4152';
+    const d = n.div;
     if (d === null) return '#546e7a';
     if (d < 0.02)   return '#388e3c';
     if (d < 0.05)   return '#f57c00';
@@ -563,6 +592,10 @@
   }
 
   function nodeLabel(n) {
+    if (n.resolved) {
+      const mark = n.resolvedOutcome === 'YES' ? '✓' : '✗';
+      return n.label + '\n' + mark + ' RESOLVED: ' + n.resolvedOutcome;
+    }
     const prices = n.bayes !== null
       ? pct(n.pm) + ' / ' + pct(n.bayes)
       : pct(n.pm);
@@ -574,7 +607,7 @@
   // ─── Cytoscape ────────────────────────────────────────────────────────────────
 
   const cyNodes = NODES.map(n => ({
-    data: { id: n.id, label: nodeLabel(n), color: divColor(n.div) },
+    data: { id: n.id, label: nodeLabel(n), color: divColor(n) },
     position: POSITIONS[n.id],
   }));
 
@@ -756,8 +789,18 @@
   function buildRanking() {
     const divEl = document.getElementById('div-ranking');
     divEl.innerHTML = '';
-    const ranked = NODES.filter(n => n.div !== null).sort((a, b) => b.div - a.div);
+    // Resolved markets are excluded: PM price is now a settled historical fact,
+    // not a live crowd estimate, so |Bayes − PM| no longer measures "surprise".
+    const resolvedCount = NODES.filter(n => n.resolved).length;
+    const ranked = NODES.filter(n => n.div !== null && !n.resolved).sort((a, b) => b.div - a.div);
     const maxDiv = ranked[0]?.div || 0.01;
+
+    if (resolvedCount) {
+      const note = document.createElement('div');
+      note.className = 'div-resolved-note';
+      note.textContent = `${resolvedCount} resolved market${resolvedCount === 1 ? '' : 's'} excluded — see Node Detail`;
+      divEl.appendChild(note);
+    }
 
     ranked.forEach(n => {
       const barW = Math.max(2, Math.round(n.div / maxDiv * 34));
@@ -780,10 +823,10 @@
       row.className = 'div-item';
       row.title = tip;
       row.innerHTML =
-        `<div class="div-bar-wrap"><div class="div-bar" style="width:${barW}px;background:${divColor(n.div)}"></div></div>` +
+        `<div class="div-bar-wrap"><div class="div-bar" style="width:${barW}px;background:${divColor(n)}"></div></div>` +
         `<span class="div-label">${n.label}</span>` +
         `<span class="div-prices">${pmPct}%→<span class="rec">${recPct}%</span></span>` +
-        `<span class="div-num" style="color:${divColor(n.div)}">${(n.div*100).toFixed(1)}pp</span>` +
+        `<span class="div-num" style="color:${divColor(n)}">${(n.div*100).toFixed(1)}pp</span>` +
         `<a class="div-pm-link" href="https://polymarket.com/event/${n.slug}" target="_blank" rel="noopener" title="View on Polymarket" onclick="event.stopPropagation()">↗</a>`;
       row.addEventListener('click', () => {
         cy.$(':selected').unselect();
@@ -816,8 +859,15 @@
       bayesTotal += (n.bayes !== null ? n.bayes : n.pm);
       const row = document.createElement('div');
       row.className = 'sum-row';
+      row.style.cursor = 'pointer';
+      row.title = `Click to inspect ${n.label} — its own PM price and BayesOracle estimate, with the formula behind each`;
       const bayesPct = n.bayes !== null ? pct(n.bayes) : '—';
       row.innerHTML = `<span class="name">${n.label}</span><span class="pct">${pct(n.pm)}</span><span class="bayes-pct">${bayesPct}</span>`;
+      row.addEventListener('click', () => {
+        cy.$(':selected').unselect();
+        cy.$('#' + n.id).select();
+        showDetail(n.id);
+      });
       el.appendChild(row);
     });
 
@@ -828,6 +878,7 @@
     const pmColor = Math.abs(pmSlack) > 0.05 ? '#f85149' : (Math.abs(pmSlack) > 0.02 ? '#f0883e' : '#3fb950');
     const tot = document.createElement('div');
     tot.className = 'sum-total';
+    tot.title = 'Sum of PM (or Bayes) prices across the 5 mutually-exclusive PM candidates. Should be ≤100% — slack above that threshold implies an unlisted-candidate probability or a live arbitrage gap.';
     tot.innerHTML =
       `<span class="st-label">Sum</span>` +
       `<span class="st-pm" style="color:${pmColor}">${pct(pmTotal)}</span>` +
@@ -855,11 +906,28 @@
     const dc = document.getElementById('detail-content');
     dc.style.display = 'block';
 
+    const banner = document.getElementById('d-resolved-banner');
+    if (n.resolved) {
+      banner.style.display = 'block';
+      banner.className = n.resolvedOutcome === 'YES' ? 'yes' : 'no';
+      banner.textContent = `🏁 RESOLVED: ${n.resolvedOutcome} — this market is closed on Polymarket. The value below is now a settled historical fact, not a live crowd estimate.`;
+    } else {
+      banner.style.display = 'none';
+    }
+
     document.getElementById('d-question').textContent = n.question;
     document.getElementById('d-pm').textContent = pct(n.pm) + (n.pm !== n.pmBase ? ' *' : '');
     const pmLink = document.getElementById('d-pm-link');
     pmLink.href = 'https://polymarket.com/event/' + n.slug;
     pmLink.style.display = 'inline-block';
+
+    const forecastLink = document.getElementById('d-forecast-link');
+    if (n.forecastId) {
+      forecastLink.href = 'https://daatan.com/forecasts/' + n.forecastId;
+      forecastLink.style.display = 'inline-block';
+    } else {
+      forecastLink.style.display = 'none';
+    }
 
     const bayesEl  = document.getElementById('d-bayes');
     const divEl    = document.getElementById('d-div');
@@ -931,10 +999,19 @@
 
     // Root node slider
     const sliderRow = document.getElementById('d-slider-row');
-    if (n.layer === 0) {
+    if (n.layer === 0 && n.resolved) {
       sliderRow.style.display = 'block';
+      sliderRow.querySelector('label').textContent = 'Resolved — no longer hypothetical';
+      document.getElementById('d-slider').style.display = 'none';
+      document.getElementById('d-slider-val').textContent = '';
+      document.getElementById('d-slider-reset').style.display = 'none';
+    } else if (n.layer === 0) {
+      sliderRow.style.display = 'block';
+      sliderRow.querySelector('label').textContent = 'Hypothetical override (root node)';
       const slider    = document.getElementById('d-slider');
       const sliderVal = document.getElementById('d-slider-val');
+      slider.style.display = '';
+      document.getElementById('d-slider-reset').style.display = '';
       slider.value    = n.pm;
       sliderVal.textContent = pct(n.pm);
 
@@ -967,6 +1044,19 @@
 
   // ─── Poll Polymarket Gamma API for live prices ─────────────────────────────────
 
+  // Shared fetch: one request per market (Gamma's batch ?id=... returns 422).
+  // Returns 'closed' + 'umaResolutionStatus' alongside price so callers can tell
+  // a settled market apart from one merely trading near 0% or 100%.
+  function fetchGammaMarkets() {
+    return Promise.allSettled(
+      NODES.map(n =>
+        fetch(`https://gamma-api.polymarket.com/markets/${n.pmId}`, { headers: { 'Accept': 'application/json' } })
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(m => ({ node: n, outcomePrices: m.outcomePrices, closed: m.closed === true }))
+      )
+    );
+  }
+
   document.getElementById('poll-btn').addEventListener('click', async () => {
     const btn      = document.getElementById('poll-btn');
     const statusEl = document.getElementById('poll-status');
@@ -975,25 +1065,23 @@
     statusEl.textContent = 'Fetching…';
 
     try {
-      // Gamma API: individual requests per market (batch ?id=... returns 422)
-      const results = await Promise.allSettled(
-        NODES.map(n =>
-          fetch(`https://gamma-api.polymarket.com/markets/${n.pmId}`, { headers: { 'Accept': 'application/json' } })
-            .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-            .then(m => ({ node: n, outcomePrices: m.outcomePrices }))
-        )
-      );
+      const results = await fetchGammaMarkets();
 
-      let updated = 0;
+      let updated = 0, newlyResolved = 0;
       results.forEach(r => {
         if (r.status !== 'fulfilled') return;
-        const { node, outcomePrices } = r.value;
+        const { node, outcomePrices, closed } = r.value;
         const prices = JSON.parse(outcomePrices || '[]');
         const p = prices[0] != null ? parseFloat(prices[0]) : null;
         if (p != null && !isNaN(p)) {
           node.pm     = p;
           node.pmBase = p;  // new baseline after a live poll
           updated++;
+        }
+        if (closed && !node.resolved) {
+          node.resolved = true;
+          node.resolvedOutcome = p >= 0.5 ? 'YES' : 'NO';
+          newlyResolved++;
         }
       });
 
@@ -1002,7 +1090,7 @@
 
       const ts = new Date().toLocaleTimeString();
       statusEl.className   = 'ok';
-      statusEl.textContent = `${updated}/${NODES.length} at ${ts}`;
+      statusEl.textContent = `${updated}/${NODES.length} at ${ts}` + (newlyResolved ? ` · ${newlyResolved} newly resolved` : '');
 
     } catch (err) {
       statusEl.className   = 'error';
@@ -1013,6 +1101,28 @@
       btn.disabled = false;
     }
   });
+
+  // Silent check on page load: only promotes markets that have newly closed
+  // since the last data refresh — never overwrites baked prices for markets
+  // that are still open, so "data <date>" stays an honest label for those.
+  (async () => {
+    try {
+      const results = await fetchGammaMarkets();
+      let newlyResolved = 0;
+      results.forEach(r => {
+        if (r.status !== 'fulfilled') return;
+        const { node, outcomePrices, closed } = r.value;
+        if (!closed || node.resolved) return;
+        const prices = JSON.parse(outcomePrices || '[]');
+        const p = prices[0] != null ? parseFloat(prices[0]) : null;
+        node.resolved = true;
+        node.resolvedOutcome = (p != null && p >= 0.5) ? 'YES' : 'NO';
+        if (p != null && !isNaN(p)) { node.pm = p; node.pmBase = p; }
+        newlyResolved++;
+      });
+      if (newlyResolved) { recompute(); refreshGraph(true); }
+    } catch (err) { /* offline or blocked — static resolved flags from the last data refresh still apply */ }
+  })();
 
   // ─── Refresh Conditionals: fetch live price history → recompute pY/pN ───────────
 
@@ -1166,7 +1276,7 @@
     NODES.forEach(n => {
       cy.$('#' + n.id)
         .data('label', nodeLabel(n))
-        .data('color', divColor(n.div));
+        .data('color', divColor(n));
     });
     buildRanking();
     buildSumPanel();

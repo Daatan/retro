@@ -133,7 +133,9 @@ Nodes have **CI ranges** (`ci:[lo, hi]`). Propagation uses **logit-space interpo
 
 No Polymarket market IDs — this is a self-contained narrative model. Node probabilities are hand-set from expert judgment and current polling.
 
-Click any node → slider appears → drag to hypothesise a new P → all downstream nodes cascade. Multiple nodes can be locked (pinned) simultaneously. "Reset All" restores the baseline values baked into the file.
+Click any node → slider appears → drag to hypothesise a new P → all downstream nodes cascade. Multiple nodes can be locked (pinned) simultaneously. "Reset All" restores the baseline values baked into the file. The panel also shows **how the number was computed**: root nodes note they're a fixed expert/poll input; computed nodes show the fitted intercept `b` and a plain-language description of the logistic-CPT enumeration behind the displayed probability.
+
+This graph is intentionally not Polymarket-linked (see the caveat at the top of this file), so it has no live resolution check or Daatan-forecast links — those only apply to `pm_analysis/index.html`, where every node carries a real `pmId`.
 
 Open: `file:///home/mark/projects/retro/bayesoracle/graph.html`
 Live: https://daatan.github.io/retro/bayesoracle/graph.html
@@ -147,6 +149,10 @@ Live: https://daatan.github.io/retro/bayesoracle/graph.html
 Each node shows `PM% / Bayes%`. The sidebar ranks all nodes by `|pm − bayes|` ("Most Surprising Markets"). Click any node to see the full conditional breakdown — primary parent's pY/pN contribution, and each secondary edge's contribution.
 
 Also shows the **PM candidate sum** (BIBI_PM + BENNETT_PM + EIZENKOT_PM + LIEBERMAN_PM + LAPID_PM). Should be ≤1.0; large slack means a significant unlisted-candidate probability or stale PM prices.
+
+**Resolved markets**: on page load (and on every 🔄 Poll live), the viewer checks each node's `closed` flag on the Polymarket Gamma API. A newly-closed market is marked `resolved` client-side — shown as a grey ✓/✗ badge instead of a live percentage, excluded from the "Most Surprising Markets" ranking (divergence is meaningless once the outcome is settled), and its root-node slider is disabled. Four nodes were already resolved as of 2026-08-21: `IRAN_DEAL` (YES), `CEASEFIRE_X` (NO), `ELECTIONS` (NO), `ANNEX_GAZA` (NO) — baked in as a static fallback in case the live check is blocked (offline viewing, corporate SSL inspection).
+
+**Daatan forecast links**: 11 of the 24 nodes have a matching Daatan forecast (same underlying question, joined by Polymarket slug against `predictions.external_market_id → external_markets.slug` in prod). Those nodes show a "View Daatan forecast →" link in the detail panel alongside the Polymarket link. This mapping is static (baked into `forecastId` per node) — re-check it after a `predictions`/`external_markets` sync if new forecasts get linked to these markets.
 
 Open: `file:///home/mark/projects/retro/bayesoracle/pm_analysis/index.html`
 Live: https://daatan.github.io/retro/bayesoracle/pm_analysis/index.html

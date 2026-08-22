@@ -69,6 +69,9 @@ header p  { font-size: 11px; color: #778; margin-top: 2px; }
 .cond-lbl { color: #667; }
 .cond-val { color: #8abbe0; font-weight: 600; }
 
+#calc-note { font-size: 10px; color: #667; line-height: 1.5; margin-top: 9px; }
+#calc-note b { color: #9ab; }
+
 .hint { position: absolute; bottom: 14px; right: 240px; font-size: 10px; color: #333; pointer-events: none; }
 </style>
 </head>
@@ -146,6 +149,7 @@ header p  { font-size: 11px; color: #778; margin-top: 2px; }
   </div>
   <div class="p-row"><span class="p-lbl">Parents</span> <span class="p-val" id="p-parents"  style="font-size:10px;text-align:right"></span></div>
   <div class="p-row"><span class="p-lbl">Children</span><span class="p-val" id="p-children" style="font-size:10px;text-align:right"></span></div>
+  <div id="calc-note"></div>
 </div>
 
 <div class="hint">BayesOracle · Israeli elections 2026 · probabilistic cascade</div>
@@ -252,6 +256,21 @@ function refreshPanel(id) {
 
   document.getElementById('p-parents').textContent  = cy.getElementById(id).incomers('node').map(x=>x.data('id')).join(', ')||'—';
   document.getElementById('p-children').textContent = cy.getElementById(id).outgoers('node').map(x=>x.data('id')).join(', ')||'—';
+
+  const calcEl = document.getElementById('calc-note');
+  const lockNote = (id in obs) ? '🔒 <b>Overridden</b> — the value above is your manual input, not the computed one.<br>' : '';
+  if (!conds.length) {
+    const ciTxt = n.ci ? ` CI [${(n.ci[0]*100).toFixed(0)}%, ${(n.ci[1]*100).toFixed(0)}%].` : '';
+    calcEl.innerHTML = lockNote +
+      `<b>Root node</b> — no parents to compute from. This is a directly-set expert/poll estimate, held fixed as input.${ciTxt}`;
+  } else {
+    const b = g.intercept[id] || 0;
+    calcEl.innerHTML = lockNote +
+      `<b>Fitted-intercept logistic CPT</b>: P = σ(b + Σ w·[parent✓]), exactly enumerated over all ` +
+      `2<sup>${conds.length}</sup> parent-state combinations, each weighted by that combination's ` +
+      `probability under the parents' current values above. Intercept b = ${b.toFixed(2)} ` +
+      `(logit space) — fit once so this formula reproduces the node's baseline prior when parents sit at theirs.`;
+  }
 }
 
 const cyNodes = SPEC.nodes.map(n => ({

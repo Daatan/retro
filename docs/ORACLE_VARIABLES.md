@@ -1733,3 +1733,70 @@ Decay is exponential in elapsed **fraction** of the claim's own window, reusing
 days because the deadline is what the claim is *about*: a 3-day and a 2-year
 window are both fully elapsed at their deadline, and absolute-time decay would
 leave the short claim essentially untouched.
+
+## 2026-08-22 — premise verifier, shadow/log-only (retro#575 slice 1 of 3)
+
+**Shadow-only. `premise_verifier_enabled` defaults `False`; `premise_verifier_enforce`
+exists but is unread this slice — a documented placeholder, not a live knob.**
+
+retro#575 observed the pool sometimes prices an already-resolved or
+structurally impossible premise with a confident number instead of
+abstaining, because nothing in the pipeline ever asks whether the question
+itself is still open — it only prices whatever evidence the topical search
+returns. A premise that already resolved usually has no fresh coverage (news
+moves on once something settles), so the topical search either returns stale
+pre-resolution articles that read as live, or nothing at all (falling
+through to the generic `no_search_results` reason, which reads as "couldn't
+find evidence," not "the premise itself is dead").
+
+`premise_verifier.py` asks one grounded LLM call — "is this question's
+premise already dead: resolved as an accomplished fact, or structurally
+impossible to still occur?" — over whatever `search_results` Step 1 of
+`_run_forecast_inner` already fetched (title/snippet/date only, no extra
+fetch). Same shape as `settlement_verifier.py`: a frozen `Verdict(dead,
+reason, errored)`, the same "announced/scheduled/planned is not carried out"
+discipline in the prompt, and the same fail-open contract — an unavailable
+or unparseable verifier returns `dead=False, errored=True`, never a false
+claim that a live premise is dead.
+
+**Log-only, unlike `settlement_verifier`.** The verdict is logged
+(`event=premise_verifier`) and never changes the response — no new field, no
+`reason` value, no mutation of `mean`/`ci`/`settled`. Promotion to an
+enforcing check (e.g. a new `insufficient_data` reason) is a follow-up once
+real trigger/precision data from this shadow period justifies it, the same
+rollout shape retro#545 slice (ii) (PR #586) and the Gate-0 evidence-window
+shadow (PR #558) used before their own promotion decisions.
+
+### Trigger gate
+
+Every `/forecast` call reaches this point, so firing unconditionally would
+double LLM cost on every ordinary request. `premise_check_triggered` fires
+only when:
+
+- `claim_archetype` is `scheduled` or `threshold` (elections, court dates —
+  the shape retro#575's own examples are), **or**
+- `claim_deadline` is present and has already passed (`<=` today).
+
+No archetype and no deadline (older callers that don't classify claims) →
+never triggers, zero added cost — the same additive/fail-open framing
+`ForecastRequest.claim_archetype`'s own docstring already promises.
+
+### Config (`api/src/forecast_api/config.py`)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `premise_verifier_enabled` | `False` | Master switch. While off, the check never runs and never spends a token. |
+| `premise_verifier_enforce` | `False` | Unread this slice — reserved for the follow-up that acts on the verdict. |
+| `premise_verifier_model` | `None` | Falls back to `extractor_model` (Claude Haiku 4.5 in prod) when unset. |
+| `premise_verifier_timeout_seconds` | `12` | Per-call timeout; a timeout is fail-open, not a `dead=True`. |
+
+### Explicitly out of scope for this slice
+
+retro#575 also proposed (2) an outside-view base-rate node keyed on
+`claimArchetype` × tag, and (3) scheduled-date anchors as first-class facts
+at the stance stage. (2) needs a brand-new `calibration_records` store — it
+does not exist anywhere in the codebase yet, only named in a `Daatan/docs`
+planning note. (3) already exists downstream in **daatan**
+(`temporal-clock.ts`'s impossibility pin) but nothing analogous exists at
+retro's extraction/stance stage. Both are separate, larger follow-up issues,
+not covered here.

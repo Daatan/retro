@@ -92,6 +92,7 @@ from .config import settings
 from .resolution_scorer import archetype_base_rate
 from .settlement_verdict_store import get_verdict, put_verdict, verdict_key
 from .settlement_verifier import SettlementVote, Verdict, build_prompt, verify_settlement
+from .premise_verifier import PremiseResult, premise_check_triggered, verify_premise
 
 
 def _hazard_shadow_base_rate() -> Optional[float]:
@@ -1623,6 +1624,30 @@ async def _run_forecast_inner(
             n_before_dedupe, len(search_results), n_before_dedupe - len(search_results),
         )
 
+    # The premise verifier (retro#575 slice 1) — shadow/log-only. Fired here,
+    # concurrently with Step 2's much slower gatekeeper/extractor fan-out
+    # below, so it never adds to the critical path; awaited and logged once
+    # the pool's own outcome is known (see below). Gated to the population
+    # where a dead premise is plausible (premise_check_triggered) so this
+    # doesn't double LLM cost on every ordinary request.
+    premise_task = (
+        asyncio.create_task(verify_premise(
+            req.question, req.claim_deadline,
+            [
+                PremiseResult(
+                    title=r.title, snippet=r.snippet,
+                    published_date=r.published_date, source=r.source,
+                )
+                for r in search_results
+            ],
+            model=settings.premise_verifier_model or _pipeline_settings.extractor_model,
+            timeout_s=settings.premise_verifier_timeout_seconds,
+        ))
+        if settings.premise_verifier_enabled
+        and premise_check_triggered(req.claim_deadline, req.claim_archetype)
+        else None
+    )
+
     # Step 2: gatekeeper + extractor in parallel
     process_start = time.perf_counter()
     timings: list[dict] = []
@@ -2009,6 +2034,14 @@ async def _run_forecast_inner(
                 sum(all_weights[i] for i in unverified_votes),
                 ",".join(source_signals[i].url or "?" for i in unverified_votes),
             )
+
+    if premise_task is not None:
+        premise_verdict = await premise_task
+        logger.warning(
+            "event=premise_verifier dead=%s errored=%s question=%s reason=%r",
+            premise_verdict.dead, premise_verdict.errored,
+            _question_hash(req.question), premise_verdict.reason[:200],
+        )
 
     if agg is None or agg.insufficient_reason is not None:
         # Outcome histogram tells us *why* we got nothing — were articles

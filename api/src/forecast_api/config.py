@@ -563,6 +563,17 @@ class ApiSettings(BaseSettings):
     settlement_verdict_cache_enabled: bool = True
     settlement_verdict_cache_path: Path = Path("")  # empty = data_dir/settlement_verdict_cache
 
+    # The premise verifier (retro#575 slice 1) — shadow/log-only, off by
+    # default. Asks whether a question's premise is already dead (resolved
+    # or structurally impossible) before pricing it. `enforce` is unread this
+    # slice; it exists only as a placeholder for the follow-up that will act
+    # on the verdict once trigger/precision data justifies it, same
+    # shadow-then-promote shape settlement_verifier itself used.
+    premise_verifier_enabled: bool = False
+    premise_verifier_enforce: bool = False
+    premise_verifier_model: Optional[str] = None
+    premise_verifier_timeout_seconds: int = 12
+
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.
     cache_ttl_seconds: int = 3600

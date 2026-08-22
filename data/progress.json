@@ -12211,7 +12211,7 @@
     "H10:axios": {
       "event_id": "H10",
       "source_id": "axios",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -12225,7 +12225,7 @@
     "H10:bloomberg": {
       "event_id": "H10",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -12246,7 +12246,7 @@
     "H10:ft": {
       "event_id": "H10",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -12260,14 +12260,14 @@
     "H10:guardian": {
       "event_id": "H10",
       "source_id": "guardian",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
     "H10:haaretz": {
       "event_id": "H10",
       "source_id": "haaretz",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -12302,7 +12302,7 @@
     "H10:nyt": {
       "event_id": "H10",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -12316,7 +12316,7 @@
     "H10:toi": {
       "event_id": "H10",
       "source_id": "toi",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -12365,7 +12365,7 @@
     "I01:calcalist": {
       "event_id": "I01",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -12428,7 +12428,7 @@
     "I01:n12": {
       "event_id": "I01",
       "source_id": "n12",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -12456,7 +12456,7 @@
     "I01:walla": {
       "event_id": "I01",
       "source_id": "walla",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -12498,7 +12498,7 @@
     "I02:calcalist": {
       "event_id": "I02",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -12512,7 +12512,7 @@
     "I02:ft": {
       "event_id": "I02",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -12624,7 +12624,7 @@
     "I03:bloomberg": {
       "event_id": "I03",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-22T17:03:52.030106"
+  "last_updated": "2026-08-22T17:05:07.551941"
 }

@@ -297,7 +297,7 @@
     "B10:reuters": {
       "event_id": "B10",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8466,7 +8466,7 @@
     "B06:ft": {
       "event_id": "B06",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8515,7 +8515,7 @@
     "B07:ft": {
       "event_id": "B07",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8550,7 +8550,7 @@
     "B08:ft": {
       "event_id": "B08",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8592,7 +8592,7 @@
     "B09:ft": {
       "event_id": "B09",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8634,7 +8634,7 @@
     "B10:ft": {
       "event_id": "B10",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10629,7 +10629,7 @@
     "B10:bloomberg": {
       "event_id": "B10",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-22T17:12:04.106747"
+  "last_updated": "2026-08-22T17:13:16.820959"
 }

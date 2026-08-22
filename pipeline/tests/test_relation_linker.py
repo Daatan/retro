@@ -10,10 +10,15 @@ is allowed to return.
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from instructor.core.exceptions import InstructorRetryException
 from pydantic import ValidationError
 
 from tm import relation_linker
 from tm.models import PairRelationOutput
+
+
+def _retry_exc() -> InstructorRetryException:
+    return InstructorRetryException("malformed output", n_attempts=1, total_usage=0)
 
 
 async def _capture_prompt(claim_a: str, claim_b: str) -> tuple[str, str]:
@@ -95,3 +100,53 @@ class TestPairRelationOutputSchema:
             "properties": {"relation_type": "complement", "polarity": "same", "reason": "x"}
         })
         assert out.relation_type == "complement"
+
+
+class TestClassifyRelationRetriesOnMalformedOutput:
+    """Nova Lite's MD_JSON mode was observed (manual runs, see PR description) failing
+    Pydantic validation on this schema — sometimes as the {"properties": ...} envelope
+    above, sometimes as a bare schema echo with no instance data at all, which no local
+    unwrapping can repair. complete_structured's shared max_retries=1 gives instructor
+    zero self-correction attempts, so classify_relation retries the whole call itself.
+    """
+
+    @pytest.mark.asyncio
+    async def test_succeeds_after_transient_malformed_output(self):
+        good = PairRelationOutput(relation_type="complement", polarity="same", reason="x")
+        mock = AsyncMock(side_effect=[_retry_exc(), _retry_exc(), (good, {"tokens": 10})])
+        with patch("tm.relation_linker.complete_structured", new=mock), \
+             patch("tm.relation_linker.asyncio.sleep", new=AsyncMock()) as sleep_mock:
+            out, usage = await relation_linker.classify_relation("A", "B")
+        assert out is good
+        assert usage == {"tokens": 10}
+        assert mock.await_count == 3
+        assert sleep_mock.await_count == 2  # slept between attempts 1->2 and 2->3, not after success
+
+    @pytest.mark.asyncio
+    async def test_gives_up_after_max_attempts_and_raises_the_last_error(self):
+        mock = AsyncMock(side_effect=[_retry_exc() for _ in range(relation_linker._MAX_ATTEMPTS)])
+        with patch("tm.relation_linker.complete_structured", new=mock), \
+             patch("tm.relation_linker.asyncio.sleep", new=AsyncMock()):
+            with pytest.raises(InstructorRetryException):
+                await relation_linker.classify_relation("A", "B")
+        assert mock.await_count == relation_linker._MAX_ATTEMPTS
+
+    @pytest.mark.asyncio
+    async def test_first_attempt_success_needs_no_retry(self):
+        good = PairRelationOutput(relation_type="independent", reason="x")
+        mock = AsyncMock(return_value=(good, {}))
+        with patch("tm.relation_linker.complete_structured", new=mock):
+            out, _ = await relation_linker.classify_relation("A", "B")
+        assert out is good
+        assert mock.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_does_not_swallow_unrelated_errors(self):
+        # A genuine non-malformed-output error (e.g. auth, a real network failure that
+        # complete_structured's own rate-limit wrapper didn't classify as transient)
+        # must propagate immediately, not get treated as retriable.
+        mock = AsyncMock(side_effect=RuntimeError("boom"))
+        with patch("tm.relation_linker.complete_structured", new=mock):
+            with pytest.raises(RuntimeError):
+                await relation_linker.classify_relation("A", "B")
+        assert mock.await_count == 1

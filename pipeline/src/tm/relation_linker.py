@@ -12,6 +12,10 @@ no persistence. Those are separate follow-ups once this classifier is proven acc
 (see the eval harness in tests/test_relation_linker.py).
 """
 
+import asyncio
+
+from instructor.core.exceptions import InstructorRetryException
+
 from .config import settings
 from .llm import complete_structured
 from .models import PairRelationOutput
@@ -95,15 +99,42 @@ Claim B: {claim_b}
 """
 
 
+# Nova Lite's MD_JSON mode is measurably unreliable on this schema: empirically (see
+# eval_relation_linker.py's run log / PR description) it sometimes echoes back a
+# JSON-Schema-shaped object (`{"properties": {...}}`, the retro#306 envelope quirk
+# GatekeeperOutput already guards against — or, seen here for the first time, a bare
+# `{"description": ..., "type": "object"}` schema echo with no instance data at all,
+# which no amount of local unwrapping can repair) instead of an instance of
+# PairRelationOutput. complete_structured's shared `max_retries=1` gives instructor
+# zero self-correction attempts, so a single call's failure rate on this schema was
+# observed north of 50% in manual runs. This retries the WHOLE call (not just local
+# parsing) up to _MAX_ATTEMPTS times before giving up, isolated to this module so it
+# doesn't change retry behaviour for gatekeeper/extractor's simpler schemas.
+_MAX_ATTEMPTS = 4
+_RETRY_DELAY_S = 2
+
+
 async def classify_relation(claim_a: str, claim_b: str):
     """One structured-output call typing the (claim_a, claim_b) pair. Returns
     ``(PairRelationOutput, usage)`` — same shape as gatekeeper.check_is_prediction /
     extractor calls. Cheap tier (extractor_model, not gatekeeper_model): this task
     requires real entailment/negation reasoning, closer to extraction than to a binary
     relevance gate, so it gets the richer of the two cheap tiers.
+
+    Retries on a malformed-output failure (see _MAX_ATTEMPTS above) — NOT on a
+    genuine rate-limit error, which complete_structured's own retry_on_rate_limit
+    wrapper already handles with its own backoff schedule before this ever sees it.
     """
     prompt = PROMPT_SUFFIX.format(claim_a=claim_a, claim_b=claim_b)
-    return await complete_structured(
-        settings.extractor_model, PairRelationOutput, prompt, max_tokens=300, timeout=60,
-        cached_prefix=PROMPT_PREFIX,
-    )
+    last_exc = None
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            return await complete_structured(
+                settings.extractor_model, PairRelationOutput, prompt, max_tokens=300, timeout=60,
+                cached_prefix=PROMPT_PREFIX,
+            )
+        except InstructorRetryException as exc:
+            last_exc = exc
+            if attempt < _MAX_ATTEMPTS - 1:
+                await asyncio.sleep(_RETRY_DELAY_S)
+    raise last_exc

@@ -6,10 +6,10 @@
 INSTANCE="i-00ac444b94c5ff9b2"
 REGION="eu-central-1"
 
-SERPERDEV_KEY=$(aws secretsmanager get-secret-value \
-  --secret-id daatan/serperdev-key \
-  --region "$REGION" \
-  --query SecretString --output text 2>/dev/null)
+SERPERDEV_KEY=$(aws ssm get-parameter \
+  --name /retro/prod/secrets/SERPER_API_KEY \
+  --with-decryption --region "$REGION" \
+  --query Parameter.Value --output text 2>/dev/null)
 
 ok()   { echo "  ✓  $1"; }
 fail() { echo "  ✗  $1"; }
@@ -37,20 +37,27 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 # ── Every secret web_search.py reads must actually resolve ──────────────
 #
-# `_secret()` falls back to Secrets Manager and returns None on a miss, so a secret
-# that doesn't exist doesn't raise — the provider is just silently skipped, and the
-# search chain quietly degrades instead of failing. Assert existence explicitly.
+# `_secret()` falls back to SSM Parameter Store (retro#548/docs#122: migrated off
+# Secrets Manager) and returns None on a miss, so a secret that doesn't exist
+# doesn't raise — the provider is just silently skipped, and the search chain
+# quietly degrades instead of failing. Assert existence explicitly.
+#
+# NEWSDATA_API_KEY, GOOGLE_CSE_API_KEY and GOOGLE_CSE_CX are included here for the
+# first time (docs#122) — they were previously excluded from this check even though
+# web_search.py reads them, so a missing/dead value for any of the three was
+# invisible until something noticed the provider going quiet.
 echo ""
-echo "  SECRET EXISTENCE (names read by pipeline/src/tm/web_search.py)"
+echo "  SECRET EXISTENCE (names read by pipeline/src/tm/web_search.py, in SSM)"
 MISSING=0
-for S in dataforseo-key serpapi-key serperdev-key brave-api-key brightdata-api-key \
-         nimbleway-api-key scrapingbee-api-key tavily-api-key oracle-api-key \
-         news-indexer-url news-indexer-api-key gcp-service-account-key; do
-  if aws secretsmanager get-secret-value --secret-id "daatan/$S" --region "$REGION" \
-       --query SecretString --output text >/dev/null 2>&1; then
-    ok "daatan/$S"
+for S in DATAFORSEO_API_KEY SERPAPI_API_KEY SERPER_API_KEY BRAVE_API_KEY BRIGHTDATA_API_KEY \
+         NIMBLEWAY_API_KEY SCRAPINGBEE_API_KEY NEWSDATA_API_KEY TAVILY_API_KEY \
+         GOOGLE_CSE_API_KEY GOOGLE_CSE_CX NEWS_INDEXER_URL NEWS_INDEXER_API_KEY \
+         GCP_SA_KEY_JSON; do
+  if aws ssm get-parameter --name "/retro/prod/secrets/$S" --with-decryption --region "$REGION" \
+       --query Parameter.Value --output text >/dev/null 2>&1; then
+    ok "/retro/prod/secrets/$S"
   else
-    fail "daatan/$S — MISSING; this provider will be silently skipped"
+    fail "/retro/prod/secrets/$S — MISSING; this provider will be silently skipped"
     MISSING=$((MISSING + 1))
   fi
 done
@@ -70,14 +77,14 @@ if [[ -n "$SERPERDEV_KEY" ]]; then
     fail "Serper.dev (HTTP $STATUS)"
   fi
 else
-  warn "Serper.dev — key not found in Secrets Manager (daatan/serperdev-key)"
+  warn "Serper.dev — key not found in SSM (/retro/prod/secrets/SERPER_API_KEY)"
 fi
 
 # ── Brave ───────────────────────────────────────────────
-BRAVE_KEY=$(aws secretsmanager get-secret-value \
-  --secret-id daatan/brave-api-key \
-  --region "$REGION" \
-  --query SecretString --output text 2>/dev/null)
+BRAVE_KEY=$(aws ssm get-parameter \
+  --name /retro/prod/secrets/BRAVE_API_KEY \
+  --with-decryption --region "$REGION" \
+  --query Parameter.Value --output text 2>/dev/null)
 if [[ -n "$BRAVE_KEY" ]]; then
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
     "https://api.search.brave.com/res/v1/web/search?q=test&count=1" \
@@ -91,7 +98,7 @@ if [[ -n "$BRAVE_KEY" ]]; then
     warn "Brave Search (HTTP $STATUS)"
   fi
 else
-  warn "Brave Search — key not found in Secrets Manager"
+  warn "Brave Search — key not found in SSM"
 fi
 
 # ── AWS Bedrock (from EC2 via IAM role) ─────────────────

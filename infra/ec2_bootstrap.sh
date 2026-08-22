@@ -36,18 +36,25 @@ if ! command -v uv &>/dev/null; then
 fi
 log "uv $(uv --version)"
 
-# ── 2. Pull secrets from AWS Secrets Manager ─────────────────────────────────
+# ── 2. Pull secrets from AWS Secrets Manager / SSM Parameter Store ───────────
 log "Fetching secrets..."
 get_secret() {
   aws secretsmanager get-secret-value \
     --secret-id "$1" --region "$REGION" \
     --query SecretString --output text 2>/dev/null
 }
+# Search-provider keys migrated to SSM per docs#122 — see infra/check_keys.sh
+# and pipeline/src/tm/web_search.py for the same /retro/prod/secrets/* names.
+get_ssm_secret() {
+  aws ssm get-parameter \
+    --name "$1" --with-decryption --region "$REGION" \
+    --query Parameter.Value --output text 2>/dev/null
+}
 
 OPENROUTER_KEY=$(get_secret "daatan/openrouter-api-key") || true
-BRAVE_KEY=$(get_secret "daatan/brave-api-key") || true
-SERPAPI_KEY=$(get_secret "daatan/serpapi-key") || true
-SERPERDEV_KEY=$(get_secret "daatan/serperdev-key") || true
+BRAVE_KEY=$(get_ssm_secret "/retro/prod/secrets/BRAVE_API_KEY") || true
+SERPAPI_KEY=$(get_ssm_secret "/retro/prod/secrets/SERPAPI_API_KEY") || true
+SERPERDEV_KEY=$(get_ssm_secret "/retro/prod/secrets/SERPER_API_KEY") || true
 GH_TOKEN=$(get_secret "daatan/github-pat") || true
 
 if [[ -z "$OPENROUTER_KEY" ]]; then

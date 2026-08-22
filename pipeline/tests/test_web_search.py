@@ -982,24 +982,24 @@ class TestQuotaFlagTTL:
 class TestSecretLoadingLogsLoudly:
     @needs_deps
     def test_secret_failure_logs_at_warning_not_debug(self, caplog, monkeypatch):
-        """A Secrets Manager failure must be visible without debug logging enabled —
+        """An SSM Parameter Store failure must be visible without debug logging enabled —
         this used to be logger.debug(), which silently hid missing providers."""
         ws = _fresh_ws()
         monkeypatch.delenv("SOME_TEST_ENV_VAR", raising=False)
 
         class _FailingClient:
-            def get_secret_value(self, SecretId):
-                raise RuntimeError("simulated Secrets Manager failure")
+            def get_parameter(self, Name, WithDecryption):
+                raise RuntimeError("simulated SSM Parameter Store failure")
 
         with patch("boto3.client", return_value=_FailingClient()):
             with caplog.at_level("WARNING", logger="tm.web_search"):
-                result = ws._secret("SOME_TEST_ENV_VAR", "daatan/some-test-key")
+                result = ws._secret("SOME_TEST_ENV_VAR", "/retro/prod/secrets/SOME_TEST_KEY")
 
         assert result is None
         assert any(
-            r.levelname == "WARNING" and "daatan/some-test-key" in r.message
+            r.levelname == "WARNING" and "/retro/prod/secrets/SOME_TEST_KEY" in r.message
             for r in caplog.records
-        ), "secret-load failure must log at WARNING with the secret name"
+        ), "secret-load failure must log at WARNING with the parameter name"
 
     @needs_deps
     def test_log_unresolved_secrets_reports_missing_keys(self, caplog):
@@ -1013,8 +1013,8 @@ class TestSecretLoadingLogsLoudly:
             ws._log_unresolved_secrets()
 
         messages = [r.message for r in caplog.records if r.levelname == "WARNING"]
-        assert any("daatan/dataforseo-key" in m for m in messages)
-        assert not any("daatan/serpapi-key" in m for m in messages)
+        assert any("/retro/prod/secrets/DATAFORSEO_API_KEY" in m for m in messages)
+        assert not any("/retro/prod/secrets/SERPAPI_API_KEY" in m for m in messages)
 
     @needs_deps
     def test_log_unresolved_secrets_silent_when_all_present(self, caplog):

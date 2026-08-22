@@ -127,50 +127,52 @@ def get_last_search_provider_chain() -> list[str]:
     return list(getattr(_provider_local, "chain", []))
 
 
-def _secret(env_var: str, secret_name: str) -> Optional[str]:
-    """Return env var if set, otherwise fetch from AWS Secrets Manager.
+def _secret(env_var: str, ssm_name: str) -> Optional[str]:
+    """Return env var if set, otherwise fetch from SSM Parameter Store.
 
-    Fails open by design (a provider with no key is simply unavailable, not a
-    startup error) — but that means a renamed/missing secret silently disables
-    a provider with no other signal. Logged at WARNING, and summarized by
-    _log_unresolved_secrets(), so it shows up without debug logging enabled.
+    Migrated off Secrets Manager per docs#122 (free SSM standard SecureString vs.
+    ~$0.40/secret/month). Fails open by design (a provider with no key is simply
+    unavailable, not a startup error) — but that means a renamed/missing parameter
+    silently disables a provider with no other signal. Logged at WARNING, and
+    summarized by _log_unresolved_secrets(), so it shows up without debug logging
+    enabled.
     """
     val = os.environ.get(env_var)
     if val:
         return val
     try:
         import boto3
-        client = boto3.client("secretsmanager", region_name="eu-central-1")
-        val = client.get_secret_value(SecretId=secret_name)["SecretString"].strip()
-        logger.info("Loaded %s from Secrets Manager", secret_name)
+        client = boto3.client("ssm", region_name="eu-central-1")
+        val = client.get_parameter(Name=ssm_name, WithDecryption=True)["Parameter"]["Value"].strip()
+        logger.info("Loaded %s from SSM Parameter Store", ssm_name)
         return val
     except Exception as e:
         logger.warning(
-            "Could not load %s from Secrets Manager (env %s not set either): %s "
+            "Could not load %s from SSM Parameter Store (env %s not set either): %s "
             "— this provider is silently disabled",
-            secret_name, env_var, e,
+            ssm_name, env_var, e,
         )
         return None
 
 
-DATAFORSEO_API_KEY: Optional[str] = _secret("DATAFORSEO_API_KEY", "daatan/dataforseo-key")
-SERPAPI_API_KEY: Optional[str] = _secret("SERPAPI_API_KEY", "daatan/serpapi-key")
-SERPER_API_KEY: Optional[str] = _secret("SERPER_API_KEY", "daatan/serperdev-key")
-BRAVE_API_KEY: Optional[str] = _secret("BRAVE_API_KEY", "daatan/brave-api-key")
-BRIGHTDATA_API_KEY: Optional[str] = _secret("BRIGHTDATA_API_KEY", "daatan/brightdata-api-key")
-NIMBLEWAY_API_KEY: Optional[str] = _secret("NIMBLEWAY_API_KEY", "daatan/nimbleway-api-key")
-SCRAPINGBEE_API_KEY: Optional[str] = _secret("SCRAPINGBEE_API_KEY", "daatan/scrapingbee-api-key")
-NEWSDATA_API_KEY: Optional[str] = _secret("NEWSDATA_API_KEY", "daatan/newsdata-api-key")
-TAVILY_API_KEY: Optional[str] = _secret("TAVILY_API_KEY", "daatan/tavily-api-key")
+DATAFORSEO_API_KEY: Optional[str] = _secret("DATAFORSEO_API_KEY", "/retro/prod/secrets/DATAFORSEO_API_KEY")
+SERPAPI_API_KEY: Optional[str] = _secret("SERPAPI_API_KEY", "/retro/prod/secrets/SERPAPI_API_KEY")
+SERPER_API_KEY: Optional[str] = _secret("SERPER_API_KEY", "/retro/prod/secrets/SERPER_API_KEY")
+BRAVE_API_KEY: Optional[str] = _secret("BRAVE_API_KEY", "/retro/prod/secrets/BRAVE_API_KEY")
+BRIGHTDATA_API_KEY: Optional[str] = _secret("BRIGHTDATA_API_KEY", "/retro/prod/secrets/BRIGHTDATA_API_KEY")
+NIMBLEWAY_API_KEY: Optional[str] = _secret("NIMBLEWAY_API_KEY", "/retro/prod/secrets/NIMBLEWAY_API_KEY")
+SCRAPINGBEE_API_KEY: Optional[str] = _secret("SCRAPINGBEE_API_KEY", "/retro/prod/secrets/SCRAPINGBEE_API_KEY")
+NEWSDATA_API_KEY: Optional[str] = _secret("NEWSDATA_API_KEY", "/retro/prod/secrets/NEWSDATA_API_KEY")
+TAVILY_API_KEY: Optional[str] = _secret("TAVILY_API_KEY", "/retro/prod/secrets/TAVILY_API_KEY")
 # Google Programmable Search (Custom Search JSON API). Needs BOTH an API key and a
 # search-engine id (cx). Inert until both are configured — see _search_google_cse.
-GOOGLE_CSE_API_KEY: Optional[str] = _secret("GOOGLE_CSE_API_KEY", "daatan/google-cse-api-key")
-GOOGLE_CSE_CX: Optional[str] = _secret("GOOGLE_CSE_CX", "daatan/google-cse-cx")
-GCP_SA_KEY_JSON: Optional[str] = _secret("GCP_SA_KEY_JSON", "daatan/gcp-service-account-key")
+GOOGLE_CSE_API_KEY: Optional[str] = _secret("GOOGLE_CSE_API_KEY", "/retro/prod/secrets/GOOGLE_CSE_API_KEY")
+GOOGLE_CSE_CX: Optional[str] = _secret("GOOGLE_CSE_CX", "/retro/prod/secrets/GOOGLE_CSE_CX")
+GCP_SA_KEY_JSON: Optional[str] = _secret("GCP_SA_KEY_JSON", "/retro/prod/secrets/GCP_SA_KEY_JSON")
 
 # news-indexer — local semantic index (https://scrapper.daatan.com)
-NEWS_INDEXER_URL: Optional[str] = _secret("NEWS_INDEXER_URL", "daatan/news-indexer-url")
-NEWS_INDEXER_API_KEY: Optional[str] = _secret("NEWS_INDEXER_API_KEY", "daatan/news-indexer-api-key")
+NEWS_INDEXER_URL: Optional[str] = _secret("NEWS_INDEXER_URL", "/retro/prod/secrets/NEWS_INDEXER_URL")
+NEWS_INDEXER_API_KEY: Optional[str] = _secret("NEWS_INDEXER_API_KEY", "/retro/prod/secrets/NEWS_INDEXER_API_KEY")
 
 
 def _log_unresolved_secrets() -> None:
@@ -181,18 +183,18 @@ def _log_unresolved_secrets() -> None:
     instead of requiring someone to notice 13 separate per-key log lines.
     """
     keys = {
-        "daatan/dataforseo-key": DATAFORSEO_API_KEY,
-        "daatan/serpapi-key": SERPAPI_API_KEY,
-        "daatan/serperdev-key": SERPER_API_KEY,
-        "daatan/brave-api-key": BRAVE_API_KEY,
-        "daatan/brightdata-api-key": BRIGHTDATA_API_KEY,
-        "daatan/nimbleway-api-key": NIMBLEWAY_API_KEY,
-        "daatan/scrapingbee-api-key": SCRAPINGBEE_API_KEY,
-        "daatan/newsdata-api-key": NEWSDATA_API_KEY,
-        "daatan/tavily-api-key": TAVILY_API_KEY,
-        "daatan/google-cse-api-key": GOOGLE_CSE_API_KEY,
-        "daatan/google-cse-cx": GOOGLE_CSE_CX,
-        "daatan/gcp-service-account-key": GCP_SA_KEY_JSON,
+        "/retro/prod/secrets/DATAFORSEO_API_KEY": DATAFORSEO_API_KEY,
+        "/retro/prod/secrets/SERPAPI_API_KEY": SERPAPI_API_KEY,
+        "/retro/prod/secrets/SERPER_API_KEY": SERPER_API_KEY,
+        "/retro/prod/secrets/BRAVE_API_KEY": BRAVE_API_KEY,
+        "/retro/prod/secrets/BRIGHTDATA_API_KEY": BRIGHTDATA_API_KEY,
+        "/retro/prod/secrets/NIMBLEWAY_API_KEY": NIMBLEWAY_API_KEY,
+        "/retro/prod/secrets/SCRAPINGBEE_API_KEY": SCRAPINGBEE_API_KEY,
+        "/retro/prod/secrets/NEWSDATA_API_KEY": NEWSDATA_API_KEY,
+        "/retro/prod/secrets/TAVILY_API_KEY": TAVILY_API_KEY,
+        "/retro/prod/secrets/GOOGLE_CSE_API_KEY": GOOGLE_CSE_API_KEY,
+        "/retro/prod/secrets/GOOGLE_CSE_CX": GOOGLE_CSE_CX,
+        "/retro/prod/secrets/GCP_SA_KEY_JSON": GCP_SA_KEY_JSON,
     }
     missing = [name for name, value in keys.items() if not value]
     if missing:
@@ -242,19 +244,19 @@ def _refresh_keys_if_stale() -> None:
     global GCP_SA_KEY_JSON, _BQ_CLIENT, _KEY_LOADED_AT
     if time.time() - _KEY_LOADED_AT < _KEY_MAX_AGE_SECONDS:
         return
-    logger.info("Refreshing search API keys from Secrets Manager (>24h since last fetch)")
-    DATAFORSEO_API_KEY = _secret("DATAFORSEO_API_KEY", "daatan/dataforseo-key")
-    SERPAPI_API_KEY = _secret("SERPAPI_API_KEY", "daatan/serpapi-key")
-    SERPER_API_KEY = _secret("SERPER_API_KEY", "daatan/serperdev-key")
-    BRAVE_API_KEY = _secret("BRAVE_API_KEY", "daatan/brave-api-key")
-    BRIGHTDATA_API_KEY = _secret("BRIGHTDATA_API_KEY", "daatan/brightdata-api-key")
-    NIMBLEWAY_API_KEY = _secret("NIMBLEWAY_API_KEY", "daatan/nimbleway-api-key")
-    SCRAPINGBEE_API_KEY = _secret("SCRAPINGBEE_API_KEY", "daatan/scrapingbee-api-key")
-    NEWSDATA_API_KEY = _secret("NEWSDATA_API_KEY", "daatan/newsdata-api-key")
-    TAVILY_API_KEY = _secret("TAVILY_API_KEY", "daatan/tavily-api-key")
-    GOOGLE_CSE_API_KEY = _secret("GOOGLE_CSE_API_KEY", "daatan/google-cse-api-key")
-    GOOGLE_CSE_CX = _secret("GOOGLE_CSE_CX", "daatan/google-cse-cx")
-    new_gcp = _secret("GCP_SA_KEY_JSON", "daatan/gcp-service-account-key")
+    logger.info("Refreshing search API keys from SSM Parameter Store (>24h since last fetch)")
+    DATAFORSEO_API_KEY = _secret("DATAFORSEO_API_KEY", "/retro/prod/secrets/DATAFORSEO_API_KEY")
+    SERPAPI_API_KEY = _secret("SERPAPI_API_KEY", "/retro/prod/secrets/SERPAPI_API_KEY")
+    SERPER_API_KEY = _secret("SERPER_API_KEY", "/retro/prod/secrets/SERPER_API_KEY")
+    BRAVE_API_KEY = _secret("BRAVE_API_KEY", "/retro/prod/secrets/BRAVE_API_KEY")
+    BRIGHTDATA_API_KEY = _secret("BRIGHTDATA_API_KEY", "/retro/prod/secrets/BRIGHTDATA_API_KEY")
+    NIMBLEWAY_API_KEY = _secret("NIMBLEWAY_API_KEY", "/retro/prod/secrets/NIMBLEWAY_API_KEY")
+    SCRAPINGBEE_API_KEY = _secret("SCRAPINGBEE_API_KEY", "/retro/prod/secrets/SCRAPINGBEE_API_KEY")
+    NEWSDATA_API_KEY = _secret("NEWSDATA_API_KEY", "/retro/prod/secrets/NEWSDATA_API_KEY")
+    TAVILY_API_KEY = _secret("TAVILY_API_KEY", "/retro/prod/secrets/TAVILY_API_KEY")
+    GOOGLE_CSE_API_KEY = _secret("GOOGLE_CSE_API_KEY", "/retro/prod/secrets/GOOGLE_CSE_API_KEY")
+    GOOGLE_CSE_CX = _secret("GOOGLE_CSE_CX", "/retro/prod/secrets/GOOGLE_CSE_CX")
+    new_gcp = _secret("GCP_SA_KEY_JSON", "/retro/prod/secrets/GCP_SA_KEY_JSON")
     if new_gcp != GCP_SA_KEY_JSON:
         GCP_SA_KEY_JSON = new_gcp
         _BQ_CLIENT = None  # force client rebuild with new credentials

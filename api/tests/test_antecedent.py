@@ -12,6 +12,7 @@ from typing import Optional
 
 from forecast_api.antecedent import (
     DEFAULT_ANTECEDENT_JACCARD_THRESHOLD,
+    antecedent_keep_mask,
     filter_pool_by_antecedent,
     source_matches_antecedent,
 )
@@ -119,3 +120,42 @@ class TestFilterPoolByAntecedent:
     def test_default_threshold_is_exported_and_used(self):
         # Sanity: the module constant matches what filter_pool_by_antecedent defaults to.
         assert DEFAULT_ANTECEDENT_JACCARD_THRESHOLD == 0.25
+
+
+class TestAntecedentKeepMask:
+    """The primitive retro#583's live-path wiring uses to filter forecaster.py's
+    several PARALLEL arrays (stance, weight, relevance, ...) in lockstep — a plain
+    list[bool], not a filtered list, since there is no single sequence to return
+    a subset of."""
+
+    def test_none_query_is_all_true(self):
+        rows = [[_claim(is_conditional=True, antecedent_text_en="X")], None, []]
+        assert antecedent_keep_mask(rows, None) == [True, True, True]
+
+    def test_mask_length_matches_input_length(self):
+        rows = [None] * 5
+        assert len(antecedent_keep_mask(rows, "the ceasefire holds")) == 5
+
+    def test_mask_matches_filter_pool_by_antecedent_rowwise(self):
+        matching = _Source(claims_detail=[_claim(
+            is_conditional=True, antecedent_text_en="the ceasefire holds", antecedent_polarity=True,
+        )])
+        other = _Source(claims_detail=[_claim(
+            is_conditional=True, antecedent_text_en="China invades Taiwan", antecedent_polarity=True,
+        )])
+        unconditional = _Source(claims_detail=[_claim(is_conditional=False)])
+        sources = [matching, other, unconditional]
+        mask = antecedent_keep_mask([s.claims_detail for s in sources], "the ceasefire holds")
+        assert mask == [True, False, True]
+        assert filter_pool_by_antecedent(sources, "the ceasefire holds") == \
+            [s for s, keep in zip(sources, mask) if keep]
+
+    def test_polarity_is_respected_in_the_mask(self):
+        affirmative = [_claim(
+            is_conditional=True, antecedent_text_en="the ceasefire holds", antecedent_polarity=True,
+        )]
+        negated = [_claim(
+            is_conditional=True, antecedent_text_en="the ceasefire holds", antecedent_polarity=False,
+        )]
+        assert antecedent_keep_mask([affirmative, negated], "the ceasefire holds", True) == [True, False]
+        assert antecedent_keep_mask([affirmative, negated], "the ceasefire holds", False) == [False, True]

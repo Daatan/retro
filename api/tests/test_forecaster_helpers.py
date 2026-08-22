@@ -120,3 +120,55 @@ class TestBuildClaimMeta:
         again = _req(claim_direction="arrival", resolution_criteria="Same rules.")
         assert ForecastCache.make_key(req.question, 5, None, build_claim_meta(req)) == \
                ForecastCache.make_key(again.question, 5, None, build_claim_meta(again))
+
+
+class TestBuildClaimMetaAntecedent:
+    """retro#583 — antecedent_query/antecedent_query_polarity must discriminate the
+    forecast cache key, same defect class as #510's resolution_criteria: without this,
+    an unconditional request and a conditional one (or two DIFFERENT antecedents on the
+    same consequent) hash identically, so whichever lands first serves the other.
+    """
+
+    def test_antecedent_less_requests_hash_exactly_as_before(self):
+        # Regression guard on the live cache: adding this field must not perturb the
+        # meta string for any caller that doesn't set it.
+        assert build_claim_meta(_req(claim_direction="arrival")) == "arrival|"
+        assert build_claim_meta(_req()) is None
+
+    def test_antecedent_alone_is_enough_to_produce_a_discriminator(self):
+        assert build_claim_meta(_req(antecedent_query="the ceasefire holds")) is not None
+
+    def test_different_antecedents_produce_different_meta(self):
+        a = build_claim_meta(_req(antecedent_query="the ceasefire holds"))
+        b = build_claim_meta(_req(antecedent_query="China invades Taiwan"))
+        assert a != b
+
+    def test_different_polarity_same_antecedent_produces_different_meta(self):
+        a = build_claim_meta(_req(antecedent_query="the ceasefire holds", antecedent_query_polarity=True))
+        b = build_claim_meta(_req(antecedent_query="the ceasefire holds", antecedent_query_polarity=False))
+        assert a != b
+
+    def test_presence_of_antecedent_changes_the_cache_key(self):
+        bare = _req(claim_direction="arrival", claim_deadline="2026-12-31")
+        conditional = _req(
+            claim_direction="arrival",
+            claim_deadline="2026-12-31",
+            antecedent_query="the ceasefire holds",
+        )
+        k_bare = ForecastCache.make_key(bare.question, 5, "abc123", build_claim_meta(bare))
+        k_cond = ForecastCache.make_key(conditional.question, 5, "abc123", build_claim_meta(conditional))
+        assert k_bare != k_cond
+
+    def test_identical_antecedent_requests_still_share_a_key(self):
+        req = _req(antecedent_query="the ceasefire holds", antecedent_query_polarity=False)
+        again = _req(antecedent_query="the ceasefire holds", antecedent_query_polarity=False)
+        assert ForecastCache.make_key(req.question, 5, None, build_claim_meta(req)) == \
+               ForecastCache.make_key(again.question, 5, None, build_claim_meta(again))
+
+    def test_criteria_and_antecedent_both_present_still_discriminates_from_criteria_alone(self):
+        criteria_only = _req(resolution_criteria="Official gov't announcement only.")
+        both = _req(
+            resolution_criteria="Official gov't announcement only.",
+            antecedent_query="the ceasefire holds",
+        )
+        assert build_claim_meta(criteria_only) != build_claim_meta(both)

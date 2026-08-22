@@ -205,13 +205,25 @@ antecedent, using lexical shingle-Jaccard over `antecedent_text_en`/`antecedent_
 Sources conditional on a *different* antecedent are dropped; a pool with no matching claims
 returns `insufficient_data`/`reason=no_matching_antecedent` rather than silently falling back
 to the unfiltered (flat) pool. `None` (every caller before this issue): no-op, byte-identical
-to today's pooling. Deliberately scoped to the recompute path only — `ForecastRequest`/the
-live `/forecast` path and the MCP `forecast` tool are unchanged; wiring the live path would
-also touch its cache key (currently keyed on question text + article set, not antecedent) and
-was judged out of scope for a filtering-only change. Option 2 from retro#573 (an
-antecedent-aware stance prompt — an extraction change) stays deferred behind the usual shadow
-gate. Tests: `api/tests/test_antecedent.py` (pure filter) and
-`api/tests/test_pool_aggregate.py::TestAntecedentPoolSplit` (integration).
+to today's pooling. Option 2 from retro#573 (an antecedent-aware stance prompt — an extraction
+change) stays deferred behind the usual shadow gate. Tests: `api/tests/test_antecedent.py`
+(pure filter) and `api/tests/test_pool_aggregate.py::TestAntecedentPoolSplit` (integration).
+
+**Live `/forecast` path (retro#583):** `ForecastRequest` carries the same two fields with the
+same semantics, wired into `_run_forecast_inner` right before `aggregate_pool()` runs — filters
+`source_signals` and every parallel array the per-article loop built (stance/weight/relevance/
+settled/...) by the same keep/drop mask (`antecedent_keep_mask`, the primitive both this path
+and `/pool/aggregate` now share) rather than a single list, since the live path builds several
+arrays in lockstep instead of one list of pool rows. `build_claim_meta` folds both fields into
+the forecast cache key (appended, not interpolated, so an antecedent-less request still hashes
+exactly as it did before #583) — closing the exact gap #582 shipped without: pre-#583, two
+different antecedents on the same consequent, or a conditional and an unconditional query on
+the same question, would have collided on the cache and silently served each other's answer.
+The MCP `forecast` tool does not yet expose these fields — a separate, deliberately deferred
+product decision, not part of this fix. Tests: `api/tests/test_antecedent.py::TestAntecedentKeepMask`
+(the shared mask primitive), `api/tests/test_forecaster_helpers.py::TestBuildClaimMetaAntecedent`
+(cache-key discrimination), `api/tests/test_antecedent_live_forecast.py` (end-to-end through the
+real `run_forecast`, gatekeeper/extractor stubbed).
 
 ---
 

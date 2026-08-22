@@ -106,6 +106,38 @@ def source_matches_antecedent(
     return not saw_conditional
 
 
+def antecedent_keep_mask(
+    claims_detail_rows: Sequence[Optional[Sequence]],
+    antecedent_query: Optional[str],
+    antecedent_query_polarity: bool = True,
+    threshold: float = DEFAULT_ANTECEDENT_JACCARD_THRESHOLD,
+) -> list[bool]:
+    """Per-row antecedent-match boolean mask, one entry per ``claims_detail_rows``
+    element, in order.
+
+    The primitive both pool-filtering shapes in this codebase reduce to.
+    ``/pool/aggregate`` holds one list of sources and can filter it directly
+    (``filter_pool_by_antecedent`` below). The live ``/forecast`` path
+    (retro#583) instead builds several PARALLEL arrays in lockstep inside its
+    per-article loop (stance, weight, relevance, ... one list per field, not
+    one list of source objects) — there is no single sequence to filter, so
+    the caller needs the keep/drop decision as a mask it can apply to every
+    array itself. This function is that mask; ``filter_pool_by_antecedent``
+    is the convenience wrapper for callers that DO have one sequence.
+
+    ``antecedent_query`` is ``None`` on every existing caller (the field is
+    new and optional): returns an all-``True`` mask (nothing dropped) — the
+    same inert-by-default contract as ``filter_pool_by_antecedent``.
+    """
+    if not antecedent_query:
+        return [True] * len(claims_detail_rows)
+    query_shingles = shingles(antecedent_query, _SHINGLE_SIZE)
+    return [
+        source_matches_antecedent(claims_detail, query_shingles, antecedent_query_polarity, threshold)
+        for claims_detail in claims_detail_rows
+    ]
+
+
 def filter_pool_by_antecedent(
     sources: Sequence[T],
     antecedent_query: Optional[str],
@@ -119,13 +151,8 @@ def filter_pool_by_antecedent(
     inert until a caller opts in, same "additive and fail-open" contract as
     ``claim_direction``/``claim_deadline`` on ``ForecastRequest``.
     """
-    if not antecedent_query:
-        return list(sources)
-    query_shingles = shingles(antecedent_query, _SHINGLE_SIZE)
-    return [
-        s
-        for s in sources
-        if source_matches_antecedent(
-            getattr(s, "claims_detail", None), query_shingles, antecedent_query_polarity, threshold,
-        )
-    ]
+    mask = antecedent_keep_mask(
+        [getattr(s, "claims_detail", None) for s in sources],
+        antecedent_query, antecedent_query_polarity, threshold,
+    )
+    return [s for s, keep in zip(sources, mask) if keep]

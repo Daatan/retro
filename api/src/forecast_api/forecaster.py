@@ -71,7 +71,7 @@ from .aggregation import (
     settlement_grade,
 )
 from .cache import forecast_cache, search_cache
-from .antecedent import filter_pool_by_antecedent
+from .antecedent import antecedent_keep_mask, filter_pool_by_antecedent
 from .clustering import cluster_text_for_claims, cluster_texts_with_stats
 from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight
@@ -1321,13 +1321,24 @@ def build_claim_meta(req: ForecastRequest) -> Optional[str]:
     told the question means, so a criteria-less response must not be served to a
     criteria-bearing request or vice versa (retro#510).
 
-    The criteria segment is *appended* rather than interpolated so that requests
-    without it hash exactly as they did before #510 — the live cache survives the
-    deploy instead of being invalidated wholesale.
+    ``antecedent_query``/``antecedent_query_polarity`` (retro#583) join them for the
+    same reason again: they filter the extracted pool BEFORE aggregation (see
+    ``antecedent_keep_mask`` in ``_run_forecast_inner``), so an unconditional cached
+    answer must never be served to a conditional query, two DIFFERENT antecedents on
+    the same consequent must never collide on the same key, and an affirmative query
+    must never be served a negated one's answer — hence the polarity is folded in too,
+    not just the antecedent text.
+
+    Every segment past the first two is *appended* rather than interpolated so that
+    requests which don't set it hash exactly as they did before that segment existed
+    — the live cache survives each deploy instead of being invalidated wholesale.
     """
     parts = [req.claim_direction or "", str(req.claim_deadline or "")]
     if req.resolution_criteria:
         parts.append(req.resolution_criteria)
+    if req.antecedent_query:
+        parts.append(req.antecedent_query)
+        parts.append(str(req.antecedent_query_polarity))
     return "|".join(parts) if any(parts) else None
 
 
@@ -1816,6 +1827,60 @@ async def _run_forecast_inner(
 
     if evidence_class_counts:
         logger.info("event=evidence_class_weighted question=%s counts=%s", _question_hash(req.question), evidence_class_counts)
+
+    # Pool-split (retro#573 Option 1, live-path counterpart added #583): filter to
+    # sources relevant to the antecedent being asked about, before aggregate_pool()
+    # runs — same placement (and rationale) as run_pool_aggregate's antecedent filter
+    # below. Unlike that path's single list of PoolSourceInput, this loop just built
+    # NINE parallel arrays (one per aggregation input) plus source_signals, one entry
+    # per article, in lockstep — so filtering means masking every one of them by the
+    # same keep/drop decision, not calling filter_pool_by_antecedent (which filters
+    # one sequence). antecedent_keep_mask is the shared primitive both paths use.
+    # Inert when antecedent_query is None, which is every caller today.
+    if req.antecedent_query:
+        n_before_antecedent = len(source_signals)
+        keep_mask = antecedent_keep_mask(
+            [s.claims_detail for s in source_signals],
+            req.antecedent_query, req.antecedent_query_polarity,
+        )
+        if not all(keep_mask):
+            source_signals = [s for s, k in zip(source_signals, keep_mask) if k]
+            all_stances = [v for v, k in zip(all_stances, keep_mask) if k]
+            all_weights = [v for v, k in zip(all_weights, keep_mask) if k]
+            all_valve_weights = [v for v, k in zip(all_valve_weights, keep_mask) if k]
+            all_age_adjusted_weights = [v for v, k in zip(all_age_adjusted_weights, keep_mask) if k]
+            relevances = [v for v, k in zip(relevances, keep_mask) if k]
+            all_settled = [v for v, k in zip(all_settled, keep_mask) if k]
+            all_settlement_dates = [v for v, k in zip(all_settlement_dates, keep_mask) if k]
+            all_published_dates = [v for v, k in zip(all_published_dates, keep_mask) if k]
+            all_source_ids = [v for v, k in zip(all_source_ids, keep_mask) if k]
+        logger.info(
+            "event=antecedent_filter_forecast before=%d after=%d antecedent=%s polarity=%s",
+            n_before_antecedent, len(source_signals), _question_hash(req.antecedent_query),
+            req.antecedent_query_polarity,
+        )
+        if not source_signals and n_before_antecedent:
+            # Distinct from "no_usable_predictions" (nothing extracted at all): articles
+            # WERE extracted, none of them spoke to this antecedent. Abstain rather than
+            # silently re-running the UNFILTERED pool — a conditional question answered
+            # with an unconditional number is exactly the retro#573 bug, and pricing a
+            # live forecast on a fabricated match would be worse than an honest
+            # insufficient_data (mirrors run_pool_aggregate's identical guard, #582).
+            _log_phase(
+                "total",
+                (time.perf_counter() - total_start) * 1000,
+                question=req.question,
+                articles_used=0,
+                outcome="no_matching_antecedent",
+            )
+            return _empty_response(
+                req.question,
+                reason="no_matching_antecedent",
+                articles_found=len(search_results),
+                provider=search_provider,
+                provider_chain=provider_chain,
+                distilled_query=distilled_query,
+            )
 
     # Steps 4-4b: relevance off-topic safety net, logit pooling, thin-evidence
     # CI widening, and the settlement override — all delegated to

@@ -136,6 +136,7 @@ No Polymarket market IDs — this is a self-contained narrative model. Node prob
 Click any node → slider appears → drag to hypothesise a new P → all downstream nodes cascade. Multiple nodes can be locked (pinned) simultaneously. "Reset All" restores the baseline values baked into the file.
 
 Open: `file:///home/mark/projects/retro/bayesoracle/graph.html`
+Live: https://daatan.github.io/retro/bayesoracle/graph.html
 
 ### `pm_analysis/index.html` — PM × BayesOracle divergence view
 
@@ -148,6 +149,7 @@ Each node shows `PM% / Bayes%`. The sidebar ranks all nodes by `|pm − bayes|` 
 Also shows the **PM candidate sum** (BIBI_PM + BENNETT_PM + EIZENKOT_PM + LIEBERMAN_PM + LAPID_PM). Should be ≤1.0; large slack means a significant unlisted-candidate probability or stale PM prices.
 
 Open: `file:///home/mark/projects/retro/bayesoracle/pm_analysis/index.html`
+Live: https://daatan.github.io/retro/bayesoracle/pm_analysis/index.html
 
 ---
 

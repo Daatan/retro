@@ -103,3 +103,5 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 - Oracle Test Console: https://daatan.github.io/retro/oracle-test.html
 - Oracle MCP Test Console: https://daatan.github.io/retro/oracle-mcp-test.html
 - TruthMachine vs Polymarket Duel: https://daatan.github.io/retro/duel.html
+- BayesOracle — Israeli Politics DAG (what-if slider): https://daatan.github.io/retro/bayesoracle/graph.html
+- BayesOracle — PM × Bayes Divergence: https://daatan.github.io/retro/bayesoracle/pm_analysis/index.html

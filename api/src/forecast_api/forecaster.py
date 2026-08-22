@@ -71,6 +71,7 @@ from .aggregation import (
     settlement_grade,
 )
 from .cache import forecast_cache, search_cache
+from .antecedent import filter_pool_by_antecedent
 from .clustering import cluster_text_for_claims, cluster_texts_with_stats
 from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight
@@ -2139,6 +2140,33 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             "event=syndication_dedupe_pool before=%d after=%d collapsed=%d",
             n_before_dedupe, len(sources), n_before_dedupe - len(sources),
         )
+    # Pool-split (retro#573, Option 1): filter to sources relevant to the
+    # antecedent being asked about, BEFORE the whitelist loop below computes
+    # weights — same placement as the dedup step above, and for the same
+    # reason: it changes WHICH rows enter the loop, never a value inside it.
+    # Inert when antecedent_query is None, which is every caller today.
+    if req.antecedent_query:
+        n_before_antecedent = len(sources)
+        sources = filter_pool_by_antecedent(
+            sources, req.antecedent_query, req.antecedent_query_polarity,
+        )
+        logger.info(
+            "event=antecedent_filter_pool before=%d after=%d antecedent=%s polarity=%s",
+            n_before_antecedent, len(sources), _question_hash(req.antecedent_query),
+            req.antecedent_query_polarity,
+        )
+        if not sources and n_before_antecedent:
+            # Distinct from "no_sources" (the caller supplied nothing at all):
+            # the pool had evidence, none of it spoke to this antecedent. Fall
+            # back to insufficient_data rather than silently re-running the
+            # UNFILTERED pool — a conditional question answered with an
+            # unconditional number is exactly the retro#573 bug, and pricing a
+            # live forecast on a fabricated match would be worse than
+            # abstaining honestly.
+            return PoolAggregateResponse(
+                mean=0.0, std=0.0, ci_low=-0.2, ci_high=0.2, articles_used=0,
+                settled=False, insufficient_data=True, reason="no_matching_antecedent",
+            )
     stances: list[float] = []
     weights: list[float] = []
     valve_weights: list[float] = []
@@ -2155,8 +2183,10 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
     # estimator behaviour change smuggled in under a persistence PR. Claim-level
     # weighting (R1) remains the issue that gets to spend this data next;
     # claims_detail is already spent, deliberately and with its own R8 movement
-    # report each time, by retro#355 (clustering, via _cluster_text_of below)
-    # and retro#372 (the settlement count over those clusters). `source_id` is
+    # report each time, by retro#355 (clustering, via _cluster_text_of below),
+    # retro#372 (the settlement count over those clusters), and retro#573
+    # (the antecedent filter above, which rows even reach `sources` at all).
+    # `source_id` is
     # spent the same way as of retro#458: read below (not merely persisted and
     # ignored) so `cap_source_mass` can group rows by outlet, but only ever
     # AS a grouping key — the identity string itself never enters the pooled

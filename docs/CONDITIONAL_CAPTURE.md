@@ -187,9 +187,31 @@ ORDER BY cond_count DESC;
 ### What's NOT Yet Active
 
 - ✅ Conditional fields captured, persisted, queryable
+- ✅ Pool-split filtering live on `/pool/aggregate` (retro#573 Option 1, below)
 - ❌ No scoring impact yet (Phase 4 pending)
 - ❌ No attenuation gates active
 - ❌ No antecedent linking (Phase 2+ work)
+
+---
+
+## Pool-Split Filtering (retro#573 Option 1)
+
+The first real consumer of this data, outside Phase 1's own tests: `PoolAggregateRequest`
+(`/pool/aggregate`) accepts an optional `antecedent_query` (+ `antecedent_query_polarity`).
+When set, the pool is filtered — BEFORE the existing weight loop, no new search, no new
+prompt — to sources whose claims are either unconditional or conditional on a matching
+antecedent, using lexical shingle-Jaccard over `antecedent_text_en`/`antecedent_polarity`
+(`forecast_api/antecedent.py`, same no-embedding rationale as `clustering.py`/retro#355).
+Sources conditional on a *different* antecedent are dropped; a pool with no matching claims
+returns `insufficient_data`/`reason=no_matching_antecedent` rather than silently falling back
+to the unfiltered (flat) pool. `None` (every caller before this issue): no-op, byte-identical
+to today's pooling. Deliberately scoped to the recompute path only — `ForecastRequest`/the
+live `/forecast` path and the MCP `forecast` tool are unchanged; wiring the live path would
+also touch its cache key (currently keyed on question text + article set, not antecedent) and
+was judged out of scope for a filtering-only change. Option 2 from retro#573 (an
+antecedent-aware stance prompt — an extraction change) stays deferred behind the usual shadow
+gate. Tests: `api/tests/test_antecedent.py` (pure filter) and
+`api/tests/test_pool_aggregate.py::TestAntecedentPoolSplit` (integration).
 
 ---
 

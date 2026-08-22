@@ -411,3 +411,130 @@ class TestSyndicationDedup:
         )
         resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=[a, b]))
         assert resp.articles_used == 2
+
+
+class TestAntecedentPoolSplit:
+    """retro#573 Option 1 ("pool-split") — filter an already-extracted pool
+    by the antecedent being asked about, before the weight loop runs. No new
+    search, no new prompt: every field read here has been live on
+    ClaimDetail since PR#570."""
+
+    # Deliberately unrelated clauses, not a minimal pair — two antecedents that
+    # merely swap one subject noun ("coalition wins" / "opposition wins") share
+    # enough bigram structure ("wins a majority") to jaccard-match at this
+    # module's threshold, which would be testing the matcher's blind spot
+    # rather than the pool-split behavior this test targets.
+    _COALITION = "the ruling coalition secures a parliamentary majority"
+    _OPPOSITION = "an independent inquiry finds evidence of electoral fraud"
+
+    @staticmethod
+    def _conditional_source(stance: float, claim_text: str, antecedent_text_en: str, **over) -> PoolSourceInput:
+        return _source(
+            stance=stance,
+            claims_detail=[{
+                "claim": claim_text, "stance": stance, "certainty": 0.7,
+                "is_conditional": True, "antecedent_text_en": antecedent_text_en,
+                "antecedent_polarity": True,
+            }],
+            **over,
+        )
+
+    @staticmethod
+    def _unconditional_source(stance: float, claim_text: str, **over) -> PoolSourceInput:
+        return _source(
+            stance=stance,
+            claims_detail=[{"claim": claim_text, "stance": stance, "certainty": 0.7, "is_conditional": False}],
+            **over,
+        )
+
+    def _mixed_pool(self) -> list:
+        # Claim text deliberately distinct per source (different specific facts) so the
+        # syndication dedup step above this filter — clustering on claims_detail text —
+        # does not collapse same-antecedent rows into one representative before this
+        # test can observe them; only antecedent_text_en repeats within a group.
+        return [
+            self._conditional_source(0.85, "Poll shows coalition bloc ahead by five points", self._COALITION),
+            self._conditional_source(0.75, "Coalition lead widens after debate performance", self._COALITION),
+            self._conditional_source(0.80, "Analyst model favors coalition after redistricting", self._COALITION),
+            self._conditional_source(-0.60, "Opposition surges in latest urban district poll", self._OPPOSITION),
+            self._conditional_source(-0.65, "Opposition candidate gains major union endorsement", self._OPPOSITION),
+            self._conditional_source(-0.55, "Post-debate tracking poll favors opposition bloc", self._OPPOSITION),
+            self._unconditional_source(0.10, "Electoral commission confirms official election date"),
+            self._unconditional_source(0.05, "Officials project record turnout this cycle"),
+        ]
+
+    async def test_unconditional_query_is_unaffected_by_conditional_fields(self):
+        """(a) A caller who never sets antecedent_query gets the same result
+        it would have gotten before this field existed — conditional fields
+        present on the rows must not leak into the estimate when nothing
+        asks for them."""
+        pool = self._mixed_pool()
+        with_conditional_fields = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=pool))
+        stripped = [s.model_copy(update={"claims_detail": None}) for s in pool]
+        without_conditional_fields = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=stripped))
+        assert with_conditional_fields.mean == pytest.approx(without_conditional_fields.mean)
+        assert with_conditional_fields.std == pytest.approx(without_conditional_fields.std)
+        assert with_conditional_fields.articles_used == without_conditional_fields.articles_used
+
+    async def test_different_antecedents_return_materially_different_estimates(self):
+        """(b) The same consequent pool, conditioned on two different
+        antecedents, must not collapse to the flat-pool number — retro#573's
+        core complaint was antecedent sensitivity ~= 0. Uses the issue's own
+        bar: sd across antecedents for a fixed consequent > 0.15."""
+        pool = self._mixed_pool()
+        flat = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=pool))
+        coalition = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=pool, antecedent_query=self._COALITION,
+        ))
+        opposition = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=pool, antecedent_query=self._OPPOSITION,
+        ))
+        assert coalition.insufficient_data is False
+        assert opposition.insufficient_data is False
+        # Each conditioned pool sees only its own antecedent's claims plus the
+        # unconditional ones — the OTHER antecedent's rows must not leak in.
+        assert coalition.articles_used == 5  # 3 coalition + 2 unconditional
+        assert opposition.articles_used == 5  # 3 opposition + 2 unconditional
+        assert coalition.mean > opposition.mean
+        assert (coalition.mean - opposition.mean) > 0.3
+        group_means = [coalition.mean, opposition.mean]
+        mu = sum(group_means) / 2
+        sd = (sum((m - mu) ** 2 for m in group_means) / 2) ** 0.5
+        assert sd > 0.15
+        # Neither conditioned estimate should equal the flat pool's — the flat
+        # number averages across a distinction the flat pool cannot see.
+        assert coalition.mean != pytest.approx(flat.mean, abs=0.05)
+        assert opposition.mean != pytest.approx(flat.mean, abs=0.05)
+
+    async def test_no_matching_antecedent_falls_back_to_insufficient_data(self):
+        """(c) When nothing in the pool speaks to the asked antecedent, the
+        recompute must say so rather than silently answering with the
+        unfiltered pool (see antecedent_query's field docstring for why:
+        answering a conditional question with an unconditional number is the
+        retro#573 bug, and this must not reproduce it in a new form)."""
+        pool = [
+            self._conditional_source(0.85, "Poll shows coalition ahead", self._COALITION),
+            self._conditional_source(-0.60, "Coalition lead evaporates in new poll", self._COALITION),
+        ]
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=pool, antecedent_query="a meteor strikes the capital",
+        ))
+        assert resp.insufficient_data is True
+        assert resp.reason == "no_matching_antecedent"
+        assert resp.articles_used == 0
+
+    async def test_negated_polarity_query_excludes_affirmative_claims(self):
+        affirmative = self._conditional_source(0.8, "Coalition consolidates ahead of vote", self._COALITION)
+        negated = _source(
+            stance=-0.7,
+            claims_detail=[{
+                "claim": "Coalition collapse reported after defections", "stance": -0.7, "certainty": 0.7,
+                "is_conditional": True, "antecedent_text_en": self._COALITION, "antecedent_polarity": False,
+            }],
+        )
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[affirmative, negated],
+            antecedent_query=self._COALITION, antecedent_query_polarity=False,
+        ))
+        assert resp.articles_used == 1
+        assert resp.mean < 0  # only `negated` (stance -0.7) survives the filter

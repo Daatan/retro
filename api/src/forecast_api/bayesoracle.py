@@ -27,6 +27,12 @@ import core  # noqa: E402  (resolved via _BAYES_DIR)
 _GRAPH_PATH = _BAYES_DIR / "graph_political.json"
 
 
+def core_module():
+    """The shared engine module, for callers that build their own graph spec
+    (the v2 playground) rather than the political DAG."""
+    return core
+
+
 @lru_cache(maxsize=1)
 def _graph() -> "core.Graph":
     return core.load_graph(_GRAPH_PATH)

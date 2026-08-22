@@ -1,6 +1,6 @@
 [project]
 name = "forecast-api"
-version = "0.3.2"
+version = "0.4.0"
 description = "TruthMachine Oracle API — FastAPI prediction microservice"
 requires-python = ">=3.11"
 dependencies = [

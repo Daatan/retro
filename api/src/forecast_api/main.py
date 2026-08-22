@@ -36,6 +36,7 @@ from .mcp_auth import SCOPE_FORECAST, SCOPE_READ
 from .mcp_server import build_mcp
 from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, IngestResolutionRequest, IngestResolutionResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, RelevanceRequest, RelevanceResponse, SearchRequest, SearchResponse, SearchHealthResponse, SettlementPinReportResponse, TokenUsage, VersionResponse
 from .searcher import run_search, run_search_health
+from .v2_playground import V2ForecastRequest, V2JobCreated, get_job, start_job
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 logger = logging.getLogger(__name__)
@@ -151,6 +152,25 @@ async def bayes_nodes(
     """
     obs = parse_node_observations(observations)
     return {"nodes": compute_nodes(obs or None)}
+
+
+@app.post("/v2/forecast", response_model=V2JobCreated, status_code=202, tags=["V2"])
+@limiter.limit("5/minute")
+async def v2_forecast(request: Request, body: V2ForecastRequest, _: ApiKeyClient = Depends(verify_api_key)):  # request: required by slowapi
+    """Oracle 2.0 playground (retro#595): start a traced query-path run and
+    return its job id. Poll ``GET /v2/jobs/{id}`` for the growing trace."""
+    job = start_job(body)
+    return V2JobCreated(job_id=job["id"], status=job["status"])
+
+
+@app.get("/v2/jobs/{job_id}", tags=["V2"])
+async def v2_job(job_id: str, _: ApiKeyClient = Depends(verify_api_key)):
+    """The full trace of a playground run: nodes, edges, every prompt and
+    response, the log, and the result once done. 404 for unknown ids."""
+    job = get_job(job_id)
+    if job is None:
+        return JSONResponse(status_code=404, content={"detail": "unknown job"})
+    return job
 
 
 @app.get("/leaderboard", tags=["Meta"])

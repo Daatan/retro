@@ -9082,7 +9082,7 @@
     "C07:ft": {
       "event_id": "C07",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9124,14 +9124,14 @@
     "C08:bloomberg": {
       "event_id": "C08",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
     "C08:ft": {
       "event_id": "C08",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9173,7 +9173,7 @@
     "C09:ft": {
       "event_id": "C09",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10671,7 +10671,7 @@
     "C07:bloomberg": {
       "event_id": "C07",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -13156,7 +13156,7 @@
     "C11:bloomberg": {
       "event_id": "C11",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -13177,7 +13177,7 @@
     "C11:ft": {
       "event_id": "C11",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-22T17:15:02.255013"
+  "last_updated": "2026-08-22T17:15:51.575944"
 }

@@ -4749,7 +4749,7 @@
     "E05:walla": {
       "event_id": "E05",
       "source_id": "walla",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10713,7 +10713,7 @@
     "E03:bloomberg": {
       "event_id": "E03",
       "source_id": "bloomberg",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-22T17:17:33.092837"
+  "last_updated": "2026-08-22T17:17:50.149423"
 }

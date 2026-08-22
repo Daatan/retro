@@ -444,21 +444,35 @@ creation and service start, restoring `latest.tgz` if `data/atlas/` is empty.
 30-day per-cycle retention + 7-day versioned `latest.tgz` give point-in-time
 recovery. Full design + IAM in [`docs/ATLAS_SNAPSHOTS.md`](ATLAS_SNAPSHOTS.md).
 
-### Required Secrets (AWS Secrets Manager, `eu-central-1`)
+### Required Secrets
+
+Search-provider keys migrated off Secrets Manager to SSM Parameter Store per
+docs#122 (free `SecureString`, same read pattern via `_secret()`):
+
+| SSM parameter (`eu-central-1`) | Used by |
+|---|---|
+| `/retro/prod/secrets/DATAFORSEO_API_KEY` | Web search — DataForSEO (optional) |
+| `/retro/prod/secrets/SERPAPI_API_KEY` | Web search — SerpAPI/Google News (optional) |
+| `/retro/prod/secrets/SERPER_API_KEY` | Web search — Serper.dev/Google News (optional) |
+| `/retro/prod/secrets/BRAVE_API_KEY` | Web search — Brave News Search (optional) |
+| `/retro/prod/secrets/BRIGHTDATA_API_KEY` | Web search — BrightData SERP API (optional) |
+| `/retro/prod/secrets/NIMBLEWAY_API_KEY` | Web search — Nimbleway SERP API (optional) |
+| `/retro/prod/secrets/SCRAPINGBEE_API_KEY` | Web search — ScrapingBee Google Search (optional) |
+| `/retro/prod/secrets/NEWSDATA_API_KEY` | Web search — Newsdata.io (optional) |
+| `/retro/prod/secrets/TAVILY_API_KEY` | Web search — Tavily (optional) |
+| `/retro/prod/secrets/GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_CX` | Web search — Google Custom Search (optional) |
+| `/retro/prod/secrets/GCP_SA_KEY_JSON` | GDELT BigQuery fallback (optional) |
+| `/retro/prod/secrets/NEWS_INDEXER_URL` / `NEWS_INDEXER_API_KEY` | news-indexer provider (optional) |
+
+Remaining secrets stay in AWS Secrets Manager (`eu-central-1`):
 
 | Secret name | Used by |
 |---|---|
 | `daatan/openrouter-api-key` | LLM inference via OpenRouter (fallback) |
-| `daatan/serpapi-key` | Web search — SerpAPI/Google News (optional) |
-| `daatan/serperdev-key` | Web search — Serper.dev/Google News (optional) |
-| `daatan/brave-api-key` | Web search — Brave News Search (optional) |
-| `daatan/brightdata-api-key` | Web search — BrightData SERP API (optional) |
-| `daatan/nimbleway-api-key` | Web search — Nimbleway SERP API (optional) |
-| `daatan/scrapingbee-api-key` | Web search — ScrapingBee Google Search (optional) |
 | `daatan/github-pat` | Push `factum_atlas.html` to repo |
-| `daatan/oracle-api-key` | Shared auth key between Oracle API and daatan |
+| `daatan/oracle-api-key` | Shared auth key between Oracle API and daatan — **dead reference**, the live secret is `openclaw/oracle-api-key` (see `duel_report.py`); tracked for unification under docs#122 |
 
-> **Note (resolved 2026-07-14):** these entries were originally created under `openclaw/*` (a decommissioned stack's namespace). PR #198 pointed the *code* at `daatan/*`; the `daatan/*` entries now exist to match, and the `openclaw/*` copies are retained but read by nothing.
+> **Note (resolved 2026-07-14):** these entries were originally created under `openclaw/*` (a decommissioned stack's namespace). PR #198 pointed the *code* at `daatan/*`; the `daatan/*` Secrets Manager entries existed to match, and the `openclaw/*` copies were retained but read by nothing. Search-provider keys have since moved again, off `daatan/*` Secrets Manager and onto the `/retro/prod/secrets/*` SSM parameters above (docs#122).
 >
 > **A missing secret does not fail loudly here.** `_secret()` returns `None` on a miss and the provider is then treated as *not configured* and skipped — no exception, no log line, just a quieter search chain. After adding or renaming any provider secret, run `bash infra/check_keys.sh`, which asserts that every secret `web_search.py` reads actually resolves.
 

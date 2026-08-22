@@ -25,6 +25,24 @@
                 "secretsmanager:DescribeSecret"
             ],
             "Resource": "arn:aws:secretsmanager:eu-central-1:<ACCOUNT_ID>:secret:openclaw/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParameter",
+                "ssm:GetParameters"
+            ],
+            "Resource": "arn:aws:ssm:eu-central-1:<ACCOUNT_ID>:parameter/retro/prod/secrets/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "kms:Decrypt",
+            "Resource": "*",
+            "Condition": {
+                "StringEquals": {
+                    "kms:ViaService": "ssm.eu-central-1.amazonaws.com"
+                }
+            }
         }
     ]
 }

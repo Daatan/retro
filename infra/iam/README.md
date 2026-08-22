@@ -19,9 +19,15 @@ Inline policy for the existing `truthmachine-ec2-role` (attached to the batch-pi
 |------|---------|
 | `truthmachine-ec2-s3-snapshots-policy.json` | Read/write access to `truthmachine-atlas-snapshots-<ACCOUNT_ID>` only. Lists the bucket, and gets/puts/deletes objects (including versioned deletes so the per-cycle `snapshots/` lifecycle rule works). |
 
-## 3. TruthMachine EC2 → Secrets Manager (search API keys)
+## 3. TruthMachine EC2 → Secrets Manager (legacy `daatan/*` secrets)
 
-Inline policy for the existing `truthmachine-ec2-role`. Grants read-only access to the `daatan/*` secret namespace so `web_search.py` can fetch search API keys at startup without needing them in the `.env` file.
+Inline policy for the existing `truthmachine-ec2-role`. Grants read-only access to the `daatan/*` secret namespace.
+
+**Search-provider keys moved off this namespace to SSM Parameter Store per docs#122** — see
+`/retro/prod/secrets/*` in section 4 below and `docs/ARCHITECTURE.md`'s Required Secrets
+table. What's left under `daatan/*` is `openrouter-api-key`, `github-pat`, and
+`oracle-api-key` (a dead reference — the live secret is `openclaw/oracle-api-key`, tracked
+for unification under docs#122).
 
 | File | Purpose |
 |------|---------|
@@ -66,7 +72,7 @@ extraction_errors`, discovered 2026-07-12).
 
 | File | Purpose |
 |------|---------|
-| `truthmachine-ec2-pipeline-policy.json` | Bedrock `InvokeModel` on the allow-listed models + read of the `openclaw/*` secret namespace (legacy name — see the openclaw rename note in `CLAUDE.md`). |
+| `truthmachine-ec2-pipeline-policy.json` | Bedrock `InvokeModel` on the allow-listed models + read of the `openclaw/*` secret namespace (legacy name — see the openclaw rename note in `CLAUDE.md`) + `ssm:GetParameter`/`ssm:GetParameters` on `/retro/prod/secrets/*` and `kms:Decrypt` scoped via `kms:ViaService` to `ssm.eu-central-1.amazonaws.com` (docs#122 — the search-provider keys `web_search.py` reads). |
 
 **Apply:**
 ```bash

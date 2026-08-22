@@ -21,6 +21,7 @@ from .extractor import (
     enforce_settlement_event_date,
     enforce_settlement_fact_signal_agreement,
     enforce_winner_entity_consistency,
+    audit_named_entity_dyad_mismatch,
     flag_claim_stance_sign_conflicts,
 )
 from .models import ExtractionOutput, CellStatus
@@ -134,6 +135,13 @@ async def run_article(article: ArticleInput) -> PipelineResult:
         # already taken their rows out of the net.
         extraction.predictions = enforce_settlement_fact_signal_agreement(
             extraction.predictions,
+        )
+        # Log-only (retro#545 slice ii): does a strong-stance claim about a
+        # single named actor land on a fact dyad that never names them? Real
+        # precision on this shape is unmeasured, so this audits rather than
+        # mutates — see docs/ORACLE_VARIABLES.md.
+        extraction.predictions = audit_named_entity_dyad_mismatch(
+            extraction.predictions, article.event_name,
         )
 
         update_cell(

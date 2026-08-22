@@ -39,6 +39,7 @@ from tm.extractor import (
     enforce_settlement_event_date,
     enforce_settlement_fact_signal_agreement,
     enforce_winner_entity_consistency,
+    audit_named_entity_dyad_mismatch,
     flag_claim_stance_sign_conflicts,
     PROMPT_PREFIX as _EXTRACTOR_PROMPT_PREFIX,
     PROMPT_SUFFIX as _EXTRACTOR_PROMPT_SUFFIX,
@@ -1235,6 +1236,13 @@ async def _process_article(
         # already taken their rows out of the net.
         extraction.predictions = enforce_settlement_fact_signal_agreement(
             extraction.predictions,
+        )
+        # Log-only (retro#545 slice ii): does a strong-stance claim about a
+        # single named actor land on a fact dyad that never names them? Real
+        # precision on this shape is unmeasured, so this audits rather than
+        # mutates — see docs/ORACLE_VARIABLES.md.
+        extraction.predictions = audit_named_entity_dyad_mismatch(
+            extraction.predictions, question,
         )
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", result.url, exc)

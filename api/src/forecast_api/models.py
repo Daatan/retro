@@ -448,6 +448,25 @@ class PoolAggregateRequest(BaseModel):
     claim_deadline: Optional[str] = Field(default=None)
     claim_created_at: Optional[str] = Field(default=None, description="See ForecastRequest.claim_created_at")
     claim_archetype: Optional[Literal["scheduled", "diffuse", "threshold", "none"]] = Field(default=None, description="See ForecastRequest.claim_archetype")
+    antecedent_query: Optional[str] = Field(
+        default=None,
+        description="Filter this pool to claims conditional on this antecedent before pooling (retro#573, "
+                    "'pool-split'). Matched against each source's claims_detail[].antecedent_text_en by lexical "
+                    "shingle overlap (forecast_api.antecedent, no embedding call). A source is kept when it has "
+                    "at least one unconditional claim or one conditional claim whose antecedent matches; it is "
+                    "dropped only when EVERY claim on it is conditional on some other antecedent. None (default, "
+                    "every existing caller): no filtering, byte-identical to today's pool. If filtering would "
+                    "leave nothing, the response is insufficient_data with reason=no_matching_antecedent rather "
+                    "than silently falling back to the unfiltered pool — a conditional question answered with an "
+                    "unconditional number is the failure mode this field exists to remove.",
+    )
+    antecedent_query_polarity: bool = Field(
+        default=True,
+        description="Polarity of antecedent_query: True (default) = affirmative ('the ceasefire holds'), "
+                    "False = negated ('the ceasefire does NOT hold'). Matched against each claim's "
+                    "antecedent_polarity (None on the claim is treated as affirmative, same convention "
+                    "ClaimDetail itself documents). Ignored when antecedent_query is None.",
+    )
 
 
 class PoolAggregateResponse(BaseModel):
@@ -458,7 +477,7 @@ class PoolAggregateResponse(BaseModel):
     articles_used: int
     settled: bool = Field(default=False, description="Same settlement-override semantics as ForecastResponse.settled")
     insufficient_data: bool = Field(default=False, description="True when no usable estimate could be pooled. mean/ci are NOT a real estimate.")
-    reason: Optional[str] = Field(default=None, description="When insufficient_data: no_sources | all_articles_off_topic | no_usable_weight | no_decisive_signal")
+    reason: Optional[str] = Field(default=None, description="When insufficient_data: no_sources | all_articles_off_topic | no_usable_weight | no_decisive_signal | no_matching_antecedent")
     settlement_suppressed: bool = Field(default=False, description="True when a would-be settlement pin was suppressed — 'settlement_conflict' (valid settled votes in both directions, revalidation path) or 'settlement_direction' (temporal guard, legacy path). Diagnostics only; the pooled mean stands.")
     settlement_suppression_reason: Optional[str] = Field(default=None, description="Why the pin was suppressed, when settlement_suppressed")
     settlement_votes_demoted: int = Field(default=0, description="How many of the request's settled votes failed aggregation-time revalidation (settlement_vote_validity) and were counted as ordinary evidence instead. Per-vote reasons are logged server-side (event=settlement_vote_demoted).")

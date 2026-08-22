@@ -19,6 +19,7 @@ Three related systems, one repo:
 - **`net_guard` is duplicated on purpose.** `pipeline/src/tm/net_guard.py` has a second copy in news-indexer (`src/news_indexer/net_guard.py`). Fix both together — a nightly drift-check CI in news-indexer fails if they diverge.
 - **Secrets fail open — a missing one is silent.** `_secret()` (`web_search.py`) returns `None` when a secret is absent, so the provider is skipped rather than erroring: the chain gets quieter, nothing raises. The openclaw→daatan rename pointed the code at `daatan/*` without migrating the live secrets, which is exactly how that bites. Both namespaces now exist (`daatan/*` is the one the code reads). After adding or renaming any provider secret, run `bash infra/check_keys.sh`. The local `infra/openclaw/` dir (gitignored `.env`) keeps the old name — that part is cosmetic and can stay.
 - **Terraform**: state key `retro/` in `daatan-terraform-state`; never blanket `apply`, use `-target` (workspace rule).
+- **Claim an issue before starting work on it.** Several agent sessions work this org's repos concurrently. Before the first exploratory read/edit for a GitHub issue: `gh issue edit <n> --add-assignee @me` and post a short "starting work now" comment. Check existing assignee/comments first — an assignee already set is a live claim, not necessarily a stalled one.
 
 ## Running & testing
 

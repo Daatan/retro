@@ -10,16 +10,17 @@ from fastapi.testclient import TestClient
 
 from forecast_api import v2_playground as pg
 from forecast_api.main import app
-from forecast_api.models import ForecastResponse, PoolAggregateResponse, SourceSignal
+from forecast_api.models import ClaimDetail, ForecastResponse, PoolAggregateResponse, SourceSignal
 
 client = TestClient(app)
 HEADERS = {"x-api-key": "test-key"}
 
 
-def _src(stance: float, claim: str) -> SourceSignal:
+def _src(stance: float, claim: str, antecedent: str | None = None) -> SourceSignal:
+    detail = [ClaimDetail(claim=claim, stance=stance, certainty=0.8, antecedent_text_en=antecedent)] if antecedent else None
     return SourceSignal(
         source_id="s", source_name="S", url="https://x/1", stance=stance, certainty=0.8, credibility_weight=1.0,
-        claims=[claim], published_date="2026-08-01", recency_weight=1.0, relevance_score=0.9,
+        claims=[claim], published_date="2026-08-01", recency_weight=1.0, relevance_score=0.9, claims_detail=detail,
     )
 
 
@@ -60,7 +61,7 @@ def test_unknown_job_is_404():
 async def test_end_to_end_trace_unpriced_edge_is_never_elicited(monkeypatch):
     """Root priced, one precursor priced, the pool cannot split on it on the
     NO side → the edge is unpriced, the child is pruned, the flat number stands."""
-    root_sources = [_src(0.4, "if the ceasefire holds, Israel withdraws")]
+    root_sources = [_src(0.4, "if the ceasefire holds, Israel withdraws", antecedent="the ceasefire holds through October")]
     monkeypatch.setattr(pg, "run_forecast", AsyncMock(side_effect=[_forecast(0.4, sources=root_sources), _forecast(0.2)]))
     monkeypatch.setattr(pg, "run_pool_aggregate", AsyncMock(side_effect=[_pool(0.6), _pool(0.0, insufficient=True)]))
     monkeypatch.setattr(
@@ -86,7 +87,7 @@ async def test_end_to_end_trace_unpriced_edge_is_never_elicited(monkeypatch):
 
 
 async def test_priced_edge_propagates_and_anchor_is_locked(monkeypatch):
-    root_sources = [_src(0.0, "depends on the ceasefire")]
+    root_sources = [_src(0.0, "depends on the ceasefire", antecedent="the ceasefire holds")]
     monkeypatch.setattr(pg, "run_forecast", AsyncMock(side_effect=[_forecast(0.0, sources=root_sources), _forecast(0.6)]))
     monkeypatch.setattr(pg, "run_pool_aggregate", AsyncMock(side_effect=[_pool(0.8), _pool(-0.8)]))
     monkeypatch.setattr(
@@ -138,3 +139,59 @@ def test_api_lifecycle(monkeypatch):
             time.sleep(0.02)
     assert g.json()["status"] == "done"
     assert g.json()["params"]["depth"] == 2
+
+
+async def test_unconditional_pool_gives_no_edge(monkeypatch):
+    """The antecedent filter keeps unconditional sources on both sides, so a
+    pool with no conditional claim would "split" into two identical numbers.
+    That is not an edge: pool_aggregate must not even be called."""
+    root_sources = [_src(0.4, "Israel will withdraw"), _src(-0.2, "talks stall")]
+    monkeypatch.setattr(pg, "run_forecast", AsyncMock(side_effect=[_forecast(0.1, sources=root_sources), _forecast(0.2)]))
+    agg = AsyncMock(side_effect=[_pool(0.1), _pool(0.1)])
+    monkeypatch.setattr(pg, "run_pool_aggregate", agg)
+    monkeypatch.setattr(
+        pg, "complete_text_once_with_usage",
+        AsyncMock(return_value=('{"precursors":[{"text":"The ceasefire holds","why":"w","effect":"raises"}]}', {})),
+    )
+    monkeypatch.setattr(pg, "_anchor", AsyncMock(return_value=None))
+
+    req = pg.V2ForecastRequest(question="Will Israel withdraw from southern Lebanon by Dec 31?", depth=1)
+    job = pg.new_job(req)
+    await pg.run_job(job["id"], req)
+    job = pg.get_job(job["id"])
+
+    edge = job["edges"][0]
+    assert edge["method"] == "unpriced" and edge["conditional_hits"] == 0 and "conditions on" in edge["reason"]
+    assert agg.await_count == 0
+    assert job["nodes"][1]["pruned"] is True and job["result"]["propagated_p"] is None
+
+
+async def test_anchor_needs_same_question_verdict(monkeypatch):
+    """A Gamma keyword hit is a same-TOPIC market, not necessarily the same
+    question. Only an LLM 'same' verdict locks it; otherwise it is kept as a
+    rejected candidate and the node stays free."""
+    market = {"question": "Will the next US-Iran meeting be in the US by Sep 30?", "slug": "meeting", "outcomes": ["Yes", "No"]}
+    monkeypatch.setattr("forecast_api.polymarket_live.resolve_market", AsyncMock(return_value=market))
+    monkeypatch.setattr("forecast_api.polymarket_live.is_binary_yesno", lambda m: True)
+    monkeypatch.setattr("forecast_api.polymarket_live.current_yes_price", lambda m: 0.003)
+    monkeypatch.setattr("forecast_api.polymarket_live.summarize_market", lambda m: dict(m))
+    llm = AsyncMock(return_value=('{"same": false, "why": "a meeting is not an agreement"}', {}))
+    monkeypatch.setattr(pg, "complete_text_once_with_usage", llm)
+
+    job = pg.new_job(pg.V2ForecastRequest(question="Will Iran and the US sign a nuclear agreement by Dec 31?"))
+    node = {"id": "n1", "text": job["question"], "depth": 0, "status": "priced", "anchor": None, "anchor_candidate": None}
+    job["nodes"].append(node)
+    await pg._anchor(job, node)
+    assert node["anchor"] is None and node["status"] != "anchored"
+    assert node["anchor_candidate"]["p"] == 0.003 and node["anchor_candidate"]["verdict"]["same"] is False
+    assert job["prompts"][-1]["step"] == "anchor_match"
+
+    llm.return_value = ('{"same": true, "why": "identical"}', {})
+    await pg._anchor(job, node)
+    assert node["status"] == "anchored" and node["anchor"]["p"] == 0.003
+
+    # no verdict (LLM error) fails closed
+    node2 = dict(node, id="n9", anchor=None, anchor_candidate=None, status="priced")
+    llm.side_effect = RuntimeError("boom")
+    await pg._anchor(job, node2)
+    assert node2["anchor"] is None and node2["anchor_candidate"]["verdict"] is None

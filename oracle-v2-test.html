@@ -234,17 +234,18 @@ function showNode() {
     <div style="font-size:.95rem;margin-bottom:6px">${esc(n.text)}</div>
     <div style="margin-bottom:8px">
       <span class="tag">${esc(n.id)} · depth ${n.depth}</span><span class="tag">${esc(n.status)}</span>
-      ${n.anchor ? '<span class="tag anchor">anchor: polymarket</span>' : ''}${n.pruned ? '<span class="tag pruned">pruned</span>' : ''}
+      ${n.anchor ? '<span class="tag anchor">anchor: polymarket</span>' : ''}${n.anchor_candidate ? '<span class="tag unpriced">polymarket candidate rejected</span>' : ''}${n.pruned ? '<span class="tag pruned">pruned</span>' : ''}
       ${n.effect ? `<span class="tag">${esc(n.effect)} parent</span>` : ''}
     </div>
     <div class="kv">
       <b>flat p (v1)</b><span>${pct(f.p)} ${f.ci ? `(CI ${pct(f.ci[0])}–${pct(f.ci[1])}, std ${f.std})` : ''} · ${f.articles_used ?? '–'} articles · n_eff ${f.n_eff ?? '–'} · ${esc(f.reason || '')} ${f.elapsed_ms ? '· ' + f.elapsed_ms + ' ms' : ''}</span>
       <b>propagated p</b><span>${pct(n.propagated)}</span>
       ${n.anchor ? `<b>anchor</b><span>🔒 ${pct(n.anchor.p)} — <a style="color:var(--accent-hi)" href="${esc(n.anchor.market.url || '#')}" target="_blank">${esc(n.anchor.market.question || n.anchor.market.slug || '')}</a></span>` : ''}
+      ${n.anchor_candidate ? `<b>rejected market</b><span>${pct(n.anchor_candidate.p)} — <a style="color:var(--accent-hi)" href="${esc(n.anchor_candidate.market.url || '#')}" target="_blank">${esc(n.anchor_candidate.market.question || '')}</a> · ${esc((n.anchor_candidate.verdict || {}).why || 'no verdict')}</span>` : ''}
       <b>why (decomposer)</b><span>${esc(n.why || n.explanation || '')}</span>
       <b>pruning</b><span>${esc(n.explanation || '')} ${n.prune_score != null ? '· score ' + n.prune_score : ''}</span>
       ${outEdge ? `<b>edge → parent</b><span><span class="tag ${outEdge.method === 'pool_split' ? 'pool' : 'unpriced'}">${esc(outEdge.method)}</span>
-        ${outEdge.method === 'pool_split' ? `P(parent | yes) = ${pct(outEdge.p_given_yes)} (${outEdge.detail.yes.articles_used} art.) · P(parent | no) = ${pct(outEdge.p_given_no)} (${outEdge.detail.no.articles_used} art.)` : esc(outEdge.reason || '')}
+        ${outEdge.method === 'pool_split' ? `P(parent | yes) = ${pct(outEdge.p_given_yes)} (${outEdge.detail.yes.articles_used} art.) · P(parent | no) = ${pct(outEdge.p_given_no)} (${outEdge.detail.no.articles_used} art.) · ${outEdge.conditional_hits} conditional source(s)` : esc(outEdge.reason || '')}
         ${outEdge.detail && outEdge.method !== 'pool_split' ? `<pre>${esc(JSON.stringify(outEdge.detail, null, 1))}</pre>` : ''}</span>` : ''}
       ${inEdges.length ? `<b>precursors</b><span>${inEdges.length} proposed · ${inEdges.filter(e => e.method === 'pool_split').length} priced</span>` : ''}
     </div>

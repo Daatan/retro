@@ -146,6 +146,29 @@ class ForecastRequest(BaseModel):
                     "announcement counts' — instead of scoring adjacent-but-non-qualifying "
                     "evidence as if it were on-point.",
     )
+    antecedent_query: Optional[str] = Field(
+        default=None,
+        description="Filter this forecast's extracted evidence pool to claims conditional on this "
+                    "antecedent before aggregating (retro#573/#583, 'pool-split' — the live-path "
+                    "counterpart of PoolAggregateRequest.antecedent_query, same semantics). Matched "
+                    "against each extracted source's claims_detail[].antecedent_text_en by lexical "
+                    "shingle overlap (forecast_api.antecedent, no embedding call). A source is kept "
+                    "when it has at least one unconditional claim or one conditional claim whose "
+                    "antecedent matches; it is dropped only when EVERY claim on it is conditional on "
+                    "some other antecedent. None (default, every existing caller): no filtering, "
+                    "byte-identical to today's forecast. If filtering would leave nothing, the response "
+                    "is insufficient_data with reason=no_matching_antecedent rather than silently "
+                    "falling back to the unfiltered pool. Folded into the forecast cache key "
+                    "(build_claim_meta) so a cached unconditional answer can never be served to a "
+                    "conditional query, or one antecedent's answer to a different antecedent's query.",
+    )
+    antecedent_query_polarity: bool = Field(
+        default=True,
+        description="Polarity of antecedent_query: True (default) = affirmative ('the ceasefire "
+                    "holds'), False = negated ('the ceasefire does NOT hold'). Matched against each "
+                    "claim's antecedent_polarity (None on the claim is treated as affirmative, same "
+                    "convention ClaimDetail itself documents). Ignored when antecedent_query is None.",
+    )
 
 
 class ClaimDetail(BaseModel):
@@ -373,7 +396,7 @@ class ForecastResponse(BaseModel):
     sources: list[SourceSignal]
     placeholder: bool = Field(default=False, description="True if this is a stub response (pipeline not yet wired)")
     insufficient_data: bool = Field(default=False, description="True when the forecast could not be computed (no usable articles). mean/ci are NOT a real estimate — render 'couldn't answer', not 0%.")
-    reason: Optional[str] = Field(default=None, description="When insufficient_data: why. One of no_search_results | all_articles_off_topic | no_usable_weight | no_decisive_signal | all_fetches_failed | extraction_errors | no_usable_predictions | timeout | no_result. (no_usable_weight: every surviving source carried zero aggregation weight — blocked by credibility and/or zeroed by relevance — so there was nothing to pool. no_decisive_signal only when defer_on_thin_evidence is set; otherwise thin evidence yields a wide-CI estimate.)")
+    reason: Optional[str] = Field(default=None, description="When insufficient_data: why. One of no_search_results | all_articles_off_topic | no_usable_weight | no_decisive_signal | all_fetches_failed | extraction_errors | no_usable_predictions | no_matching_antecedent | timeout | no_result. (no_usable_weight: every surviving source carried zero aggregation weight — blocked by credibility and/or zeroed by relevance — so there was nothing to pool. no_decisive_signal only when defer_on_thin_evidence is set; otherwise thin evidence yields a wide-CI estimate. no_matching_antecedent: antecedent_query was set and every extracted source was conditional on some OTHER antecedent — retro#583.)")
     articles_found: int = Field(default=0, description="How many search results were considered before filtering")
     outcome_counts: dict[str, int] = Field(default_factory=dict, description="Per-article outcome histogram (gate_rejected, gate_error, empty_text, extract_error, unhandled_error, ok, …) — explains an empty forecast")
     provider: str = Field(default="", description="Search provider that served the underlying article search. May be a pseudo-provider: 'caller' (articles supplied by the request), 'search_cache', or 'none'.")

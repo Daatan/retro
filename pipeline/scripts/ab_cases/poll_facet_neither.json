@@ -1,0 +1,72 @@
+[
+  {
+    "id": "poll-facet-not-announcement",
+    "event_name": "Party X wins a majority of seats in the Country R general election on 2026-10-04",
+    "event_description": "Only the official election result counts. Pre-election polling, however lopsided, is not the event and is not a formal statement by any decider.",
+    "claim_deadline": "2026-10-04",
+    "article_date": "2026-08-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "A new nationwide poll released Thursday by the independent institute Metron shows Party X commanding 58% support, a 20-point lead over its nearest rival, pollsters said. The survey of 2,400 respondents was conducted last week and has a margin of error of 2 points. Analysts said that if the trend holds through election day, Party X would be on track for a comfortable outright majority in parliament, though officials from Party X and its rivals both declined to comment on the poll itself, saying only that they were focused on campaigning.",
+    "expect": {
+      "facet": "neither"
+    },
+    "tags": [
+      "retro-541",
+      "facet-poll"
+    ]
+  },
+  {
+    "id": "seat-projection-facet-not-announcement",
+    "event_name": "Party X wins a majority of seats in the Country R general election on 2026-10-04",
+    "event_description": "Only the official election result counts. Modeled seat projections, however confident, are not the event and are not a formal statement by any decider.",
+    "claim_deadline": "2026-10-04",
+    "article_date": "2026-08-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "An election forecasting model run by the polling firm Datavote and published Tuesday projects Party X will win 210 of 350 seats, comfortably above the 176-seat threshold needed for a majority. The model, which combines current polling averages with historical swing patterns from the last three elections, gives Party X a 91% probability of an outright majority. The party's campaign office had no immediate reaction to the projection, and no government or election official has confirmed or disputed the figures.",
+    "expect": {
+      "facet": "neither"
+    },
+    "tags": [
+      "retro-541",
+      "facet-poll"
+    ]
+  },
+  {
+    "id": "survey-facet-not-denial",
+    "event_name": "Party X wins a majority of seats in the Country R general election on 2026-10-04",
+    "event_description": "Only the official election result counts. Public-opinion surveys, however one-sided, are not the event and are not a formal statement by any decider.",
+    "claim_deadline": "2026-10-04",
+    "article_date": "2026-08-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "A survey of 1,200 likely voters conducted by the research firm Insight Metrics found just 22% backing Party X, down sharply from 41% a month ago, as the party's platform draws widening criticism over its economic proposals ahead of the vote. The pollster said the drop was concentrated among younger voters and that the trend, if it continues, would put a majority well out of reach for Party X. Party X's press office declined to comment on the specific numbers.",
+    "expect": {
+      "facet": "neither"
+    },
+    "tags": [
+      "retro-541",
+      "facet-poll"
+    ]
+  },
+  {
+    "id": "decider-announcement-facet-control",
+    "event_name": "An official mobilisation order is issued in Country R by 2026-12-31",
+    "event_description": "A statement of intent by the head of government or an authorized spokesperson counts as evidence for. A statement by an opponent or an unnamed source does not.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-08-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "The president said Monday that a formal mobilisation order will be issued within weeks, calling it 'now inevitable given the security situation on the border.' Speaking at a televised press conference, he said the order was being drafted and would be signed as soon as legal preparations were complete. No order has yet been signed.",
+    "expect": {
+      "facet": "announcement",
+      "is_occurrence": false
+    },
+    "tags": [
+      "retro-541",
+      "facet-poll",
+      "no-harm-control"
+    ]
+  }
+]

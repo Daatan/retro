@@ -595,7 +595,11 @@ Discipline fact_signal by four tests, and record the facets that justify each:
 having happened), denial (it establishes the event will not or did not happen), or neither \
 (it bears on the event without asserting either polarity — a precursor, a capability, an \
 escalation). A decider statement of intent or commitment is an announcement; a decider's \
-denial, refusal, or ruling-out is a denial. Omit facet when fact_signal itself is omitted.
+denial, refusal, or ruling-out is a denial. A poll, survey, or seat/vote-share projection is \
+never announcement or denial, however lopsided its numbers — it is neither, since it reports \
+what respondents or a model estimate, not a decider's own statement or the event itself; \
+grade its bearing on the event through fact_signal's magnitude, not through facet. Omit \
+facet when fact_signal itself is omitted.
   - DYAD. Name WHO acts (event_actors) and the TARGET of the action (event_target) in the \
 fact. A fact whose actor-target pair is NOT the claim's pair — a strike by a different \
 country, on a different country — is context only: keep |fact_signal| small and never treat \

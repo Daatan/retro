@@ -42,6 +42,7 @@ _FACET_READERS = {
     "fact_signal_sign": lambda p: _sign(p.fact_signal) if p.fact_signal is not None else None,
     "fact_signal_null": lambda p: p.fact_signal is None,
     "is_occurrence": lambda p: p.is_occurrence,
+    "facet": lambda p: p.facet,
     "verified": lambda p: p.verified,
     "settled": lambda p: bool(p.settled),
     "evidence_class": lambda p: p.evidence_class,

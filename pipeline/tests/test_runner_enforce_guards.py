@@ -147,3 +147,29 @@ async def test_settlement_contradicting_its_own_fact_lane_is_neutralised():
     assert out.predictions[0].stance == 0.0
     assert out.predictions[0].settled is False
     assert out.predictions[0].certainty == pytest.approx(0.95)
+
+
+async def test_entity_dyad_mismatch_is_logged_using_article_event_name(caplog):
+    """retro#545 slice ii: the batch path must run
+    audit_named_entity_dyad_mismatch keyed on article.event_name, same as the
+    winner-entity check above — log-only, no mutation."""
+    gate = GatekeeperOutput(is_prediction=True, reason="looks predictive")
+    preds = [PredictionExtraction(
+        quote="q", claim="Yoaz Hendel will run in the 26th Knesset",
+        stance=0.9, certainty=0.9,
+        event_actors="Almog Cohen", event_target="the Knesset",
+    )]
+    extraction = ExtractionOutput(predictions=preds)
+    article = _article(
+        event_name="Will Yoaz Hendel run in the 26th Knesset elections?",
+    )
+    with caplog.at_level("WARNING", logger="tm.extractor"), \
+         patch("tm.runner.check_is_prediction", new=AsyncMock(return_value=(gate, {}))), \
+         patch("tm.runner.extract_predictions", new=AsyncMock(return_value=(extraction, {}))), \
+         patch("tm.runner.update_cell"):
+        result = await run_article(article)
+    assert result.extraction is not None
+    out = result.extraction.predictions[0]
+    assert out.stance == 0.9
+    assert out.certainty == 0.9
+    assert any("event=entity_dyad_mismatch" in r.message for r in caplog.records)

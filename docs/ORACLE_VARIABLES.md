@@ -161,6 +161,38 @@ a zero stance all pass through untouched. Runs **last** in the `enforce_*` chain
 has already clamped precursor fact_signals below the anchor — both correctly keeping their rows
 out of this net.
 
+#### A named-actor claim landing on a different actor's fact — `audit_named_entity_dyad_mismatch` (log-only)
+
+The wrong-entity class (retro#545, slice ii): a strong-stance claim about ONE specific named
+actor, scored against an article whose reported fact is about someone else entirely. Issue
+examples: a **Yoaz Hendel** claim scored against an Almog Cohen article (−0.851 @ 0.875), and
+separately against an Oren Smadja article in the same pool. Unlike the versus/sports shape
+`enforce_winner_entity_consistency` already covers (retro#401), there's no rival to compare
+against — just a named actor `event_actors`/`event_target` never mention.
+
+`_extract_named_entities` pulls entity-shaped substrings out of the question with the same
+"1–4 capitalized words, minus stopwords" heuristic `enforce_winner_entity_consistency` already
+uses (still not real NER). Only the FIRST extracted entity — the question's primary/subject
+actor — is checked, not "any" of them: a question routinely also names a location or
+organisation ("Yoaz Hendel ... in the 26th Knesset"), and generic nouns like that trivially
+co-occur in most same-topic articles, which would mask exactly the mismatch this is meant to
+catch. For a claim at `|stance| ≥ 0.7 & certainty ≥ 0.7`
+(`_ENTITY_DYAD_AUDIT_STANCE_GATE`/`_ENTITY_DYAD_AUDIT_CERTAINTY_GATE`) with both `event_actors`
+and `event_target` populated, if the subject entity appears in neither dyad field,
+`event=entity_dyad_mismatch` is logged.
+
+**Log-only — this never mutates `stance`/`certainty`/`settled`.** Coverage and precision on
+this shape are both unmeasured: a prod check (2026-08-22) found `event_actors`/`event_target`
+populated on only 38% of the `|stance| ≥ 0.7 & certainty ≥ 0.7` band (345/905), and — unlike
+the sign-error guard above, a symmetric comparison of two already-reliable fields — a
+regex-based single-entity extractor over free-text claims is a new, unvalidated detector. Same
+rollout shape as the Gate-0 evidence-window shadow (`evidence_window_outside`): ship as a pure
+audit log, review real trigger/precision rate, then decide whether to promote to an enforcing
+guard in a follow-up slice.
+
+Fail-open throughout: no entity parses out of the question, either dyad field missing, below
+either gate, or the subject entity mentioned on either side of the dyad — all no-op.
+
 #### Claim/stance sign conflicts are logged, not corrected — `flag_claim_stance_sign_conflicts`
 
 retro#298 found rows where the extracted `claim` text and `stance` disagree with each other in

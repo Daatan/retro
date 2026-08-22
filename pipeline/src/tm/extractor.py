@@ -1735,6 +1735,100 @@ def enforce_winner_entity_consistency(
     return predictions
 
 
+# retro#545 slice (ii): does a strong-stance claim about ONE specific named
+# actor land on a fact whose dyad never names them? The wrong-entity examples
+# in the issue (a Yoaz Hendel claim scored against an Almog Cohen article, an
+# Oren Smadja article, ...) aren't the "X vs Y" shape `_match_versus_question`
+# targets — there's no rival, just a single named actor the article isn't
+# about. Extracting that actor from free text still isn't real NER, so this
+# reuses the same "1-4 capitalized words, minus stopwords" heuristic as the
+# versus check above, applied to the whole question instead of a fixed
+# grammar. Audit only (retro#545 comment, 2026-08-22): coverage is partial
+# (event_actors/event_target populate on ~38% of the strong-stance band,
+# prod audit 2026-08-22) and precision on this shape is unmeasured, so this
+# logs rather than mutates — the Gate-0/evidence-window (#558) precedent for
+# shipping an unvalidated detector shadow-first.
+_ENTITY_DYAD_AUDIT_STANCE_GATE = 0.7
+_ENTITY_DYAD_AUDIT_CERTAINTY_GATE = 0.7
+
+
+def _extract_named_entities(question: str) -> list[str]:
+    """Named-entity-shaped substrings in ``question``, deduped case-insensitively.
+
+    Same heuristic as ``_ENTITY``/``_VERSUS_ENTITY_STOPWORDS`` above (1-4
+    consecutive capitalized words, minus common sentence-initial words) —
+    not real NER, just enough to catch a plainly-named person/org/place.
+    """
+    seen: set[str] = set()
+    entities: list[str] = []
+    for m in re.finditer(_ENTITY, question):
+        # Consecutive capitalized words match as ONE candidate (e.g. "Will Yoaz
+        # Hendel"), so a leading stopword must be stripped from the candidate,
+        # not used to reject it outright — otherwise "Will Yoaz Hendel" loses
+        # "Yoaz Hendel" entirely instead of just "Will".
+        words = m.group(0).split()
+        while words and words[0].lower() in _VERSUS_ENTITY_STOPWORDS:
+            words = words[1:]
+        if not words:
+            continue
+        candidate = " ".join(words)
+        key = candidate.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        entities.append(candidate)
+    return entities
+
+
+def audit_named_entity_dyad_mismatch(
+    predictions: list[PredictionExtraction],
+    question: str,
+) -> list[PredictionExtraction]:
+    """Log-only: flag a strong-stance claim whose fact dyad never names the
+    question's own primary (first-mentioned) named actor.
+
+    Only the FIRST extracted entity is checked, not "any" of them — a
+    question routinely names a location or organisation alongside its real
+    subject ("Yoaz Hendel ... in the 26th Knesset"), and those generic nouns
+    trivially co-occur in most articles on the same topic, which would mask
+    exactly the wrong-entity shape this is meant to catch (an article about a
+    different named PERSON, same Knesset). The subject is almost always
+    named first in these claims ("X will...", "X runs...", "X is..."), the
+    same assumption `_match_versus_question`'s subject/rival ordering makes.
+
+    Fails open throughout, matching every sibling guard: no entity parses out
+    of ``question`` => no-op; either dyad field missing on a claim => skip it;
+    below the stance/certainty gate => skip; the subject entity appears in
+    EITHER ``event_actors`` or ``event_target`` => skip. Never mutates
+    ``stance``/``certainty``/``settled``/anything else — pure logging, same
+    contract as ``evidence_window_outside`` (PR #558).
+    """
+    entities = _extract_named_entities(question)
+    if not entities:
+        return predictions
+    subject = entities[0]
+
+    for p in predictions:
+        if p.event_actors is None or p.event_target is None:
+            continue
+        if abs(p.stance) < _ENTITY_DYAD_AUDIT_STANCE_GATE:
+            continue
+        if p.certainty < _ENTITY_DYAD_AUDIT_CERTAINTY_GATE:
+            continue
+
+        if _mentions_entity(p.event_actors, subject) or _mentions_entity(p.event_target, subject):
+            continue
+
+        logger.warning(
+            "event=entity_dyad_mismatch question_subject=%r actors=%r target=%r "
+            "stance=%+.2f certainty=%.2f settled=%s claim=%r",
+            subject, p.event_actors, p.event_target, p.stance, p.certainty,
+            p.settled, p.claim[:120],
+        )
+
+    return predictions
+
+
 # A settlement whose own fact lane points the other way is contradicting itself.
 # 0.5 is the anchoring bar the FACT_SIGNAL prompt already uses for a graded
 # reading: below it a value is "bears on the event" rather than "establishes it",

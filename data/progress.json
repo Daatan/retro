@@ -7836,7 +7836,7 @@
     "A11:ft": {
       "event_id": "A11",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -7934,7 +7934,7 @@
     "A13:nyt": {
       "event_id": "A13",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -8011,7 +8011,7 @@
     "A15:ft": {
       "event_id": "A15",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-22T17:10:07.588415"
+  "last_updated": "2026-08-22T17:10:27.615129"
 }

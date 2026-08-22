@@ -9859,7 +9859,7 @@
     "E09:nyt": {
       "event_id": "E09",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9894,7 +9894,7 @@
     "E10:ft": {
       "event_id": "E10",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -9992,7 +9992,7 @@
     "F02:ft": {
       "event_id": "F02",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -10006,7 +10006,7 @@
     "F02:nyt": {
       "event_id": "F02",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-22T17:17:50.149423"
+  "last_updated": "2026-08-22T17:18:19.426322"
 }

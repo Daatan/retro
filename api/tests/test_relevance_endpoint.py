@@ -52,7 +52,7 @@ def test_relevance_reports_the_judging_model():
     # always be traced to what produced it (a model swap must be visible in the data).
     with patch("forecast_api.main.check_is_prediction", new=AsyncMock(return_value=(_verdict(), {}))):
         r = client.post("/relevance", json=BODY, headers=HEADERS)
-    assert r.json()["model"] == "bedrock/amazon.nova-micro-v1:0"
+    assert r.json()["model"] == "bedrock/us.amazon.nova-micro-v1:0"
 
 
 def test_relevance_passes_the_claim_through_as_the_event_name():

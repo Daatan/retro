@@ -9,9 +9,13 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     brave_api_key: str = ""
 
-    gatekeeper_model: str = "bedrock/amazon.nova-micro-v1:0"
-    extractor_model: str = "bedrock/amazon.nova-lite-v1:0"
-    ground_truth_model: str = "bedrock/amazon.nova-lite-v1:0"
+    # Region-explicit (retro#548): bare model IDs used to fall back to whatever
+    # region boto3 resolved, silently — CloudWatch showed these bare defaults
+    # landing on us-east-1 in practice, so `us.` here is a no-op for current
+    # behavior, just makes it deliberate instead of accidental.
+    gatekeeper_model: str = "bedrock/us.amazon.nova-micro-v1:0"
+    extractor_model: str = "bedrock/us.amazon.nova-lite-v1:0"
+    ground_truth_model: str = "bedrock/us.amazon.nova-lite-v1:0"
 
     # Kill-switch for Bedrock/Anthropic prompt caching (llm.py::complete_structured's
     # cached_prefix). Verified ON: smoke_test_prompt_cache.py confirmed reliable

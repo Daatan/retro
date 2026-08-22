@@ -6,6 +6,7 @@ on:
     paths:
       - factum_atlas.html
       - oracle-test.html
+      - oracle-v2-test.html
       - oracle-mcp-test.html
       - duel.html
       - 'bayesoracle/**'
@@ -40,6 +41,7 @@ jobs:
           cp factum_atlas.html _site/index.html
           cp factum_atlas.html _site/factum_atlas.html
           cp oracle-test.html _site/oracle-test.html
+          cp oracle-v2-test.html _site/oracle-v2-test.html
           cp oracle-mcp-test.html _site/oracle-mcp-test.html
           # Copy duel report if it exists
           if [ -f duel.html ]; then cp duel.html _site/duel.html; fi

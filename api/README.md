@@ -75,7 +75,9 @@ secret. CI runs this on every PR and **gates the deploy** (see `.github/workflow
 `POST /fetch-url`, `POST /pool/aggregate`, `POST /relevance`,
 `GET /bayes/nodes`, `GET /leaderboard`, `POST /leaderboard/ingest`,
 `GET /leaderboard/resolution-shadow`, `GET /leaderboard/author-shadow`,
-`GET /health`, `GET /version`, `GET /pm/markets`. All require the `x-api-key`
+`GET /health`, `GET /version`, `GET /pm/markets`, `POST /v2/forecast` + `GET /v2/jobs/{id}`
+(the Oracle 2.0 playground, retro#595 — traced query-path runs behind
+`oracle-v2-test.html`). All require the `x-api-key`
 header **except** `/health`, `/version`, and the deliberately-public
 `/fetch-url` (which is rate-limited and SSRF-guarded — http(s) only, no
 private/loopback/link-local hosts). Full details in the

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oracle 2.0 Playground</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+<style>
+  :root {
+    --bg:#080F1A; --surface:#0E1F35; --surface2:#142843; --border:#1C3452;
+    --accent:#3B82F6; --accent-hi:#60A5FA; --muted:#4B6280; --text:#E2E8F0; --text-dim:#8BA3BC;
+    --yes:#22C55E; --no:#EF4444; --warn:#F59E0B; --gold:#e2b96f; --radius:12px; --radius-sm:8px;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+  header { display:flex; align-items:center; gap:14px; padding:10px 16px; background:var(--surface); border-bottom:1px solid var(--border); }
+  header h1 { font-size:1rem; margin:0; color:var(--gold); }
+  header .sub { color:var(--text-dim); font-size:.78rem; }
+  header a { color:var(--accent-hi); font-size:.78rem; margin-left:auto; text-decoration:none; }
+  #main { flex:1; display:flex; min-height:0; }
+  #sidebar { width:340px; background:var(--surface); border-right:1px solid var(--border); padding:14px; overflow-y:auto; display:flex; flex-direction:column; gap:12px; }
+  .label { font-size:.68rem; text-transform:uppercase; letter-spacing:.1em; color:var(--text-dim); margin-bottom:4px; }
+  input, textarea, select { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 9px; font:inherit; }
+  textarea { min-height:74px; resize:vertical; }
+  .row { display:flex; gap:8px; }
+  .row > * { flex:1; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:var(--radius-sm); padding:8px 12px; font:inherit; cursor:pointer; }
+  button.secondary { background:var(--surface2); color:var(--text); border:1px solid var(--border); }
+  button:disabled { opacity:.5; cursor:default; }
+  .status { font-size:.8rem; color:var(--text-dim); display:flex; align-items:center; gap:6px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
+  .dot.ok { background:var(--yes); box-shadow:0 0 6px var(--yes); }
+  .dot.run { background:var(--warn); box-shadow:0 0 6px var(--warn); }
+  .dot.err { background:var(--no); box-shadow:0 0 6px var(--no); }
+  .result { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; }
+  .result .big { font-size:1.7rem; font-family:ui-monospace,monospace; }
+  .result .big small { font-size:.8rem; color:var(--text-dim); font-family:system-ui; }
+  .calls { font-size:.74rem; color:var(--text-dim); font-family:ui-monospace,monospace; }
+  #center { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #cy { flex:1; min-height:200px; }
+  #bottom { height:300px; border-top:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; }
+  .tabs { display:flex; gap:2px; padding:6px 10px 0; border-bottom:1px solid var(--border); }
+  .tab { padding:6px 12px; font-size:.8rem; color:var(--text-dim); cursor:pointer; border-radius:var(--radius-sm) var(--radius-sm) 0 0; }
+  .tab.active { background:var(--surface2); color:var(--text); }
+  .pane { flex:1; overflow:auto; padding:10px 14px; display:none; font-size:.82rem; }
+  .pane.active { display:block; }
+  pre { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; white-space:pre-wrap; word-break:break-word; font-size:.74rem; margin:6px 0; max-height:260px; overflow:auto; }
+  .prompt { border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:10px; }
+  .prompt summary { padding:7px 10px; cursor:pointer; color:var(--accent-hi); }
+  .prompt .body { padding:0 10px 8px; }
+  .kv { display:grid; grid-template-columns:130px 1fr; gap:3px 10px; font-size:.8rem; }
+  .kv b { color:var(--text-dim); font-weight:500; }
+  .tag { display:inline-block; padding:1px 7px; border-radius:999px; font-size:.7rem; border:1px solid var(--border); color:var(--text-dim); margin-right:4px; }
+  .tag.pool { border-color:var(--yes); color:var(--yes); }
+  .tag.unpriced { border-color:var(--warn); color:var(--warn); }
+  .tag.anchor { border-color:var(--gold); color:var(--gold); }
+  .tag.pruned { border-color:var(--no); color:var(--no); }
+  .log div { font-family:ui-monospace,monospace; font-size:.72rem; color:var(--text-dim); }
+  .log div b { color:var(--text); font-weight:500; }
+  .src { margin:2px 0; }
+  .src a { color:var(--accent-hi); text-decoration:none; }
+  @media (max-width:860px) { #main { flex-direction:column; } #sidebar { width:100%; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔮 Oracle 2.0 Playground</h1>
+  <span class="sub">query path P0–P6 · logic + v1 pricing · edges from the antecedent pool-split, never elicited</span>
+  <a href="oracle-test.html">v1 console →</a>
+</header>
+<div id="main">
+  <aside id="sidebar">
+    <div>
+      <div class="label">API key</div>
+      <div class="row"><input id="apiKey" type="password" placeholder="x-api-key"><button class="secondary" id="saveKey" style="flex:0">Save</button></div>
+    </div>
+    <div>
+      <div class="label">Question</div>
+      <textarea id="question" placeholder="Will Israel withdraw its troops from southern Lebanon by December 31, 2026?"></textarea>
+    </div>
+    <div class="row">
+      <div><div class="label">Depth (1–6)</div><select id="depth"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></div>
+      <div><div class="label">Keep / node</div><input id="maxPrecursors" type="number" min="1" max="10" value="5"></div>
+    </div>
+    <div class="row">
+      <div><div class="label">Forecast calls</div><input id="maxCalls" type="number" min="1" max="80" value="15"></div>
+      <div><div class="label">Articles / call</div><input id="maxArticles" type="number" min="3" max="30" value="10"></div>
+    </div>
+    <div><div class="label">Deadline (optional)</div><input id="deadline" type="date"></div>
+    <div class="row">
+      <button id="run">Run</button>
+      <button class="secondary" id="load" title="Re-open a job id">Load job…</button>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">idle</span></div>
+    <div class="result" id="result" style="display:none">
+      <div class="label">Result</div>
+      <div class="big"><span id="propP">–</span> <small>propagated</small></div>
+      <div class="big" style="font-size:1.1rem"><span id="flatP">–</span> <small>flat (v1)</small></div>
+      <div id="resultNote" style="font-size:.74rem;color:var(--text-dim);margin-top:4px"></div>
+      <div class="calls" id="calls"></div>
+    </div>
+    <div style="font-size:.72rem;color:var(--muted)">Job <span id="jobId" style="font-family:ui-monospace,monospace">–</span></div>
+  </aside>
+  <div id="center">
+    <div id="cy"></div>
+    <div id="bottom">
+      <div class="tabs">
+        <div class="tab active" data-pane="node">Node</div>
+        <div class="tab" data-pane="prompts">Prompts <span id="promptCount"></span></div>
+        <div class="tab" data-pane="log">Log</div>
+        <div class="tab" data-pane="json">JSON</div>
+      </div>
+      <div class="pane active" id="pane-node"><span style="color:var(--text-dim)">Click a node.</span></div>
+      <div class="pane" id="pane-prompts"></div>
+      <div class="pane log" id="pane-log"></div>
+      <div class="pane" id="pane-json"><pre id="json"></pre></div>
+    </div>
+  </div>
+</div>
+<script>
+const API_URL = 'https://oracle.daatan.com';
+const $ = id => document.getElementById(id);
+const getKey = () => localStorage.getItem('oracle_api_key') || '';
+$('apiKey').value = getKey();
+$('saveKey').onclick = () => { localStorage.setItem('oracle_api_key', $('apiKey').value.trim()); setStatus('key saved', ''); };
+$('question').value = localStorage.getItem('oracle_v2_q') || '';
+const headers = () => ({ 'Content-Type': 'application/json', 'x-api-key': getKey() });
+
+let job = null, selected = null, pollTimer = null;
+
+function setStatus(text, cls) { $('statusText').textContent = text; $('dot').className = 'dot ' + cls; }
+const pct = p => (p == null ? '–' : Math.round(p * 100) + '%');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+$('run').onclick = async () => {
+  const question = $('question').value.trim();
+  if (!question) return;
+  localStorage.setItem('oracle_v2_q', question);
+  const body = {
+    question, depth: +$('depth').value, max_precursors: +$('maxPrecursors').value,
+    max_forecast_calls: +$('maxCalls').value, max_articles: +$('maxArticles').value,
+    claim_deadline: $('deadline').value || null,
+  };
+  setStatus('starting…', 'run'); $('run').disabled = true;
+  try {
+    const r = await fetch(API_URL + '/v2/forecast', { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(r.status + ' ' + (await r.text()).slice(0, 200));
+    const { job_id } = await r.json();
+    watch(job_id);
+  } catch (e) { setStatus('error: ' + e.message, 'err'); $('run').disabled = false; }
+};
+$('load').onclick = () => { const id = prompt('job id'); if (id) watch(id.trim()); };
+
+function watch(id) {
+  $('jobId').textContent = id; history.replaceState(null, '', '#' + id);
+  clearInterval(pollTimer);
+  const tick = async () => {
+    try {
+      const r = await fetch(API_URL + '/v2/jobs/' + id, { headers: headers() });
+      if (!r.ok) throw new Error(r.status);
+      job = await r.json(); render();
+      if (job.status === 'done' || job.status === 'failed') { clearInterval(pollTimer); $('run').disabled = false; }
+    } catch (e) { setStatus('poll error: ' + e.message, 'err'); }
+  };
+  tick(); pollTimer = setInterval(tick, 3000);
+}
+if (location.hash.length > 1) watch(location.hash.slice(1));
+
+// ---------- graph
+const cy = cytoscape({
+  container: $('cy'), layout: { name: 'preset' }, wheelSensitivity: 0.2,
+  style: [
+    { selector: 'node', style: { shape: 'round-rectangle', width: 190, height: 58, 'background-color': '#1C3452', 'border-width': 1.5, 'border-color': '#3B82F6',
+      color: '#E2E8F0', 'font-size': 9.5, 'text-wrap': 'wrap', 'text-max-width': 176, 'text-valign': 'center', 'text-halign': 'center', label: 'data(label)' } },
+    { selector: 'node[status="anchored"]', style: { 'border-color': '#e2b96f', 'border-width': 3, 'border-style': 'double' } },
+    { selector: 'node[status="unpriced"], node[status="failed"], node[status="proposed"]', style: { 'border-color': '#F59E0B', 'border-style': 'dashed' } },
+    { selector: 'node[status="pricing"]', style: { 'border-color': '#60A5FA', 'border-style': 'dotted' } },
+    { selector: 'node[?pruned]', style: { opacity: 0.45, 'border-color': '#4B6280' } },
+    { selector: 'node[depth=0]', style: { 'background-color': '#142843', 'border-color': '#e2b96f', width: 240, height: 66, 'font-size': 10.5, 'font-weight': 'bold', 'text-max-width': 226 } },
+    { selector: 'node:selected', style: { 'border-color': '#60A5FA', 'border-width': 3, opacity: 1 } },
+    { selector: 'edge', style: { width: 1.5, 'line-color': '#2a3d55', 'target-arrow-color': '#2a3d55', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier',
+      label: 'data(label)', 'font-size': 8.5, color: '#8BA3BC', 'text-background-color': '#080F1A', 'text-background-opacity': 1, 'text-background-padding': 2, 'text-rotation': 'autorotate', 'text-margin-y': -7 } },
+    { selector: 'edge[method="pool_split"]', style: { 'line-color': '#22C55E', 'target-arrow-color': '#22C55E', width: 2 } },
+    { selector: 'edge[method="unpriced"]', style: { 'line-style': 'dashed', 'line-color': '#F59E0B', 'target-arrow-color': '#F59E0B' } },
+  ],
+});
+cy.on('tap', 'node', e => { selected = e.target.id(); showNode(); activate('node'); });
+
+function nodeLabel(n) {
+  const p = n.anchor ? `🔒 ${pct(n.anchor.p)}` : n.flat && n.flat.p != null ? pct(n.flat.p) : (n.status === 'pricing' ? '…' : '?');
+  const prop = n.propagated != null && (!n.flat || n.propagated !== n.flat.p) ? ` → ${pct(n.propagated)}` : '';
+  return `${n.text.length > 110 ? n.text.slice(0, 107) + '…' : n.text}\n${p}${prop}${n.pruned ? '  (pruned)' : ''}`;
+}
+
+function render() {
+  setStatus(job.status + (job.error ? ' — ' + job.error : ''), job.status === 'done' ? 'ok' : job.status === 'failed' ? 'err' : 'run');
+  const byDepth = {};
+  job.nodes.forEach(n => (byDepth[n.depth] = byDepth[n.depth] || []).push(n));
+  const els = [];
+  Object.keys(byDepth).forEach(d => {
+    const row = byDepth[d]; const w = 230;
+    row.forEach((n, i) => els.push({ group: 'nodes', data: { id: n.id, label: nodeLabel(n), status: n.status, pruned: !!n.pruned, depth: n.depth },
+      position: { x: (i - (row.length - 1) / 2) * w, y: d * 150 } }));
+  });
+  job.edges.forEach(e => els.push({ group: 'edges', data: { id: e.id, source: e.source, target: e.target, method: e.method,
+    label: e.method === 'pool_split' ? `✓${pct(e.p_given_yes)}  ✗${pct(e.p_given_no)}` : 'unpriced' } }));
+  cy.elements().remove(); cy.add(els); cy.fit(undefined, 40);
+  if (selected) { cy.$id(selected).select(); showNode(); }
+
+  const r = job.result;
+  $('result').style.display = r ? '' : 'none';
+  if (r) { $('propP').textContent = pct(r.propagated_p); $('flatP').textContent = pct(r.flat_p); $('resultNote').textContent = r.note || ''; }
+  const c = job.calls;
+  $('calls').textContent = `calls — forecast ${c.forecast} · pool ${c.pool_aggregate} · llm ${c.llm} · pm ${c.polymarket}`;
+
+  $('promptCount').textContent = job.prompts.length ? `(${job.prompts.length})` : '';
+  $('pane-prompts').innerHTML = job.prompts.map(p => `
+    <details class="prompt"><summary>${esc(p.id)} · ${esc(p.step)} · ${esc(p.node_id)} · ${esc(p.model)} · ${p.elapsed_ms ?? '…'} ms${p.error ? ' · <span style="color:var(--no)">' + esc(p.error) + '</span>' : ''}</summary>
+      <div class="body">
+        <div class="label">messages</div>${p.messages.map(m => `<pre>[${esc(m.role)}]\n${esc(m.content)}</pre>`).join('')}
+        <div class="label">response</div><pre>${esc(p.response ?? '(pending)')}</pre>
+        ${p.usage ? `<div class="calls">usage ${esc(JSON.stringify(p.usage))}</div>` : ''}
+      </div></details>`).join('') || '<span style="color:var(--text-dim)">No prompts yet.</span>';
+  $('pane-log').innerHTML = job.log.map(l => `<div>${esc(l.at.slice(11, 19))} <b>${esc(l.node_id || '')}</b> ${esc(l.message)}</div>`).join('');
+  $('json').textContent = JSON.stringify(job, null, 2);
+}
+
+function showNode() {
+  const n = job && job.nodes.find(x => x.id === selected);
+  if (!n) return;
+  const inEdges = job.edges.filter(e => e.target === n.id), outEdge = job.edges.find(e => e.source === n.id);
+  const f = n.flat || {};
+  $('pane-node').innerHTML = `
+    <div style="font-size:.95rem;margin-bottom:6px">${esc(n.text)}</div>
+    <div style="margin-bottom:8px">
+      <span class="tag">${esc(n.id)} · depth ${n.depth}</span><span class="tag">${esc(n.status)}</span>
+      ${n.anchor ? '<span class="tag anchor">anchor: polymarket</span>' : ''}${n.pruned ? '<span class="tag pruned">pruned</span>' : ''}
+      ${n.effect ? `<span class="tag">${esc(n.effect)} parent</span>` : ''}
+    </div>
+    <div class="kv">
+      <b>flat p (v1)</b><span>${pct(f.p)} ${f.ci ? `(CI ${pct(f.ci[0])}–${pct(f.ci[1])}, std ${f.std})` : ''} · ${f.articles_used ?? '–'} articles · n_eff ${f.n_eff ?? '–'} · ${esc(f.reason || '')} ${f.elapsed_ms ? '· ' + f.elapsed_ms + ' ms' : ''}</span>
+      <b>propagated p</b><span>${pct(n.propagated)}</span>
+      ${n.anchor ? `<b>anchor</b><span>🔒 ${pct(n.anchor.p)} — <a style="color:var(--accent-hi)" href="${esc(n.anchor.market.url || '#')}" target="_blank">${esc(n.anchor.market.question || n.anchor.market.slug || '')}</a></span>` : ''}
+      <b>why (decomposer)</b><span>${esc(n.why || n.explanation || '')}</span>
+      <b>pruning</b><span>${esc(n.explanation || '')} ${n.prune_score != null ? '· score ' + n.prune_score : ''}</span>
+      ${outEdge ? `<b>edge → parent</b><span><span class="tag ${outEdge.method === 'pool_split' ? 'pool' : 'unpriced'}">${esc(outEdge.method)}</span>
+        ${outEdge.method === 'pool_split' ? `P(parent | yes) = ${pct(outEdge.p_given_yes)} (${outEdge.detail.yes.articles_used} art.) · P(parent | no) = ${pct(outEdge.p_given_no)} (${outEdge.detail.no.articles_used} art.)` : esc(outEdge.reason || '')}
+        ${outEdge.detail && outEdge.method !== 'pool_split' ? `<pre>${esc(JSON.stringify(outEdge.detail, null, 1))}</pre>` : ''}</span>` : ''}
+      ${inEdges.length ? `<b>precursors</b><span>${inEdges.length} proposed · ${inEdges.filter(e => e.method === 'pool_split').length} priced</span>` : ''}
+    </div>
+    ${f.sources && f.sources.length ? `<div class="label" style="margin-top:10px">evidence (${f.sources.length})</div>` + f.sources.map(s =>
+      `<div class="src"><span class="tag">${s.stance > 0.1 ? '▲' : s.stance < -0.1 ? '▼' : '•'} ${(s.stance ?? 0).toFixed(2)}</span><a href="${esc(s.url)}" target="_blank">${esc(s.source_name)}</a> <span style="color:var(--text-dim)">${esc(s.published_date || '')} · ${esc(s.evidence_class || '')}</span>${s.claims && s.claims[0] ? `<div style="color:var(--text-dim);font-size:.74rem;margin-left:8px">“${esc(s.claims[0])}”</div>` : ''}</div>`).join('') : ''}`;
+}
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => activate(t.dataset.pane));
+function activate(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.pane === name));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + name));
+}
+document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') $('run').click(); });
+</script>
+</body>
+</html>

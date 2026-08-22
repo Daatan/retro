@@ -96,6 +96,18 @@ class TestUnmetFacets:
     def test_empty_runs_leaves_everything_unmet(self):
         assert unmet_facets([], {"stance_sign": 1}) == {"stance_sign"}
 
+    def test_facet_field_is_checkable(self):
+        """retro#541 — the literal announcement/denial/neither field, not to be
+        confused with this module's generic "facet" (expectation dimension)."""
+        expect = {"facet": "neither"}
+        runs = [[_pred(facet="announcement")], [_pred(facet="neither")]]
+        assert unmet_facets(runs, expect) == set()
+
+    def test_facet_field_unmet_when_no_run_matches(self):
+        expect = {"facet": "neither"}
+        runs = [[_pred(facet="announcement")], [_pred(facet=None)]]
+        assert unmet_facets(runs, expect) == {"facet"}
+
 
 class TestRegressionGate:
     def test_no_regression_when_patched_keeps_baseline_facets(self):

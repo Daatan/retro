@@ -32,7 +32,10 @@
                 "ssm:GetParameter",
                 "ssm:GetParameters"
             ],
-            "Resource": "arn:aws:ssm:eu-central-1:<ACCOUNT_ID>:parameter/retro/prod/secrets/*"
+            "Resource": [
+                "arn:aws:ssm:eu-central-1:<ACCOUNT_ID>:parameter/retro/prod/secrets/*",
+                "arn:aws:ssm:eu-central-1:<ACCOUNT_ID>:parameter/daatan/shared/secrets/*"
+            ]
         },
         {
             "Effect": "Allow",

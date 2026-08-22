@@ -10,8 +10,9 @@ Comparison protocol:
   TM probability  : Oracle API forecast using articles published <= T, converted (stance+1)/2
 
 TM predictions are fetched live from oracle.daatan.com (or ORACLE_URL) and
-cached in data/duel_oracle/{event_id}.json.  Set ORACLE_API_KEY or configure
-AWS Secrets Manager (daatan/oracle-api-key) before running.
+cached in data/duel_oracle/{event_id}.json.  Set ORACLE_API_KEY, or rely on
+the SSM fallback (/daatan/shared/secrets/ORACLE_API_KEY — the same shared
+parameter daatan's app reads) before running.
 
 Usage:
     ORACLE_API_KEY=sk-... DATA_DIR=data python -m tm.duel_report
@@ -177,11 +178,13 @@ def fetch_tm_probabilities_oracle(data_dir: Path, events: list[dict], t_days: in
     if not api_key:
         try:
             import boto3
-            sm = boto3.client("secretsmanager", region_name="eu-central-1")
-            api_key = sm.get_secret_value(SecretId="daatan/oracle-api-key")["SecretString"]
-            console.print("[dim]Oracle API key loaded from Secrets Manager[/dim]")
+            ssm = boto3.client("ssm", region_name="eu-central-1")
+            api_key = ssm.get_parameter(
+                Name="/daatan/shared/secrets/ORACLE_API_KEY", WithDecryption=True
+            )["Parameter"]["Value"].strip()
+            console.print("[dim]Oracle API key loaded from SSM Parameter Store[/dim]")
         except Exception as e:
-            console.print(f"[red]ORACLE_API_KEY not set and AWS fetch failed: {e}[/red]")
+            console.print(f"[red]ORACLE_API_KEY not set and SSM fetch failed: {e}[/red]")
 
     if not api_key:
         console.print("[red bold]No Oracle API key — cannot fetch TM predictions. Set ORACLE_API_KEY.[/red bold]")

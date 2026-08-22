@@ -463,6 +463,7 @@ docs#122 (free `SecureString`, same read pattern via `_secret()`):
 | `/retro/prod/secrets/GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_CX` | Web search — Google Custom Search (optional) |
 | `/retro/prod/secrets/GCP_SA_KEY_JSON` | GDELT BigQuery fallback (optional) |
 | `/retro/prod/secrets/NEWS_INDEXER_URL` / `NEWS_INDEXER_API_KEY` | news-indexer provider (optional) |
+| `/daatan/shared/secrets/ORACLE_API_KEY` | `duel_report.py`'s SSM fallback for the Oracle `x-api-key` — one parameter, also read by daatan's app, so the two sides can't drift (docs#122 group 3; fixed the `daatan/oracle-api-key` dead reference below) |
 
 Remaining secrets stay in AWS Secrets Manager (`eu-central-1`):
 
@@ -470,7 +471,6 @@ Remaining secrets stay in AWS Secrets Manager (`eu-central-1`):
 |---|---|
 | `daatan/openrouter-api-key` | LLM inference via OpenRouter (fallback) |
 | `daatan/github-pat` | Push `factum_atlas.html` to repo |
-| `daatan/oracle-api-key` | Shared auth key between Oracle API and daatan — **dead reference**, the live secret is `openclaw/oracle-api-key` (see `duel_report.py`); tracked for unification under docs#122 |
 
 > **Note (resolved 2026-07-14):** these entries were originally created under `openclaw/*` (a decommissioned stack's namespace). PR #198 pointed the *code* at `daatan/*`; the `daatan/*` Secrets Manager entries existed to match, and the `openclaw/*` copies were retained but read by nothing. Search-provider keys have since moved again, off `daatan/*` Secrets Manager and onto the `/retro/prod/secrets/*` SSM parameters above (docs#122).
 >

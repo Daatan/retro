@@ -8067,7 +8067,7 @@
     "A16:nyt": {
       "event_id": "A16",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -8151,7 +8151,7 @@
     "A18:ft": {
       "event_id": "A18",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12743,7 +12743,7 @@
     "A20:axios": {
       "event_id": "A20",
       "source_id": "axios",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12778,7 +12778,7 @@
     "A20:ft": {
       "event_id": "A20",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12834,7 +12834,7 @@
     "A20:nyt": {
       "event_id": "A20",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12855,7 +12855,7 @@
     "A20:walla": {
       "event_id": "A20",
       "source_id": "walla",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-23T01:20:00.255021"
+  "last_updated": "2026-08-23T01:21:12.058546"
 }

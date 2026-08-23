@@ -34,10 +34,10 @@
 # Requires a Google OAuth 2.0 client (Cloud Console — outside this repo's/any
 # CLI's reach, a human has to click through it) whose authorized redirect URI is
 # https://<domain>.auth.eu-central-1.amazoncognito.com/oauth2/idpresponse. Store
-# {client_id, client_secret} as JSON in Secrets Manager under
-# var.google_oauth_secret_id BEFORE running `terraform plan` — the data source
-# below fails the plan if the secret doesn't exist yet. The secret is read via a
-# data source so it never lands in the tf files or state as a literal.
+# {client_id, client_secret} as JSON in an SSM SecureString under
+# var.google_oauth_ssm_path BEFORE running `terraform plan` — the data source
+# below fails the plan if the parameter doesn't exist yet. The secret is read
+# via a data source so it never lands in the tf files or state as a literal.
 
 variable "cognito_domain_prefix" {
   description = "Globally-unique prefix for the Cognito hosted-UI domain."
@@ -45,10 +45,10 @@ variable "cognito_domain_prefix" {
   default     = "daatan-oracle"
 }
 
-variable "google_oauth_secret_id" {
-  description = "Secrets Manager secret id holding {client_id, client_secret} JSON for the Google IdP."
+variable "google_oauth_ssm_path" {
+  description = "SSM SecureString parameter path holding {client_id, client_secret} JSON for the Google IdP."
   type        = string
-  default     = "daatan/cognito-google-oauth"
+  default     = "/retro/prod/secrets/COGNITO_GOOGLE_OAUTH"
 }
 
 variable "claude_callback_urls" {
@@ -69,14 +69,15 @@ variable "claude_callback_urls" {
 }
 
 # ── Google federation ──────────────────────────────────────────────────────────
-# Requires var.google_oauth_secret_id to exist in Secrets Manager first (see the
-# header note) — this data source fails the plan otherwise.
-data "aws_secretsmanager_secret_version" "google_oauth" {
-  secret_id = var.google_oauth_secret_id
+# Requires var.google_oauth_ssm_path to exist in SSM first (see the header
+# note) — this data source fails the plan otherwise.
+data "aws_ssm_parameter" "google_oauth" {
+  name            = var.google_oauth_ssm_path
+  with_decryption = true
 }
 
 locals {
-  google_oauth = jsondecode(data.aws_secretsmanager_secret_version.google_oauth.secret_string)
+  google_oauth = jsondecode(data.aws_ssm_parameter.google_oauth.value)
 }
 
 resource "aws_cognito_user_pool" "oracle_mcp" {

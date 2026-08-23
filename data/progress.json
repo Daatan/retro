@@ -7549,7 +7549,7 @@
     "A05:ft": {
       "event_id": "A05",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10524,7 +10524,7 @@
     "A03:bloomberg": {
       "event_id": "A03",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-23T01:13:16.886324"
+  "last_updated": "2026-08-23T01:19:01.265720"
 }

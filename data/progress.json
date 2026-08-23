@@ -9390,7 +9390,7 @@
     "D05:ft": {
       "event_id": "D05",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13401,21 +13401,21 @@
     "D07:aljazeera": {
       "event_id": "D07",
       "source_id": "aljazeera",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "D07:axios": {
       "event_id": "D07",
       "source_id": "axios",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "D07:bbc": {
       "event_id": "D07",
       "source_id": "bbc",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13443,7 +13443,7 @@
     "D07:ft": {
       "event_id": "D07",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13492,7 +13492,7 @@
     "D07:n12": {
       "event_id": "D07",
       "source_id": "n12",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-23T01:01:05.308230"
+  "last_updated": "2026-08-23T01:01:58.067489"
 }

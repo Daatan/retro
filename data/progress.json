@@ -5554,7 +5554,7 @@
     "G03:toi": {
       "event_id": "G03",
       "source_id": "toi",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10461,7 +10461,7 @@
     "G07:nyt": {
       "event_id": "G07",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10762,7 +10762,7 @@
     "G04:bloomberg": {
       "event_id": "G04",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10776,7 +10776,7 @@
     "G07:bloomberg": {
       "event_id": "G07",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-23T01:03:23.979785"
+  "last_updated": "2026-08-23T01:03:49.365386"
 }

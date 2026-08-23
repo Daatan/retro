@@ -4,7 +4,7 @@ priced edges only; the combination locks anchors and leaves the root free)."""
 
 import asyncio
 import time
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -386,3 +386,117 @@ class TestPrecursorMatchShippedDefaults:
     def test_enforce_ships_disabled_and_is_unread_this_slice(self):
         from forecast_api.config import ApiSettings
         assert ApiSettings.model_fields["precursor_match_enforce"].default is False
+
+
+class TestSettledGroundingShadow:
+    """retro#609 — shadow-only settled/confidence grounding. No LLM or network
+    call: _settled_ground is a pure function of node["flat"], which _price_flat
+    already computes. Flag off must be byte-identical to today (the pre-existing
+    e2e tests above already prove this: settled_grounding_enabled defaults False
+    and both pass unmodified). Flag on must never touch node["status"]/anchor/
+    pruning/_combine's output — only node["settled_grounding"]."""
+
+    def _node(self, job, flat, **overrides) -> dict:
+        node = {
+            "id": "n1", "text": job["question"], "status": "priced", "flat": flat,
+            "anchor": None, "settled_grounding": None,
+        }
+        node.update(overrides)
+        job["nodes"].append(node)
+        return node
+
+    def test_settled_true_yields_would_lock_true(self):
+        job = pg.new_job(pg.V2ForecastRequest(question="Will X happen by Dec 31?"))
+        flat = {"std": 0.01, "ci": [0.85, 0.95], "evidence_mass": 12.0, "n_eff": 8, "settled": True}
+        node = self._node(job, flat)
+
+        pg._settled_ground(job, node)
+
+        assert node["settled_grounding"] == {
+            "would_lock": True, "std": 0.01, "evidence_mass": 12.0, "n_eff": 8, "ci_width": 0.1,
+        }
+
+    def test_settled_false_yields_would_lock_false_with_raw_signal(self):
+        job = pg.new_job(pg.V2ForecastRequest(question="Will X happen by Dec 31?"))
+        flat = {"std": 0.3, "ci": [0.2, 1.0], "evidence_mass": 1.0, "n_eff": 2, "settled": False}
+        node = self._node(job, flat)
+
+        pg._settled_ground(job, node)
+
+        assert node["settled_grounding"]["would_lock"] is False
+        assert node["settled_grounding"]["std"] == 0.3
+        assert node["settled_grounding"]["ci_width"] == 0.8
+
+    def test_missing_flat_fields_do_not_crash(self):
+        """The call-cap / failed-pricing shapes (node["flat"] = {"reason": ...})
+        carry no "settled"/"ci"/"std" keys at all — must degrade to a clean
+        all-None verdict, not raise."""
+        job = pg.new_job(pg.V2ForecastRequest(question="Will X happen by Dec 31?"))
+        node = self._node(job, {"reason": "call_cap"})
+
+        pg._settled_ground(job, node)
+
+        assert node["settled_grounding"] == {
+            "would_lock": False, "std": None, "evidence_mass": None, "n_eff": None, "ci_width": None,
+        }
+
+    def test_none_flat_does_not_crash(self):
+        job = pg.new_job(pg.V2ForecastRequest(question="Will X happen by Dec 31?"))
+        node = self._node(job, None)
+
+        pg._settled_ground(job, node)
+
+        assert node["settled_grounding"]["would_lock"] is False
+
+    async def test_flag_off_never_computes_verdict(self, monkeypatch):
+        monkeypatch.setattr(pg.settings, "settled_grounding_enabled", False)
+        spy = Mock()
+        monkeypatch.setattr(pg, "_settled_ground", spy)
+        root_sources = [_src(0.4, "if the ceasefire holds, Israel withdraws", antecedent="the ceasefire holds through October")]
+        monkeypatch.setattr(pg, "run_forecast", AsyncMock(side_effect=[_forecast(0.4, sources=root_sources), _forecast(0.2)]))
+        monkeypatch.setattr(pg, "run_pool_aggregate", AsyncMock(side_effect=[_pool(0.6), _pool(0.0, insufficient=True)]))
+        monkeypatch.setattr(
+            pg, "complete_text_once_with_usage",
+            AsyncMock(return_value=('{"precursors":[{"text":"The ceasefire holds through October","why":"w","effect":"raises"}]}', {})),
+        )
+        monkeypatch.setattr(pg, "_anchor", AsyncMock(return_value=None))
+
+        req = pg.V2ForecastRequest(question="Will Israel withdraw from southern Lebanon by Dec 31?", depth=1)
+        job = pg.new_job(req)
+        await pg.run_job(job["id"], req)
+        job = pg.get_job(job["id"])
+
+        assert spy.call_count == 0
+        assert all(n["settled_grounding"] is None for n in job["nodes"])
+
+    async def test_flag_on_settled_node_is_not_locked_or_status_changed(self, monkeypatch):
+        """The entire shadow-only contract: even a would_lock=True verdict must
+        never touch node["status"]/node["anchor"] or skip recursion."""
+        monkeypatch.setattr(pg.settings, "settled_grounding_enabled", True)
+        settled_res = ForecastResponse(
+            question="q", mean=0.9, std=0.01, ci_low=0.85, ci_high=0.95, articles_used=1,
+            sources=[], placeholder=False, insufficient_data=False, articles_found=1, settled=True,
+        )
+        monkeypatch.setattr(pg, "run_forecast", AsyncMock(return_value=settled_res))
+        monkeypatch.setattr(pg, "complete_text_once_with_usage", AsyncMock(return_value=('{"precursors":[]}', {})))
+        monkeypatch.setattr(pg, "_anchor", AsyncMock(return_value=None))
+
+        req = pg.V2ForecastRequest(question="Will X happen by Dec 31?", depth=1)
+        job = pg.new_job(req)
+        await pg.run_job(job["id"], req)
+        job = pg.get_job(job["id"])
+
+        root = job["nodes"][0]
+        assert root["settled_grounding"]["would_lock"] is True
+        assert root["status"] == "priced"
+        assert root["anchor"] is None
+
+
+class TestSettledGroundingShippedDefaults:
+    def test_settled_grounding_ships_disabled(self):
+        from forecast_api.config import ApiSettings
+        assert ApiSettings.model_fields["settled_grounding_enabled"].default is False
+
+    def test_enforce_ships_disabled_and_is_unread_this_slice(self):
+        from forecast_api.config import ApiSettings
+        assert ApiSettings.model_fields["settled_grounding_enforce"].default is False

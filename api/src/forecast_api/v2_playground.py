@@ -345,6 +345,40 @@ async def _same_question(job: dict, node: dict, market_question: str) -> tuple[b
         _save(job)
 
 
+# ---------------------------------------------------------------- settled grounding (retro#609, shadow-only)
+
+
+def _settled_ground(job: dict, node: dict) -> None:
+    """node["flat"]["settled"] is a free-to-compute grounding signal _price_flat
+    already produces (a majority of the pool's claims were already-decided fact,
+    not forecast) and today discards. Shadow-only: never locks/skips anything —
+    only logs what a hard lock on `settled` would have done, plus the raw
+    tight-CI/high-evidence_mass signal (std/evidence_mass/n_eff/ci_width), for a
+    later correlation against premise_verifier's own shadow log (retro#601)
+    before either check is promoted. No I/O, so failure here is a bug in this
+    function, not an external dependency — still fails open rather than ever
+    breaking pricing for the node it's attached to."""
+    try:
+        flat = node.get("flat") or {}
+        ci = flat.get("ci")
+        ci_width = round(ci[1] - ci[0], 4) if ci and ci[0] is not None and ci[1] is not None else None
+        verdict = {
+            "would_lock": bool(flat.get("settled")),
+            "std": flat.get("std"), "evidence_mass": flat.get("evidence_mass"),
+            "n_eff": flat.get("n_eff"), "ci_width": ci_width,
+        }
+    except Exception:
+        logger.exception("event=settled_grounding_crash node_id=%s", node["id"])
+        return
+    node["settled_grounding"] = verdict
+    logger.info(
+        "event=settled_grounding would_lock=%s question=%s std=%s evidence_mass=%s n_eff=%s ci_width=%s",
+        verdict["would_lock"], _question_hash(node["text"]),
+        verdict["std"], verdict["evidence_mass"], verdict["n_eff"], verdict["ci_width"],
+    )
+    _log(job, f"settled grounding (shadow): would_lock={verdict['would_lock']}", node["id"])
+
+
 # ---------------------------------------------------------------- precursor match (retro#608, shadow-only)
 #
 # Before a node is priced fresh, check whether it already matches an open
@@ -567,7 +601,7 @@ async def _expand(job: dict, parent: dict, parent_res: Optional[ForecastResponse
             "id": nid, "text": item["text"].strip(), "depth": parent["depth"] + 1, "parent_id": parent["id"],
             "why": item.get("why"), "effect": item.get("effect"), "status": "proposed", "flat": None, "anchor": None,
             "propagated": None, "pruned": False, "prune_score": None, "explanation": None, "anchor_candidate": None,
-            "precursor_match": None,
+            "precursor_match": None, "settled_grounding": None,
         }
         job["nodes"].append(child)
         children.append(child)
@@ -587,6 +621,8 @@ async def _expand(job: dict, parent: dict, parent_res: Optional[ForecastResponse
             )
             res = await _price_flat(job, child, req)
             child["_res"] = res
+            if settings.settled_grounding_enabled:
+                _settled_ground(job, child)
             if match_task is not None:
                 await _await_match_task_safely(job, child, match_task)
             if child["status"] == "priced":
@@ -687,7 +723,7 @@ async def run_job(job_id: str, req: V2ForecastRequest) -> None:
     root = {
         "id": "n1", "text": req.question.strip(), "depth": 0, "parent_id": None, "why": None, "effect": None,
         "status": "proposed", "flat": None, "anchor": None, "anchor_candidate": None, "propagated": None, "pruned": False, "prune_score": None,
-        "explanation": "the question asked", "precursor_match": None,
+        "explanation": "the question asked", "precursor_match": None, "settled_grounding": None,
     }
     job["nodes"].append(root)
     _log(job, "job started", root["id"], params=req.model_dump())
@@ -697,6 +733,8 @@ async def run_job(job_id: str, req: V2ForecastRequest) -> None:
             if settings.precursor_match_enabled else None
         )
         root_res = await _price_flat(job, root, req)
+        if settings.settled_grounding_enabled:
+            _settled_ground(job, root)
         if match_task is not None:
             await _await_match_task_safely(job, root, match_task)
         await _anchor(job, root)  # recorded for comparison; the root is never locked

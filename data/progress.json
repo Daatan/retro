@@ -5813,7 +5813,7 @@
     "G08:haaretz": {
       "event_id": "G08",
       "source_id": "haaretz",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5841,7 +5841,7 @@
     "G08:maariv": {
       "event_id": "G08",
       "source_id": "maariv",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11294,7 +11294,7 @@
     "H01:bloomberg": {
       "event_id": "H01",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11546,21 +11546,21 @@
     "H04:axios": {
       "event_id": "H04",
       "source_id": "axios",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "H04:bbc": {
       "event_id": "H04",
       "source_id": "bbc",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
     "H04:bloomberg": {
       "event_id": "H04",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11581,7 +11581,7 @@
     "H04:ft": {
       "event_id": "H04",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11595,7 +11595,7 @@
     "H04:guardian": {
       "event_id": "H04",
       "source_id": "guardian",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11637,7 +11637,7 @@
     "H04:nyt": {
       "event_id": "H04",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11651,7 +11651,7 @@
     "H04:toi": {
       "event_id": "H04",
       "source_id": "toi",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-23T01:03:49.365386"
+  "last_updated": "2026-08-23T01:05:20.473117"
 }

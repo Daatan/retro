@@ -1753,7 +1753,7 @@
     "B12:israel_hayom": {
       "event_id": "B12",
       "source_id": "israel_hayom",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -8676,7 +8676,7 @@
     "B11:ft": {
       "event_id": "B11",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -8718,7 +8718,7 @@
     "B12:ft": {
       "event_id": "B12",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -8732,7 +8732,7 @@
     "B12:nyt": {
       "event_id": "B12",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -8809,7 +8809,7 @@
     "C01:ft": {
       "event_id": "C01",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10643,7 +10643,7 @@
     "B12:bloomberg": {
       "event_id": "B12",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12897,7 +12897,7 @@
     "B14:calcalist": {
       "event_id": "B14",
       "source_id": "calcalist",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12911,7 +12911,7 @@
     "B14:ft": {
       "event_id": "B14",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12967,7 +12967,7 @@
     "B14:nyt": {
       "event_id": "B14",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-23T00:57:08.086562"
+  "last_updated": "2026-08-23T00:58:32.281777"
 }

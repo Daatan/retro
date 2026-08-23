@@ -86,7 +86,7 @@ def _forecast_payload(resp) -> dict:
 
 # ── tool implementations (registered onto the FastMCP instance in build_mcp) ──
 
-async def forecast(question: str, max_articles: Optional[int] = None) -> dict:
+async def forecast(question: str, max_articles: Optional[int] = None, verbose: bool = False) -> dict:
     """Get the Oracle's calibrated probability for a binary (yes/no) question.
 
     Searches recent news, weights sources by historical credibility, and returns
@@ -95,11 +95,17 @@ async def forecast(question: str, max_articles: Optional[int] = None) -> dict:
     probability space. If `insufficient_data` is true, `probability` is null —
     say the Oracle couldn't answer rather than reporting 0%. This is the slow
     tool (a live news+LLM pipeline; tens of seconds, occasionally more).
+
+    `verbose=True` returns the full ForecastResponse instead of the trimmed
+    default payload — adds `std`, `n_eff`, `evidence_mass`, `age_adjusted_mass`,
+    every `claims_detail` field per source, and `provenance` (engine/model/build
+    identity, retro#593). Use when you need to replay or audit a number, not
+    just read it.
     """
     require_scope(SCOPE_FORECAST)
     enforce(FORECAST_LIMIT, "forecast")
     resp = await run_forecast(ForecastRequest(question=question, max_articles=max_articles))
-    return _forecast_payload(resp)
+    return resp.model_dump() if verbose else _forecast_payload(resp)
 
 
 async def search_news(

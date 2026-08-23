@@ -384,6 +384,65 @@ class FetchUrlResponse(BaseModel):
     source: Optional[str] = None
 
 
+# ── Provenance (retro#602 umbrella retro#571, retro#593) ───────────────────────
+#
+# Today the pieces a caller needs to replay a number back to what produced it
+# are scattered across three places (provider_chain on the response, git_sha/
+# version on /health, relevance_bar on the response) and there is no
+# schema_version at all — daatan's oracle.ts prefix-matches
+# EXPECTED_API_VERSION = '0.1' against /version, so any base-version bump
+# silently disables the Oracle (LLM fallback). One `provenance` block, same
+# shape whether it's v1 (this repo) or a future v2 engine, fixes both: a
+# real schema_version a caller can gate on, and the scattered fields
+# consolidated into one place instead of three.
+
+PROVENANCE_SCHEMA_VERSION = "1.0"
+
+
+class ProvenanceOracle(BaseModel):
+    version: str = Field(description="Composed deploy version, see VersionResponse.version")
+    git_sha: str = Field(description="Deployed commit SHA, or 'unknown'")
+    built_at: Optional[str] = Field(default=None, description="UTC ISO-8601 deploy timestamp")
+
+
+class ProvenanceModels(BaseModel):
+    """Which LLM did the work, when an LLM call was involved. All null on a
+    pool recompute (no LLM call: aggregation is pure arithmetic over an
+    already-extracted pool)."""
+    gatekeeper: Optional[str] = Field(default=None, description="litellm model id used for the gatekeeper stage")
+    extractor: Optional[str] = Field(default=None, description="litellm model id used for the extractor stage")
+
+
+class ProvenanceInput(BaseModel):
+    """v2 only: one input node this forecast was derived from. Always empty
+    on v1, whose only inputs are `sources[]` (already on the response)."""
+    node_id: str
+    kind: Literal["evidence", "market", "stated", "commitment", "node"]
+    p: Optional[float] = None
+    var: Optional[float] = None
+    method: Optional[str] = None
+    as_of: Optional[str] = None
+
+
+class ProvenanceUpstreamCall(BaseModel):
+    """v2 only: one upstream v1 call a v2 forecast is built from. Always
+    empty on v1 itself, which has no upstream engine to call."""
+    api: str = "v1"
+    version: Optional[str] = None
+    request_id: Optional[str] = None
+
+
+class Provenance(BaseModel):
+    schema_version: str = Field(default=PROVENANCE_SCHEMA_VERSION, description="Provenance block shape version — gate on this, not on /version's free-form semver")
+    engine: Literal["v1", "v2"] = Field(default="v1")
+    oracle: ProvenanceOracle
+    models: ProvenanceModels = Field(default_factory=ProvenanceModels)
+    method: Literal["live", "pool", "propagated", "logical"] = Field(description="live = /forecast did its own search+extraction; pool = /pool/aggregate recomputed over an already-extracted pool; propagated/logical reserved for v2")
+    chain: list[str] = Field(default_factory=list, description="= provider_chain: full search fallback chain attempted, in order. Empty on a pool recompute, which never searches.")
+    inputs: list[ProvenanceInput] = Field(default_factory=list, description="v2 only; empty on v1")
+    upstream: list[ProvenanceUpstreamCall] = Field(default_factory=list, description="v2 calling v1 only; empty on v1")
+
+
 # ── Forecast ──────────────────────────────────────────────────────────────────
 
 class ForecastResponse(BaseModel):
@@ -409,6 +468,7 @@ class ForecastResponse(BaseModel):
     evidence_mass: float = Field(default=0.0, description="Floored, credibility/evidence-class/recency/relevance-weighted voting mass this pool carried (aggregation.PoolAggregateResult.evidence_mass, retro#458 Phase 2). 0.0 on an insufficient-data response.")
     n_eff: float = Field(default=0.0, description="Kish's effective sample size of the voting weights (aggregation.effective_sample_size) — exactly articles_used for equal weights, shrinking toward 1 as one row dominates the pool (retro#458 Phase 2). 0.0 on an insufficient-data response.")
     age_adjusted_mass: float = Field(default=0.0, description="evidence_mass recomputed with recency decay switched off — how much this pool would weigh if nothing had aged (retro#458 Phase 2). Equal to evidence_mass on a pool with no time decay in play; always >= evidence_mass. 0.0 on an insufficient-data response.")
+    provenance: Optional[Provenance] = Field(default=None, description="retro#593: engine/model/build identity this forecast was produced with, replayable independent of provider_chain/relevance_bar/version. Optional/additive — null only on a response built before this field existed (there is no such path going forward).")
 
 
 # ── Pool aggregate (recompute-over-pool) ────────────────────────────────────
@@ -507,6 +567,7 @@ class PoolAggregateResponse(BaseModel):
     evidence_mass: float = Field(default=0.0, description="Floored, credibility/evidence-class/recency/relevance-weighted voting mass this pool carried (aggregation.PoolAggregateResult.evidence_mass, retro#458 Phase 2). 0.0 when insufficient_data (or no_sources, where no pool was ever built).")
     n_eff: float = Field(default=0.0, description="Kish's effective sample size of the voting weights (aggregation.effective_sample_size) — exactly articles_used for equal weights, shrinking toward 1 as one row dominates the pool (retro#458 Phase 2). 0.0 when insufficient_data (or no_sources).")
     age_adjusted_mass: float = Field(default=0.0, description="evidence_mass recomputed with recency decay switched off — how much this pool would weigh if nothing had aged (retro#458 Phase 2). Equal to evidence_mass on a pool with no time decay in play; always >= evidence_mass. 0.0 when insufficient_data (or no_sources).")
+    provenance: Optional[Provenance] = Field(default=None, description="retro#593: engine/build identity this recompute was produced with. method is always 'pool' here (no search, no LLM call) — see ForecastResponse.provenance for the /forecast counterpart.")
 
 
 # ── Resolution feedback ingest (credibility feedback loop, step 1) ─────────

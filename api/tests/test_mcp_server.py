@@ -13,6 +13,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from forecast_api import mcp_limiter, mcp_server
+from forecast_api._build import build_provenance
 from forecast_api.config import settings
 from forecast_api.mcp_auth import (
     SCOPE_FORECAST,
@@ -135,6 +136,29 @@ class TestForecastTool:
         out = await mcp_server.forecast("Will X happen by 2027?")
         assert out["probability"] is None
         assert out["insufficient_data"] is True
+
+    @pytest.mark.asyncio
+    async def test_default_payload_is_trimmed(self, monkeypatch):
+        """retro#593: the default shape is the lossy one — no std/n_eff/
+        evidence_mass/claims_detail/provenance."""
+        _patch_scope_ok(monkeypatch)
+        _patch_forecast(monkeypatch, _forecast_response(0.5))
+        out = await mcp_server.forecast("Will X happen by 2027?")
+        assert "provenance" not in out
+        assert "std" not in out
+        assert "n_eff" not in out
+
+    @pytest.mark.asyncio
+    async def test_verbose_returns_the_full_response(self, monkeypatch):
+        """retro#593: verbose=True is the untrimmed ForecastResponse, provenance included."""
+        _patch_scope_ok(monkeypatch)
+        resp = _forecast_response(0.5, provenance=build_provenance(method="live", chain=["gdelt"]))
+        _patch_forecast(monkeypatch, resp)
+        out = await mcp_server.forecast("Will X happen by 2027?", verbose=True)
+        assert out == resp.model_dump()
+        assert out["provenance"]["schema_version"] == "1.0"
+        assert out["provenance"]["chain"] == ["gdelt"]
+        assert "std" in out and "n_eff" in out
 
     @pytest.mark.asyncio
     async def test_rate_limited_after_the_per_caller_cap(self, monkeypatch):

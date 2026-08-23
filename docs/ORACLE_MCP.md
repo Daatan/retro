@@ -23,7 +23,7 @@ probability, compare to the price, find an edge — plus general forecasting.
 |------|-------|------------|--------------|
 | `polymarket_edge(market, edge_threshold=0.05)` | `forecast` | 10/min | Resolve a market (URL/slug/Gamma id) → live YES price; forecast its question; return the **edge** (oracle − market) and a **suggested side** (BUY YES / BUY NO / NO EDGE) |
 | `polymarket_market(market)` | `read` | 30/min | Live market data: question, outcomes, prices, volume, end date |
-| `forecast(question, max_articles?)` | `forecast` | 10/min | Calibrated probability for any binary question (`probability` in [0,1]) |
+| `forecast(question, max_articles?, verbose?)` | `forecast` | 10/min | Calibrated probability for any binary question (`probability` in [0,1]). `verbose=true` returns the full `ForecastResponse` (`std`/`n_eff`/`evidence_mass`/`claims_detail`/`provenance`) instead of the trimmed default payload — retro#593 |
 | `search_news(query, limit?, date_from?, date_to?)` | `read` | 60/min | News search via the provider chain |
 | `fetch_article(url)` | `read` | 30/min | Fetch + extract one article (SSRF-guarded) |
 | `bayes_nodes(observations?)` | `read` | none | BayesOracle Israeli-politics DAG probabilities |

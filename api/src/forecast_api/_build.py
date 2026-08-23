@@ -22,6 +22,9 @@ import subprocess
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from pathlib import Path
+from typing import Literal, Optional
+
+from .models import Provenance, ProvenanceModels, ProvenanceOracle
 
 _BUILD_FILE = Path(__file__).with_name("_build_info.json")
 _REPO_ROOT = Path(__file__).resolve().parents[3]  # forecast_api -> src -> api -> repo
@@ -113,3 +116,27 @@ def build_info() -> dict:
         "built_at": info.get("built_at"),
         "source": info.get("source", "unknown"),
     }
+
+
+def build_provenance(
+    *,
+    method: Literal["live", "pool", "propagated", "logical"],
+    chain: Optional[list[str]] = None,
+    gatekeeper_model: Optional[str] = None,
+    extractor_model: Optional[str] = None,
+) -> Provenance:
+    """One `provenance` block for a /forecast or /pool/aggregate response
+    (retro#593) — consolidates what was three separate places (provider_chain
+    on the response, git_sha/version on /health, relevance_bar on the
+    response) into one, plus a real `schema_version`, which didn't exist at
+    all before (the v1<->daatan contract was a raw `/version` prefix match).
+    """
+    bi = build_info()
+    return Provenance(
+        oracle=ProvenanceOracle(
+            version=bi["version"], git_sha=bi["git_sha"], built_at=bi["built_at"],
+        ),
+        models=ProvenanceModels(gatekeeper=gatekeeper_model, extractor=extractor_model),
+        method=method,
+        chain=chain or [],
+    )

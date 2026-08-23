@@ -1816,7 +1816,7 @@
     "F04:jpost": {
       "event_id": "F04",
       "source_id": "jpost",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -5435,7 +5435,7 @@
     "G01:reuters": {
       "event_id": "G01",
       "source_id": "reuters",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10027,7 +10027,7 @@
     "F03:bloomberg": {
       "event_id": "F03",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10083,7 +10083,7 @@
     "F04:ft": {
       "event_id": "F04",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -10125,7 +10125,7 @@
     "F05:ft": {
       "event_id": "F05",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-23T01:02:48.200420"
+  "last_updated": "2026-08-23T01:03:23.979785"
 }

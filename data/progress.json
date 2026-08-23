@@ -8907,7 +8907,7 @@
     "C03:ft": {
       "event_id": "C03",
       "source_id": "ft",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-23T01:24:27.970595"
+  "last_updated": "2026-08-23T01:25:00.314424"
 }

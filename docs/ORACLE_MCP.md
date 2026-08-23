@@ -178,13 +178,13 @@ through it) whose redirect URI is
 then store its creds (read via a data source — never a literal in tf/state):
 
 ```bash
-aws secretsmanager create-secret --region eu-central-1 \
-  --name daatan/cognito-google-oauth \
-  --secret-string '{"client_id":"<GOOGLE_CLIENT_ID>","client_secret":"<GOOGLE_CLIENT_SECRET>"}'
+aws ssm put-parameter --region eu-central-1 \
+  --name /retro/prod/secrets/COGNITO_GOOGLE_OAUTH --type SecureString \
+  --value '{"client_id":"<GOOGLE_CLIENT_ID>","client_secret":"<GOOGLE_CLIENT_SECRET>"}'
 ```
 
-The `data "aws_secretsmanager_secret_version" "google_oauth"` block fails any
-`plan`/`apply` in this file until the secret above exists — create it first.
+The `data "aws_ssm_parameter" "google_oauth"` block fails any `plan`/`apply`
+in this file until the parameter above exists — create it first.
 
 Native Cognito accounts (admin-invite only, `admin-create-user`) still work
 independently of this — Google federation is additive, not a replacement.

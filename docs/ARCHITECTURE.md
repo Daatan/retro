@@ -84,6 +84,8 @@ retro/
 ├── infra/
 │   ├── ec2_bootstrap.sh         # One-time EC2 setup script (incl. restore_atlas before service start)
 │   ├── ec2_run.sh               # Continuous pipeline loop (runs on EC2; snapshots atlas at tail of cycle)
+│   ├── tests/
+│   │   └── test_ec2_run_guards.sh # CI regression coverage for ec2_run.sh's sync/re-exec guards (retro#557)
 │   ├── ec2_run_poc.sh           # PoC pipeline run script
 │   ├── snapshot_atlas.sh        # Tar data/atlas + data/vault2 → S3 (per-cycle + latest.tgz)
 │   ├── restore_atlas.sh         # Pull latest.tgz from S3 if data/atlas/ is empty (fresh boot only)

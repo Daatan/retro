@@ -16,10 +16,26 @@ on:
       # validates the committed set — so a bad edit to an event file alone must
       # trigger this workflow, not just changes under pipeline/.
       - data/events/**
+      - infra/**
       - .github/workflows/tests.yml
   workflow_call:
 
 jobs:
+  infra-shell-tests:
+    # ec2_run.sh's sync/re-exec guards (retro#553) only run on the unhappy path
+    # and had zero CI coverage before this job — an infra-only change never
+    # matched this workflow's path filter at all. See the harness's own header
+    # comment (infra/tests/test_ec2_run_guards.sh) for what these guards protect.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: shellcheck ec2_run.sh
+        run: shellcheck -S error infra/ec2_run.sh
+
+      - name: Run ec2_run.sh guard regression tests
+        run: bash infra/tests/test_ec2_run_guards.sh
+
   pytest:
     runs-on: ubuntu-latest
     strategy:

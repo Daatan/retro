@@ -25,9 +25,10 @@ Inline policy for the existing `truthmachine-ec2-role`. Grants read-only access 
 
 **Search-provider keys moved off this namespace to SSM Parameter Store per docs#122** — see
 `/retro/prod/secrets/*` in section 4 below and `docs/ARCHITECTURE.md`'s Required Secrets
-table. What's left under `daatan/*` is `openrouter-api-key`, `github-pat`, and
-`oracle-api-key` (a dead reference — the live secret is `openclaw/oracle-api-key`, tracked
-for unification under docs#122).
+table. What's left under `daatan/*` is `openrouter-api-key` and `github-pat`.
+`daatan/oracle-api-key` was a dead reference (the live secret was `openclaw/oracle-api-key`)
+— `pipeline/src/tm/duel_report.py` now reads the unified `/daatan/shared/secrets/ORACLE_API_KEY`
+SSM parameter instead (docs#122 group 3; see section 4's SSM resource list).
 
 | File | Purpose |
 |------|---------|
@@ -72,7 +73,7 @@ extraction_errors`, discovered 2026-07-12).
 
 | File | Purpose |
 |------|---------|
-| `truthmachine-ec2-pipeline-policy.json` | Bedrock `InvokeModel` on the allow-listed models + read of the `openclaw/*` secret namespace (legacy name — see the openclaw rename note in `CLAUDE.md`) + `ssm:GetParameter`/`ssm:GetParameters` on `/retro/prod/secrets/*` and `kms:Decrypt` scoped via `kms:ViaService` to `ssm.eu-central-1.amazonaws.com` (docs#122 — the search-provider keys `web_search.py` reads). |
+| `truthmachine-ec2-pipeline-policy.json` | Bedrock `InvokeModel` on the allow-listed models + read of the `openclaw/*` secret namespace (legacy name — see the openclaw rename note in `CLAUDE.md`) + `ssm:GetParameter`/`ssm:GetParameters` on `/retro/prod/secrets/*` (docs#122 — the search-provider keys `web_search.py` reads) and `/daatan/shared/secrets/*` (docs#122 group 3 — `ORACLE_API_KEY`, the one parameter `duel_report.py` and daatan's app both read) + `kms:Decrypt` scoped via `kms:ViaService` to `ssm.eu-central-1.amazonaws.com`. |
 
 **Apply:**
 ```bash

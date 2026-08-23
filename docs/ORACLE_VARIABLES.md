@@ -1900,3 +1900,59 @@ question.
 **Promoting any relation type to actually gate `_price_flat`** — that is the
 retro#601-style follow-up this slice exists to produce data for, not something decided
 here.
+
+## 2026-08-23 — settled-grounding, shadow/log-only (retro#609)
+
+**Shadow-only. `settled_grounding_enabled` defaults `False`; `settled_grounding_enforce`
+exists but is unread this slice — a documented placeholder, not a live knob.**
+
+`_price_flat` already computes a usable grounding signal on every node it prices and
+discards it: `_flat_summary` (`v2_playground.py:140-157`) captures `settled: bool` — true
+when the pool's aggregate came from a majority of claims the extractor itself marked as
+already-decided fact (`settlement_grade`), not a forecast — plus `std`/`evidence_mass`/
+`n_eff`/`ci`, a softer "how confidently was this estimated" signal distinct from `settled`.
+Before this slice, `node["flat"]["settled"]` was written once and never read again
+anywhere in the file; it had no effect on `_anchor`, pruning, or recursion.
+
+`_settled_ground` (`v2_playground.py`) runs right after `_price_flat`, no LLM call and no
+network call — everything it reads is already sitting in `node["flat"]`. It logs two
+things into `node["settled_grounding"]` and an `event=settled_grounding` line:
+
+- `would_lock` — what a hard lock on `settled=True` would have done (the same
+  stop-recursion-and-lock treatment `_anchor` gives a same-question Polymarket match).
+- The raw `std`/`evidence_mass`/`n_eff`/`ci_width` values — the softer "confidently
+  estimated, further decomposition unlikely to move this number" signal the issue
+  proposes should weight pruning rather than stop recursion outright.
+
+**This slice deliberately stops at logging the raw soft-signal values, not a derived
+prune-weight formula.** No threshold for "tight CI" or "high evidence_mass" exists
+anywhere in this codebase to calibrate against, and inventing one without real
+distribution data would just be encoding a guess as if it were validated — exactly what
+the shadow-first pattern exists to avoid. The follow-up review (same retro#601 shape) is
+where that threshold gets picked, from real logged values, not before.
+
+**Coordinate with `premise_verifier`, don't duplicate it (retro#575/#601).** `settled` is
+a post-extraction, claim-level signal; `premise_verifier` is a dedicated pre-extraction LLM
+call over raw search snippets asking essentially the same "is this premise already dead"
+question. Both now log independently (`event=settled_grounding` here,
+`event=premise_verifier` in `forecaster.py`), tagged with the same `_question_hash`, so a
+future review can check whether they agree before either is promoted — if they're highly
+correlated, prefer the free one (`settled`) and don't pay for both.
+
+### Config (`api/src/forecast_api/config.py`)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `settled_grounding_enabled` | `False` | Master switch. While off, `_settled_ground` never runs — it's a pure function of data `_price_flat` already computed, so there's no cost to skip. |
+| `settled_grounding_enforce` | `False` | Unread this slice — reserved for the follow-up that acts on the verdict. |
+
+### Explicitly out of scope for this slice
+
+**Any actual pruning/locking behavior change** — this slice only logs what a hard lock or
+a soft prune-weight *would* do; nothing about `_anchor`, the prune step, or recursion
+changes yet. That is the retro#601-style follow-up.
+
+**The premise_verifier correlation check itself** — the issue's point 3 names this as a
+prerequisite for *promoting* settled-grounding, not for shipping the shadow log. Both
+retro#601 (premise_verifier's own review) and this feature's equivalent follow-up are
+still open; the correlation check happens once both have real accumulated volume.

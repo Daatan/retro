@@ -587,6 +587,16 @@ class ApiSettings(BaseSettings):
     precursor_match_model: Optional[str] = None
     precursor_match_timeout_seconds: int = 12
 
+    # Settled-grounding (retro#609) — shadow/log-only, off by default. No LLM or
+    # network call: node["flat"]["settled"] is a free-to-compute signal
+    # _price_flat already produces (a majority of the pool's claims were
+    # already-decided fact, not forecast) and today discards. This logs what
+    # would happen if it were used to lock a node, for correlation against
+    # premise_verifier's own shadow log (retro#601) before either is promoted —
+    # see the issue's own point 3 against duplicating that check.
+    settled_grounding_enabled: bool = False
+    settled_grounding_enforce: bool = False
+
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.
     cache_ttl_seconds: int = 3600

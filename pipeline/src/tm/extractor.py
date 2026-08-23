@@ -1829,6 +1829,54 @@ def audit_named_entity_dyad_mismatch(
     return predictions
 
 
+# retro#602 sizing (2026-08-23): at |stance|>=0.7 & certainty>=0.7 with a
+# populated fact_signal, 44/531 (8.3%) prod rows disagree in sign with their
+# own stance. Hand-checked 20: 18 genuine sign-inversions (the tracked Burnham
+# and Israel-coalition clusters), 1 borderline, 1 a near-zero fact_signal that
+# isn't really a polarity flip — hence the |fact_signal|>=0.3 floor below to
+# drop that last case. ~90% per-row precision, unlike audit_named_entity_dyad_
+# mismatch's ~0% on the same "promote?" question (not promoted). Log-only for
+# now per that same recommendation: this covers every claim (not just
+# settled=True, which enforce_settlement_fact_signal_agreement already
+# enforces at the stricter 0.5 anchor) and is meant to surface *new* instances
+# of the defect class before deciding whether to enforce here too.
+_FACT_SIGNAL_SIGN_STANCE_GATE = 0.7
+_FACT_SIGNAL_SIGN_CERTAINTY_GATE = 0.7
+_FACT_SIGNAL_SIGN_MAGNITUDE_GATE = 0.3
+
+
+def audit_fact_signal_sign_mismatch(
+    predictions: list[PredictionExtraction],
+) -> list[PredictionExtraction]:
+    """Log-only: flag a strong-stance claim whose fact_signal points the
+    opposite way (retro#545/#602).
+
+    Fails open like every sibling guard: a missing or near-zero fact_signal
+    (legitimately omitted for opinion/advocacy rows, or a value that bears on
+    the event without establishing it) never fires, and below the stance/
+    certainty gate is skipped. Never mutates ``stance``/``fact_signal``/
+    ``settled``/anything else — pure observability, same contract as
+    ``audit_named_entity_dyad_mismatch``.
+    """
+    for p in predictions:
+        if p.fact_signal is None or abs(p.fact_signal) < _FACT_SIGNAL_SIGN_MAGNITUDE_GATE:
+            continue
+        if abs(p.stance) < _FACT_SIGNAL_SIGN_STANCE_GATE:
+            continue
+        if p.certainty < _FACT_SIGNAL_SIGN_CERTAINTY_GATE:
+            continue
+        if (p.fact_signal > 0) == (p.stance > 0):
+            continue
+
+        logger.warning(
+            "event=fact_signal_sign_mismatch stance=%+.2f fact_signal=%+.2f "
+            "certainty=%.2f settled=%s claim=%r",
+            p.stance, p.fact_signal, p.certainty, p.settled, p.claim[:120],
+        )
+
+    return predictions
+
+
 # A settlement whose own fact lane points the other way is contradicting itself.
 # 0.5 is the anchoring bar the FACT_SIGNAL prompt already uses for a graded
 # reading: below it a value is "bears on the event" rather than "establishes it",

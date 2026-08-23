@@ -636,9 +636,27 @@ POST /forecast
   "outcome_counts": { "ok": 5, "gate_rejected": 2 },
   "provider": "news-indexer",
   "provider_chain": ["news-indexer"],
-  "distilled_query": null
+  "distilled_query": null,
+  "provenance": {
+    "schema_version": "1.0",
+    "engine": "v1",
+    "oracle": { "version": "1.65.x", "git_sha": "…", "built_at": "…" },
+    "models": { "gatekeeper": "nova-micro", "extractor": "claude-haiku-4-5" },
+    "method": "live",
+    "chain": ["news-indexer"],
+    "inputs": [],
+    "upstream": []
+  }
 }
 ```
+
+`provenance` (retro#593) is a replayability block carried on every `ForecastResponse` and
+`PoolAggregateResponse`: which Oracle build, which LLM models, and which method (`live` |
+`pool` | `propagated` | `logical`) produced the estimate — `chain` mirrors the top-level
+`provider_chain`. `inputs`/`upstream` are v2-only and stay empty (`[]`) on the v1 engine
+above. The MCP `forecast` tool trims this (and `sources[]`) out of its default response;
+pass `verbose: true` to get the full `model_dump()` including `provenance` — see
+[`docs/ORACLE_MCP.md`](ORACLE_MCP.md).
 
 When the pipeline can't compute a real estimate it returns `insufficient_data: true`
 with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,

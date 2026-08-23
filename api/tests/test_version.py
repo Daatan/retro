@@ -104,3 +104,32 @@ def test_build_info_env_fallback(tmp_path, monkeypatch):
     assert info["git_branch"] == "feature/x"
     assert info["source"] == "env"
     _build.build_info.cache_clear()
+
+
+# ── build_provenance (retro#593) ────────────────────────────────────────────
+
+def test_build_provenance_carries_build_info_into_oracle_block():
+    p = _build.build_provenance(method="live", chain=["gdelt", "brave"])
+    bi = _build.build_info()
+    assert p.schema_version == "1.0"
+    assert p.engine == "v1"
+    assert p.oracle.version == bi["version"]
+    assert p.oracle.git_sha == bi["git_sha"]
+    assert p.method == "live"
+    assert p.chain == ["gdelt", "brave"]
+    assert p.inputs == [] and p.upstream == []  # v2-only, always empty on v1
+
+
+def test_build_provenance_defaults_chain_to_empty():
+    p = _build.build_provenance(method="pool")
+    assert p.chain == []
+
+
+def test_build_provenance_models_block_only_set_when_passed():
+    p = _build.build_provenance(method="live", gatekeeper_model="nova-micro", extractor_model="nova-lite")
+    assert p.models.gatekeeper == "nova-micro"
+    assert p.models.extractor == "nova-lite"
+
+    p2 = _build.build_provenance(method="pool")
+    assert p2.models.gatekeeper is None
+    assert p2.models.extractor is None

@@ -59,6 +59,7 @@ from tm.net_guard import UnsafeURLError, safe_get
 GATEKEEPER_PROMPT = _GATEKEEPER_PROMPT_PREFIX + _GATEKEEPER_PROMPT_SUFFIX
 EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 
+from ._build import build_provenance
 from .auth import ApiKeyClient
 from .aggregation import (
     PoolAggregateResult,
@@ -2190,6 +2191,12 @@ async def _run_forecast_inner(
         evidence_mass=round(agg.evidence_mass, 4),
         n_eff=round(agg.n_eff, 4),
         age_adjusted_mass=round(agg.age_adjusted_mass, 4),
+        provenance=build_provenance(
+            method="live",
+            chain=provider_chain,
+            gatekeeper_model=_pipeline_settings.gatekeeper_model,
+            extractor_model=_pipeline_settings.extractor_model,
+        ),
     )
 
     forecast_cache.set(cache_key, response)
@@ -2272,6 +2279,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             return PoolAggregateResponse(
                 mean=0.0, std=0.0, ci_low=-0.2, ci_high=0.2, articles_used=0,
                 settled=False, insufficient_data=True, reason="no_matching_antecedent",
+                provenance=build_provenance(method="pool"),
             )
     stances: list[float] = []
     weights: list[float] = []
@@ -2444,6 +2452,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         return PoolAggregateResponse(
             mean=0.0, std=0.0, ci_low=-0.2, ci_high=0.2, articles_used=0,
             settled=False, insufficient_data=True, reason="no_sources",
+            provenance=build_provenance(method="pool"),
         )
     if agg.insufficient_reason is not None:
         return PoolAggregateResponse(
@@ -2456,6 +2465,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             evidence_mass=round(agg.evidence_mass, 4),
             n_eff=round(agg.n_eff, 4),
             age_adjusted_mass=round(agg.age_adjusted_mass, 4),
+            provenance=build_provenance(method="pool"),
         )
 
     logger.info(
@@ -2472,6 +2482,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         evidence_mass=round(agg.evidence_mass, 4),
         n_eff=round(agg.n_eff, 4),
         age_adjusted_mass=round(agg.age_adjusted_mass, 4),
+        provenance=build_provenance(method="pool"),
     )
 
 
@@ -2530,6 +2541,7 @@ def _empty_response(
         provider_chain=provider_chain or [],
         distilled_query=distilled_query,
         debug=debug,
+        provenance=build_provenance(method="live", chain=provider_chain),
     )
 
 

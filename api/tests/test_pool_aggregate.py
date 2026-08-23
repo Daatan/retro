@@ -538,3 +538,53 @@ class TestAntecedentPoolSplit:
         ))
         assert resp.articles_used == 1
         assert resp.mean < 0  # only `negated` (stance -0.7) survives the filter
+
+
+class TestProvenance:
+    """retro#593: PoolAggregateResponse.provenance is populated on every
+    return path — the normal success path, and all three insufficient_data
+    early returns (no_sources, insufficient_reason, no_matching_antecedent) —
+    since a caller replaying any of these numbers needs the same block."""
+
+    async def test_normal_pool_carries_pool_method_provenance(self):
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[_source(stance=0.6), _source(stance=0.4)],
+        ))
+        assert resp.provenance is not None
+        assert resp.provenance.schema_version == "1.0"
+        assert resp.provenance.engine == "v1"
+        assert resp.provenance.method == "pool"
+        assert resp.provenance.chain == []  # a recompute never searches
+        # No LLM call is made recomputing over an already-extracted pool.
+        assert resp.provenance.models.gatekeeper is None
+        assert resp.provenance.models.extractor is None
+
+    async def test_no_sources_still_carries_provenance(self):
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=[]))
+        assert resp.insufficient_data is True and resp.reason == "no_sources"
+        assert resp.provenance is not None
+        assert resp.provenance.method == "pool"
+
+    async def test_insufficient_reason_path_still_carries_provenance(self):
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[_source(relevance_score=0.05), _source(relevance_score=0.05)],
+        ))
+        assert resp.insufficient_data is True and resp.reason == "all_articles_off_topic"
+        assert resp.provenance is not None
+        assert resp.provenance.method == "pool"
+
+    async def test_no_matching_antecedent_path_still_carries_provenance(self):
+        pool = [_source(
+            stance=0.85,
+            claims_detail=[{
+                "claim": "Poll shows coalition ahead", "stance": 0.85, "certainty": 0.7,
+                "is_conditional": True, "antecedent_text_en": "the coalition wins",
+                "antecedent_polarity": True,
+            }],
+        )]
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=pool, antecedent_query="a meteor strikes the capital",
+        ))
+        assert resp.reason == "no_matching_antecedent"
+        assert resp.provenance is not None
+        assert resp.provenance.method == "pool"

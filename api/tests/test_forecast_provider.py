@@ -31,6 +31,18 @@ class TestEmptyResponseForwardsProvider:
         r = _empty_response("q?")
         assert r.provider == "" and r.provider_chain == [] and r.distilled_query is None
 
+    def test_carries_provenance_with_the_same_chain(self):
+        """retro#593: even a placeholder insufficient_data response is
+        replayable — same engine block, and `chain` mirrors provider_chain."""
+        r = _empty_response(
+            "q?",
+            provider_chain=["gdelt", "ddg"],
+        )
+        assert r.provenance is not None
+        assert r.provenance.schema_version == "1.0"
+        assert r.provenance.method == "live"
+        assert r.provenance.chain == ["gdelt", "ddg"]
+
 
 class TestForecastResponseProvider:
     def test_empty_path_carries_provider(self, monkeypatch):
@@ -103,6 +115,13 @@ class TestForecastResponseProvider:
         assert resp.sources[0].fact_signal is None
         assert resp.sources[0].event_actors is None
         assert resp.sources[0].is_occurrence is None
+        # retro#593: the success path carries a full live-method provenance block,
+        # with the actual gatekeeper/extractor models this run used.
+        assert resp.provenance is not None
+        assert resp.provenance.method == "live"
+        assert resp.provenance.chain == ["caller"]
+        assert resp.provenance.models.gatekeeper == forecaster._pipeline_settings.gatekeeper_model
+        assert resp.provenance.models.extractor == forecaster._pipeline_settings.extractor_model
 
     def test_caller_supplied_articles_fact_signal_reduction(self, monkeypatch):
         # fact_signal + facets are per-claim (Phase 2, author-scoring redesign). The per-source

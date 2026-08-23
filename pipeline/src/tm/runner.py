@@ -21,6 +21,7 @@ from .extractor import (
     enforce_settlement_event_date,
     enforce_settlement_fact_signal_agreement,
     enforce_winner_entity_consistency,
+    audit_fact_signal_sign_mismatch,
     audit_named_entity_dyad_mismatch,
     flag_claim_stance_sign_conflicts,
 )
@@ -134,6 +135,15 @@ async def run_article(article: ArticleInput) -> PipelineResult:
         # is wrong is not knowable here. Runs last, so the demotions above have
         # already taken their rows out of the net.
         extraction.predictions = enforce_settlement_fact_signal_agreement(
+            extraction.predictions,
+        )
+        # Log-only (retro#602): the same stance/fact_signal sign disagreement,
+        # but for every strong-stance claim, not just settled=True ones — 90%
+        # per-row precision on a 2026-08-23 sweep, promoted from shadow to a
+        # warning per #602's recommendation (not yet to enforcement). Runs
+        # after the settled-only enforcement above so an already-neutralised
+        # row (stance zeroed) can't also fire here.
+        extraction.predictions = audit_fact_signal_sign_mismatch(
             extraction.predictions,
         )
         # Log-only (retro#545 slice ii): does a strong-stance claim about a

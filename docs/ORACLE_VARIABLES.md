@@ -193,6 +193,30 @@ guard in a follow-up slice.
 Fail-open throughout: no entity parses out of the question, either dyad field missing, below
 either gate, or the subject entity mentioned on either side of the dyad — all no-op.
 
+#### Any strong-stance claim's sign-error, not just settled ones — `audit_fact_signal_sign_mismatch` (log-only)
+
+retro#602's follow-up on the sign-error class above: `enforce_settlement_fact_signal_agreement`
+only ever looks at `settled = True` claims. This audits the same `sign(stance) != sign(fact_signal)`
+disagreement across **every** claim at `|stance| ≥ 0.7 & certainty ≥ 0.7`
+(`_FACT_SIGNAL_SIGN_STANCE_GATE`/`_FACT_SIGNAL_SIGN_CERTAINTY_GATE`) with `|fact_signal| ≥ 0.3`
+(`_FACT_SIGNAL_SIGN_MAGNITUDE_GATE`, looser than the settlement guard's 0.5 anchor since this
+isn't clamping anything).
+
+A 2026-08-23 sweep of `evidence_pool_articles` (COMPLETE, that stance/certainty band, `fact_signal`
+populated) found 44/531 (8.3%) rows disagree in sign. Grouped by prediction, 82% of those 44
+collapse onto the already-tracked Burnham cluster this guard's settled-only sibling exists for; a
+20-row hand-check found 18/20 (90%) genuine sign-inversions, 1/20 borderline, 1/20 a fact_signal
+too close to zero to call a real polarity flip — the reason for the 0.3 floor. That ~90% per-row
+precision is well above `audit_named_entity_dyad_mismatch`'s ~0% on the same "promote?" question
+(not promoted), which is why this one *is* promoted — but only to `event=fact_signal_sign_mismatch`
+as a warning, not to enforcement: it exists to catch **new** instances of the defect class before
+any decision to neutralise rows the way the settled-only guard already does.
+
+**Log-only — never mutates `stance`/`fact_signal`/`settled`.** Runs immediately after
+`enforce_settlement_fact_signal_agreement` so an already-neutralised settled row (stance zeroed)
+can't also fire here. Fail-open like every sibling: missing or sub-0.3-magnitude `fact_signal`,
+below either gate, or a matching sign — all no-op.
+
 #### Claim/stance sign conflicts are logged, not corrected — `flag_claim_stance_sign_conflicts`
 
 retro#298 found rows where the extracted `claim` text and `stance` disagree with each other in

@@ -574,6 +574,19 @@ class ApiSettings(BaseSettings):
     premise_verifier_model: Optional[str] = None
     premise_verifier_timeout_seconds: int = 12
 
+    # Precursor candidate-match (retro#608) — shadow/log-only, off by default.
+    # Before pricing a v2-playground precursor fresh, checks whether it already
+    # matches an open forecast in Daatan's own bank or a live Polymarket market,
+    # and logs a typed relation verdict (alias/nested/complement/implies/
+    # independent) without changing pricing, recursion, or the propagated result.
+    # `enforce` is unread this slice; same shadow-then-promote placeholder shape
+    # premise_verifier_enforce uses, for the follow-up that decides whether to act
+    # on the verdict once precision data justifies it.
+    precursor_match_enabled: bool = False
+    precursor_match_enforce: bool = False
+    precursor_match_model: Optional[str] = None
+    precursor_match_timeout_seconds: int = 12
+
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.
     cache_ttl_seconds: int = 3600

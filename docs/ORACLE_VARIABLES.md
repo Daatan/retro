@@ -1800,3 +1800,79 @@ planning note. (3) already exists downstream in **daatan**
 (`temporal-clock.ts`'s impossibility pin) but nothing analogous exists at
 retro's extraction/stance stage. Both are separate, larger follow-up issues,
 not covered here.
+
+## 2026-08-23 — precursor candidate-match, shadow/log-only (retro#608)
+
+**Shadow-only. `precursor_match_enabled` defaults `False`; `precursor_match_enforce`
+exists but is unread this slice — a documented placeholder, not a live knob.**
+
+The v2 playground's `_decompose` (`api/src/forecast_api/v2_playground.py`) proposes
+precursor sub-questions and prices every one fresh via a full news-search pipeline —
+even when an existing forecast on the same real-world event already sits in Daatan's
+own bank or on a live Polymarket market. A partial check already existed
+(`_anchor`/`_same_question`), but it only looks at Polymarket, runs *after* pricing (so
+it never saves the cost), and only records a binary same-question verdict — anything
+narrower/broader/complementary is written to `node["anchor_candidate"]` and never read
+again anywhere in the file. retro#571's design hints already name the goal: "existing
+questions first, latent nodes second."
+
+This slice adds a **candidate-match step**, fired concurrently alongside pricing (same
+shape as `forecaster.py`'s `premise_task`), that checks two sources for each node —
+Daatan's own public `/api/forecasts/similar` bank search, and the same Polymarket Gamma
+lookup `_anchor` already makes — and, for any candidate found, asks one LLM call to
+type the relation (`alias`/`nested`/`complement`/`implies`/`independent`), the same
+`_same_question`-shaped call primitive `_anchor` already uses. **It changes nothing
+about pricing, recursion, or the propagated result** — it only writes
+`node["precursor_match"]` and a structured `event=precursor_match` log line, giving a
+retro#601-style follow-up the precision data needed before anything is allowed to gate
+on it.
+
+### Status disambiguation
+
+Each source in `node["precursor_match"]` (`{"daatan": ..., "polymarket": ...}`) is one
+of three shapes, not a bare candidate-or-`None` — collapsing "no candidate" and "the
+lookup itself failed" into one signal would make a real outage of Daatan's API log
+identically to "Daatan genuinely has no matching forecasts," which defeats the
+precision review this slice exists to enable:
+
+- `{"status": "not_found"}` — source reached, no candidate cleared the bar
+- `{"status": "error", "detail": "..."}` — the lookup itself failed
+- `{"status": "ok", "candidate": {...}, "relation": {...} | None}` — candidate found;
+  `relation` is `None` only when the relation-classifier call itself failed/was
+  unparseable, distinct from both cases above
+
+### Polymarket fetch is shared with `_anchor`, not duplicated
+
+`_match_polymarket` caches the fetched Gamma market onto
+`node["_polymarket_cache"]` (transient — popped before the node is ever persisted,
+either by `_anchor`'s cache-check or, for nodes `_anchor` never reaches, by the
+per-depth/end-of-job cleanup in `run_job`). `_anchor` checks that cache before making
+its own fetch, so enabling this slice does not double the Oracle's Gamma HTTP volume —
+one fetch per node either way.
+
+### Config (`api/src/forecast_api/config.py`)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `precursor_match_enabled` | `False` | Master switch. While off, the check never runs and never spends a token or an HTTP call. |
+| `precursor_match_enforce` | `False` | Unread this slice — reserved for the follow-up that acts on the verdict. |
+| `precursor_match_model` | `None` | Falls back to `extractor_model` (Claude Haiku 4.5 in prod) when unset. |
+| `precursor_match_timeout_seconds` | `12` | Per-call timeout for the Daatan bank lookup. |
+
+### Explicitly out of scope for this slice
+
+**Metaculus** as a third grounding source — retro#608's original proposal named it, but
+nothing in this repo does full-text search over Metaculus questions today (the existing
+`metaculus/` module is Oracle→Metaculus submission for benchmarking, the opposite
+direction, and isn't fully wired up yet). Deferred to a follow-up once a
+read/search-capable Metaculus client exists.
+
+**Grounding a node on its own settled/confidence signal** (`node["flat"]["settled"]`,
+an existing computed-but-unused per-node field) is a separate concern, tracked as
+retro#609 — coordinate with retro#575/#601's `premise_verifier` before building it, since
+both would independently want a say in the same "is this node's premise still live"
+question.
+
+**Promoting any relation type to actually gate `_price_flat`** — that is the
+retro#601-style follow-up this slice exists to produce data for, not something decided
+here.

@@ -11770,7 +11770,7 @@
     "H05:nyt": {
       "event_id": "H05",
       "source_id": "nyt",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11931,7 +11931,7 @@
     "H06:ynet": {
       "event_id": "H06",
       "source_id": "ynet",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12001,7 +12001,7 @@
     "H08:haaretz": {
       "event_id": "H08",
       "source_id": "haaretz",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12092,7 +12092,7 @@
     "H09:bloomberg": {
       "event_id": "H09",
       "source_id": "bloomberg",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12162,7 +12162,7 @@
     "H09:n12": {
       "event_id": "H09",
       "source_id": "n12",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-23T01:05:20.473117"
+  "last_updated": "2026-08-23T01:07:16.532882"
 }

@@ -34,7 +34,7 @@ Three related systems, one repo:
 - Services on the box: `truthmachine.service` (batch pipeline loop) + `oracle-api.service` (FastAPI).
 - Latency profile: `/forecast` slow tail is dominated by the LLM article phase (p99 ≈ 226 s) and slow GDELT failures — not by the search providers themselves.
 - LLM: AWS Bedrock — Nova Micro (gatekeeper) + Nova Lite (extractor/aggregator default, `tm/config.py`). **The live `oracle-api` service overrides the extractor to Claude Haiku 4.5** via a committed systemd drop-in (`infra/oracle-api.service.d/extractor-model.conf`) — a deliberate quality-over-cost call after Nova Lite failed an adjacent-event A/B test (`docs/ORACLE_VARIABLES.md`); the batch `truthmachine.service` stays on Nova Lite. See `docs/PROMPT_CACHING.md` for the cost side of this. The gatekeeper/extractor/aggregator prompts live in this repo (`pipeline/src/tm/*.py`) and reach prod on merge like any code change. (The Bedrock-prompt-via-SSM-ARN mechanism with the 5-min cache is the **daatan** app's — all `/*/prompts/*` SSM params are `/daatan/`-namespaced; there is no prompt-fetch layer in `tm`/`forecast_api`.)
-- Live pages: atlas https://daatan.github.io/retro/ · test console `/oracle-test.html` · Polymarket duel `/duel.html`
+- Live pages: atlas https://daatan.github.io/retro/ · test console `/oracle-test.html` · Oracle 2.0 playground `/oracle-v2-test.html` (key-based) · Polymarket duel `/duel.html`
 
 ## Before opening a PR
 

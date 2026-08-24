@@ -110,6 +110,23 @@ def test_negated_events_examples_present():
     assert "the negated claim is settled FALSE" in PROMPT_PREFIX
 
 
+def test_alarming_tone_section_present():
+    """retro#545's sign-error class, cross-model evidence (2026-08-25 extractor
+    model survey): the identical Hebrew sentence about Chernobyl's "elephant's
+    foot" keeping a city uninhabitable for a century — same quote, same claim
+    wording, both models flagged reporting/high-certainty — scored stance
+    +1.0 on one model's run and -1.0 on another's, on content that is
+    unambiguously affirmative. The prompt had no rule separating an alarming
+    quote's emotional register from what its content actually asserts."""
+    assert "## Alarming or critical tone is not stance direction" in PROMPT_PREFIX
+    assert "content argues against the related event" in PROMPT_PREFIX
+
+
+def test_alarming_tone_example_present():
+    assert "Site S remains hazardous to human habitation" in PROMPT_PREFIX
+    assert "do not score it negative because" in PROMPT_PREFIX
+
+
 def test_capability_vs_occurrence_section_present():
     """The capability-as-occurrence class (2026-07-19 audit of 44 prod evidence
     rows): one identical claim — "Ukraine has demonstrated the capability to

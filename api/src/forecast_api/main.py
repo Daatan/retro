@@ -15,7 +15,12 @@ from .auth import ApiKeyClient, verify_api_key
 from .bayesoracle import compute_nodes, parse_node_observations
 from .cache import forecast_cache
 from .config import settings
-from .forecaster import run_forecast, run_pool_aggregate
+from .forecaster import (
+    GATEKEEPER_PROMPT_HASH,
+    GATEKEEPER_PROMPT_VERSION,
+    run_forecast,
+    run_pool_aggregate,
+)
 from .leaderboard import (
     background_refresh_loop,
     get_leaderboard_data,
@@ -395,6 +400,8 @@ async def relevance(
         reason=out.reason,
         prediction_count_estimate=out.prediction_count_estimate,
         model=_pipeline_settings.gatekeeper_model,
+        gatekeeper_prompt_version=GATEKEEPER_PROMPT_VERSION,
+        gatekeeper_prompt_hash=GATEKEEPER_PROMPT_HASH,
         token_usage=TokenUsage.from_usages([usage]),
     )
 

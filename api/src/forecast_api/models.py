@@ -748,4 +748,9 @@ class RelevanceResponse(BaseModel):
     reason: str
     prediction_count_estimate: int = Field(ge=0)
     model: str = Field(description="litellm model ID that produced this verdict")
+    # Same gatekeeper prompt /forecast's ProvenanceModels already versions (retro#627/#628) —
+    # /relevance runs the identical tm.gatekeeper.check_is_prediction, so it reuses those
+    # constants rather than versioning a second copy (retro#637).
+    gatekeeper_prompt_version: Optional[str] = Field(default=None, description="Hand-bumped version label for tm.gatekeeper's prompt (see retro/docs/PROMPT_VERSIONS.md)")
+    gatekeeper_prompt_hash: Optional[str] = Field(default=None, description="SHA-256 (first 16 hex chars) of tm.gatekeeper's rendered prompt template")
     token_usage: Optional[TokenUsage] = Field(default=None, description="Token spend of this gatekeeper call; null when the backend reported no usage")

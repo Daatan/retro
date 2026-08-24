@@ -26,10 +26,18 @@ WorkingDirectory=/home/ubuntu/oracle-api/api
 #   --keep-alive 5                    matches nginx keepalive
 #   (no --preload)                    preload forks from master and breaks
 #                                     per-worker code reload on SIGHUP
+#   --max-requests / --max-requests-jitter  retro#600: recycle each worker
+#                                     after ~500 requests (jittered) so any
+#                                     slow per-request memory growth gets
+#                                     reclaimed by a fresh process instead of
+#                                     accumulating toward the box's swap/OOM
+#                                     pressure over a long uptime
 #   --access-logformat                adds response time in ms (%M) to access lines
 ExecStart=/home/ubuntu/.local/bin/uv run gunicorn forecast_api.main:app \
     -k uvicorn.workers.UvicornWorker \
     --workers 2 \
+    --max-requests 500 \
+    --max-requests-jitter 50 \
     --bind 127.0.0.1:8001 \
     --graceful-timeout 30 \
     --timeout 120 \
@@ -48,6 +56,11 @@ ExecReload=/bin/kill -HUP $MAINPID
 # via `systemctl restart`, but incurs the usual 2-5s 502 window.
 Restart=always
 RestartSec=10
+# Soft cgroup memory ceiling (retro#600): the box is a memory-constrained t4g.small
+# and this service was found sitting mostly in swap after long uptime. MemoryHigh
+# triggers proactive reclaim under pressure instead of relying on uncontrolled
+# swap growth / the global OOM killer.
+MemoryHigh=900M
 # Shared env file: DATA_DIR points into the pipeline's data dir so the API
 # reads live leaderboard.json / events/ written by the ingest loop.
 EnvironmentFile=/home/ubuntu/truthmachine/.env

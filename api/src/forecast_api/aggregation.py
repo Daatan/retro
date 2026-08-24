@@ -55,6 +55,37 @@ def prob_to_stance(p: float) -> float:
     return 2.0 * p - 1.0
 
 
+def confidence_bucket(
+    *,
+    settled: bool,
+    ci_low: float,
+    ci_high: float,
+    articles_used: int,
+    insufficient_data: bool = False,
+) -> Optional[str]:
+    """The CI-width heuristic (F16, retro#365) as "low"/"medium"/"high" — or
+    None when there's no estimate to be confident about (insufficient_data).
+
+    Single definition so /forecast, /pool/aggregate, and the MCP tools
+    (mcp_server._confidence, which delegates here) can't drift apart
+    (retro#618 — the plain HTTP responses didn't expose this at all, so a
+    caller not going through MCP had nothing but raw CI width to notice a
+    thin, single-source pool with). Bucket boundaries are pinned by
+    test_mcp_server.py::TestConfidenceBucket — do not retune here without
+    updating those.
+    """
+    if insufficient_data:
+        return None
+    if settled:
+        return "high"
+    width = stance_to_prob(ci_high) - stance_to_prob(ci_low)
+    if articles_used >= 5 and width <= 0.30:
+        return "high"
+    if width <= 0.50:
+        return "medium"
+    return "low"
+
+
 def logit(p: float) -> float:
     """Log-odds of a probability. Caller must pass p in the open interval (0, 1)."""
     return math.log(p / (1.0 - p))

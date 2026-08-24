@@ -16,10 +16,17 @@ here whenever a prompt edit changes model behavior materially (wording that
 could change extraction/gating outcomes) — not for comment-only or
 formatting-only edits.
 
-| Component | Version | Effective from | PR | Summary |
-|---|---|---|---|---|
-| gatekeeper | v1 | 2026-08-24 | retro#627 | Initial versioned baseline — no prior version existed on the live path. |
-| extractor | v1 | 2026-08-24 | retro#627 | Initial versioned baseline — no prior version existed on the live path. |
+**Enforced, not just documented (retro#632):** `docs/prompt_versions.lock.json`
+records the hash each version label is supposed to correspond to.
+`api/tests/test_prompt_version_enforcement.py` fails CI if the currently
+computed `*_PROMPT_HASH` doesn't match the lock file — i.e. if a prompt edit
+landed without a version bump. Update the lock file (and this table) in the
+same PR as the prompt edit.
+
+| Component | Version | Hash | Effective from | PR | Summary |
+|---|---|---|---|---|---|
+| gatekeeper | v1 | `a09cdb5ecda0ce5e` | 2026-08-24 | retro#627 | Initial versioned baseline — no prior version existed on the live path. |
+| extractor | v1 | `6371300bb3b89b8c` | 2026-08-24 | retro#627 | Initial versioned baseline — no prior version existed on the live path. |
 
 Note: `pipeline/src/tm/orchestrator.py`'s `EXTRACTION_PROMPT_VERSION` is a
 separate, older constant scoped to the batch pipeline's own extraction

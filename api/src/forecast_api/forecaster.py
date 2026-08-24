@@ -1444,7 +1444,7 @@ async def run_forecast(
     _inflight[cache_key] = event
 
     try:
-        return await asyncio.wait_for(
+        resp = await asyncio.wait_for(
             _run_forecast_inner(req, cache_key, limit, total_start),
             timeout=settings.forecast_timeout_seconds,
         )
@@ -1465,6 +1465,78 @@ async def run_forecast(
     finally:
         event.set()
         _inflight.pop(cache_key, None)
+
+    # retro#621 fallback ladder rung 1. Only for live search paths — a caller
+    # who supplied articles directly skipped search, so a wider limit can't
+    # recover anything for them.
+    if (
+        settings.retry_relaxed_search_enabled
+        and resp.insufficient_data
+        and not req.articles
+    ):
+        resp = await _maybe_retry_relaxed_search(
+            req, resp, limit, cap, articles_hash, claim_meta,
+        )
+
+    return resp
+
+
+async def _maybe_retry_relaxed_search(
+    req: ForecastRequest,
+    primary_resp: ForecastResponse,
+    primary_limit: int,
+    cap: Optional[int],
+    articles_hash: Optional[str],
+    claim_meta,
+) -> ForecastResponse:
+    """retro#621 fallback ladder rung 1: retry once with a wider article limit
+    when the primary pass returned no usable forecast (insufficient_data).
+
+    Shadow-gated the same way premise_verifier/precursor_match/settled_grounding
+    are: retry_relaxed_search_enabled runs the retry and logs what it would
+    have produced; retry_relaxed_search_enforce additionally lets a recovered
+    result replace the empty response the caller sees. Both default False.
+    Caller (run_forecast) has already confirmed enabled=True and
+    primary_resp.insufficient_data before calling this.
+    """
+    retry_limit = int(primary_limit * settings.retry_relaxed_search_limit_multiplier)
+    if cap is not None:
+        retry_limit = min(retry_limit, cap)
+    if retry_limit <= primary_limit:
+        # Already at the per-key ceiling — a wider limit isn't available.
+        logger.info(
+            "event=retry_relaxed_search question=%s primary_reason=%s skipped=at_limit_cap",
+            _question_hash(req.question), primary_resp.reason,
+        )
+        return primary_resp
+
+    retry_cache_key = forecast_cache.make_key(
+        req.question, retry_limit, articles_hash, claim_meta
+    )
+    retry_cached = forecast_cache.get(retry_cache_key)
+    if retry_cached is not None:
+        retry_resp = retry_cached
+    else:
+        retry_start = time.perf_counter()
+        try:
+            retry_resp = await asyncio.wait_for(
+                _run_forecast_inner(req, retry_cache_key, retry_limit, retry_start),
+                timeout=settings.forecast_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            retry_resp = _empty_response(req.question, reason="timeout")
+
+    recovered = not retry_resp.insufficient_data
+    logger.info(
+        "event=retry_relaxed_search question=%s primary_reason=%s primary_limit=%d "
+        "retry_limit=%d recovered=%s enforce=%s",
+        _question_hash(req.question), primary_resp.reason, primary_limit,
+        retry_limit, recovered, settings.retry_relaxed_search_enforce,
+    )
+    if settings.retry_relaxed_search_enforce and recovered:
+        retry_resp.fallback_path = "retry-relaxed"
+        return retry_resp
+    return primary_resp
 
 
 async def _run_forecast_inner(

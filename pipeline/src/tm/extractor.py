@@ -1800,13 +1800,11 @@ def _extract_named_entities(question: str) -> list[str]:
 
     Known limitation (retro#644): this can't tell an actor-shaped span from a
     topic/event-shaped one — "Ebola" is just as capitalized as "Yoaz Hendel".
-    A question whose real subject is a topic, not a named actor, still returns
-    that topic as ``entities[0]``, which downstream in
-    ``audit_named_entity_dyad_mismatch`` produces a false positive against a
-    legitimately different (and correctly extracted) actor/target pair. Not
-    fixed here — this function is shared with the *enforcing*
+    Not fixed here — this function is shared with the *enforcing*
     ``enforce_winner_entity_consistency``, so a span-selection change needs
-    its own review, not a bundled fix.
+    its own review, not a bundled fix. ``audit_named_entity_dyad_mismatch``
+    instead uses ``_extract_actor_shaped_entities``, an audit-only sibling
+    that filters out the reviewed topic-modifier shape.
     """
     seen: set[str] = set()
     entities: list[str] = []
@@ -1827,6 +1825,72 @@ def _extract_named_entities(question: str) -> list[str]:
         seen.add(key)
         entities.append(candidate)
     return entities
+
+
+# retro#644, 2026-08-24 review: the residual false-positive shape after
+# stem-matching (#645) — "Ebola" is grabbed as the subject of "the Ebola
+# outbreak", but "Ebola" itself is a topic modifier, not the actor who could
+# plausibly show up in event_actors/event_target ("WHO", "Africa CDC" are a
+# correctly-extracted, genuinely different dyad). A candidate immediately
+# followed by one of these topic-head nouns is a modifier inside a larger
+# topic noun phrase, not a standalone named actor, so it's dropped as an
+# audit subject. A small closed list, same style as
+# ``_GENERIC_ENTITY_ANCHOR_WORDS`` above — not real NER, just enough to catch
+# the reviewed shape. Audit-only: deliberately a SEPARATE function from
+# ``_extract_named_entities``, which stays untouched and shared with the
+# *enforcing* ``enforce_winner_entity_consistency`` guard (see that
+# function's docstring for why a span-selection change there needs its own
+# review).
+_TOPIC_HEAD_NOUNS = frozenset({
+    "outbreak", "pandemic", "epidemic", "crisis", "war", "conflict",
+    "election", "elections", "referendum", "deal", "agreement", "summit",
+    "case", "cases", "death", "deaths", "toll", "campaign", "scandal",
+    "controversy", "shutdown", "strike", "protest", "protests", "rally",
+    "boycott", "recession", "inflation", "drought", "wildfire", "wildfires",
+    "earthquake", "storm", "hurricane", "virus", "disease", "vaccine",
+    "treaty", "ceasefire", "dispute", "crackdown", "uprising", "coup",
+    "insurgency", "famine", "flood", "floods",
+})
+
+
+def _extract_actor_shaped_entities(question: str) -> list[str]:
+    """Like ``_extract_named_entities``, but only ever considers the FIRST
+    capitalized candidate — the only one ``audit_named_entity_dyad_mismatch``
+    reads (``entities[0]``) — and returns ``[]`` instead of that candidate
+    when it's immediately followed by a ``_TOPIC_HEAD_NOUNS`` word
+    (retro#644): "Ebola" in "the Ebola outbreak" is a topic modifier, not the
+    actor a dyad check should compare against.
+
+    Deliberately does NOT fall through to a later capitalized token when the
+    first one is filtered — a second-or-later token was never validated as
+    the question's primary subject in the first place (it's exactly as
+    likely to be a date, location, or other generic noun as a real actor;
+    see ``audit_named_entity_dyad_mismatch``'s docstring on why only
+    ``entities[0]`` is trusted). Filtering the first candidate to ``[]``
+    keeps the caller's existing "no entities parses out of question => no-op"
+    fail-open branch, rather than adding a new one.
+
+    Duplicates ``_extract_named_entities``'s loop rather than filtering its
+    output, because the topic-head check needs the candidate's position in
+    ``question`` (to inspect the word right after it), which the plain
+    string list doesn't carry. The duplication is deliberate: it keeps this
+    audit-only path fully separate from the span-selection logic
+    ``enforce_winner_entity_consistency`` relies on via
+    ``_extract_named_entities``.
+    """
+    for m in re.finditer(_ENTITY, question):
+        words = m.group(0).split()
+        while words and words[0].lower() in _VERSUS_ENTITY_STOPWORDS:
+            words = words[1:]
+        if not words:
+            continue
+        candidate = " ".join(words)
+        tail = question[m.end():].lstrip()
+        next_word = tail.split(maxsplit=1)[0].strip(".,?!:;\"'") if tail else ""
+        if next_word.lower() in _TOPIC_HEAD_NOUNS:
+            return []
+        return [candidate]
+    return []
 
 
 def audit_named_entity_dyad_mismatch(
@@ -1856,15 +1920,19 @@ def audit_named_entity_dyad_mismatch(
     real precision): the comparison uses ``_mentions_entity_stem`` (not the
     stricter ``_mentions_entity``) so an institutional-alias ("Donald Trump" /
     "Trump administration") or adjectival-form ("Israel" / "Israeli
-    government") reference no longer false-positives. A residual
-    topic-vs-actor gap remains — see ``_extract_named_entities`` and retro#644.
+    government") reference no longer false-positives. retro#644 closed the
+    third reviewed shape (topic-vs-actor, e.g. "Ebola" in "the Ebola
+    outbreak") by extracting the subject with ``_extract_actor_shaped_entities``
+    instead of ``_extract_named_entities`` — see that function's docstring.
+    Neither fix is exhaustive (curated word lists, not real NER); any further
+    shape belongs in a new issue with its own repro.
 
     Also logs one ``event=entity_dyad_mismatch_shadow`` summary line per call,
     regardless of outcome, with ``eligible``/``fired`` counts — matching the
     ``evidence_window_shadow`` convention (PR #558) — so a future precision
     review has a real trigger-rate denominator instead of only a raw hit count.
     """
-    entities = _extract_named_entities(question)
+    entities = _extract_actor_shaped_entities(question)
     if not entities:
         logger.info(
             "event=entity_dyad_mismatch_shadow question_subject=None eligible=0 fired=0 n=%d",

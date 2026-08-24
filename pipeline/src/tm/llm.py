@@ -15,6 +15,7 @@ They now live here once. ``forecaster.py`` (in the API) also reuses
 
 import asyncio
 import functools
+import re
 
 import instructor
 import litellm
@@ -33,6 +34,41 @@ client = instructor.from_litellm(litellm.acompletion, mode=instructor.Mode.MD_JS
 
 # Retry schedule (seconds) for transient rate-limit / throttling errors.
 RATE_LIMIT_BACKOFF = [30, 60, 120]
+
+# retro#600: under memory pressure on the Oracle box, an async coroutine's
+# deadline can expire while the event loop is stalled (GC pause, swap I/O) and
+# then fire the instant the loop resumes — logging near-zero elapsed time
+# despite a much longer real wall-clock stall. A genuine network timeout takes
+# close to the full configured duration, so anything under this threshold is
+# the stalled-loop false positive, not a real Bedrock failure.
+_STALLED_TIMEOUT_RE = re.compile(r"time taken=([\d.]+) seconds")
+_STALLED_TIMEOUT_THRESHOLD_S = 1.0
+
+
+def is_stalled_event_loop_timeout(exc: Exception) -> bool:
+    """True for the retro#600 signature: a ``litellm.Timeout`` firing in a
+    fraction of a second despite a much longer configured timeout."""
+    if not isinstance(exc, litellm.Timeout):
+        return False
+    match = _STALLED_TIMEOUT_RE.search(str(exc))
+    return bool(match) and float(match.group(1)) < _STALLED_TIMEOUT_THRESHOLD_S
+
+
+def retry_once_on_stalled_timeout(func):
+    """Retry an async call exactly once, immediately, on a stalled-event-loop
+    false-positive timeout (:func:`is_stalled_event_loop_timeout`). Any other
+    exception, or a second stalled-timeout in a row, propagates — this is a
+    workaround for one specific false-failure signature, not a general retry.
+    """
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as exc:
+            if is_stalled_event_loop_timeout(exc):
+                return await func(*args, **kwargs)
+            raise
+    return wrapper
 
 
 def apply_routing(kwargs: dict) -> dict:
@@ -77,11 +113,12 @@ def extract_usage(completion) -> dict:
 
 
 def retry_on_rate_limit(func):
-    """Retry an async call on transient rate-limit / throttle errors.
+    """Retry an async call on transient rate-limit / throttle errors, and on the
+    retro#600 stalled-event-loop false-positive timeout (:func:`is_stalled_event_loop_timeout`).
 
     Tries once, then waits ``RATE_LIMIT_BACKOFF`` seconds between further
-    attempts. Non-rate-limit exceptions propagate immediately; if every attempt
-    is rate-limited the last such exception is raised.
+    attempts. All other exceptions propagate immediately; if every attempt
+    is rate-limited (or stalled-timeout) the last such exception is raised.
     """
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
@@ -92,7 +129,7 @@ def retry_on_rate_limit(func):
             try:
                 return await func(*args, **kwargs)
             except Exception as exc:
-                if is_rate_limit_error(exc):
+                if is_rate_limit_error(exc) or is_stalled_event_loop_timeout(exc):
                     last_exc = exc
                     continue
                 raise
@@ -155,6 +192,7 @@ async def complete_structured(
     return output, extract_usage(completion)
 
 
+@retry_once_on_stalled_timeout
 async def complete_text_once_with_usage(
     model: str,
     prompt: str | None = None,
@@ -209,9 +247,12 @@ async def complete_text_once(
     Callers that need the token usage too use
     :func:`complete_text_once_with_usage`, which this delegates to.
 
-    No retry: use this on latency-bounded paths (the /forecast keyword distill,
-    the interactive /llm endpoint). For batch/offline callers that should ride
-    out Bedrock throttling, use :func:`complete_text`.
+    No rate-limit retry: use this on latency-bounded paths (the /forecast
+    keyword distill, the interactive /llm endpoint). For batch/offline callers
+    that should ride out Bedrock throttling, use :func:`complete_text`.
+    ``complete_text_once_with_usage`` still gets one immediate retry on the
+    retro#600 stalled-event-loop false-positive timeout — that costs no
+    meaningful latency and isn't a "wait and hope" retry.
     """
     text, _usage = await complete_text_once_with_usage(
         model,

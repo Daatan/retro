@@ -411,6 +411,17 @@ class ProvenanceModels(BaseModel):
     already-extracted pool)."""
     gatekeeper: Optional[str] = Field(default=None, description="litellm model id used for the gatekeeper stage")
     extractor: Optional[str] = Field(default=None, description="litellm model id used for the extractor stage")
+    # daatan#1604: lets a caller persisting these results tell which prompt version/content
+    # produced them, so a since-fixed prompt bug doesn't stay invisible in stored data.
+    # `*_prompt_version` is a hand-bumped human label (see docs/PROMPT_VERSIONS.md); it is
+    # only as reliable as whoever last edited the prompt remembering to bump it.
+    # `*_prompt_hash` is a SHA-256 of the actual rendered PROMPT_PREFIX+PROMPT_SUFFIX,
+    # computed automatically — the ground truth for "did this prompt actually change,"
+    # independent of whether the version label was bumped.
+    gatekeeper_prompt_version: Optional[str] = Field(default=None, description="Hand-bumped version label for tm.gatekeeper's prompt")
+    gatekeeper_prompt_hash: Optional[str] = Field(default=None, description="SHA-256 (first 16 hex chars) of tm.gatekeeper's rendered prompt template")
+    extractor_prompt_version: Optional[str] = Field(default=None, description="Hand-bumped version label for tm.extractor's prompt")
+    extractor_prompt_hash: Optional[str] = Field(default=None, description="SHA-256 (first 16 hex chars) of tm.extractor's rendered prompt template")
 
 
 class ProvenanceInput(BaseModel):

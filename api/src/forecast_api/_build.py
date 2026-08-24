@@ -124,6 +124,10 @@ def build_provenance(
     chain: Optional[list[str]] = None,
     gatekeeper_model: Optional[str] = None,
     extractor_model: Optional[str] = None,
+    gatekeeper_prompt_version: Optional[str] = None,
+    gatekeeper_prompt_hash: Optional[str] = None,
+    extractor_prompt_version: Optional[str] = None,
+    extractor_prompt_hash: Optional[str] = None,
 ) -> Provenance:
     """One `provenance` block for a /forecast or /pool/aggregate response
     (retro#593) — consolidates what was three separate places (provider_chain
@@ -136,7 +140,14 @@ def build_provenance(
         oracle=ProvenanceOracle(
             version=bi["version"], git_sha=bi["git_sha"], built_at=bi["built_at"],
         ),
-        models=ProvenanceModels(gatekeeper=gatekeeper_model, extractor=extractor_model),
+        models=ProvenanceModels(
+            gatekeeper=gatekeeper_model,
+            extractor=extractor_model,
+            gatekeeper_prompt_version=gatekeeper_prompt_version,
+            gatekeeper_prompt_hash=gatekeeper_prompt_hash,
+            extractor_prompt_version=extractor_prompt_version,
+            extractor_prompt_hash=extractor_prompt_hash,
+        ),
         method=method,
         chain=chain or [],
     )

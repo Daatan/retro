@@ -16,6 +16,7 @@ from tm.extractor import (
     _ENTITY_DYAD_AUDIT_CERTAINTY_GATE,
     _ENTITY_DYAD_AUDIT_STANCE_GATE,
     _extract_named_entities,
+    _mentions_entity_stem,
     audit_named_entity_dyad_mismatch,
 )
 from tm.models import PredictionExtraction
@@ -114,6 +115,131 @@ def test_below_certainty_gate_fails_open(caplog):
     assert not any(
         "event=entity_dyad_mismatch" in r.message for r in caplog.records
     )
+
+
+# ── stem-matched false positives (retro#545 slice ii, 2026-08-24 review) ───
+
+def test_institutional_alias_actor_does_not_log(caplog):
+    """"Donald Trump" is the subject; "Trump administration" names him via a
+    prefix of his surname, not the full phrase — must no longer fire."""
+    preds = [pred(event_actors="Trump administration", event_target="the tariff order")]
+    with caplog.at_level("WARNING", logger="tm.extractor"):
+        audit_named_entity_dyad_mismatch(preds, "Will Donald Trump sign the order?")
+    assert not any(
+        "event=entity_dyad_mismatch " in r.message for r in caplog.records
+    )
+
+
+def test_institutional_alias_target_does_not_log(caplog):
+    """Same shape, mismatch on event_target instead of event_actors — proves
+    both dyad fields go through the looser stem match."""
+    preds = [pred(event_actors="the White House", event_target="Trump administration")]
+    with caplog.at_level("WARNING", logger="tm.extractor"):
+        audit_named_entity_dyad_mismatch(preds, "Will Donald Trump sign the order?")
+    assert not any(
+        "event=entity_dyad_mismatch " in r.message for r in caplog.records
+    )
+
+
+def test_adjectival_form_does_not_log(caplog):
+    """"Israel" as a prefix of "Israeli" inside "Israeli government" — the
+    word-boundary regex in _mentions_entity fails here; the stem match doesn't."""
+    preds = [pred(event_actors="Israeli government", event_target="the ceasefire")]
+    with caplog.at_level("WARNING", logger="tm.extractor"):
+        audit_named_entity_dyad_mismatch(preds, "Will Israel agree to a ceasefire?")
+    assert not any(
+        "event=entity_dyad_mismatch " in r.message for r in caplog.records
+    )
+
+
+def test_adjectival_form_iran_does_not_log(caplog):
+    preds = [pred(event_actors="Iranian-backed militias", event_target="the base")]
+    with caplog.at_level("WARNING", logger="tm.extractor"):
+        audit_named_entity_dyad_mismatch(preds, "Will Iran retaliate against the base?")
+    assert not any(
+        "event=entity_dyad_mismatch " in r.message for r in caplog.records
+    )
+
+
+def test_generic_org_suffix_still_logs(caplog):
+    """A genuinely different party sharing the word "Party" must still fire —
+    the generic-anchor exclusion exists specifically to prevent this loose
+    match, so this pins that as deliberate."""
+    preds = [pred(event_actors="the Republican Party's leadership", event_target="the bill")]
+    with caplog.at_level("WARNING", logger="tm.extractor"):
+        audit_named_entity_dyad_mismatch(preds, "Will the Democratic Party pass the bill?")
+    assert any(
+        "event=entity_dyad_mismatch " in r.message for r in caplog.records
+    )
+
+
+def test_short_acronym_subject_still_logs(caplog):
+    """Below the 4-char anchor floor: "US" must not loose-match "USA" or any
+    other word merely starting with "US" — documents the deliberately
+    unresolved short-acronym case."""
+    preds = [pred(event_actors="USA officials", event_target="the summit")]
+    with caplog.at_level("WARNING", logger="tm.extractor"):
+        audit_named_entity_dyad_mismatch(preds, "Will the US attend the summit?")
+    assert any(
+        "event=entity_dyad_mismatch " in r.message for r in caplog.records
+    )
+
+
+def test_topic_vs_responder_known_limitation_still_logs(caplog):
+    """Known limitation (retro#644), NOT a bug in this fix: _extract_named_entities
+    grabs "Ebola" (a topic noun) as the subject instead of the actual actor the
+    question is about, so a legitimately different, correctly-extracted
+    actor/target pair still spuriously fires. Pinned here so a future fix to
+    subject extraction has an intentional regression signal to update, rather
+    than silently gaining coverage this fix never claimed."""
+    preds = [pred(event_actors="WHO", event_target="Africa CDC")]
+    with caplog.at_level("WARNING", logger="tm.extractor"):
+        audit_named_entity_dyad_mismatch(
+            preds, "Will the Ebola outbreak be declared over by Q4?"
+        )
+    assert any(
+        "event=entity_dyad_mismatch " in r.message for r in caplog.records
+    )
+
+
+def test_summary_log_line_reports_eligible_and_fired_counts(caplog):
+    preds = [
+        pred(event_actors=None),  # not eligible (missing dyad field)
+        pred(event_actors="Almog Cohen", event_target="the Knesset"),  # eligible, fires
+        pred(event_actors="Yoaz Hendel", event_target="the Knesset"),  # eligible, no-op
+    ]
+    with caplog.at_level("INFO", logger="tm.extractor"):
+        audit_named_entity_dyad_mismatch(preds, QUESTION)
+    summary = [r.message for r in caplog.records if "event=entity_dyad_mismatch_shadow" in r.message]
+    assert len(summary) == 1
+    assert "eligible=2" in summary[0]
+    assert "fired=1" in summary[0]
+    assert "n=3" in summary[0]
+
+
+# ── _mentions_entity_stem unit tests ────────────────────────────────────────
+
+def test_mentions_entity_stem_matches_surname_in_institutional_phrase():
+    assert _mentions_entity_stem("Trump administration", "Donald Trump") is True
+
+
+def test_mentions_entity_stem_matches_adjectival_form():
+    assert _mentions_entity_stem("Israeli government", "Israel") is True
+
+
+def test_mentions_entity_stem_rejects_short_acronym():
+    assert _mentions_entity_stem("USA officials", "US") is False
+
+
+def test_mentions_entity_stem_rejects_generic_anchor_word():
+    assert _mentions_entity_stem("the Republican Party's leadership", "Democratic Party") is False
+
+
+def test_mentions_entity_stem_falls_back_to_exact_match():
+    """A superset of _mentions_entity, not a replacement: an exact match
+    still passes even when the anchor-word logic wouldn't independently
+    justify it (single-word entity, generic-sounding last word)."""
+    assert _mentions_entity_stem("the Knesset speaker", "the Knesset") is True
 
 
 # ── never mutates ───────────────────────────────────────────────────────────

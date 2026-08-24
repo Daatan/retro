@@ -173,3 +173,26 @@ async def test_entity_dyad_mismatch_is_logged_using_article_event_name(caplog):
     assert out.stance == 0.9
     assert out.certainty == 0.9
     assert any("event=entity_dyad_mismatch" in r.message for r in caplog.records)
+
+
+async def test_institutional_alias_does_not_log_using_article_event_name(caplog):
+    """retro#545 slice ii, 2026-08-24 review fix: an institutional-alias
+    reference ("Trump administration" for "Donald Trump") must not fire
+    through the full batch-path wiring, not just the unit-level function."""
+    gate = GatekeeperOutput(is_prediction=True, reason="looks predictive")
+    preds = [PredictionExtraction(
+        quote="q", claim="Trump administration signs the order",
+        stance=0.9, certainty=0.9,
+        event_actors="Trump administration", event_target="the tariff order",
+    )]
+    extraction = ExtractionOutput(predictions=preds)
+    article = _article(event_name="Will Donald Trump sign the tariff order?")
+    with caplog.at_level("WARNING", logger="tm.extractor"), \
+         patch("tm.runner.check_is_prediction", new=AsyncMock(return_value=(gate, {}))), \
+         patch("tm.runner.extract_predictions", new=AsyncMock(return_value=(extraction, {}))), \
+         patch("tm.runner.update_cell"):
+        result = await run_article(article)
+    assert result.extraction is not None
+    assert not any(
+        "event=entity_dyad_mismatch " in r.message for r in caplog.records
+    )

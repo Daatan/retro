@@ -193,6 +193,39 @@ guard in a follow-up slice.
 Fail-open throughout: no entity parses out of the question, either dyad field missing, below
 either gate, or the subject entity mentioned on either side of the dyad — all no-op.
 
+**2026-08-24 precision review and fix.** A 244-event sample of live `entity_dyad_mismatch`
+shadow logs found ~0% real precision on the wrong-entity class this guard targets. Three
+false-positive shapes, all "the exact-phrase `_mentions_entity` check requires more than it
+should": **institutional-alias** (`"Donald Trump"` vs `event_actors="Trump administration"` —
+the surname is present, the full phrase isn't), **adjectival-form** (`"Israel"` vs
+`"Israeli government"` — the word-boundary regex fails on the trailing `-i`), and
+**topic-vs-responder** (`"Ebola"` vs `event_actors="WHO"`/`event_target="Africa CDC"` — not an
+alias relationship at all; `_extract_named_entities` grabbed a topic noun as the "subject"
+instead of an actor noun).
+
+Fixed the first two: the comparison now uses `_mentions_entity_stem` (audit-only, next to
+`_mentions_entity`), which additionally matches when the field text contains a word starting
+with the entity's last (most distinctive) word — closing both gaps with one mechanism, no
+curated alias table. A small closed exclusion list (`_GENERIC_ENTITY_ANCHOR_WORDS`: "party",
+"administration", "government", ...) keeps generic multi-word org names from loose-matching on
+their common trailing noun, and a 4-character floor keeps short acronyms (US/UK/EU/UN) from
+matching unrelated words. `enforce_winner_entity_consistency` keeps the stricter exact-phrase
+`_mentions_entity` — this loosening is audit-only.
+
+**Third shape (topic-vs-responder) is explicitly not fixed here** — tracked as retro#644.
+Fixing it means changing `_extract_named_entities`'s span-selection, which is shared verbatim
+with the *enforcing* `enforce_winner_entity_consistency`; that needs its own dedicated review,
+not a bundled fix in a shadow-precision pass. A pinned test documents this as current, known
+behavior rather than silently-uncovered.
+
+Also added: one `event=entity_dyad_mismatch_shadow` summary line per call (per article),
+logged unconditionally with `eligible=`/`fired=`/`n=` counts, matching the
+`evidence_window_shadow` convention below — so a future precision review can compute a real
+trigger rate instead of only a raw hit count.
+
+**Still log-only.** This fix does not change the shadow-only status — a fresh precision review
+against the stem-matched logs is needed before any promotion to enforcement is considered.
+
 #### Any strong-stance claim's sign-error, not just settled ones — `audit_fact_signal_sign_mismatch` (log-only)
 
 retro#602's follow-up on the sign-error class above: `enforce_settlement_fact_signal_agreement`

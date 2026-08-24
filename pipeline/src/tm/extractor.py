@@ -1637,6 +1637,45 @@ def _mentions_entity(field_text: Optional[str], entity: str) -> bool:
     return re.search(rf"\b{re.escape(entity)}\b", field_text, re.I) is not None
 
 
+# retro#545 slice (ii), 2026-08-24 precision review: audit_named_entity_dyad_mismatch's
+# _mentions_entity check false-positives whenever the same entity is named differently —
+# "Donald Trump" vs "Trump administration", "Israel" vs "Israeli government". Anchoring on
+# the entity's last (most distinctive) word as a prefix-stem closes both without a curated
+# alias table. A small closed exclusion list keeps generic multi-word org names ("X Party",
+# "X Coalition") from loose-matching on their common trailing noun, and a length floor keeps
+# short acronyms (US/UK/EU/UN) from matching unrelated words that merely start the same way.
+_GENERIC_ENTITY_ANCHOR_WORDS = frozenset({
+    "party", "administration", "government", "movement", "coalition",
+    "authority", "committee", "council", "commission", "forces",
+})
+_STEM_MATCH_MIN_LEN = 4
+
+
+def _mentions_entity_stem(field_text: Optional[str], entity: str) -> bool:
+    """Looser than ``_mentions_entity``: also matches when ``field_text`` contains a word
+    that starts with ``entity``'s last word — "Trump" as a prefix inside "Trump
+    administration" (entity "Donald Trump"), "Israel" as a prefix of "Israeli" inside
+    "Israeli government". Audit-only: deliberately NOT used by
+    ``enforce_winner_entity_consistency``, which stays on the stricter exact-phrase check —
+    this only ever turns a "fire" into a "no-op", never the reverse, so it's safe to loosen
+    here without touching that guard's enforcing behavior.
+
+    Does not solve metonyms ("the Kremlin" for "Russia"), acronym expansion ("WHO" for
+    "World Health Organization"), or a question whose extracted "subject" is a topic/event
+    noun rather than an actor (see the known limitation noted on
+    ``_extract_named_entities``) — those need real alias data or a different fix, not a
+    string primitive.
+    """
+    if _mentions_entity(field_text, entity):
+        return True
+    if not field_text:
+        return False
+    anchor = entity.split()[-1]
+    if len(anchor) < _STEM_MATCH_MIN_LEN or anchor.lower() in _GENERIC_ENTITY_ANCHOR_WORDS:
+        return False
+    return re.search(rf"\b{re.escape(anchor)}\w*\b", field_text, re.I) is not None
+
+
 def enforce_winner_entity_consistency(
     predictions: list[PredictionExtraction],
     question: str,
@@ -1758,6 +1797,16 @@ def _extract_named_entities(question: str) -> list[str]:
     Same heuristic as ``_ENTITY``/``_VERSUS_ENTITY_STOPWORDS`` above (1-4
     consecutive capitalized words, minus common sentence-initial words) —
     not real NER, just enough to catch a plainly-named person/org/place.
+
+    Known limitation (retro#644): this can't tell an actor-shaped span from a
+    topic/event-shaped one — "Ebola" is just as capitalized as "Yoaz Hendel".
+    A question whose real subject is a topic, not a named actor, still returns
+    that topic as ``entities[0]``, which downstream in
+    ``audit_named_entity_dyad_mismatch`` produces a false positive against a
+    legitimately different (and correctly extracted) actor/target pair. Not
+    fixed here — this function is shared with the *enforcing*
+    ``enforce_winner_entity_consistency``, so a span-selection change needs
+    its own review, not a bundled fix.
     """
     seen: set[str] = set()
     entities: list[str] = []
@@ -1802,12 +1851,30 @@ def audit_named_entity_dyad_mismatch(
     EITHER ``event_actors`` or ``event_target`` => skip. Never mutates
     ``stance``/``certainty``/``settled``/anything else — pure logging, same
     contract as ``evidence_window_outside`` (PR #558).
+
+    retro#545 slice (ii), 2026-08-24 precision review (244 sampled events, ~0%
+    real precision): the comparison uses ``_mentions_entity_stem`` (not the
+    stricter ``_mentions_entity``) so an institutional-alias ("Donald Trump" /
+    "Trump administration") or adjectival-form ("Israel" / "Israeli
+    government") reference no longer false-positives. A residual
+    topic-vs-actor gap remains — see ``_extract_named_entities`` and retro#644.
+
+    Also logs one ``event=entity_dyad_mismatch_shadow`` summary line per call,
+    regardless of outcome, with ``eligible``/``fired`` counts — matching the
+    ``evidence_window_shadow`` convention (PR #558) — so a future precision
+    review has a real trigger-rate denominator instead of only a raw hit count.
     """
     entities = _extract_named_entities(question)
     if not entities:
+        logger.info(
+            "event=entity_dyad_mismatch_shadow question_subject=None eligible=0 fired=0 n=%d",
+            len(predictions),
+        )
         return predictions
     subject = entities[0]
 
+    eligible = 0
+    fired = 0
     for p in predictions:
         if p.event_actors is None or p.event_target is None:
             continue
@@ -1815,9 +1882,11 @@ def audit_named_entity_dyad_mismatch(
             continue
         if p.certainty < _ENTITY_DYAD_AUDIT_CERTAINTY_GATE:
             continue
+        eligible += 1
 
-        if _mentions_entity(p.event_actors, subject) or _mentions_entity(p.event_target, subject):
+        if _mentions_entity_stem(p.event_actors, subject) or _mentions_entity_stem(p.event_target, subject):
             continue
+        fired += 1
 
         logger.warning(
             "event=entity_dyad_mismatch question_subject=%r actors=%r target=%r "
@@ -1826,6 +1895,10 @@ def audit_named_entity_dyad_mismatch(
             p.settled, p.claim[:120],
         )
 
+    logger.info(
+        "event=entity_dyad_mismatch_shadow question_subject=%r eligible=%d fired=%d n=%d",
+        subject, eligible, fired, len(predictions),
+    )
     return predictions
 
 

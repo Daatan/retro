@@ -20,6 +20,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from tm.scorer import stance_to_prob
 
+from .aggregation import confidence_bucket
 from .article_fetch import ArticleFetchError, fetch_and_extract
 from .bayesoracle import compute_nodes, parse_node_observations
 from .config import settings
@@ -53,16 +54,16 @@ def _prob_ci(resp) -> list:
     return [round(stance_to_prob(resp.ci_low), 4), round(stance_to_prob(resp.ci_high), 4)]
 
 
-def _confidence(resp) -> str:
-    if resp.settled:
-        return "high"
-    lo, hi = _prob_ci(resp)
-    width = hi - lo
-    if resp.articles_used >= 5 and width <= 0.30:
-        return "high"
-    if width <= 0.50:
-        return "medium"
-    return "low"
+def _confidence(resp) -> Optional[str]:
+    """Delegates to aggregation.confidence_bucket — see its docstring for the
+    bucket definition and why this exists in one place (retro#618)."""
+    return confidence_bucket(
+        settled=resp.settled,
+        ci_low=resp.ci_low,
+        ci_high=resp.ci_high,
+        articles_used=resp.articles_used,
+        insufficient_data=resp.insufficient_data,
+    )
 
 
 def _forecast_payload(resp) -> dict:

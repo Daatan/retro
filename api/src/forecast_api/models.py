@@ -1,5 +1,7 @@
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
+
+from .aggregation import confidence_bucket
 
 
 # ── Meta ──────────────────────────────────────────────────────────────────────
@@ -481,6 +483,23 @@ class ForecastResponse(BaseModel):
     age_adjusted_mass: float = Field(default=0.0, description="evidence_mass recomputed with recency decay switched off — how much this pool would weigh if nothing had aged (retro#458 Phase 2). Equal to evidence_mass on a pool with no time decay in play; always >= evidence_mass. 0.0 on an insufficient-data response.")
     provenance: Optional[Provenance] = Field(default=None, description="retro#593: engine/model/build identity this forecast was produced with, replayable independent of provider_chain/relevance_bar/version. Optional/additive — null only on a response built before this field existed (there is no such path going forward).")
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def confidence(self) -> Optional[str]:
+        """low | medium | high from CI width + article count (F16, retro#365),
+        or null when insufficient_data. Previously computed only for MCP tool
+        responses (mcp_server._confidence) — a caller hitting /forecast
+        directly had nothing but raw ci_low/ci_high to notice a thin,
+        single-source pool with (retro#618). Same bucket, single definition:
+        see aggregation.confidence_bucket."""
+        return confidence_bucket(
+            settled=self.settled,
+            ci_low=self.ci_low,
+            ci_high=self.ci_high,
+            articles_used=self.articles_used,
+            insufficient_data=self.insufficient_data,
+        )
+
 
 # ── Pool aggregate (recompute-over-pool) ────────────────────────────────────
 
@@ -579,6 +598,19 @@ class PoolAggregateResponse(BaseModel):
     n_eff: float = Field(default=0.0, description="Kish's effective sample size of the voting weights (aggregation.effective_sample_size) — exactly articles_used for equal weights, shrinking toward 1 as one row dominates the pool (retro#458 Phase 2). 0.0 when insufficient_data (or no_sources).")
     age_adjusted_mass: float = Field(default=0.0, description="evidence_mass recomputed with recency decay switched off — how much this pool would weigh if nothing had aged (retro#458 Phase 2). Equal to evidence_mass on a pool with no time decay in play; always >= evidence_mass. 0.0 when insufficient_data (or no_sources).")
     provenance: Optional[Provenance] = Field(default=None, description="retro#593: engine/build identity this recompute was produced with. method is always 'pool' here (no search, no LLM call) — see ForecastResponse.provenance for the /forecast counterpart.")
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def confidence(self) -> Optional[str]:
+        """See ForecastResponse.confidence (retro#618) — identical bucket, same
+        aggregation.confidence_bucket definition."""
+        return confidence_bucket(
+            settled=self.settled,
+            ci_low=self.ci_low,
+            ci_high=self.ci_high,
+            articles_used=self.articles_used,
+            insufficient_data=self.insufficient_data,
+        )
 
 
 # ── Resolution feedback ingest (credibility feedback loop, step 1) ─────────

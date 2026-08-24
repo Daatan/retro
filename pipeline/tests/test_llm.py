@@ -12,9 +12,18 @@ and that each caller delegates to complete_structured with its exact params
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import litellm
 import pytest
 
 from tm import llm
+
+
+def _stalled_timeout(time_taken="0.001"):
+    return litellm.Timeout(
+        message=f"Connection timed out. Timeout passed=Timeout(timeout=90.0), "
+                f"time taken={time_taken} seconds",
+        model="bedrock/x", llm_provider="bedrock",
+    )
 
 
 # ── retry_on_rate_limit ──────────────────────────────────────────────────────
@@ -76,6 +85,79 @@ class TestRetryOnRateLimit:
 
         assert await fine() == 42
         llm.asyncio.sleep.assert_not_awaited()
+
+    async def test_retries_stalled_event_loop_timeout(self, monkeypatch):
+        """retro#600: the same shared retry gets structured-output callers
+        (gatekeeper/extractor/aggregator) through this false-positive too."""
+        monkeypatch.setattr(llm.asyncio, "sleep", AsyncMock())
+        calls = {"n": 0}
+
+        @llm.retry_on_rate_limit
+        async def flaky():
+            calls["n"] += 1
+            if calls["n"] < 2:
+                raise _stalled_timeout()
+            return "ok"
+
+        assert await flaky() == "ok"
+        assert calls["n"] == 2
+
+
+# ── is_stalled_event_loop_timeout / retry_once_on_stalled_timeout (retro#600) ─
+
+class TestIsStalledEventLoopTimeout:
+    def test_near_zero_litellm_timeout_is_stalled(self):
+        assert llm.is_stalled_event_loop_timeout(_stalled_timeout("0.001")) is True
+
+    def test_slow_litellm_timeout_is_a_real_timeout(self):
+        # A genuine timeout takes close to the full configured duration.
+        assert llm.is_stalled_event_loop_timeout(_stalled_timeout("89.9")) is False
+
+    def test_other_exception_types_are_not_stalled_timeouts(self):
+        assert llm.is_stalled_event_loop_timeout(RuntimeError("time taken=0.001 seconds")) is False
+
+    def test_litellm_timeout_without_parseable_elapsed_is_not_stalled(self):
+        exc = litellm.Timeout(message="boom", model="bedrock/x", llm_provider="bedrock")
+        assert llm.is_stalled_event_loop_timeout(exc) is False
+
+
+class TestRetryOnceOnStalledTimeout:
+    async def test_retries_exactly_once_and_succeeds(self):
+        calls = {"n": 0}
+
+        @llm.retry_once_on_stalled_timeout
+        async def flaky():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise _stalled_timeout()
+            return "ok"
+
+        assert await flaky() == "ok"
+        assert calls["n"] == 2
+
+    async def test_second_stalled_timeout_in_a_row_propagates(self):
+        calls = {"n": 0}
+
+        @llm.retry_once_on_stalled_timeout
+        async def always_stalled():
+            calls["n"] += 1
+            raise _stalled_timeout()
+
+        with pytest.raises(litellm.Timeout):
+            await always_stalled()
+        assert calls["n"] == 2  # one retry, then give up
+
+    async def test_other_exceptions_propagate_immediately(self):
+        calls = {"n": 0}
+
+        @llm.retry_once_on_stalled_timeout
+        async def boom():
+            calls["n"] += 1
+            raise ValueError("schema validation failed")
+
+        with pytest.raises(ValueError):
+            await boom()
+        assert calls["n"] == 1
 
 
 # ── is_rate_limit_error ──────────────────────────────────────────────────────
@@ -209,6 +291,19 @@ class TestCompleteText:
         monkeypatch.setattr(llm.litellm, "acompletion", AsyncMock(return_value=self._resp("x")))
         _text, usage = await llm.complete_text_once_with_usage("bedrock/x", "p", max_tokens=5)
         assert usage == {}
+
+    async def test_with_usage_retries_once_on_stalled_timeout(self, monkeypatch):
+        calls = {"n": 0}
+        async def flaky(**_kw):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise _stalled_timeout()
+            return self._resp("recovered")
+        monkeypatch.setattr(llm.litellm, "acompletion", flaky)
+
+        text, _usage = await llm.complete_text_once_with_usage("bedrock/x", "p", max_tokens=5)
+        assert text == "recovered"
+        assert calls["n"] == 2
 
     async def test_complete_text_retries_on_rate_limit(self, monkeypatch):
         calls = {"n": 0}

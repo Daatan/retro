@@ -15,6 +15,7 @@ this only logs — it never mutates stance/certainty/settled.
 from tm.extractor import (
     _ENTITY_DYAD_AUDIT_CERTAINTY_GATE,
     _ENTITY_DYAD_AUDIT_STANCE_GATE,
+    _extract_actor_shaped_entities,
     _extract_named_entities,
     _mentions_entity_stem,
     audit_named_entity_dyad_mismatch,
@@ -185,21 +186,54 @@ def test_short_acronym_subject_still_logs(caplog):
     )
 
 
-def test_topic_vs_responder_known_limitation_still_logs(caplog):
-    """Known limitation (retro#644), NOT a bug in this fix: _extract_named_entities
-    grabs "Ebola" (a topic noun) as the subject instead of the actual actor the
-    question is about, so a legitimately different, correctly-extracted
-    actor/target pair still spuriously fires. Pinned here so a future fix to
-    subject extraction has an intentional regression signal to update, rather
-    than silently gaining coverage this fix never claimed."""
+def test_topic_vs_responder_shape_no_longer_logs(caplog):
+    """retro#644 fix: "Ebola" in "the Ebola outbreak" is a topic modifier, not
+    the actor the question is about, so a legitimately different,
+    correctly-extracted actor/target pair (WHO / Africa CDC) must no longer
+    spuriously fire."""
     preds = [pred(event_actors="WHO", event_target="Africa CDC")]
     with caplog.at_level("WARNING", logger="tm.extractor"):
         audit_named_entity_dyad_mismatch(
             preds, "Will the Ebola outbreak be declared over by Q4?"
         )
+    assert not any(
+        "event=entity_dyad_mismatch " in r.message for r in caplog.records
+    )
+
+
+def test_topic_head_noun_not_in_the_curated_list_still_logs(caplog):
+    """Honest about non-exhaustiveness: _TOPIC_HEAD_NOUNS is a small closed
+    list, not real NER — a topic-modifier shape it doesn't cover still fires,
+    same as before retro#644. Uses "flare-up", deliberately absent from the
+    list, to document the remaining gap rather than implying it's closed."""
+    preds = [pred(event_actors="WHO", event_target="Africa CDC")]
+    with caplog.at_level("WARNING", logger="tm.extractor"):
+        audit_named_entity_dyad_mismatch(
+            preds, "Will the Ebola flare-up be declared over by Q4?"
+        )
     assert any(
         "event=entity_dyad_mismatch " in r.message for r in caplog.records
     )
+
+
+# ── _extract_actor_shaped_entities (retro#644) ──────────────────────────────
+
+def test_extract_actor_shaped_entities_drops_topic_modifier():
+    entities = _extract_actor_shaped_entities(
+        "Will the Ebola outbreak be declared over by Q4?"
+    )
+    assert "Ebola" not in entities
+
+
+def test_extract_actor_shaped_entities_keeps_a_real_actor():
+    assert "Yoaz Hendel" in _extract_actor_shaped_entities(QUESTION)
+
+
+def test_extract_actor_shaped_entities_keeps_actor_before_stem_matched_alias():
+    """Regression guard: the institutional-alias/adjectival-form fixes (#645)
+    must keep working once the subject comes from the new extractor."""
+    entities = _extract_actor_shaped_entities("Will Donald Trump sign the order?")
+    assert "Donald Trump" in entities
 
 
 def test_summary_log_line_reports_eligible_and_fired_counts(caplog):

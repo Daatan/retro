@@ -6,6 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: truthmachine-pipeline
+    init: true # tail -f /dev/null as PID 1 ignores SIGTERM without this — `down` would otherwise hang the full stop timeout
     volumes:
       - .:/app
       - ../data:/app/data

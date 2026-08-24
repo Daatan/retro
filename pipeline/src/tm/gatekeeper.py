@@ -54,10 +54,15 @@ How much would a forecaster update their estimate of THIS outcome after reading 
   underlying process or situation is on track (schedules, dates, procedures) without
   distinguishing between its possible outcomes.
 - **0.0–0.2** — no bearing: about the actor/topic but a DIFFERENT matter (Musk's bitcoin
-  views for "will Musk tweet about Daatan?"), or merely shares a name/keyword.
+  views for "will Musk tweet about Daatan?"), or merely shares a name/keyword. This
+  includes two unrelated events that merely share a place or region — a claim about one
+  country's election and an article about a different, causally unconnected event in that
+  same country (a natural disaster, an unrelated crime story, sports) is NOT evidence just
+  because the dateline matches. Ask whether the article's content, not its location tag,
+  bears on the outcome.
 Most articles a search returns for a well-formed claim are genuinely relevant — the
-0.0–0.2 band is for the actor-but-different-matter case, not for solid evidence that
-merely isn't laser-focused on the outcome.
+0.0–0.2 band is for the actor-but-different-matter (or same-place-different-story) case,
+not for solid evidence that merely isn't laser-focused on the outcome.
 
 **Process-only cap.** When the claim names ONE specific outcome of a multi-outcome
 process (one winner among contenders, one option among alternatives) and the article

@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from forecast_api.forecaster import GATEKEEPER_PROMPT_HASH, GATEKEEPER_PROMPT_VERSION
 from forecast_api.main import app
 from tm.models import GatekeeperOutput
 
@@ -53,6 +54,17 @@ def test_relevance_reports_the_judging_model():
     with patch("forecast_api.main.check_is_prediction", new=AsyncMock(return_value=(_verdict(), {}))):
         r = client.post("/relevance", json=BODY, headers=HEADERS)
     assert r.json()["model"] == "bedrock/us.amazon.nova-micro-v1:0"
+
+
+def test_relevance_reports_the_gatekeeper_prompt_version():
+    # /relevance runs the same tm.gatekeeper prompt /forecast already versions
+    # (retro#627/#628) — a rescued verdict must be traceable to which prompt produced it,
+    # same as any other gatekeeper call (retro#637).
+    with patch("forecast_api.main.check_is_prediction", new=AsyncMock(return_value=(_verdict(), {}))):
+        r = client.post("/relevance", json=BODY, headers=HEADERS)
+    body = r.json()
+    assert body["gatekeeper_prompt_version"] == GATEKEEPER_PROMPT_VERSION
+    assert body["gatekeeper_prompt_hash"] == GATEKEEPER_PROMPT_HASH
 
 
 def test_relevance_passes_the_claim_through_as_the_event_name():

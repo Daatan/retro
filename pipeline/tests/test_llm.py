@@ -320,6 +320,30 @@ class TestCompleteText:
         assert calls["n"] == 2  # retried once
 
 
+class TestModelSupportsPromptCache:
+    """retro#650 — allowlist, not denylist: an unrecognized model must default to
+    unsupported, so a new model family added to the fleet degrades to full-price
+    calls rather than to every call failing."""
+
+    @pytest.mark.parametrize("model", [
+        "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "bedrock/us.amazon.nova-micro-v1:0",
+        "bedrock/us.amazon.nova-2-lite-v1:0",
+    ])
+    def test_known_supported_families(self, model):
+        assert llm._model_supports_prompt_cache(model) is True
+
+    @pytest.mark.parametrize("model", [
+        "bedrock/qwen.qwen3-32b-v1:0",
+        "bedrock/zai.glm-4.7-flash",
+        "bedrock/us.meta.llama4-scout-17b-instruct-v1:0",
+        "bedrock/us.deepseek.r1-v1:0",
+    ])
+    def test_unrecognized_families_default_to_unsupported(self, model):
+        assert llm._model_supports_prompt_cache(model) is False
+
+
 class TestCompleteStructuredPromptCaching:
     """cached_prefix wiring in complete_structured itself — the content shape sent
     to the underlying instructor/litellm client, not just that callers pass the
@@ -354,12 +378,28 @@ class TestCompleteStructuredPromptCaching:
         captured = self._patch_client(monkeypatch)
 
         await llm.complete_structured(
-            "bedrock/x", dict, "SUFFIX", max_tokens=10, timeout=5, cached_prefix="PREFIX ",
+            "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0", dict, "SUFFIX",
+            max_tokens=10, timeout=5, cached_prefix="PREFIX ",
         )
         assert captured["messages"] == [{"role": "user", "content": [
             {"type": "text", "text": "PREFIX ", "cache_control": {"type": "ephemeral"}},
             {"type": "text", "text": "SUFFIX"},
         ]}]
+
+    async def test_cache_enabled_but_unsupported_model_sends_flat_string(self, monkeypatch):
+        """retro#650: Bedrock hard-rejects the whole call when cache_control is sent
+        to a model family that doesn't support it (found via Qwen3 32B: 0/50 calls
+        succeeded until this check existed). Must degrade to the uncached flat
+        string -- same as the flag being off -- never send the cache block on
+        spec, and never drop cached_prefix's content either."""
+        monkeypatch.setattr(llm.settings, "enable_prompt_cache", True)
+        captured = self._patch_client(monkeypatch)
+
+        await llm.complete_structured(
+            "bedrock/qwen.qwen3-32b-v1:0", dict, "SUFFIX",
+            max_tokens=10, timeout=5, cached_prefix="PREFIX ",
+        )
+        assert captured["messages"] == [{"role": "user", "content": "PREFIX SUFFIX"}]
 
     async def test_cache_enabled_but_no_prefix_given_sends_flat_string(self, monkeypatch):
         """Callers that never pass cached_prefix (aggregator today) are unaffected by

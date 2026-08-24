@@ -15,12 +15,33 @@ They now live here once. ``forecaster.py`` (in the API) also reuses
 
 import asyncio
 import functools
+import logging
 import re
 
 import instructor
 import litellm
 
 from .config import settings
+
+logger = logging.getLogger(__name__)
+
+# Bedrock prompt caching (the Anthropic-style `cache_control: {"type": "ephemeral"}`
+# content block) is only honoured by some model families. Sending it to one that
+# doesn't support it isn't a silent no-op -- Bedrock hard-rejects the whole call
+# ("You invoked an unsupported model or your request did not allow prompt
+# caching."), which fails 100% of requests to that model (retro#650, found via
+# Qwen3 32B: 0/50 gatekeeper calls succeeded until this check). Confirmed
+# supporting the cache_control block on this account: the Anthropic (Claude) and
+# Amazon Nova families. Everything else falls back to the uncached flat-string
+# path -- cached_prefix is still concatenated in, so correctness is unaffected,
+# only the cache-read cost saving is skipped. Allowlist, not denylist: an
+# unrecognized model is assumed NOT to support it, so a new model family added
+# to the fleet degrades to "full price" rather than to "every call fails".
+_PROMPT_CACHE_MODEL_MARKERS = (".anthropic.", ".amazon.nova")
+
+
+def _model_supports_prompt_cache(model: str) -> bool:
+    return any(marker in model for marker in _PROMPT_CACHE_MODEL_MARKERS)
 
 # litellm reads this global for OpenAI-compatible backends. For ``bedrock/*``
 # models (the default) litellm ignores it and authenticates with AWS
@@ -164,15 +185,19 @@ async def complete_structured(
     as its own Bedrock/Anthropic cache-marked content block ahead of ``prompt`` — for
     text that's identical on every call (e.g. the extractor's fixed instructions),
     so Bedrock bills a cache-read rate instead of full price on every repeat. When
-    the flag is off, or no prefix is given, ``content`` is the same flat string as
+    the flag is off, no prefix is given, or ``model`` isn't a family confirmed to
+    support Bedrock prompt caching (retro#650 — sending the cache block to one that
+    doesn't hard-fails the whole call), ``content`` is the same flat string as
     before caching existed — behaviour is unchanged.
     """
-    if cached_prefix and settings.enable_prompt_cache:
+    if cached_prefix and settings.enable_prompt_cache and _model_supports_prompt_cache(model):
         content = [
             {"type": "text", "text": cached_prefix, "cache_control": {"type": "ephemeral"}},
             {"type": "text", "text": prompt},
         ]
     else:
+        if cached_prefix and settings.enable_prompt_cache:
+            logger.info("event=prompt_cache_skipped_unsupported_model model=%s", model)
         # Caching off (default) or no prefix given: fall back to one flat string —
         # byte-identical to the single PROMPT this used to be before the
         # PROMPT_PREFIX/PROMPT_SUFFIX split. Dropping cached_prefix here instead of

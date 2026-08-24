@@ -133,3 +133,28 @@ def test_build_provenance_models_block_only_set_when_passed():
     p2 = _build.build_provenance(method="pool")
     assert p2.models.gatekeeper is None
     assert p2.models.extractor is None
+
+
+def test_build_provenance_prompt_version_and_hash_pass_through():
+    """daatan#1604/retro#627: a caller persisting extraction results needs the
+    prompt version/hash alongside the model name, so a since-fixed prompt bug
+    doesn't stay invisible in stored data."""
+    p = _build.build_provenance(
+        method="live",
+        gatekeeper_model="nova-micro",
+        extractor_model="nova-lite",
+        gatekeeper_prompt_version="v1",
+        gatekeeper_prompt_hash="abc123",
+        extractor_prompt_version="v1",
+        extractor_prompt_hash="def456",
+    )
+    assert p.models.gatekeeper_prompt_version == "v1"
+    assert p.models.gatekeeper_prompt_hash == "abc123"
+    assert p.models.extractor_prompt_version == "v1"
+    assert p.models.extractor_prompt_hash == "def456"
+
+    p2 = _build.build_provenance(method="pool")
+    assert p2.models.gatekeeper_prompt_version is None
+    assert p2.models.gatekeeper_prompt_hash is None
+    assert p2.models.extractor_prompt_version is None
+    assert p2.models.extractor_prompt_hash is None

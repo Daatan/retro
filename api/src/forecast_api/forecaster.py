@@ -59,6 +59,16 @@ from tm.net_guard import UnsafeURLError, safe_get
 GATEKEEPER_PROMPT = _GATEKEEPER_PROMPT_PREFIX + _GATEKEEPER_PROMPT_SUFFIX
 EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 
+# daatan#1604/retro#627: provenance for a caller (daatan) persisting extraction results,
+# so a stored stance/certainty value can be traced back to the prompt that produced it.
+# Bump the *_VERSION string by hand whenever either prompt changes materially — it's a
+# human-readable label only, see docs/PROMPT_VERSIONS.md. The *_HASH is computed from the
+# actual prompt text above, so it stays correct even if a version bump is forgotten.
+GATEKEEPER_PROMPT_VERSION = "v1"
+EXTRACTOR_PROMPT_VERSION = "v1"
+GATEKEEPER_PROMPT_HASH = hashlib.sha256(GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
+EXTRACTOR_PROMPT_HASH = hashlib.sha256(EXTRACTOR_PROMPT.encode()).hexdigest()[:16]
+
 from ._build import build_provenance
 from .auth import ApiKeyClient
 from .aggregation import (
@@ -2196,6 +2206,10 @@ async def _run_forecast_inner(
             chain=provider_chain,
             gatekeeper_model=_pipeline_settings.gatekeeper_model,
             extractor_model=_pipeline_settings.extractor_model,
+            gatekeeper_prompt_version=GATEKEEPER_PROMPT_VERSION,
+            gatekeeper_prompt_hash=GATEKEEPER_PROMPT_HASH,
+            extractor_prompt_version=EXTRACTOR_PROMPT_VERSION,
+            extractor_prompt_hash=EXTRACTOR_PROMPT_HASH,
         ),
     )
 

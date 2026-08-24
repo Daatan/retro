@@ -122,6 +122,12 @@ class TestForecastResponseProvider:
         assert resp.provenance.chain == ["caller"]
         assert resp.provenance.models.gatekeeper == forecaster._pipeline_settings.gatekeeper_model
         assert resp.provenance.models.extractor == forecaster._pipeline_settings.extractor_model
+        # daatan#1604/retro#627: prompt version + content hash ride alongside the model
+        # names, so a caller persisting this row can tell which prompt produced it.
+        assert resp.provenance.models.gatekeeper_prompt_version == forecaster.GATEKEEPER_PROMPT_VERSION
+        assert resp.provenance.models.gatekeeper_prompt_hash == forecaster.GATEKEEPER_PROMPT_HASH
+        assert resp.provenance.models.extractor_prompt_version == forecaster.EXTRACTOR_PROMPT_VERSION
+        assert resp.provenance.models.extractor_prompt_hash == forecaster.EXTRACTOR_PROMPT_HASH
 
     def test_caller_supplied_articles_fact_signal_reduction(self, monkeypatch):
         # fact_signal + facets are per-claim (Phase 2, author-scoring redesign). The per-source

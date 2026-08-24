@@ -82,6 +82,10 @@ def _forecast_payload(resp) -> dict:
         "reason": resp.reason,
         "provider": resp.provider,
         "sources": [_source_brief(s) for s in resp.sources],
+        # retro#621: which fallback-ladder rung produced this — "primary" for
+        # the overwhelming majority of responses. A caller publishing this
+        # forecast's rationale must say so when it isn't "primary".
+        "fallback_path": resp.fallback_path,
     }
 
 

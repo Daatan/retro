@@ -1985,6 +1985,68 @@ correlated, prefer the free one (`settled`) and don't pay for both.
 a soft prune-weight *would* do; nothing about `_anchor`, the prune step, or recursion
 changes yet. That is the retro#601-style follow-up.
 
+## 2026-08-25 — retry-relaxed-search fallback ladder rung 1, shadow/log-only (retro#621)
+
+**Shadow-only. `retry_relaxed_search_enabled` defaults `False`; `retry_relaxed_search_enforce`
+exists but is unread while the shadow log is thin — the same documented-placeholder shape
+`precursor_match_enforce`/`settled_grounding_enforce` use.**
+
+`/forecast` returns `insufficient_data` (a.k.a. `outcome=no_usable_predictions`) on
+~30% of daatan's own production traffic (retro#621's own measurement; the rate on
+Metaculus-style tournament questions is unmeasured, blocked on retro#619's Bot
+Benchmarking Tier access). That's fatal for a FutureEval bot: a question is open 1.5h,
+scored by spot peer score, and no submission scores nothing.
+
+This is rung 1 of the fallback ladder retro#621 asks for — the cheapest, lowest
+honesty-cost rung: when the primary pass comes back insufficient, retry once with a
+wider article limit (`retry_relaxed_search_limit_multiplier`, default `2.0`, capped at
+the caller's per-key `max_articles` ceiling if one applies). No query rewording in this
+slice — see "Explicitly out of scope" below.
+
+`_maybe_retry_relaxed_search` (`api/src/forecast_api/forecaster.py`) runs after
+`run_forecast`'s primary `_run_forecast_inner` call returns `insufficient_data=True`,
+and only when the caller used live search (`req.articles` unset — a caller who supplied
+articles directly has nothing for a wider limit to search). It logs
+`event=retry_relaxed_search` with the primary's `reason`, both limits, whether the
+retry recovered a usable forecast, and the live `enforce` value — so the shadow log
+alone answers "how often would this rung have helped" before it's ever allowed to
+change a response.
+
+**The recovered response is tagged, never silently swapped in.** `ForecastResponse`
+gained `fallback_path: "primary" | "retry-relaxed"` (`models.py`), surfaced in the MCP
+tool's default (non-verbose) payload too — retro#621 ask item 4 is explicit that a
+fallback must never masquerade as an ordinary Oracle forecast, and a Metaculus
+rationale comment built off this field can say plainly which rung produced the number.
+
+### Config (`api/src/forecast_api/config.py`)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `retry_relaxed_search_enabled` | `False` | Master switch. While off, a primary `insufficient_data` response returns unchanged and `_run_forecast_inner` runs exactly once. |
+| `retry_relaxed_search_enforce` | `False` | Unread while off — reserved for the follow-up that lets a recovered retry replace the empty response. While `enabled=True` and `enforce=False`, the retry still runs (for the shadow log) but its result never reaches the caller. |
+| `retry_relaxed_search_limit_multiplier` | `2.0` | Retry's article limit = primary limit × this, capped at the caller's per-key `max_articles` if one applies. If the primary limit is already at that cap, the retry is skipped entirely (logged as `skipped=at_limit_cap`). |
+
+### Explicitly out of scope for this slice
+
+**Query rewording/decomposition** — the issue's ask lists "relaxed search parameters
+**or** a reworded/decomposed query" as alternative levers for this rung; only the
+limit lever shipped here. `_distill_query` (keyword distillation) and
+`v2_playground._decompose` (question decomposition, different pipeline) both exist and
+are reusable for a future query-rewording variant of this rung if the shadow log shows
+the limit lever alone doesn't recover much.
+
+**The rest of the ladder** — base-rate/outside-view prior (#589, blocked on
+`calibration_records` not existing yet) and the Metaculus community-prediction anchor
+(blocked on CP not being exposed by the standard API, likely the same access gate as
+#619) are separate follow-ups, not this slice.
+
+**Whether a fallback is worth submitting at all under spot peer score** — see the
+scoring-EV analysis on retro#621 itself. Short version: an *uninformative* 50% guess is
+expected-negative EV relative to just forfeiting whenever the peer field is informed
+(the normal case) — it does not belong on this ladder as a safe last resort. This
+rung's retry, by contrast, is a genuine (if narrower) Oracle forecast, so it carries no
+special scoring risk beyond Oracle's ordinary accuracy.
+
 **The premise_verifier correlation check itself** — the issue's point 3 names this as a
 prerequisite for *promoting* settled-grounding, not for shipping the shadow log. Both
 retro#601 (premise_verifier's own review) and this feature's equivalent follow-up are

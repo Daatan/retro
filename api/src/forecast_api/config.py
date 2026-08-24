@@ -597,6 +597,18 @@ class ApiSettings(BaseSettings):
     settled_grounding_enabled: bool = False
     settled_grounding_enforce: bool = False
 
+    # Retry-relaxed-search fallback ladder rung 1 (retro#621) — shadow/log-only,
+    # off by default. When the primary /forecast pass returns
+    # insufficient_data (no_usable_predictions and friends), re-runs the same
+    # question once with a wider article limit and logs whether the retry
+    # would have recovered a usable forecast. `enforce` is unread while False;
+    # same shadow-then-promote placeholder shape premise_verifier_enforce
+    # uses — it exists so this can be turned on for real once the shadow log
+    # shows the retry actually recovers forecasts worth the extra spend.
+    retry_relaxed_search_enabled: bool = False
+    retry_relaxed_search_enforce: bool = False
+    retry_relaxed_search_limit_multiplier: float = 2.0
+
     # Forecast-response cache keyed by sha256(question, max_articles).
     # cache_ttl_seconds=0 disables caching entirely.
     cache_ttl_seconds: int = 3600

@@ -1,0 +1,11 @@
+{
+  "_comment": "Source of truth for api/tests/test_prompt_version_enforcement.py. Every entry's hash MUST equal the current SHA-256 (first 16 hex chars) of that component's rendered prompt (forecaster.py's GATEKEEPER_PROMPT_HASH/EXTRACTOR_PROMPT_HASH). Whenever a prompt-text edit changes model behavior materially: bump the matching *_PROMPT_VERSION constant in forecaster.py, add a row to docs/PROMPT_VERSIONS.md, and update this file's version+hash to match. The test fails otherwise.",
+  "gatekeeper": {
+    "version": "v1",
+    "hash": "a09cdb5ecda0ce5e"
+  },
+  "extractor": {
+    "version": "v1",
+    "hash": "6371300bb3b89b8c"
+  }
+}

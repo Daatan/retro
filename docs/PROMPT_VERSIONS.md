@@ -28,9 +28,28 @@ same PR as the prompt edit.
 | gatekeeper | v1 | `a09cdb5ecda0ce5e` | 2026-08-24 | retro#627 | Initial versioned baseline — no prior version existed on the live path. |
 | extractor | v1 | `6371300bb3b89b8c` | 2026-08-24 | retro#627 | Initial versioned baseline — no prior version existed on the live path. |
 
-Note: `pipeline/src/tm/orchestrator.py`'s `EXTRACTION_PROMPT_VERSION` is a
-separate, older constant scoped to the batch pipeline's own extraction
-cache (used for cache-invalidation, not exposed on any API response). It
-tracks the same prompt files but is bumped independently and is not
-guaranteed to stay in sync with the versions in this table — a known
-inconsistency, not something this change fixes.
+## ⚠️ This table does NOT cover the batch pipeline
+
+`pipeline/src/tm/orchestrator.py`'s `EXTRACTION_PROMPT_VERSION` constant is a
+**separate, unrelated version scheme** — do not cross-reference it against the
+table above, and do not assume a version/hash bump here also applies to batch
+output.
+
+- It versions the batch pipeline's own extraction cache (used for
+  cache-invalidation inside `_negative_marker_is_current`), not anything
+  exposed on an API response.
+- It has no SHA-256 prompt-hash equivalent and is **not enforced by
+  `test_prompt_version_enforcement.py`** — a batch prompt edit can land
+  without any version bump and CI will not catch it.
+- It is bumped independently of this table and is **not guaranteed to stay in
+  sync** with the live-path versions above, even though both track prompts in
+  the same file family.
+- Because daatan's evidence pool ingestion only ever calls the live API (not
+  the batch pipeline), stored `EvidencePoolArticle` provenance
+  (`extractorPromptVersion`/`extractorPromptHash`) always refers to *this*
+  table's scheme, never to `EXTRACTION_PROMPT_VERSION`.
+
+This is a known, accepted gap (retro#631) — not something planned to be
+unified in the near term, since the batch lane isn't currently read by
+daatan's evidence pool. If that changes, the batch pipeline will need its own
+hash-based provenance and lock-file enforcement, mirroring retro#627/#632.

@@ -550,7 +550,13 @@ explicitly weighs both sides and commits to neither. This is the direction the a
 expects the event to RESOLVE, not whether they welcome it: an author who condemns, warns \
 against, or laments an event while treating it as happening or inevitable is still \
 forecasting that it WILL happen — lean +1 toward it, never negative. Approval or alarm about \
-an outcome is sentiment, not a directional forecast, and must not flip the sign.
+an outcome is sentiment, not a directional forecast, and must not flip the sign. Cross-check \
+against your own extracted claims below: if this author's claims already affirm the event is \
+happening (a positive stance), author_lean must not read negative — and if their claims deny \
+it, author_lean must not read positive. Alarm, outrage, or criticism about a DIFFERENT \
+development, a related event's consequences, or this event's implications is still not a \
+reason to move author_lean opposite to what the author's own claims about THIS event already \
+established.
   author_lean_certainty = how firmly the author commits to that forecast (0 hedged, 1 emphatic).
 Return null for both (omit them) when the byline author only reports what happened or relays \
 other people's views without endorsing a direction — a straight news report has no \

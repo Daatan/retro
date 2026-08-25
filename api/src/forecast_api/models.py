@@ -104,6 +104,19 @@ class ArticleInput(BaseModel):
 class ForecastRequest(BaseModel):
     question: str = Field(..., min_length=5, max_length=500, description="Binary question to forecast")
     max_articles: Optional[int] = Field(default=None, ge=1, le=30)
+    # retro#652: opt-in litellm model id override for the extractor stage of THIS live
+    # request, and the premise verifier (retro#575), which shares the same
+    # settings.premise_verifier_model-or-extractor_model fallback and runs within the
+    # same request. Deliberately does NOT reach the settlement-verifier gate or the
+    # batch-pipeline aggregator: both are shared with pool recompute / offline runs that
+    # have no per-request override to thread, and the settlement gate in particular
+    # judges already-settled facts, not a live extraction where more effort helps.
+    # Never touches the gatekeeper, which has no override anywhere by design (a coarse,
+    # cheap relevance filter, not the quality-sensitive stage). No default policy is
+    # attached to this field -- it's a capability for a caller who wants to pick their
+    # own model (e.g. the #619 calibration backtest A/B-testing model tiers), not an
+    # "effort" tier with an opinion about what a caller SHOULD pick.
+    model: Optional[str] = Field(default=None, description="litellm model id overriding the extractor stage (and premise verifier) for this call only, e.g. 'bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0'. Never affects the gatekeeper or settlement verifier.")
     articles: Optional[list[ArticleInput]] = Field(
         default=None,
         description=(

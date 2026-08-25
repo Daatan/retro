@@ -142,6 +142,74 @@ class TestForecastResponseProvider:
         # no per-key client) rides alongside model/prompt provenance.
         assert resp.provenance.max_articles == 7
 
+    def test_model_override_reaches_the_extractor_and_provenance(self, monkeypatch):
+        """retro#652: req.model overrides the extractor call for this request only, and
+        the effective model — not the raw global default — is what provenance reports."""
+        from tm.models import GatekeeperOutput, ExtractionOutput, PredictionExtraction
+
+        override = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        captured = {}
+
+        async def _gate(**kw):
+            return GatekeeperOutput(is_prediction=True, reason="on topic", prediction_count_estimate=1), {}
+
+        async def _extract(**kw):
+            captured["model"] = kw.get("model")
+            return ExtractionOutput(predictions=[
+                PredictionExtraction(quote="q", claim="c", stance=0.6, certainty=0.8)
+            ]), {}
+
+        monkeypatch.setattr(forecaster, "check_is_prediction", _gate)
+        monkeypatch.setattr(forecaster, "extract_predictions", _extract)
+
+        req = ForecastRequest(
+            question="Model-override-probe 3f — will the measure pass?",
+            model=override,
+            articles=[ArticleInput(
+                url="https://example.com/b",
+                title="Detailed analysis of whether the measure will pass this session",
+                snippet="Analysts weigh in on the vote.",
+                text="The measure is widely expected to pass given the coalition's majority. " * 4,
+            )],
+        )
+        resp = asyncio.run(run_forecast(req))
+        assert not resp.insufficient_data
+        assert captured["model"] == override
+        assert resp.provenance.models.extractor == override
+
+    def test_no_model_override_uses_the_configured_default(self, monkeypatch):
+        """Omitting req.model must not change today's behavior: the extractor call and
+        provenance both fall back to the configured global default."""
+        from tm.models import GatekeeperOutput, ExtractionOutput, PredictionExtraction
+
+        captured = {}
+
+        async def _gate(**kw):
+            return GatekeeperOutput(is_prediction=True, reason="on topic", prediction_count_estimate=1), {}
+
+        async def _extract(**kw):
+            captured["model"] = kw.get("model")
+            return ExtractionOutput(predictions=[
+                PredictionExtraction(quote="q", claim="c", stance=0.6, certainty=0.8)
+            ]), {}
+
+        monkeypatch.setattr(forecaster, "check_is_prediction", _gate)
+        monkeypatch.setattr(forecaster, "extract_predictions", _extract)
+
+        req = ForecastRequest(
+            question="No-override-probe 8h — will the measure pass?",
+            articles=[ArticleInput(
+                url="https://example.com/c",
+                title="Detailed analysis of whether the measure will pass this session",
+                snippet="Analysts weigh in on the vote.",
+                text="The measure is widely expected to pass given the coalition's majority. " * 4,
+            )],
+        )
+        resp = asyncio.run(run_forecast(req))
+        assert not resp.insufficient_data
+        assert captured["model"] == forecaster._pipeline_settings.extractor_model
+        assert resp.provenance.models.extractor == forecaster._pipeline_settings.extractor_model
+
     def test_caller_supplied_articles_fact_signal_reduction(self, monkeypatch):
         # fact_signal + facets are per-claim (Phase 2, author-scoring redesign). The per-source
         # signal reduces them Option-1 style: fact_signal = claim-weighted MEAN over the article's

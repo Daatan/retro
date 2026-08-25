@@ -39,6 +39,7 @@ from tm.extractor import (
     enforce_settlement_event_date,
     enforce_settlement_fact_signal_agreement,
     enforce_winner_entity_consistency,
+    audit_author_lean_sign_mismatch,
     audit_named_entity_dyad_mismatch,
     flag_claim_stance_sign_conflicts,
     PROMPT_PREFIX as _EXTRACTOR_PROMPT_PREFIX,
@@ -1309,6 +1310,16 @@ async def _process_article(
     logger.info(
         "event=article_outcome outcome=ok url=%s stance=%.3f certainty=%.3f n_preds=%d claim=%r",
         result.url, avg_stance, avg_certainty, len(extraction.predictions), first_claim,
+    )
+    # Log-only (retro#326): does the byline's own directional forecast disagree
+    # in sign with what their own claims just affirmed? See
+    # audit_author_lean_sign_mismatch's docstring — this is the live path that
+    # actually populates daatan's evidence_pool_articles, unlike the batch/atlas
+    # pipeline in runner.py which has no per-article stance aggregate to compare
+    # against.
+    audit_author_lean_sign_mismatch(
+        extraction.author_lean, extraction.author_lean_certainty,
+        avg_stance, avg_certainty, url=result.url,
     )
     timings.append({
         "url": result.url, "fetch_ms": fetch_ms, "gate_ms": gate_ms,

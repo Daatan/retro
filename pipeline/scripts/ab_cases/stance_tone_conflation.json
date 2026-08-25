@@ -1,0 +1,37 @@
+[
+  {
+    "id": "stance-tone-conflation-hazard-persists",
+    "event_name": "The exclusion zone around Facility F remains uninhabitable for at least 80 more years",
+    "event_description": "Only expert or official assessments of the exclusion zone's ongoing radiological hazard count. General nostalgia, tourism coverage, or unrelated wildlife reporting do not.",
+    "claim_deadline": "2110-01-01",
+    "article_date": "2026-08-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Decades after the disaster, the melted reactor core still sits beneath the containment structure, radioactive and unstable. Scientists warn that the surrounding town will remain too contaminated for residents to safely return for at least another eight decades -- a fact that continues to draw dark tourism to the abandoned streets.",
+    "expect": {
+      "stance_sign": 1
+    },
+    "tags": [
+      "retro-545",
+      "stance-tone-conflation"
+    ]
+  },
+  {
+    "id": "stance-tone-conflation-hazard-persists-control",
+    "event_name": "The exclusion zone around Facility F remains uninhabitable for at least 80 more years",
+    "event_description": "Only expert or official assessments of the exclusion zone's ongoing radiological hazard count. General nostalgia, tourism coverage, or unrelated wildlife reporting do not.",
+    "claim_deadline": "2110-01-01",
+    "article_date": "2026-08-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "A new decontamination method has cleared background radiation in the inner ring of the exclusion zone to levels safe for permanent habitation, officials announced, with resettlement of the nearest town expected to begin within five years.",
+    "expect": {
+      "stance_sign": -1
+    },
+    "tags": [
+      "retro-545",
+      "stance-tone-conflation",
+      "control"
+    ]
+  }
+]

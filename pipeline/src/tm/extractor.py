@@ -183,6 +183,21 @@ Examples — related event: "Inflation will NOT fall below 3 percent this year":
   "CPI drops to 2.9 percent in June"           → stance −1.0, certainty 0.9, settled true (the inner event occurred — the negated claim is settled FALSE)
   "CPI ticks up to 4.1 percent"                → stance +0.5, certainty 0.5
 
+## Alarming or critical tone is not stance direction
+A quote's emotional register — danger, tragedy, outrage, criticism — is not the signal. \
+Read only what the claim's content asserts: if the alarming or critical fact described IS \
+the outcome the related event asks about, stance follows the content, not the tone — an \
+alarming quote can carry POSITIVE stance when its content affirms the claim. Two models \
+reading the identical sentence must not land on opposite stance signs; if you find yourself \
+scoring a quote negative because it "sounds bad" rather than because its content argues \
+against the related event, re-read the claim's exact wording and check which way the \
+content actually points.
+
+Examples — related event: "Site S remains hazardous to human habitation for at least 100 years":
+  "The reactor core residue is still molten beneath the plant; its presence keeps the city \
+unsafe to resettle, and will for at least the next century" \
+                                               → stance +1.0, certainty 0.9 (alarming tone, but the content directly affirms the claim — do not score it negative because "danger" reads as bad news)
+
 ## Numeric thresholds — compare the numbers, not the sentiment
 When the related event states a quantitative threshold ("more than 33 seats", \
 "below $50,000", "at least 10 medals", "reaches 2800 rating"), judge each signal \

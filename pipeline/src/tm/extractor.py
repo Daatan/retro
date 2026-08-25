@@ -889,6 +889,7 @@ async def extract_predictions(
     include_conditional_block: Optional[bool] = None,
     is_single_article: bool = False,
     cache_coordinator: Optional["CacheWriteCoordinator"] = None,
+    model: Optional[str] = None,
 ) -> tuple["ExtractionOutput", dict]:
     """Returns (ExtractionOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
 
@@ -919,6 +920,11 @@ async def extract_predictions(
     not serialize the whole batch — only the single write is on the critical path, preserving the
     batch's original parallelism for every call after the first. None means no coordination
     (backward compat).
+
+    ``model`` (retro#652) overrides ``settings.extractor_model`` for this call only. None (the
+    default) keeps the configured global. A per-request opt-in, not a policy — callers who want a
+    different model/cost tradeoff (e.g. a benchmark harness with a wider latency budget) pass one
+    in; nothing here decides what a caller should choose.
     """
     prompt = PROMPT_SUFFIX.format(
         article_text=article_text,
@@ -945,7 +951,7 @@ async def extract_predictions(
 
     async def _call_extractor():
         return await complete_structured(
-            settings.extractor_model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
+            model or settings.extractor_model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
             cached_prefix=None if is_single_article else PROMPT_PREFIX,
         )
 

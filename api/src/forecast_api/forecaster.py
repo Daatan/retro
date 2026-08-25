@@ -919,6 +919,7 @@ async def _process_article_bounded(
     usage_events: list[dict] | None = None,
     is_single_article: bool = False,
     cache_coordinator: CacheWriteCoordinator | None = None,
+    extractor_model: str | None = None,
 ) -> tuple[SearchResult, float, list, float | None, float | None] | None:
     """Run _process_article under a per-article wall-clock ceiling.
 
@@ -941,6 +942,7 @@ async def _process_article_bounded(
                 usage_events=usage_events,
                 is_single_article=is_single_article,
                 cache_coordinator=cache_coordinator,
+                extractor_model=extractor_model,
             ),
             timeout=timeout_s,
         )
@@ -994,6 +996,7 @@ async def _process_article(
     usage_events: list[dict] | None = None,
     is_single_article: bool = False,
     cache_coordinator: CacheWriteCoordinator | None = None,
+    extractor_model: str | None = None,
 ) -> tuple[SearchResult, float, list, float | None, float | None] | None:
     """
     Run gatekeeper + extractor for one article.
@@ -1002,6 +1005,8 @@ async def _process_article(
     Non-empty gate/extract usage dicts are appended to ``usage_events`` (when given)
     as soon as each call returns — including for articles later rejected, whose
     tokens were still spent — feeding ForecastResponse.token_usage.
+    ``extractor_model`` (retro#652), when given, overrides ``settings.extractor_model``
+    for this article's extractor call only; the gatekeeper is never affected.
     """
     # A t.me post is short-form (retro#297): mirrors news-indexer's rematch.py:_is_short_form,
     # which feeds the same hint to the gatekeeper on its /relevance rescue path — one line
@@ -1171,6 +1176,7 @@ async def _process_article(
             language=language,
             is_single_article=is_single_article,
             cache_coordinator=cache_coordinator,
+            model=extractor_model,
         )
         if usage_events is not None and extract_usage:
             usage_events.append(extract_usage)
@@ -1555,6 +1561,11 @@ async def _run_forecast_inner(
     # summed into ForecastResponse.token_usage on EVERY exit path below,
     # debug or not.
     usage_events: list[dict] = []
+    # retro#652: caller's per-request extractor override, or the configured default.
+    # Computed once here so the premise verifier and every per-article extractor call
+    # in this request agree, and so DebugInfo/provenance report what actually ran
+    # rather than the raw global default.
+    effective_extractor_model = req.model or _pipeline_settings.extractor_model
     # Strip leading emoji/markers the frontend may prepend (e.g. "🤖 Question…")
     # before any provider sees the query; supplementary-plane chars (U+10000+) cover
     # virtually all emoji while leaving ordinary punctuation and non-ASCII text intact.
@@ -1666,7 +1677,7 @@ async def _run_forecast_inner(
                 search_provider=search_provider,
                 search_provider_chain=provider_chain,
                 gatekeeper_model=_pipeline_settings.gatekeeper_model,
-                extractor_model=_pipeline_settings.extractor_model,
+                extractor_model=effective_extractor_model,
                 articles_fetched=0,
                 articles_gate_passed=0,
                 articles_extracted=0,
@@ -1724,7 +1735,7 @@ async def _run_forecast_inner(
                 )
                 for r in search_results
             ],
-            model=settings.premise_verifier_model or _pipeline_settings.extractor_model,
+            model=settings.premise_verifier_model or effective_extractor_model,
             timeout_s=settings.premise_verifier_timeout_seconds,
         ))
         if settings.premise_verifier_enabled
@@ -1758,6 +1769,7 @@ async def _run_forecast_inner(
                 usage_events=usage_events,
                 is_single_article=is_single_article,
                 cache_coordinator=cache_coordinator,
+                extractor_model=effective_extractor_model,
             )
             for r in search_results
         ],
@@ -2169,7 +2181,7 @@ async def _run_forecast_inner(
                 search_provider=search_provider,
                 search_provider_chain=provider_chain,
                 gatekeeper_model=_pipeline_settings.gatekeeper_model,
-                extractor_model=_pipeline_settings.extractor_model,
+                extractor_model=effective_extractor_model,
                 articles_fetched=len(search_results),
                 articles_gate_passed=sum(1 for d in article_debugs if d.gate_passed),
                 articles_extracted=0,
@@ -2237,7 +2249,7 @@ async def _run_forecast_inner(
             search_provider=search_provider,
             search_provider_chain=provider_chain,
             gatekeeper_model=_pipeline_settings.gatekeeper_model,
-            extractor_model=_pipeline_settings.extractor_model,
+            extractor_model=effective_extractor_model,
             articles_fetched=len(search_results),
             articles_gate_passed=sum(1 for d in article_debugs if d.gate_passed),
             articles_extracted=n,
@@ -2281,7 +2293,7 @@ async def _run_forecast_inner(
             chain=provider_chain,
             max_articles=limit,
             gatekeeper_model=_pipeline_settings.gatekeeper_model,
-            extractor_model=_pipeline_settings.extractor_model,
+            extractor_model=effective_extractor_model,
             gatekeeper_prompt_version=GATEKEEPER_PROMPT_VERSION,
             gatekeeper_prompt_hash=GATEKEEPER_PROMPT_HASH,
             extractor_prompt_version=EXTRACTOR_PROMPT_VERSION,

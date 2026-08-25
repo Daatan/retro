@@ -122,6 +122,7 @@ def build_provenance(
     *,
     method: Literal["live", "pool", "propagated", "logical"],
     chain: Optional[list[str]] = None,
+    max_articles: Optional[int] = None,
     gatekeeper_model: Optional[str] = None,
     extractor_model: Optional[str] = None,
     gatekeeper_prompt_version: Optional[str] = None,
@@ -150,4 +151,5 @@ def build_provenance(
         ),
         method=method,
         chain=chain or [],
+        max_articles=max_articles,
     )

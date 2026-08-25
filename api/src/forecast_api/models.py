@@ -452,6 +452,14 @@ class Provenance(BaseModel):
     models: ProvenanceModels = Field(default_factory=ProvenanceModels)
     method: Literal["live", "pool", "propagated", "logical"] = Field(description="live = /forecast did its own search+extraction; pool = /pool/aggregate recomputed over an already-extracted pool; propagated/logical reserved for v2")
     chain: list[str] = Field(default_factory=list, description="= provider_chain: full search fallback chain attempted, in order. Empty on a pool recompute, which never searches.")
+    # retro#652: the effective article-count ceiling this attempt ran with — req.max_articles
+    # clamped by settings.max_articles and any per-key ORACLE_API_KEYS cap (run_forecast's
+    # `limit`), or the retry-relaxed-search rung's own wider `retry_limit` when that path ran.
+    # Recorded even on a timeout/empty-result attempt (the configured ceiling is still known),
+    # so a caller correlating search depth against calibration doesn't have to guess it from
+    # `articles_found`/`articles_used`, which reflect what was actually returned, not what was
+    # allowed. Null on a pool recompute, which never searches.
+    max_articles: Optional[int] = Field(default=None, description="Effective article-count ceiling for this attempt (post per-key cap / retry widening). Null on a pool recompute.")
     inputs: list[ProvenanceInput] = Field(default_factory=list, description="v2 only; empty on v1")
     upstream: list[ProvenanceUpstreamCall] = Field(default_factory=list, description="v2 calling v1 only; empty on v1")
 

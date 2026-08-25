@@ -43,6 +43,15 @@ class TestEmptyResponseForwardsProvider:
         assert r.provenance.method == "live"
         assert r.provenance.chain == ["gdelt", "ddg"]
 
+    def test_carries_the_effective_article_ceiling(self):
+        """retro#652: the ceiling this attempt ran with is recorded even on a
+        timeout/empty-result exit, since it's known before search runs."""
+        r = _empty_response("q?", max_articles=7)
+        assert r.provenance.max_articles == 7
+
+    def test_ceiling_defaults_to_none(self):
+        assert _empty_response("q?").provenance.max_articles is None
+
 
 class TestForecastResponseProvider:
     def test_empty_path_carries_provider(self, monkeypatch):
@@ -95,6 +104,7 @@ class TestForecastResponseProvider:
 
         req = ForecastRequest(
             question="Caller-probe 9z — will the measure pass?",
+            max_articles=7,
             articles=[ArticleInput(
                 url="https://example.com/a",
                 title="Detailed analysis of whether the measure will pass this session",
@@ -128,6 +138,9 @@ class TestForecastResponseProvider:
         assert resp.provenance.models.gatekeeper_prompt_hash == forecaster.GATEKEEPER_PROMPT_HASH
         assert resp.provenance.models.extractor_prompt_version == forecaster.EXTRACTOR_PROMPT_VERSION
         assert resp.provenance.models.extractor_prompt_hash == forecaster.EXTRACTOR_PROMPT_HASH
+        # retro#652: the effective article ceiling (req.max_articles, unclamped here —
+        # no per-key client) rides alongside model/prompt provenance.
+        assert resp.provenance.max_articles == 7
 
     def test_caller_supplied_articles_fact_signal_reduction(self, monkeypatch):
         # fact_signal + facets are per-claim (Phase 2, author-scoring redesign). The per-source

@@ -1438,7 +1438,7 @@ async def run_forecast(
         result = forecast_cache.get(cache_key)
         if result is not None:
             return result
-        return _empty_response(req.question, reason="no_result")
+        return _empty_response(req.question, reason="no_result", max_articles=limit)
 
     event = asyncio.Event()
     _inflight[cache_key] = event
@@ -1461,7 +1461,7 @@ async def run_forecast(
             articles_used=0,
             outcome="timeout",
         )
-        return _empty_response(req.question, reason="timeout")
+        return _empty_response(req.question, reason="timeout", max_articles=limit)
     finally:
         event.set()
         _inflight.pop(cache_key, None)
@@ -1524,7 +1524,7 @@ async def _maybe_retry_relaxed_search(
                 timeout=settings.forecast_timeout_seconds,
             )
         except asyncio.TimeoutError:
-            retry_resp = _empty_response(req.question, reason="timeout")
+            retry_resp = _empty_response(req.question, reason="timeout", max_articles=retry_limit)
 
     recovered = not retry_resp.insufficient_data
     logger.info(
@@ -1656,6 +1656,7 @@ async def _run_forecast_inner(
             provider=search_provider,
             provider_chain=provider_chain,
             distilled_query=distilled_query,
+            max_articles=limit,
         )
         # Only the distillation call (if any) ran by this point — still spend.
         resp.token_usage = TokenUsage.from_usages(usage_events)
@@ -1996,6 +1997,7 @@ async def _run_forecast_inner(
                 provider=search_provider,
                 provider_chain=provider_chain,
                 distilled_query=distilled_query,
+                max_articles=limit,
             )
 
     # Steps 4-4b: relevance off-topic safety net, logit pooling, thin-evidence
@@ -2187,6 +2189,7 @@ async def _run_forecast_inner(
             provider_chain=provider_chain,
             distilled_query=distilled_query,
             debug=empty_debug,
+            max_articles=limit,
         )
         # The gate/extract calls were made and paid for even though no usable
         # forecast came out — an empty answer still reports its spend.
@@ -2276,6 +2279,7 @@ async def _run_forecast_inner(
         provenance=build_provenance(
             method="live",
             chain=provider_chain,
+            max_articles=limit,
             gatekeeper_model=_pipeline_settings.gatekeeper_model,
             extractor_model=_pipeline_settings.extractor_model,
             gatekeeper_prompt_version=GATEKEEPER_PROMPT_VERSION,
@@ -2602,6 +2606,7 @@ def _empty_response(
     provider_chain: Optional[list[str]] = None,
     distilled_query: Optional[str] = None,
     debug: Optional[DebugInfo] = None,
+    max_articles: Optional[int] = None,
 ) -> ForecastResponse:
     """Return a maximally uncertain response when no usable articles are found.
 
@@ -2609,6 +2614,9 @@ def _empty_response(
     distinguish 'couldn't answer (and why)' from a real 0.5 probability.
     ``provider``/``provider_chain`` surface which engine served (or failed to
     serve) the search, so an empty forecast still says where it looked.
+    ``max_articles`` (retro#652) is the effective ceiling this attempt ran
+    with, when the caller knows it — omitted on the couple of very early exits
+    (in-flight-wait race, outer timeout) that precede computing it.
     """
     return ForecastResponse(
         question=question,
@@ -2627,7 +2635,7 @@ def _empty_response(
         provider_chain=provider_chain or [],
         distilled_query=distilled_query,
         debug=debug,
-        provenance=build_provenance(method="live", chain=provider_chain),
+        provenance=build_provenance(method="live", chain=provider_chain, max_articles=max_articles),
     )
 
 

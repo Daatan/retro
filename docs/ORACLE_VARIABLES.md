@@ -250,6 +250,37 @@ any decision to neutralise rows the way the settled-only guard already does.
 can't also fire here. Fail-open like every sibling: missing or sub-0.3-magnitude `fact_signal`,
 below either gate, or a matching sign — all no-op.
 
+#### author_lean disagreeing with the article's own stance — `audit_author_lean_sign_mismatch` (log-only)
+
+retro#326: the 2026-07-24 PR#314 fix corrected the primary sentiment-vs-forecast leak (an author
+who condemns an event while treating it as happening was getting a negative `author_lean` instead
+of positive), validated against exactly 3 real article bodies at the time. A 2026-08-25 prod sweep
+of author_lean rows added *since* that fix deployed found the leak is broader than tracked: ~26-30
+of 1467 rows (~2%) still disagree in sign with the article's own claim-weighted `avg_stance` —
+spanning many outlets/bylines, not just the one known "downstream-consequence" residual. Spot-check
+example: a hnaftali.com piece explicitly declaring Israel will NOT withdraw from Lebanon
+(`avg_stance=+1.0`) still scored `author_lean=-0.9`, its outrage about a separate US-Iran deal
+leaking into the author's own directional score.
+
+This audits `sign(author_lean) != sign(avg_stance)` at `|avg_stance| ≥ 0.7 & avg_certainty ≥ 0.7`
+(`_AUTHOR_LEAN_SIGN_STANCE_GATE`/`_AUTHOR_LEAN_SIGN_CERTAINTY_GATE`) with `|author_lean| ≥ 0.3`
+(`_AUTHOR_LEAN_SIGN_MAGNITUDE_GATE`) — the same gate shape and thresholds as
+`audit_fact_signal_sign_mismatch` above, since that guard's 90%-precision sizing is the only
+precedent in this codebase for where to set this kind of bar; several real leaks in the 2026-08-25
+sweep sat at `avg_stance` 0.3-0.66, below this gate, so the 0.7 bar trades recall for the same
+precision discipline rather than a fresh sizing pass — a broader hand-check to loosen it (the way
+retro#602 did with a 20-row sample) is a natural follow-up, not a claim that those are non-leaks.
+
+Runs only on the **live** `/forecast` path (`forecaster.py`, right after `avg_stance` is computed)
+— that is the path that actually populates daatan's `evidence_pool_articles`, unlike the batch/
+atlas pipeline in `runner.py` which has no per-article stance aggregate to compare against.
+Genuine author/fact disagreement (the author's own claims also read negative, so `avg_stance` is
+negative too) is left alone by construction — only a *disagreement* between the two signs fires.
+
+**Log-only — never mutates `author_lean`/`author_lean_certainty`/`stance`.** Fail-open like every
+sibling: a null or sub-0.3-magnitude `author_lean` (no position taken — most reporting), or below
+either gate, is a no-op.
+
 #### Claim/stance sign conflicts are logged, not corrected — `flag_claim_stance_sign_conflicts`
 
 retro#298 found rows where the extracted `claim` text and `stance` disagree with each other in

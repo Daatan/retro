@@ -550,7 +550,13 @@ explicitly weighs both sides and commits to neither. This is the direction the a
 expects the event to RESOLVE, not whether they welcome it: an author who condemns, warns \
 against, or laments an event while treating it as happening or inevitable is still \
 forecasting that it WILL happen — lean +1 toward it, never negative. Approval or alarm about \
-an outcome is sentiment, not a directional forecast, and must not flip the sign.
+an outcome is sentiment, not a directional forecast, and must not flip the sign. Cross-check \
+against your own extracted claims below: if this author's claims already affirm the event is \
+happening (a positive stance), author_lean must not read negative — and if their claims deny \
+it, author_lean must not read positive. Alarm, outrage, or criticism about a DIFFERENT \
+development, a related event's consequences, or this event's implications is still not a \
+reason to move author_lean opposite to what the author's own claims about THIS event already \
+established.
   author_lean_certainty = how firmly the author commits to that forecast (0 hedged, 1 emphatic).
 Return null for both (omit them) when the byline author only reports what happened or relays \
 other people's views without endorsing a direction — a straight news report has no \
@@ -2037,6 +2043,71 @@ def audit_fact_signal_sign_mismatch(
         )
 
     return predictions
+
+
+# retro#326 sizing (2026-08-25): a prod sweep of author_lean rows added since
+# the PR#314 sentiment-leak fix deployed (2026-07-24 11:34 UTC) found ~26-30
+# rows (of 1467, ~2%) where author_lean's sign disagrees with the article's
+# own claim-weighted stance at a real (non-near-zero) stance magnitude — not
+# the single narrow "Behrendt-class" residual PR#314 tracked, but a broader,
+# ongoing recurrence: strong evaluative/alarmed language (outrage, "strategic
+# disaster") sitting next to a clearly affirmed factual claim, e.g. a byline
+# explicitly declaring Israel will NOT withdraw from Lebanon still scored
+# author_lean=-0.9 against stance=+1.0. Spot-checked 3/3 high-stance hits as
+# genuine leaks (Bermant/FP, Behrendt/tagesschau, a hnaftali.com piece) —
+# same gate shape and thresholds as `audit_fact_signal_sign_mismatch`
+# (retro#602) since that guard's 0.7/0.7/0.3 bar is the only precision-sized
+# precedent in this codebase; a broader hand-check to size a looser bound (the
+# way #602 did with a 20-row sample) is left as follow-up. Log-only, same
+# contract as every sibling audit in this module: never mutates author_lean,
+# author_lean_certainty, or stance.
+_AUTHOR_LEAN_SIGN_STANCE_GATE = 0.7
+_AUTHOR_LEAN_SIGN_CERTAINTY_GATE = 0.7
+_AUTHOR_LEAN_SIGN_MAGNITUDE_GATE = 0.3
+
+
+def audit_author_lean_sign_mismatch(
+    author_lean: Optional[float],
+    author_lean_certainty: Optional[float],
+    avg_stance: float,
+    avg_certainty: float,
+    *,
+    url: Optional[str] = None,
+) -> None:
+    """Log-only: flag an author_lean whose sign disagrees with the article's
+    own claim-weighted stance (retro#326).
+
+    ``author_lean`` is the BYLINE author's own directional forecast — per the
+    AUTHOR_LEAN prompt section it must track whether the author expects the
+    event to happen, never their sentiment about it. When the article's own
+    extracted claims (``avg_stance``, the same claim-weighted aggregate used
+    for the live estimate) affirm the event at real magnitude and confidence
+    but author_lean reads the opposite sign, that is very likely a sentiment-
+    vs-forecast leak, not a genuine author/fact disagreement — a genuine
+    disagreement would show up as a *negative* avg_stance too (the author's
+    own claims would reflect their doubt), which this gate leaves alone.
+
+    Fails open like every sibling guard: a null author_lean (no position
+    taken — most reporting) never fires, and below the stance/certainty gate
+    or the author_lean magnitude floor is skipped. Never mutates anything —
+    pure observability, same contract as ``audit_fact_signal_sign_mismatch``.
+    """
+    if author_lean is None or abs(author_lean) < _AUTHOR_LEAN_SIGN_MAGNITUDE_GATE:
+        return
+    if abs(avg_stance) < _AUTHOR_LEAN_SIGN_STANCE_GATE:
+        return
+    if avg_certainty < _AUTHOR_LEAN_SIGN_CERTAINTY_GATE:
+        return
+    if (author_lean > 0) == (avg_stance > 0):
+        return
+
+    logger.warning(
+        "event=author_lean_sign_mismatch author_lean=%+.2f author_lean_certainty=%s "
+        "avg_stance=%+.2f avg_certainty=%.2f url=%r",
+        author_lean,
+        f"{author_lean_certainty:.2f}" if author_lean_certainty is not None else None,
+        avg_stance, avg_certainty, url,
+    )
 
 
 # A settlement whose own fact lane points the other way is contradicting itself.

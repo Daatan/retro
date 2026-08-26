@@ -157,7 +157,7 @@ def _weight_from_brier(brier_mean: float, predictions: int) -> float:
     term only ever moves a source relative to that. Shrinkage is what makes a
     minimum per-source count unnecessary: a new source with two lucky calls
     lands near 1.0 instead of at the upper clamp, and earns its way out
-    smoothly as its own record accumulates.
+    smoothly as its own track record accumulates.
 
     Deliberately NOT the vault's μ−3σ transform: σ barely moves in these large
     multi-team OpenSkill matches, so conservative stays pinned near 0 and every

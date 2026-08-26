@@ -427,7 +427,9 @@ async def discover(keywords: str, date_from: str, date_to: str, data_dir: Path):
             ],
         ),
     )
-    rows = list(await asyncio.to_thread(job.result))
+    # Same time fuse as _search_gdelt_bq (retro#655) — job.result() has no
+    # default timeout and can hang indefinitely.
+    rows = list(await asyncio.to_thread(job.result, timeout=_ws._GDELT_BQ_QUERY_TIMEOUT_S))
     table = Table(title=f"GKG coverage for {terms} · {date_from}→{date_to}")
     table.add_column("Outlet", style="cyan")
     table.add_column("source_id", style="green")

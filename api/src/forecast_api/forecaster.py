@@ -2078,11 +2078,12 @@ async def _run_forecast_inner(
             )
     agg = aggregate_pool(all_stances, all_weights, relevances, all_settled, **_pool_kwargs)
     if agg is not None:
-        # Evidence-window shadow (retro#545 slice iii): per-row lines plus one
-        # per-pool summary — the summary logs on EVERY pool so the review has a
+        # Gate 0 (retro#545 slice iii, enforced 2026-08-26): per-row lines plus
+        # one per-pool summary — the summary logs on EVERY pool so drift has a
         # denominator (share of pools affected), same rationale as
-        # event=evidence_clusters logging every request (retro#412). Log-only;
-        # the rows still voted.
+        # event=evidence_clusters logging every request (retro#412). These
+        # rows are already excluded from `agg`'s pooled estimate by this
+        # point — the log exists so an exclusion can be traced back to a URL.
         for idx, window_reason in agg.evidence_window_outside_rows:
             logger.info(
                 "event=evidence_window_outside reason=%s url=%s stance=%+.2f "
@@ -2574,7 +2575,14 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             # The pool the abstention judged unusable still had a shape — see
             # PoolAggregateResult's docstring on why evidence_mass/thin_evidence
             # ride along on an insufficient result (retro#458 Phase 2 extends
-            # that to n_eff/age_adjusted_mass).
+            # that to n_eff/age_adjusted_mass). settlement_votes_demoted rides
+            # along too (Gate 0, retro#545 slice iii): a vote can now be BOTH
+            # demoted (fails settlement_vote_validity) AND weight-zeroed by the
+            # evidence window, which can make its otherwise-single-source pool
+            # abstain (no_usable_weight) rather than fall through to the
+            # normal-path response below — losing the demotion count here
+            # would silently hide why an abstained pool had nothing usable.
+            settlement_votes_demoted=len(agg.settlement_demotions),
             evidence_mass=round(agg.evidence_mass, 4),
             n_eff=round(agg.n_eff, 4),
             age_adjusted_mass=round(agg.age_adjusted_mass, 4),

@@ -1013,9 +1013,11 @@ class TestRelevanceBandWeights:
 
 
 class TestEvidenceWindowShadow:
-    """retro#545 slice (iii): the evidence-window shadow check
-    (``[claim_created_at − lookback, deadline]``, Gate-0 decision 2026-08-19).
-    Log-only — these tests pin that it reports and never alters the estimate.
+    """retro#545 slice (iii): the evidence window
+    (``[claim_created_at − lookback, deadline]``, Gate-0 decision 2026-08-19,
+    enforced 2026-08-26). A row dated outside the window has its weight
+    zeroed in the pooled estimate; it is still reported (event log,
+    ``evidence_window_outside_rows``) and still counted in ``n``.
     """
 
     def _outside(self, **kw):
@@ -1078,7 +1080,7 @@ class TestEvidenceWindowShadow:
             published_dates=["2027-06-01"], n=1, claim_deadline=None,
         ) == ()
 
-    def _pool(self, **kw):
+    def _pool(self, weights=(1.0, 1.0), **kw):
         defaults = dict(
             relevance_weight_floor=0.0,
             decisiveness_floor=0.0,
@@ -1095,16 +1097,21 @@ class TestEvidenceWindowShadow:
         )
         defaults.update(kw)
         return aggregate_pool(
-            [0.6, 0.4], [1.0, 1.0], [0.8, 0.8], [False, False], **defaults,
+            [0.6, 0.4], list(weights), [0.8, 0.8], [False, False], **defaults,
         )
 
-    def test_aggregate_pool_reports_rows_without_touching_the_estimate(self):
-        shadow = self._pool(evidence_window_lookback_days=30)
+    def test_aggregate_pool_excludes_the_row_from_the_estimate(self):
+        enforced = self._pool(evidence_window_lookback_days=30)
         baseline = self._pool()
-        assert shadow.evidence_window_outside_rows == ((0, "before_window"),)
+        zeroed = self._pool(weights=(0.0, 1.0))
+        assert enforced.evidence_window_outside_rows == ((0, "before_window"),)
         assert baseline.evidence_window_outside_rows == ()
-        # Log-only: every published quantity is identical with the shadow on.
-        assert shadow._replace(evidence_window_outside_rows=()) == baseline
+        # Enforced: excluding row 0 via the window is equivalent to zeroing
+        # its weight directly (R3 — missing/inapplicable data never
+        # increases influence, same shape as F14's zero-weight rows).
+        assert enforced._replace(evidence_window_outside_rows=()) == zeroed
+        # And the estimate genuinely moved off the unfiltered baseline.
+        assert enforced.mean != baseline.mean
 
     def test_aggregate_pool_reports_on_an_abstaining_pool(self):
         # Computed on every branch, like n_eff — an abstained pool still has a

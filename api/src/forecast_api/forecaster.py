@@ -41,6 +41,7 @@ from tm.extractor import (
     enforce_winner_entity_consistency,
     audit_author_lean_sign_mismatch,
     audit_named_entity_dyad_mismatch,
+    audit_quote_provenance_mismatch,
     flag_claim_stance_sign_conflicts,
     PROMPT_PREFIX as _EXTRACTOR_PROMPT_PREFIX,
     PROMPT_SUFFIX as _EXTRACTOR_PROMPT_SUFFIX,
@@ -1262,6 +1263,13 @@ async def _process_article(
         # mutates — see docs/ORACLE_VARIABLES.md.
         extraction.predictions = audit_named_entity_dyad_mismatch(
             extraction.predictions, question,
+        )
+        # Log-only (retro#545): does a claim's quote turn out to be the
+        # event's own name/description restated rather than real article
+        # text — the fabricated-quote shape the 2026-08-25 cross-model
+        # survey surfaced. See docs/ORACLE_VARIABLES.md.
+        extraction.predictions = audit_quote_provenance_mismatch(
+            extraction.predictions, question, resolution_criteria or question,
         )
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", result.url, exc)

@@ -281,6 +281,34 @@ negative too) is left alone by construction — only a *disagreement* between th
 sibling: a null or sub-0.3-magnitude `author_lean` (no position taken — most reporting), or below
 either gate, is a no-op.
 
+#### A fabricated quote — the extracted text is the event, not the article — `audit_quote_provenance_mismatch` (log-only)
+
+retro#545's 2026-08-25 cross-model extractor survey (700 matched-quote comparisons, 78
+model-pairs × 50 real prod articles) surfaced a class distinct from the sign-error and
+wrong-entity shapes above: in 2 of 10 flagged articles, the extracted `quote` field was
+verbatim the event's own `event_name`/`event_description`, not text pulled from the article.
+Two clean tells confirmed it wasn't coincidence — the article had nothing to do with its
+assigned event (a Beitar Jerusalem soccer-ban article scored against "Global oil price drops
+below $70/barrel"), and the "quote" was the event description restated, not a sentence from
+the piece. No guard checked quote provenance at all before this: `extract_predictions`'s
+prompt tells the model to quote verbatim, but nothing verified compliance.
+
+Deliberately narrow: compares `quote` against `event_name`/`event_description` only — after
+casefolding, whitespace-collapsing and punctuation-stripping
+(`_normalize_for_provenance_compare`) — not a quote-vs-`article_text` substring check. The two
+known real examples were exact restatements of the event, which this catches precisely; a full
+article-body check would need translation- and extraction-artifact-aware normalization to avoid
+drowning in noise, deferred until this narrower signal's precision is measured. A short-quote
+floor (`_QUOTE_PROVENANCE_MIN_LEN`, 20 chars) skips anything short enough that an on-topic
+quote could coincidentally overlap the event text without being fabricated.
+
+**Log-only — never mutates `stance`/`claim`/anything else.** `event=quote_provenance_mismatch`
+fires per match; `event=quote_provenance_mismatch_shadow` logs `eligible=`/`fired=`/`n=` once
+per call regardless of outcome, same convention as the guards above, so a future precision
+review has a real denominator. Precision on this shape is unmeasured (only 2 known examples) —
+same rollout shape as the other audit-only guards: ship the shadow log, review real
+trigger/precision rate, decide on promotion in a follow-up slice.
+
 #### Claim/stance sign conflicts are logged, not corrected — `flag_claim_stance_sign_conflicts`
 
 retro#298 found rows where the extracted `claim` text and `stance` disagree with each other in

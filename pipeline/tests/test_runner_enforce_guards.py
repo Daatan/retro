@@ -196,3 +196,53 @@ async def test_institutional_alias_does_not_log_using_article_event_name(caplog)
     assert not any(
         "event=entity_dyad_mismatch " in r.message for r in caplog.records
     )
+
+
+async def test_fabricated_quote_is_logged_using_article_event_fields(caplog):
+    """retro#545: the batch path must run audit_quote_provenance_mismatch keyed
+    on article.event_name/event_description, same wiring pattern as the
+    entity-dyad audit above — log-only, no mutation."""
+    gate = GatekeeperOutput(is_prediction=True, reason="looks predictive")
+    preds = [PredictionExtraction(
+        quote="Global oil price drops below $70/barrel",
+        claim="Oil price falls", stance=0.9, certainty=0.9,
+    )]
+    extraction = ExtractionOutput(predictions=preds)
+    article = _article(
+        event_name="Global oil price drops below $70/barrel",
+        event_description="Will Brent crude fall below $70 a barrel?",
+    )
+    with caplog.at_level("WARNING", logger="tm.extractor"), \
+         patch("tm.runner.check_is_prediction", new=AsyncMock(return_value=(gate, {}))), \
+         patch("tm.runner.extract_predictions", new=AsyncMock(return_value=(extraction, {}))), \
+         patch("tm.runner.update_cell"):
+        result = await run_article(article)
+    assert result.extraction is not None
+    out = result.extraction.predictions[0]
+    assert out.stance == 0.9
+    assert out.certainty == 0.9
+    assert any(
+        "event=quote_provenance_mismatch " in r.message for r in caplog.records
+    )
+
+
+async def test_real_article_quote_does_not_log_using_article_event_fields(caplog):
+    gate = GatekeeperOutput(is_prediction=True, reason="looks predictive")
+    preds = [PredictionExtraction(
+        quote="Brent crude futures fell 3% in early trading amid oversupply concerns.",
+        claim="Oil price falls", stance=0.9, certainty=0.9,
+    )]
+    extraction = ExtractionOutput(predictions=preds)
+    article = _article(
+        event_name="Global oil price drops below $70/barrel",
+        event_description="Will Brent crude fall below $70 a barrel?",
+    )
+    with caplog.at_level("WARNING", logger="tm.extractor"), \
+         patch("tm.runner.check_is_prediction", new=AsyncMock(return_value=(gate, {}))), \
+         patch("tm.runner.extract_predictions", new=AsyncMock(return_value=(extraction, {}))), \
+         patch("tm.runner.update_cell"):
+        result = await run_article(article)
+    assert result.extraction is not None
+    assert not any(
+        "event=quote_provenance_mismatch " in r.message for r in caplog.records
+    )

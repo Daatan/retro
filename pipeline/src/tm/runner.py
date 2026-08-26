@@ -23,6 +23,7 @@ from .extractor import (
     enforce_winner_entity_consistency,
     audit_fact_signal_sign_mismatch,
     audit_named_entity_dyad_mismatch,
+    audit_quote_provenance_mismatch,
     flag_claim_stance_sign_conflicts,
 )
 from .models import ExtractionOutput, CellStatus
@@ -152,6 +153,13 @@ async def run_article(article: ArticleInput) -> PipelineResult:
         # mutates — see docs/ORACLE_VARIABLES.md.
         extraction.predictions = audit_named_entity_dyad_mismatch(
             extraction.predictions, article.event_name,
+        )
+        # Log-only (retro#545): does a claim's quote turn out to be the
+        # event's own name/description restated rather than real article
+        # text — the fabricated-quote shape the 2026-08-25 cross-model
+        # survey surfaced. See docs/ORACLE_VARIABLES.md.
+        extraction.predictions = audit_quote_provenance_mismatch(
+            extraction.predictions, article.event_name, article.event_description,
         )
 
         update_cell(

@@ -2186,3 +2186,84 @@ def enforce_settlement_fact_signal_agreement(
         p.stance = 0.0
 
     return predictions
+
+
+_QUOTE_PROVENANCE_MIN_LEN = 20
+
+
+def _normalize_for_provenance_compare(text: str) -> str:
+    """Casefold, collapse whitespace, strip enclosing punctuation/quote marks —
+    enough to catch a ``quote`` that is ``event_name``/``event_description``
+    restated with only formatting differences, without touching real content."""
+    collapsed = re.sub(r"\s+", " ", text.strip().casefold())
+    return collapsed.strip(" .,;:!?\"'“”‘’")
+
+
+def audit_quote_provenance_mismatch(
+    predictions: list[PredictionExtraction],
+    event_name: str,
+    event_description: str,
+) -> list[PredictionExtraction]:
+    """Log-only: flag a claim whose ``quote`` is actually the event's own
+    ``event_name``/``event_description`` restated, not real article text.
+
+    retro#545's 2026-08-25 cross-model survey (700 matched-quote comparisons,
+    78 model-pairs x 50 real prod articles) found 2 of 10 flagged articles
+    carried a fabricated quote of exactly this shape: the article had nothing
+    to do with its assigned event, and the model's ``quote`` field was
+    verbatim the event_name/event_description rather than anything from the
+    article body. No existing guard checks quote provenance at all —
+    ``extract_predictions``'s prompt tells the model to quote verbatim, but
+    nothing verifies it did.
+
+    Deliberately narrow: compares ``quote`` against ``event_name``/
+    ``event_description`` only, not a quote-vs-article_text substring check.
+    The two known real examples were exact restatements of the event, which
+    this catches precisely; a full article-body check would need real
+    normalization work (translation, HTML artifacts, elided quotes) to avoid
+    drowning in noise — deferred until this narrower signal's precision is
+    measured, the same incremental-scoping approach
+    ``audit_named_entity_dyad_mismatch`` took.
+
+    Fails open like every sibling: a ``quote`` shorter than
+    ``_QUOTE_PROVENANCE_MIN_LEN`` is skipped — below that length, an on-topic
+    quote could coincidentally overlap the event text without being
+    fabricated. Never mutates ``stance``/``claim``/anything else — pure
+    logging, same contract as ``audit_named_entity_dyad_mismatch``.
+
+    Also logs one ``event=quote_provenance_mismatch_shadow`` summary line per
+    call with ``eligible=``/``fired=`` counts, matching the
+    ``entity_dyad_mismatch_shadow`` convention, so a future precision review
+    has a real trigger-rate denominator.
+    """
+    targets = {
+        _normalize_for_provenance_compare(t)
+        for t in (event_name, event_description)
+        if t
+    }
+    targets.discard("")
+
+    eligible = 0
+    fired = 0
+    for p in predictions:
+        quote = (p.quote or "").strip()
+        if len(quote) < _QUOTE_PROVENANCE_MIN_LEN:
+            continue
+        eligible += 1
+
+        if _normalize_for_provenance_compare(quote) not in targets:
+            continue
+        fired += 1
+
+        logger.warning(
+            "event=quote_provenance_mismatch event_name=%r event_description=%r "
+            "quote=%r stance=%+.2f certainty=%.2f settled=%s claim=%r",
+            event_name, event_description, quote, p.stance, p.certainty,
+            p.settled, p.claim[:120],
+        )
+
+    logger.info(
+        "event=quote_provenance_mismatch_shadow eligible=%d fired=%d n=%d",
+        eligible, fired, len(predictions),
+    )
+    return predictions

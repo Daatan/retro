@@ -154,6 +154,30 @@ class TestSourceLevelInvariants:
         assert "domain_filter" in src
         assert "maximum_bytes_billed" in src
 
+    def test_bq_query_has_time_fuse(self):
+        """retro#655 — job.result() must not be called without a timeout, or a
+        stalled BigQuery job hangs the ingestor indefinitely (observed: 0% CPU,
+        alive 11+ minutes on a real event)."""
+        import inspect
+        assert "job.result(timeout=" in inspect.getsource(ws._search_gdelt_bq)
+        assert "job.result(timeout=" in inspect.getsource(g.discover) \
+            or "job.result, timeout=" in inspect.getsource(g.discover)
+
+
+class TestSearchGdeltBqTimeout:
+    """Behavioral counterpart to the source-inspection guard above."""
+
+    def test_job_result_called_with_timeout(self, monkeypatch):
+        fake_client = MagicMock()
+        fake_job = MagicMock()
+        fake_job.result.return_value = []
+        fake_client.query.return_value = fake_job
+        monkeypatch.setattr(ws, "_get_bq_client", lambda: fake_client)
+
+        ws._search_gdelt_bq("Netanyahu", limit=10)
+
+        fake_job.result.assert_called_once_with(timeout=ws._GDELT_BQ_QUERY_TIMEOUT_S)
+
 
 class TestEntityRegexPatterns:
     """_entity_regex_patterns() builds the values bound as a BigQuery

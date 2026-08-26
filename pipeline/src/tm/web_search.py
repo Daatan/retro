@@ -1194,6 +1194,12 @@ _GDELT_DOC_WINDOW_DAYS = 90
 # comfortably clears any legitimate multi-month window while blocking catastrophe.
 _GDELT_BQ_MAX_BYTES_BILLED = 200 * 1024**3
 
+# Time fuse (retro#655): a partition-pruned scan normally finishes in well under
+# a minute, but job.result() has no default timeout and can hang indefinitely —
+# observed via strace: zero syscalls, 0% CPU, alive 11+ minutes on a real event.
+# 120s comfortably clears a legitimate scan while failing well short of that.
+_GDELT_BQ_QUERY_TIMEOUT_S = 120
+
 
 def _slug_to_title(url: str) -> str:
     """Derive a human-readable title from a URL path slug.
@@ -1366,7 +1372,7 @@ def _search_gdelt_bq(
             ],
         ),
     )
-    rows = list(job.result())
+    rows = list(job.result(timeout=_GDELT_BQ_QUERY_TIMEOUT_S))
 
     seen_urls: set[str] = set()
     results = []

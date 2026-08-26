@@ -881,11 +881,13 @@ class PoolAggregateResult(NamedTuple):
     # validity rules (retro#388's match gate reads exactly these rows) —
     # aggregation itself neither logs nor judges them.
     settlement_vote_indices: tuple = ()
-    # Shadow instrumentation only (retro#545 slice iii): (source index, reason)
-    # per row dated outside the claim's evidence window — see
-    # evidence_window_outside(). Nothing in this module reads it back into the
-    # pooled estimate; callers log it, same contract as settlement_demotions.
-    # Empty when the check is disabled or nothing falls outside.
+    # Gate 0 (retro#545 slice iii): (source index, reason) per row dated
+    # outside the claim's evidence window — see evidence_window_outside().
+    # Enforced (2026-08-26): every listed row's weight is already zeroed in
+    # the pooled estimate this result carries. Exposed so callers can still
+    # log which rows were dropped and why, same contract as
+    # settlement_demotions. Empty when the check is disabled or nothing
+    # falls outside.
     evidence_window_outside_rows: tuple = ()
     # Shadow instrumentation only (retro#356): the pooled mean re-drifted toward
     # the resolved base rate for a `diffuse` by-deadline claim whose window has
@@ -1352,15 +1354,43 @@ def aggregate_pool(
     if not stances:
         return None
 
-    # Shadow-only (retro#545 slice iii): which rows sit outside the evidence
-    # window. Computed on every branch, like n_eff — a pool that abstains or
-    # pins still has a window worth measuring — and read back by nothing here.
-    # Disabled at this function's default (-1); Settings turns it on.
+    # Gate 0 (retro#545 slice iii, Daatan/docs decisions.md 2026-08-19):
+    # which rows sit outside the evidence window. Computed on every branch,
+    # like n_eff — a pool that abstains or pins still has a window worth
+    # measuring. Disabled at this function's default (-1); Settings turns it
+    # on at 30 days.
     window_outside = evidence_window_outside(
         len(stances), settlement_event_dates, published_dates,
         claim_created_at, claim_deadline, claim_archetype,
         lookback_days=evidence_window_lookback_days,
     )
+    # Enforced (was shadow-only through the week of 2026-08-19 to 2026-08-26 —
+    # the shadow review the decision gated enforcement on; see retro#545's
+    # 2026-08-26 election-pool comment for the reviewed numbers). A row
+    # outside the window is not weak evidence for this claim, it is not
+    # evidence for this claim at all — the adjacent-event class — so it is
+    # zeroed here (R3: missing/inapplicable data never increases influence),
+    # the same "row stays counted in n, drops out of every weight-driven
+    # quantity" shape as F14's zero-weight rows. This runs BEFORE the
+    # correlated-evidence discount and the source-mass cap below, so an
+    # excluded row can never re-enter through either (0 * anything is 0), and
+    # before `settlement_decision` — deliberately: that call already applies
+    # its OWN, separately-shipped temporal check (`event_before_claim_window`,
+    # the 2026-08-16 decision) to individual votes, so zeroing the row's
+    # weight here only removes it from the settlement quality-floor's mass
+    # accounting, never from vote validity, which is exactly the "estimation
+    # lane vs settlement lane" split the decision draws.
+    if window_outside:
+        _excluded = frozenset(i for i, _reason in window_outside)
+        weights = [0.0 if i in _excluded else w for i, w in enumerate(weights)]
+        if valve_weights is not None:
+            valve_weights = [
+                0.0 if i in _excluded else w for i, w in enumerate(valve_weights)
+            ]
+        if age_adjusted_weights is not None:
+            age_adjusted_weights = [
+                0.0 if i in _excluded else w for i, w in enumerate(age_adjusted_weights)
+            ]
 
     # Correlated-evidence discount (retro#355), applied FIRST so that every
     # downstream consumer — evidence_mass, the decisiveness floor, pool_sources,

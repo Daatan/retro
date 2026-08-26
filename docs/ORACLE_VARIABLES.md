@@ -347,15 +347,21 @@ votes in **both** directions suppress the pin entirely
 facts are not decided by outvoting; the England 4-vs-1 stance-inversion pool is the
 canonical case). The pin then requires `settlement_min_sources` **unanimous** valid votes.
 
-**Evidence-window shadow** (retro#545 slice iii, Gate-0 decision 2026-08-19): separately from
-the settlement rules above — which demote *votes* — the *estimation* evidence window for
-non-`scheduled` archetypes is decided to become `[claim_created_at − evidence_window_lookback_days,
-claim_deadline]` (today it is effectively `(−∞, deadline]`). Currently **log-only**: every pool
-aggregation reports rows dated outside the window (`event=evidence_window_outside`, reason
-`before_window`/`after_deadline`; a row's date is its `settlement_event_date` when parseable,
-else `published_date`, and undated rows are skipped) plus one `event=evidence_window_shadow`
-summary per pool so the review has a denominator. Nothing is excluded or demoted — enforce only
-after the shadow numbers are reviewed. The lookback (default **30**, `EVIDENCE_WINDOW_LOOKBACK_DAYS`,
+**Evidence window** (retro#545 slice iii, Gate-0 decision 2026-08-19, **enforced 2026-08-26**):
+separately from the settlement rules above — which demote *votes* — the *estimation* evidence
+window for non-`scheduled` archetypes is `[claim_created_at − evidence_window_lookback_days,
+claim_deadline]` (previously effectively `(−∞, deadline]`). Rows dated outside the window are
+**excluded from the pooled estimate** (weight zeroed — still counted in `n`, still logged as
+`event=evidence_window_outside`, reason `before_window`/`after_deadline`; a row's date is its
+`settlement_event_date` when parseable, else `published_date`, and undated rows are skipped, fail
+open). Shadow-only from 2026-08-19 through 2026-08-26 per the decision ("enforce only after the
+shadow numbers are reviewed"); the review was a scoped election-pool sweep on 2026-08-26 (127 of
+2,057 recent evidence rows across 17 forecasts fell outside the window, driven mostly by a
+2026-08-24 full-pool re-extraction that re-validated topicality but not the evidence date — see
+retro#545 comment). The settlement lane's own, separately-shipped temporal check
+(`event_before_claim_window`, the 2026-08-16 decision) is unaffected: this zeroing happens before
+`settlement_decision` and only removes a row's contribution to `settlement_quality_floor`'s mass
+accounting, never a vote's validity. The lookback (default **30**, `EVIDENCE_WINDOW_LOOKBACK_DAYS`,
 negative disables) is the tunable knob: it keeps the precursor/trend coverage that makes a young
 forecast estimable while catching the adjacent-event class (an earlier, similar incident counted
 as evidence for the forecasted one — the Baltic-drone case, where the incident the claim was

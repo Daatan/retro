@@ -27,7 +27,7 @@ import pytest
 import tm.orchestrator as orch_mod
 from tm.config import settings as tm_settings
 from tm.models import CellStatus, ExtractionOutput, PredictionExtraction
-from tm.orchestrator import Orchestrator, SearchMode
+from tm.orchestrator import EXTRACTION_PROMPT_VERSION, Orchestrator, SearchMode
 from tm.progress import load_state
 from tm.runner import ArticleInput, PipelineResult
 
@@ -417,7 +417,7 @@ class TestProcessArticle:
         orch = _make_orch(tmp_path)
         canonical_hash = "c" * 64
         monkeypatch.setattr(orch._simhash_idx, "find_near_duplicate", lambda text: canonical_hash)
-        extract_path = orch.vault_dir / "extractions" / f"{canonical_hash}_E1_v1.json"
+        extract_path = orch.vault_dir / "extractions" / f"{canonical_hash}_E1_{EXTRACTION_PROMPT_VERSION}.json"
         _write_json(extract_path, {
             "extraction": {"predictions": []},
             "extractor_model": "m", "gatekeeper_model": "g", "gatekeeper_reason": "",
@@ -447,7 +447,7 @@ class TestProcessArticle:
     async def test_existing_extraction_is_reused_without_calling_runner(self, tmp_path, monkeypatch):
         orch = _make_orch(tmp_path)
         art_hash = orch.get_article_hash(self._raw_art()["text"])
-        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_v1.json"
+        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_{EXTRACTION_PROMPT_VERSION}.json"
         _write_json(extract_path, {
             "extraction": {"predictions": []}, "extractor_model": "m",
             "gatekeeper_model": "g", "gatekeeper_reason": "",
@@ -468,7 +468,7 @@ class TestProcessArticle:
     async def test_force_reextract_calls_runner_even_if_cached(self, tmp_path, monkeypatch):
         orch = _make_orch(tmp_path, force_reextract=True)
         art_hash = orch.get_article_hash(self._raw_art()["text"])
-        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_v1.json"
+        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_{EXTRACTION_PROMPT_VERSION}.json"
         _write_json(extract_path, {
             "extraction": {"predictions": []}, "extractor_model": "m",
             "gatekeeper_model": "g", "gatekeeper_reason": "",
@@ -606,7 +606,7 @@ class TestCreateAtlasLink:
     def test_builds_expected_link_data(self, tmp_path):
         orch = _make_orch(tmp_path)
         art_hash = "a" * 64
-        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_v1.json"
+        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_{EXTRACTION_PROMPT_VERSION}.json"
         _write_json(extract_path, {
             "extraction": {"predictions": [{"quote": "q", "claim": "c", "stance": 0.5, "certainty": 0.8}]},
             "extractor_model": "nova-lite",
@@ -630,7 +630,7 @@ class TestCreateAtlasLink:
         # paths that bypass local_file_search's window filter).
         orch = _make_orch(tmp_path)
         art_hash = "d" * 64
-        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_v1.json"
+        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_{EXTRACTION_PROMPT_VERSION}.json"
         _write_json(extract_path, {
             "extraction": {"predictions": [{"quote": "q", "claim": "c", "stance": 0.5, "certainty": 0.8}]},
             "extractor_model": "m", "gatekeeper_model": "g", "gatekeeper_reason": "",
@@ -644,7 +644,7 @@ class TestCreateAtlasLink:
         # so create_atlas_link still writes — matching existing behavior.
         orch = _make_orch(tmp_path)
         art_hash = "e" * 64
-        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_v1.json"
+        extract_path = orch.vault_dir / "extractions" / f"{art_hash}_E1_{EXTRACTION_PROMPT_VERSION}.json"
         _write_json(extract_path, {
             "extraction": {"predictions": []},
             "extractor_model": "m", "gatekeeper_model": "g", "gatekeeper_reason": "",

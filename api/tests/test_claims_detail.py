@@ -27,6 +27,9 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
+
+from forecast_api.models import ClaimDetail
 
 from forecast_api import forecaster
 from forecast_api.aggregation import claim_weighted_stance, resolve_stance_certainty
@@ -806,3 +809,43 @@ class TestConditionalFields:
         # Verdicts must be identical
         assert verdicts_bare == verdicts_enriched, \
             "Settlement gate verdicts changed when conditional fields were populated"
+
+
+class TestClaimStrengthCertaintyAlias:
+    """`ClaimDetail.certainty` and `.claim_strength` are one number under two
+    names for one schema cycle (Oracle 1.5 Phase 1, retro#680).
+
+    daatan persists `claims_detail` rows (daatan#1235), so rows written before
+    the rename carry only `certainty` and rows written after may carry only
+    `claim_strength`. Both must load, and both must come back out carrying both
+    names — otherwise a consumer reading the name this deploy didn't write sees
+    a missing required field on a row that is perfectly well-formed.
+    """
+
+    def test_a_pre_rename_row_loads_and_gains_the_new_name(self):
+        c = ClaimDetail.model_validate({"claim": "c", "stance": 0.4, "certainty": 0.82})
+        assert (c.certainty, c.claim_strength) == (0.82, 0.82)
+
+    def test_a_post_rename_row_loads_and_keeps_the_alias(self):
+        c = ClaimDetail.model_validate({"claim": "c", "stance": 0.4, "claim_strength": 0.82})
+        assert (c.certainty, c.claim_strength) == (0.82, 0.82)
+
+    def test_a_row_carrying_both_names_is_accepted_when_they_agree(self):
+        c = ClaimDetail.model_validate(
+            {"claim": "c", "stance": 0.4, "certainty": 0.82, "claim_strength": 0.82}
+        )
+        assert c.claim_strength == 0.82
+
+    def test_a_row_whose_two_names_disagree_is_rejected_loudly(self):
+        """Silently picking a winner would publish one of two numbers that both
+        claim to be the same field — the failure mode this alias exists to avoid."""
+        with pytest.raises(ValidationError, match="must match"):
+            ClaimDetail.model_validate(
+                {"claim": "c", "stance": 0.4, "certainty": 0.82, "claim_strength": 0.10}
+            )
+
+    def test_both_names_are_emitted_on_the_wire(self):
+        dumped = ClaimDetail.model_validate(
+            {"claim": "c", "stance": 0.4, "claim_strength": 0.82}
+        ).model_dump()
+        assert dumped["certainty"] == dumped["claim_strength"] == 0.82

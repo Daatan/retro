@@ -69,7 +69,7 @@ def test_at_or_below_the_cap_is_untouched():
 def test_only_stance_moves():
     [out] = enforce_decider_intent_stance_cap([pred(0.9, fact_signal=0.25, certainty=0.77)])
     assert out.fact_signal == pytest.approx(0.25)
-    assert out.certainty == pytest.approx(0.77)
+    assert out.claim_strength == pytest.approx(0.77)
     assert out.facet == "announcement"
     assert out.is_occurrence is False
 

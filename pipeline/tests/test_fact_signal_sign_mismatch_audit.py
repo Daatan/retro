@@ -53,7 +53,7 @@ def test_opposing_signs_in_the_other_direction_also_log(caplog):
 def test_never_mutates_anything():
     preds = [pred(0.9, -0.9, certainty=0.95, settled=True)]
     audit_fact_signal_sign_mismatch(preds)
-    assert (preds[0].stance, preds[0].fact_signal, preds[0].certainty, preds[0].settled) == (
+    assert (preds[0].stance, preds[0].fact_signal, preds[0].claim_strength, preds[0].settled) == (
         0.9, -0.9, 0.95, True,
     )
 

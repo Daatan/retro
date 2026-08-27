@@ -156,7 +156,7 @@ class TestForecastTool:
         _patch_forecast(monkeypatch, resp)
         out = await mcp_server.forecast("Will X happen by 2027?", verbose=True)
         assert out == resp.model_dump()
-        assert out["provenance"]["schema_version"] == "1.0"
+        assert out["provenance"]["schema_version"] == "1.1"
         assert out["provenance"]["chain"] == ["gdelt"]
         assert "std" in out and "n_eff" in out
 

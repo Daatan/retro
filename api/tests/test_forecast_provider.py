@@ -39,7 +39,7 @@ class TestEmptyResponseForwardsProvider:
             provider_chain=["gdelt", "ddg"],
         )
         assert r.provenance is not None
-        assert r.provenance.schema_version == "1.0"
+        assert r.provenance.schema_version == "1.1"
         assert r.provenance.method == "live"
         assert r.provenance.chain == ["gdelt", "ddg"]
 

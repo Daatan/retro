@@ -96,7 +96,7 @@ def test_a_clamped_claim_keeps_every_other_field():
     p.event_actors, p.event_target = "Russia", "Ukraine"
     [out] = enforce_precursor_cap([p])
     assert out.fact_signal == CAP
-    assert (out.stance, out.certainty) == (0.75, 0.85)
+    assert (out.stance, out.claim_strength) == (0.75, 0.85)
     assert out.settled is True
     assert out.verified is False
     assert (out.event_actors, out.event_target) == ("Russia", "Ukraine")

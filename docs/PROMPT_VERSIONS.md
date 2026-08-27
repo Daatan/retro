@@ -29,6 +29,7 @@ same PR as the prompt edit.
 | extractor | v1 | `6371300bb3b89b8c` | 2026-08-24 | retro#627 | Initial versioned baseline — no prior version existed on the live path. |
 | extractor | v2 | `6813d6184d14568b` | 2026-08-25 | retro#649 | Added "tone is not stance direction" rule + worked example (retro#545) — alarming/critical tone getting read as negative stance regardless of the claim's actual content. |
 | extractor | v3 | `5a8082ab250463eb` | 2026-08-25 | retro#326 | Added an author_lean self-consistency cross-check against the article's own extracted claims — alarm/criticism about a downstream consequence or a related event must not flip author_lean opposite to what the byline's own claims about the event itself already established. A/B'd against the live model on 13 synthetic regression cases (zero regressions); real-corpus validation was inconclusive — see PR description. |
+| extractor | v4 | `fc550c6255ecaa31` | 2026-08-27 | retro#680 | Renamed the elicited field `certainty` → `claim_strength` (Oracle 1.5 Phase 1). No rule, threshold or worked-example VALUE changed — only the identifier, at every site where it names the output slot; the four places the prompt uses "certainty" as ordinary English (e.g. "LATE is certainty the claim is FALSE") keep the word. The rename separates the SOURCE's commitment from the READER's confidence in its own interpretation, which becomes its own field in retro#681. `certainty` stays populated as a wire alias for one schema cycle. |
 
 ## ⚠️ This table does NOT cover the batch pipeline
 

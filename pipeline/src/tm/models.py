@@ -1,5 +1,7 @@
 import json as _json
-from pydantic import BaseModel, Field, model_validator
+from pydantic import (
+    AliasChoices, BaseModel, ConfigDict, Field, model_serializer, model_validator,
+)
 from typing import Literal, Optional, Any
 from enum import Enum
 
@@ -53,10 +55,42 @@ class PredictionType(str, Enum):
 
 
 class PredictionExtraction(BaseModel):
+    # `claim_strength` was named `certainty` until Oracle 1.5 Phase 1 (retro#680). The
+    # elicitation text is unchanged — only the name moved, so the number this field carries
+    # is the same one the within-article mean has always used. The old name is accepted on
+    # input (`validation_alias` below) so stored rows and any not-yet-updated producer still
+    # parse; the wire keeps emitting BOTH names for one schema cycle (api ClaimDetail /
+    # SourceSignal / PoolSourceInput). The rename exists because "certainty" invited a second
+    # reading — the *reader's* confidence in its own interpretation — which is a different
+    # quantity and gets its own field (`reader_confidence`, retro#681). retro#664's Kenya case
+    # is the evidence: an unhedged span ("retained the Central Bank Rate at 8.75 percent")
+    # scored 0.30 because the reader was unsure, not because the source hedged.
+    model_config = ConfigDict(populate_by_name=True)
+
     quote: str = Field(description="Exact sentence(s) from the article containing the prediction")
     claim: str = Field(description="One-sentence neutral summary in English")
     stance: float = Field(ge=-1.0, le=1.0, description="Directional outlook: -1=event won't happen, +1=event will happen")
-    certainty: float = Field(ge=0.0, le=1.0, description="Linguistic confidence: 0=very hedged, 1=absolute")
+    claim_strength: float = Field(
+        ge=0.0, le=1.0,
+        validation_alias=AliasChoices("claim_strength", "certainty"),
+        description="Linguistic confidence: 0=very hedged, 1=absolute",
+    )
+
+    @model_serializer(mode="wrap")
+    def _emit_certainty_alias(self, handler) -> dict[str, Any]:
+        """Serialize `claim_strength` under BOTH names for one schema cycle.
+
+        `orchestrator.py` dumps this model straight into the atlas article JSON,
+        and `utils.py`/`backtest.py` validate those rows on the literal key
+        `certainty` — dropping it would make every new row score as broken rather
+        than fail loudly. A serializer (not a `computed_field`) is what does this:
+        it leaves the VALIDATION schema untouched, which is the schema instructor
+        sends to the model, so the extractor is still asked for exactly one name.
+        """
+        data = handler(self)
+        if "claim_strength" in data:
+            data["certainty"] = data["claim_strength"]
+        return data
     settled: Optional[bool] = Field(default=None, description="True when the source reports the outcome as an accomplished fact (event occurred, or became permanently impossible) — not a prediction, however confident. A POSITIVE settlement (event occurred) must be accompanied by event_date; one without a parseable event_date, or dated after the article itself, is demoted to ordinary evidence in code (enforce_settlement_event_date). A NEGATIVE settlement (became impossible) carries the FORECLOSING event's date in event_date when the article dates it — the rival's win, the elimination, the death that made the outcome impossible; leave it empty when the impossibility comes only from time expiring or the foreclosure is undated")
     quantitative_estimate: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
@@ -71,7 +105,7 @@ class PredictionExtraction(BaseModel):
         "reported_fact", "cited_probability", "cited_share", "reporting", "opinion",
     ]] = Field(
         default=None,
-        description="The kind of evidence this claim is, independent of stance/certainty "
+        description="The kind of evidence this claim is, independent of stance/claim_strength "
                     "(S2, retro docs/ORACLE_VARIABLES.md §5). LOAD-BEARING since the S2 "
                     "weight cutover: keys the cross-article evidence_class_weight lookup, "
                     "and only cited_probability authorizes the quantitative_estimate "

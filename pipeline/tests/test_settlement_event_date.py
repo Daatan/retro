@@ -33,7 +33,7 @@ def test_the_netanyahu_case_an_undated_settlement_is_demoted():
     [out] = enforce_settlement_event_date([pred(1.0, None, settled=True)], ARTICLE_DATE)
     assert out.settled is False
     assert out.stance == 1.0      # still votes as ordinary evidence
-    assert out.certainty == 0.95  # only the settlement bit is cleared
+    assert out.claim_strength == 0.95  # only the settlement bit is cleared
 
 
 def test_a_dated_settlement_is_left_alone():

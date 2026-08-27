@@ -3,7 +3,7 @@
 > Goal: give the retro engines (Bediavad source-leaderboard + Duel) a **free,
 > reproducible, historical** article-discovery layer, **without changing the
 > Oracle `/search` API**. Date: 2026-07-11. Verified live from the Oracle host
-> `i-00ac444b94c5ff9b2` (egress IP `3.120.185.111`).
+> `i-00ac444b94c5ff9b2` (egress IP `3.122.48.104` since 2026-08-27; was `3.120.185.111` when this was written).
 
 ---
 

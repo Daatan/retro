@@ -122,6 +122,40 @@ class TestShortFormFloorExemption:
         # base prompt's "under ~200 meaningful words" rule would reject what the floor spared.
         assert gk.await_args.kwargs["short_form"] is True
 
+    async def test_inn_post_also_gets_the_short_form_override(self, monkeypatch):
+        # ni#380 added israelnationalnews.com to news-indexer's short-form host list on
+        # 2026-08-24; retro's two inline copies kept checking only t.me, so INN posts were
+        # judged against the ~200-word long-form floor. Both sides now read one shared list
+        # (tm.gatekeeper.is_short_form).
+        sr = _sr("https://www.israelnationalnews.com/news/123456", snippet="Deal is done.")
+        # INN IS fetched (see the test below) — the fetch returns the fallback here, which is
+        # what _fetch_article_text does when extraction is no better than the snippet.
+        out, gk, _, _ = await _process(
+            monkeypatch, sr, fetch=Mock(return_value="Deal is done."),
+        )
+        assert out is not None
+        assert gk.await_args.kwargs["short_form"] is True
+
+    async def test_inn_is_still_origin_fetched(self, monkeypatch):
+        """`short_form` governs JUDGING, not fetching. INN is terse but has a real article page,
+        so the t.me no-fetch shortcut must not follow it: keying that branch on `short_form`
+        would silently reduce every INN item to its search snippet."""
+        body = "A full INN article body with plenty of substance about the elections."
+        sr = _sr("https://www.israelnationalnews.com/news/123456", snippet="Deal is done.")
+        out, gk, _, fetch = await _process(monkeypatch, sr, fetch=Mock(return_value=body))
+        assert out is not None
+        fetch.assert_called_once()
+        assert gk.await_args.kwargs["article_text"] == body
+        assert gk.await_args.kwargs["short_form"] is True
+
+    def test_forecaster_uses_the_shared_helper(self):
+        # No inline host check may come back on this side either — that is what drifted.
+        from pathlib import Path
+
+        src = Path(forecaster.__file__).read_text()
+        assert "is_short_form(" in src
+        assert 'removeprefix("www.") == "t.me"' not in src
+
     async def test_short_non_tme_article_is_still_dropped(self, monkeypatch):
         sr = _sr("https://x.com/some/1", snippet="Deal is done.")
         out, gk, _, _ = await _process(monkeypatch, sr)

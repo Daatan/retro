@@ -1,9 +1,53 @@
 import logging
 import re
+from urllib.parse import urlparse
 
 from .models import GatekeeperOutput
 from .config import settings
 from .llm import complete_structured
+
+
+# Hosts whose posts are terse BY DESIGN — messaging channels and flash tickers — and so must be
+# judged on content rather than length (see _SHORT_FORM_OVERRIDE below).
+#
+# Deliberately mirrors news-indexer's `worker/fetcher.py:_is_short_form`, which feeds the same
+# hint on its /relevance rescue path. That cross-repo copy stays a copy: threading a flag through
+# two independently-deployed services costs more than the one line is worth (retro#297/#542).
+#
+# What is NOT deliberate is duplicating it WITHIN retro. The batch runner and the live /forecast
+# path each carried their own inline `== "t.me"`, and when news-indexer added INN on 2026-08-24
+# (ni#380) both copies silently missed it — so INN posts were judged against the ~200-word
+# long-form floor, the exact rejection/confabulation class short_form exists to prevent. `api`
+# already depends on `truthmachine-pipeline` and imports this module, so there was never a reason
+# for two copies on this side of the repo boundary. One definition, both callers.
+_SHORT_FORM_HOSTS = frozenset({"t.me", "israelnationalnews.com"})
+
+# A STRICT SUBSET of the above, and a different fact about the world. "Terse by design" is about
+# how to JUDGE a post; this is about whether an article page exists to fetch at all. t.me serves a
+# web preview that extracts to near-nothing, so an origin fetch is guaranteed to lose to the
+# title+snippet fallback — a wasted request and throttle slot. INN is a real site with a real,
+# fetchable body; it is merely SHORT. Conflating the two silently downgrades every INN article to
+# its snippet (see ni#380, which widened the shared predicate without revisiting its no-fetch
+# caller — the bug this split exists to prevent recurring here).
+_NO_ARTICLE_PAGE_HOSTS = frozenset({"t.me"})
+
+
+def _host(url: str | None) -> str:
+    return urlparse(url or "").netloc.lower().removeprefix("www.")
+
+
+def is_short_form(url: str | None) -> bool:
+    """Is this URL terse BY DESIGN — a messaging post or flash ticker rather than an article?
+
+    Governs how the post is JUDGED: the short-form prompt override and the lowered length floor.
+    Says nothing about whether the body can be fetched — see `has_no_article_page`.
+    """
+    return _host(url) in _SHORT_FORM_HOSTS
+
+
+def has_no_article_page(url: str | None) -> bool:
+    """Is an origin fetch of this URL pointless because there is no article page behind it?"""
+    return _host(url) in _NO_ARTICLE_PAGE_HOSTS
 
 logger = logging.getLogger(__name__)
 

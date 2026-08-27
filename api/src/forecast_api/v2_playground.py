@@ -6,7 +6,7 @@ ordinary forecaster; an LLM proposes precursors; each precursor is priced
 flat the same way; the edge P(parent | precursor) comes from the antecedent
 pool-split over the PARENT's own evidence (two ``/pool/aggregate`` recomputes,
 affirmative and negated — no search, no LLM); edges the pool cannot price are
-shown as unpriced, never elicited from a model; precursors are kept by
+shown as unpriced, never priced by unanchored elicitation; precursors are kept by
 sensitivity × own uncertainty; recursion stops at an anchor (a Polymarket
 market) or the depth limit; the surviving graph is combined by the exact
 enumeration in ``bayesoracle/core.py``.
@@ -540,7 +540,7 @@ async def _edge(job: dict, parent: dict, parent_res: ForecastResponse, child: di
         # (fail-open by design, antecedent.py), so with no source that actually
         # conditions on the child both "splits" would return the parent's flat
         # number — a fake edge with zero sensitivity. Say so instead.
-        edge["reason"] = "no source in the parent's pool conditions on this precursor — unpriced, not elicited"
+        edge["reason"] = "no source in the parent's pool conditions on this precursor — unpriced; unanchored elicitation is refused"
         _log(job, f"edge {child['id']}→{parent['id']} unpriced ({edge['reason']})", parent["id"])
         _save(job)
         return edge
@@ -564,7 +564,7 @@ async def _edge(job: dict, parent: dict, parent_res: ForecastResponse, child: di
         edge.update(p_given_yes=py, p_given_no=pn, method="pool_split")
         _log(job, f"edge {child['id']}→{parent['id']}: P(yes)={py} P(no)={pn} from pool split", parent["id"])
     else:
-        edge["reason"] = "pool split has no matching antecedent on one side — unpriced, not elicited"
+        edge["reason"] = "pool split has no matching antecedent on one side — unpriced; unanchored elicitation is refused"
         _log(job, f"edge {child['id']}→{parent['id']} unpriced ({edge['reason']})", parent["id"])
     _save(job)
     return edge

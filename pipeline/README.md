@@ -1,6 +1,6 @@
 # TruthMachine Pipeline
 
-Python pipeline for retroactive media prediction extraction and scoring.
+Python pipeline for retroactive media prediction elicitation and scoring.
 
 ## Structure
 
@@ -19,9 +19,9 @@ pipeline/
     polymarket.py          # Polymarket Gamma API: fetch market history per event
     polymarket_harvest.py  # Bulk harvest of all resolved Polymarket political markets
 
-    # Extraction
+    # Elicitation
     gatekeeper.py          # LLM stage 1: graded topic/evidence-relevance gate (emits relevance_score; passes indirect evidence, not just explicit predictions)
-    extractor.py           # LLM stage 2: extract structured predictions from article
+    extractor.py           # LLM stage 2: elicit structured predictions from article
     runner.py              # Orchestrates gatekeeper → extractor per article
     aggregator.py          # Cell-level: collapse all predictions → CellSignal
     reaggregate.py         # Post-processing: re-run aggregation on high-variance cells

@@ -1,6 +1,7 @@
 """retro#595 — the v2 playground: job lifecycle through the API, and the
-engine's non-negotiables (an unpriced edge is never elicited; pruning keeps
-priced edges only; the combination locks anchors and leaves the root free)."""
+engine's non-negotiables (an unpriced edge refuses unanchored elicitation;
+pruning keeps priced edges only; the combination locks anchors and leaves the
+root free)."""
 
 import asyncio
 import time
@@ -59,7 +60,7 @@ def test_unknown_job_is_404():
     assert client.get("/v2/jobs/doesnotexist", headers=HEADERS).status_code == 404
 
 
-async def test_end_to_end_trace_unpriced_edge_is_never_elicited(monkeypatch):
+async def test_end_to_end_trace_unpriced_edge_refuses_unanchored_elicitation(monkeypatch):
     """Root priced, one precursor priced, the pool cannot split on it on the
     NO side → the edge is unpriced, the child is pruned, the flat number stands."""
     root_sources = [_src(0.4, "if the ceasefire holds, Israel withdraws", antecedent="the ceasefire holds through October")]

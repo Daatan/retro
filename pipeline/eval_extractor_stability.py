@@ -30,9 +30,18 @@ the literal Le Monde article became fetchable for the first time — case 1 belo
 ## What this measures
 
 For each (real article, event, claim) case, run N times against each model in
-MODELS and record the primary extracted prediction's `stance`/`certainty`. Reports
+MODELS and record the primary elicited prediction's `stance`/`certainty`. Reports
 range and population stdev per (model, case) — the stability question #519 asks,
 not accuracy (there's no "correct" stance being checked against a label here).
+
+Since retro#664 it also reports the **sign-flip rate**: the fraction of runs whose
+stance sign differs from the modal sign on identical input. Range and stdev answer
+"how much does the number move"; the sign-flip rate answers "how often does the
+same article vote the opposite way", which is the failure retro#545 is about and
+which stdev can hide — a case sitting at +0.05/-0.05 has a tiny stdev and a
+catastrophic flip rate, while one swinging +0.2 to +0.9 has a large stdev and votes
+the same way every time. It is also the P0 baseline for retro#664's paired
+comparison of `sign(stance)` against a separately elicited `direction` field.
 
 ## Go/no-go
 
@@ -44,7 +53,7 @@ switch candidate — escalate to a human call either way, this script does not
 auto-decide (same policy as eval_extractor_adjacent_events.py).
 """
 import asyncio
-from collections import defaultdict
+from collections import Counter, defaultdict
 from statistics import pstdev
 
 from tm.config import settings
@@ -165,6 +174,37 @@ def _spread(values: list[float]) -> tuple[float, float]:
     return (max(values) - min(values), pstdev(values)) if len(values) >= 2 else (0.0, 0.0)
 
 
+def _sign(value: float) -> int:
+    """-1 / 0 / +1. Exact 0.0 is its own category, not folded into either side."""
+    return (value > 0) - (value < 0)
+
+
+def _sign_flip_rate(values: list[float]) -> float:
+    """Fraction of runs whose stance sign differs from the modal sign, on identical input.
+
+    This is the statistic retro#545 is actually about, and it is NOT what stdev measures.
+    Magnitude moving is survivable — the pool is a weighted mean, so a stance wobbling
+    between +0.4 and +0.8 still votes the same way. A sign crossing zero inverts the vote:
+    `probability = (stance + 1) / 2` puts +0.4 at 70% and -0.4 at 30%, so two runs over the
+    same article can put a source on opposite sides of the question.
+
+    0.0 = every run agreed on direction. 0.5 = an even split, the worst reachable value for
+    a two-sign case. Ties resolve to whichever sign Counter sees first, which only affects
+    the reported rate at an exact 50/50 — already a maximal-instability result either way.
+    """
+    if len(values) < 2:
+        return 0.0
+    signs = [_sign(v) for v in values]
+    modal_count = Counter(signs).most_common(1)[0][1]
+    return (len(signs) - modal_count) / len(signs)
+
+
+def _sign_histogram(values: list[float]) -> str:
+    """`+5/-3/0x0` — the raw split behind the rate, so a reader can see WHICH way it split."""
+    c = Counter(_sign(v) for v in values)
+    return f"+{c.get(1, 0)}/-{c.get(-1, 0)}/0x{c.get(0, 0)}"
+
+
 async def main() -> None:
     summary = defaultdict(dict)
     for model in MODELS:
@@ -177,17 +217,34 @@ async def main() -> None:
             no_prediction = RUNS_PER_CASE - n_predictions
             stance_range, stance_stdev = _spread(stances) if stances else (0.0, 0.0)
             cert_range, cert_stdev = _spread(certainties) if certainties else (0.0, 0.0)
+            sign_flip_rate = _sign_flip_rate(stances) if stances else 0.0
             summary[case["name"]][model] = {
                 "stance_range": stance_range, "stance_stdev": stance_stdev,
                 "cert_range": cert_range, "cert_stdev": cert_stdev,
                 "no_prediction": no_prediction,
+                "sign_flip_rate": sign_flip_rate,
+                "sign_histogram": _sign_histogram(stances) if stances else "-",
             }
             print(
                 f"  {case['name']}: n={n_predictions}/{RUNS_PER_CASE} "
                 f"stance range={stance_range:.2f} stdev={stance_stdev:.3f} | "
-                f"certainty range={cert_range:.2f} stdev={cert_stdev:.3f}"
+                f"certainty range={cert_range:.2f} stdev={cert_stdev:.3f} | "
+                f"sign {_sign_histogram(stances) if stances else '-'} "
+                f"flip_rate={sign_flip_rate:.3f}"
                 + (f" | {no_prediction} run(s) extracted NO prediction" if no_prediction else "")
             )
+
+    print("\n=== Summary (stance SIGN-FLIP RATE by case x model — 0.000 = direction unanimous) ===")
+    print("  The retro#545 statistic: how often the same article votes the opposite way.")
+    header = "  case".ljust(38) + "".join(m.split("/")[-1][:24].ljust(28) for m in MODELS)
+    print(header)
+    for case_name, by_model in summary.items():
+        row = f"  {case_name}".ljust(38)
+        for model in MODELS:
+            stats = by_model.get(model, {})
+            rate = stats.get("sign_flip_rate", float("nan"))
+            row += f"{rate:.3f}  ({stats.get('sign_histogram', '-')})".ljust(28)
+        print(row)
 
     print("\n=== Summary (stance stdev by case x model — lower is more stable) ===")
     header = "  case".ljust(38) + "".join(m.split("/")[-1][:24].ljust(28) for m in MODELS)

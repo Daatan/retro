@@ -107,7 +107,7 @@ France-elimination trap). On survival claims a settled negative means the underl
 negative pins are guarded by `settlement_direction_allowed` (§ settlement override).
 
 The extractor prompt also carries a **single-winner contests** section (2026-07-16
-stance-inversion incident: "Spain beat France" / "Argentina stun England" were extracted as
+stance-inversion incident: "Spain beat France" / "Argentina stun England" were elicited as
 **+1 settled** for "France/England will win"): in a one-winner contest, a rival achieving the
 outcome settles the subject's claim **negatively** — stance −1.0, settled, dated by the
 foreclosing result — never +1, however triumphant the article.
@@ -115,9 +115,9 @@ foreclosing result — never +1, however triumphant the article.
 Deliberately fails **closed** on a positive settlement's missing date — the asymmetry is the
 point: a wrong demotion costs a slower pin (the stance still votes), a wrong settlement sticks
 a market at 97% on history. The prompt (SETTLED section) states the same contract, so a
-compliant extraction is never demoted; the guard exists for the non-compliant ones.
+compliant elicitation is never demoted; the guard exists for the non-compliant ones.
 
-The anchor date survives extraction: each source's `SourceSignal.settlement_event_date`
+The anchor date survives elicitation: each source's `SourceSignal.settlement_event_date`
 carries the `event_date` of the highest-certainty settlement-grade claim whose sign matches
 the article's collapsed stance (`derive_settlement_event_date`, forecaster.py). Callers
 persist it next to `settled` and send it back on `/pool/aggregate`
@@ -317,14 +317,14 @@ general case ("does this stance follow from this claim") needs a second LLM call
 stage — out of scope here. `flag_claim_stance_sign_conflicts` (`extractor.py`) is the issue's own
 "cheap partial": a deterministic marker check (`is mandatory`/`must`/`is required` vs.
 `will not`/`refuses`/`rejects`, etc.) that logs `event=claim_stance_sign_conflict` when a claim's
-explicit marker and its stance sign disagree. Runs once, right after extraction, before any of
+explicit marker and its stance sign disagree. Runs once, right after elicitation, before any of
 the guards above can touch `stance` — **observability only, never corrects a prediction**. It is
 narrow by design: literal marker clashes only, so it misses subtler mismatches (a demand read as
 adversarial when it is actually a climb-down, retro#298's own row 6451).
 
 #### Aggregation-time revalidation — `settlement_vote_validity`
 
-Extraction-time guards only protect fresh extractions; a recompute replays stored `settled`
+Elicitation-time guards only protect fresh elicitations; a recompute replays stored `settled`
 bits written before the guards existed or re-poisoned since (the 2026-07-16 audit: 11 of 19
 pins wrong; re-pushes re-flipped cleaned flags within hours). With `settlement_revalidate`
 (default **on**; env kill switch `SETTLEMENT_REVALIDATE=false` + service restart), every
@@ -358,8 +358,8 @@ settlement vote re-proves its anchor inside `aggregate_pool()` on every call —
   "nothing happened" read from an article that late is more likely a misread of a LATER,
   different-timeframe recurrence of the same event class than genuine retrospective silence on
   the closed window (the same 2026-07-19 audit's "US bombs Iran in 2025" class: mid-2026
-  articles about active 2026 strikes extracted as an undated NO for the already-closed 2025
-  window). The extractor prompt already forbids cross-timeframe extraction (retro#295); this
+  articles about active 2026 strikes elicited as an undated NO for the already-closed 2025
+  window). The extractor prompt already forbids cross-timeframe elicitation (retro#295); this
   check is the aggregation-time backstop for rows that slip through it — keyed on
   `published_date` rather than `event_date`, since there is no event date to anchor on. An
   undated non-occurrence vote from an article published within grace of a closed window is
@@ -371,7 +371,7 @@ forecast: `question=` (question hash), the claim-window bounds actually compared
 (`created=`/`deadline=`), and `event_date_state=absent|unparseable|parsed`, which separates an
 article that genuinely carried no date from one whose date string failed ISO parsing). Valid
 votes in **both** directions suppress the pin entirely
-(`settlement_suppressed`, `settlement_conflict` — one extraction is provably wrong, and
+(`settlement_suppressed`, `settlement_conflict` — one elicitation is provably wrong, and
 facts are not decided by outvoting; the England 4-vs-1 stance-inversion pool is the
 canonical case). The pin then requires `settlement_min_sources` **unanimous** valid votes.
 
@@ -478,7 +478,7 @@ what action, and within what scope, and answers NO when the facts settle it the 
 a different party acts or the action lands on a different target, when the action was announced
 or agreed but not carried out, or when the fact belongs to a different instance or timeframe of
 a recurring event. Where a claim's summary and its quoted sentence disagree it believes the
-**quote** — the summary is a paraphrase by the same extraction step that may have misread the
+**quote** — the summary is a paraphrase by the same elicitation step that may have misread the
 sentence. The pin's **direction** is part of what is asked, because facts that decide a question
 *against* the answer about to be published are not proof of it however clearly they decide it.
 
@@ -560,7 +560,7 @@ lever. The `event=settlement_verifier` log line carries `cached=`, `samples=` an
 hit, a fresh majority roll and a degraded roll are all distinguishable in the log.
 
 **Coverage caveat.** The gate needs the claim text and per-claim `claims_detail`. On `/forecast`
-it has both (`question` is required; `claims_detail` comes from the in-process extraction), and
+it has both (`question` is required; `claims_detail` comes from the in-process elicitation), and
 that is the path that publishes pins. On `/pool/aggregate` both fields are optional and daatan
 sends **neither**, so the gate skips explicitly (`outcome=skipped reason=no_question`) rather
 than guessing from the rows — every live firing since deploy has been such a skip. That path is
@@ -1045,7 +1045,7 @@ pruning + extraction cache. S2 in parallel at any point.
 
 - False settlement pins: F-35-to-Turkey pinned to 3 % at 09:26 by 2-of-6
   sources whose *background sentence* ("Turkey was removed from the F-35
-  program in 2019") was extracted as an accomplished-fact settlement; daatan
+  program in 2019") was elicited as an accomplished-fact settlement; daatan
   latched `settled=true` (one-way), page then showed "Outcome reported" beside
   a recovered 52 % estimate. McConnell forecast pinned to 97 % for ~4 h by
   2-of-15 sources against a pool of ≈ 47 %.

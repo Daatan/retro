@@ -30,7 +30,7 @@ Daatan addresses this problem through three interconnected products:
 
 Retro Analysis is built around **The Factum Atlas**, a definitive map of historical reality against which all media claims are measured. It cross-references major events against media outlets, journalists, and think tanks.
 
-For every article in scope, a multi-stage LLM pipeline extracts a forensic prediction vector:
+For every article in scope, a multi-stage LLM pipeline elicits a forensic prediction vector:
 
 - **Stance** — directional outlook on the event (-1.0 bearish → +1.0 bullish)
 - **Certainty** — how linguistically confident the author is
@@ -72,9 +72,9 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 
 ## Appendix A: LLM & NLP Pipeline
 
-**Hybrid architecture:** High-volume filtering uses fast models (AWS Bedrock Nova Micro); nuanced forensic extraction defaults to mid-tier models (Bedrock Nova Lite) for the batch pipeline, with the live Oracle API upgraded to Claude Haiku 4.5. Heavy models are called only when necessary.
+**Hybrid architecture:** High-volume filtering uses fast models (AWS Bedrock Nova Micro); nuanced forensic elicitation defaults to mid-tier models (Bedrock Nova Lite) for the batch pipeline, with the live Oracle API upgraded to Claude Haiku 4.5. Heavy models are called only when necessary.
 
-**Multilingual extraction:** The pipeline natively processes Hebrew and English, capturing signals in Israeli media before they surface in international coverage.
+**Multilingual elicitation:** The pipeline natively processes Hebrew and English, capturing signals in Israeli media before they surface in international coverage.
 
 **Scope:** Every article that passes the prediction filter is processed — not just op-eds with explicit forecasts, but news analysis, commentary, sourced claims, and any text that implies a directional view on a future outcome.
 
@@ -82,7 +82,7 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 
 ## Appendix B: The Mathematics of Truth
 
-**Brier Score** — measures calibration: how close the extracted probability was to the actual binary outcome. Lower is better.
+**Brier Score** — measures calibration: how close the elicited probability was to the actual binary outcome. Lower is better.
 
 **ELO Rating** — zero-sum relative ranking: sources that correctly predict events their peers got wrong absorb significant rating gains, instantly surfacing hidden analytical alpha regardless of platform size or brand recognition.
 

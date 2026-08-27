@@ -23,6 +23,8 @@ import trafilatura
 
 from tm.gatekeeper import (
     check_is_prediction,
+    has_no_article_page,
+    is_short_form,
     PROMPT_PREFIX as _GATEKEEPER_PROMPT_PREFIX,
     PROMPT_SUFFIX as _GATEKEEPER_PROMPT_SUFFIX,
 )
@@ -1010,10 +1012,10 @@ async def _process_article(
     ``extractor_model`` (retro#652), when given, overrides ``settings.extractor_model``
     for this article's extractor call only; the gatekeeper is never affected.
     """
-    # A t.me post is short-form (retro#297): mirrors news-indexer's rematch.py:_is_short_form,
-    # which feeds the same hint to the gatekeeper on its /relevance rescue path — one line
-    # duplicated on purpose rather than threading a flag through three repos.
-    short_form = urlparse(result.url or "").netloc.lower().removeprefix("www.") == "t.me"
+    # Short-form sources are judged on content, not length (retro#297). The host list lives in
+    # `tm.gatekeeper` — shared with the batch runner, which used to carry its own inline copy and
+    # drifted from it (both missed INN when news-indexer added it in ni#380).
+    short_form = is_short_form(result.url)
     # Caller-supplied language hint, threaded to the gatekeeper/extractor prompts (retro#417).
     language = getattr(result, "_language", None)
 
@@ -1034,11 +1036,13 @@ async def _process_article(
     if result._prefetched_text:
         text = result._prefetched_text
         logger.info("event=article_fetch outcome=prefetched url=%s", result.url)
-    elif short_form:
+    elif has_no_article_page(result.url):
         # Never origin-fetch t.me (retro#417): t.me serves a web preview that extracts to
         # near-nothing, so the fetch always lost the `extracted_len <= len(fallback)`
         # comparison in _fetch_article_text anyway — a wasted request plus a wasted
         # per-host throttle slot. news-indexer's rematch.py documents the same fact.
+        # Deliberately NOT keyed on `short_form`: INN is short but has a real, fetchable
+        # article page, and skipping it would silently reduce every INN item to its snippet.
         text = fallback
         logger.info("event=article_fetch outcome=short_form_no_fetch url=%s", result.url)
     elif _is_known_degraded_domain(result.url):

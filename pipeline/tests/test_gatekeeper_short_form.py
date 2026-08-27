@@ -14,6 +14,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from tm import runner as runner_mod
+from tm.gatekeeper import is_short_form
+
 from tm import gatekeeper
 
 
@@ -99,3 +102,36 @@ async def test_short_form_and_language_stack():
     assert both.startswith(short)
     assert "Short-form source" in both
     assert "The article text is in Hebrew" in both
+
+
+# ── Host detection (retro#297/#542, ni#380) ────────────────────────────────────────────
+
+
+def test_is_short_form_recognises_telegram_and_inn():
+    # Mirrors news-indexer's worker/fetcher.py:_is_short_form. INN was added there on
+    # 2026-08-24 (ni#380) while retro's two inline copies kept checking only t.me, so INN
+    # posts were judged against the ~200-word long-form floor for three days. The host list
+    # is shared between the batch runner and the live /forecast path precisely so that a
+    # one-sided update cannot happen again.
+    assert is_short_form("https://t.me/ben_caspit/17764") is True
+    assert is_short_form("https://www.T.ME/x/1") is True
+    assert is_short_form("https://www.israelnationalnews.com/news/123456") is True
+    assert is_short_form("https://israelnationalnews.com/news/123456") is True
+
+
+def test_is_short_form_leaves_ordinary_articles_alone():
+    assert is_short_form("https://www.ynet.co.il/news/article/abc") is False
+    assert is_short_form("https://example.com/t.me/not-really") is False
+    assert is_short_form(None) is False
+    assert is_short_form("") is False
+
+
+def test_runner_uses_the_shared_helper():
+    # The regression that motivated sharing: the batch runner had its own inline host check
+    # and drifted from news-indexer. It may not reintroduce one. (forecast_api's matching
+    # assertion lives in api/tests — that package isn't importable from here.)
+    from pathlib import Path
+
+    src = Path(runner_mod.__file__).read_text()
+    assert "is_short_form(" in src
+    assert 'removeprefix("www.") == "t.me"' not in src

@@ -5,11 +5,10 @@ Pipeline runner: orchestrates gatekeeper → extraction for one article.
 import asyncio
 from dataclasses import dataclass
 from typing import Optional
-from urllib.parse import urlparse
 
 from rich.console import Console
 
-from .gatekeeper import check_is_prediction
+from .gatekeeper import check_is_prediction, is_short_form
 from .extractor import (
     extract_predictions,
     enforce_anchor_provenance,
@@ -57,14 +56,12 @@ class PipelineResult:
 async def run_article(article: ArticleInput) -> PipelineResult:
     update_cell(article.event_id, article.source_id, CellStatus.in_progress)
 
-    # A t.me post is short-form (retro#297): same one-liner as forecaster.py's live path and
-    # news-indexer's rematch.py — duplicated on purpose rather than threading a flag through
-    # three repos. Without it the batch pipeline judged terse Telegram posts on the long-form
-    # prompts, whose ~200-word floor rejects (or confabulates on) exactly that class (retro#542).
+    # Short-form sources are judged on content, not length (retro#297/#542): without this the
+    # batch pipeline judges terse posts on the long-form prompts, whose ~200-word floor rejects
+    # (or confabulates on) exactly that class. Host list lives in `gatekeeper` so this path and
+    # the live /forecast one cannot drift apart again — they already had, on INN.
     # Forward-only: cached extractions keep their pre-fix results — see the issue's cache caveat.
-    short_form = (
-        urlparse(article.article_url or "").netloc.lower().removeprefix("www.") == "t.me"
-    )
+    short_form = is_short_form(article.article_url)
 
     try:
         # Stage 1: Gatekeeper

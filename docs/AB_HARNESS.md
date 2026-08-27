@@ -70,6 +70,21 @@ A case whose `article_date` postdates its own `claim_deadline` is flagged
 better than it actually is at forecast time. Pass `--allow-leakage` to
 include such cases in the gate anyway.
 
+## How lenient the gate is — read this before trusting a pass
+
+`unmet_facets` satisfies a facet if **any** prediction in **any** run matches. A model that gets
+a case right once in five runs passes it exactly like a model that gets it right every time.
+
+That is the right default for a *prompt* A/B — the question there is whether an edit destroyed a
+capability — but it flatters an unstable model when the variable is the model. retro#664's run
+hit this directly: on `threshold-near-boundary-satisfied` (8.99% against a 9% ceiling) Haiku
+alternates `+0.60` and `-0.20` run to run and passes on the strength of the positive runs, while
+Nova Lite sits at `0.00/-0.10` and fails. The gate's verdict — "the candidate lost a case the
+baseline held" — is true and useful, but "the baseline held it" means "held it sometimes".
+
+When the model is the variable, read the per-run values alongside the gate, and treat
+`eval_extractor_stability.py`'s sign-flip rate as the companion statistic.
+
 ## Adding a case
 
 Cases live in JSON files under `pipeline/scripts/ab_cases/`. Each case:

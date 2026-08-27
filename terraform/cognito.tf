@@ -146,6 +146,24 @@ resource "aws_cognito_identity_provider" "google" {
     email    = "email"
     username = "sub"
   }
+
+  # Cognito fills in Google's OIDC endpoints itself for provider_type = "Google";
+  # they are its defaults, not our configuration. Left undeclared, terraform sees
+  # six keys in AWS that the config doesn't mention and proposes deleting them on
+  # every single plan — so this stack could never produce the literal no-op that
+  # the workspace's terraform rules gate every apply on, and both #668 and #669
+  # had to -target around the noise. Ignoring them says who actually owns them,
+  # without pinning Google's URLs into this repo for us to maintain. See #670.
+  lifecycle {
+    ignore_changes = [
+      provider_details["attributes_url"],
+      provider_details["attributes_url_add_attributes"],
+      provider_details["authorize_url"],
+      provider_details["oidc_issuer"],
+      provider_details["token_request_method"],
+      provider_details["token_url"],
+    ]
+  }
 }
 
 # Public client for the Claude MCP connector: Authorization Code + PKCE, no secret.

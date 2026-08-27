@@ -127,6 +127,20 @@ async def _cmd_run(args: argparse.Namespace) -> None:
     Path(args.out).write_text(json.dumps(payload, indent=2))
     print(f"Wrote {args.out}")
 
+    # Fail closed on an empty arm. Every per-case exception is caught in _run_case so one
+    # bad case can't abort the sweep -- but that also means a run where EVERY call failed
+    # (expired API key, revoked model access, wrong region) still wrote a well-formed
+    # results file and exited 0. `compare` then reads two arms, finds no predictions to
+    # disagree about, and reports no regression: a total outage renders as a clean pass.
+    # The results file is still written -- the exceptions in it are the diagnosis -- but
+    # the exit code now says the arm is unusable.
+    empty = [cid for cid, runs in results.items() if not runs]
+    if empty:
+        print(f"\nFAIL: {len(empty)}/{len(cases)} cases produced 0 usable runs "
+              f"({', '.join(empty[:5])}{', ...' if len(empty) > 5 else ''}) -- "
+              f"this arm is not comparable. See the errors above.")
+        sys.exit(1)
+
 
 def _case_asdict(case: Case) -> dict:
     return {
@@ -159,6 +173,23 @@ def _cmd_compare(args: argparse.Namespace) -> None:
     if missing:
         print(f"WARNING: cases missing from one side, skipped: {missing}")
         cases = [c for c in cases if c.id not in missing]
+
+    # Refuse a dead arm rather than scoring it. A case present but with 0 usable runs meets no
+    # facets, so an all-failed BASELINE cannot be regressed against -- the gate passes and every
+    # case prints as `improved ... fixed`, reading an outage as a win. (An all-failed `patched`
+    # is caught by the gate honestly, and both-empty prints `no change`.) `run` exits 1 on this
+    # now, but results files get reused and re-compared long after that exit code is gone.
+    dead = {
+        "baseline": [c.id for c in cases if not baseline_preds.get(c.id)],
+        "patched": [c.id for c in cases if not patched_preds.get(c.id)],
+    }
+    if any(dead.values()):
+        for arm, ids in dead.items():
+            if ids:
+                print(f"UNUSABLE: {arm} has 0 usable runs for {len(ids)}/{len(cases)} cases: "
+                      f"{', '.join(ids[:5])}{', ...' if len(ids) > 5 else ''}")
+        print("\nRefusing to compare -- re-run the affected arm. A dead baseline scores as a win.")
+        sys.exit(2)
 
     results = build_case_results(cases, baseline_preds, patched_preds)
 

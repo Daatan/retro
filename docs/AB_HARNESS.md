@@ -85,6 +85,30 @@ baseline held" — is true and useful, but "the baseline held it" means "held it
 When the model is the variable, read the per-run values alongside the gate, and treat
 `eval_extractor_stability.py`'s sign-flip rate as the companion statistic.
 
+### An arm that never ran is not a clean arm
+
+`run` catches every per-case exception so one bad case can't abort a sweep. The cost of that is
+an arm where *every* call failed — an expired API key, revoked model access, the wrong region —
+still writing a well-formed results file.
+
+Scoring such a file is worse than useless. A dead arm meets no facets, so a dead **baseline**
+cannot be regressed against: the gate passed and printed every case as `improved … fixed [...]`,
+rendering a total outage as a *win*. (A dead `patched` failed honestly; both dead printed
+`no change`.) The arm nobody re-checks is usually the baseline, which is the one that fails
+silently.
+
+Both ends now refuse instead:
+
+- `run` exits **1** when any case produced 0 usable runs, and names them. The file is still
+  written — the exceptions inside it are the diagnosis — but the exit code refuses to call the
+  arm comparable.
+- `compare` exits **2** (distinct from the gate's **1**) if either side has a case with 0 usable
+  runs, naming the arm. Results files get reused and re-compared long after `run`'s exit code is
+  gone, so the check has to live at the gate too.
+
+Read those exit codes directly, not through a pipe — `cmd | tail` reports `tail`'s status, not
+`cmd`'s.
+
 ## Adding a case
 
 Cases live in JSON files under `pipeline/scripts/ab_cases/`. Each case:

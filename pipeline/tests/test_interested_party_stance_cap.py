@@ -94,7 +94,7 @@ def test_certainty_and_class_are_untouched():
     """Only the location axis moves here. The certainty cap the prompt already
     promises — violated on 30.3% of live unverified rows — is retro#378."""
     [out] = enforce_interested_party_stance_cap([pred(0.9, certainty=0.85)])
-    assert out.certainty == pytest.approx(0.85)
+    assert out.claim_strength == pytest.approx(0.85)
     assert out.evidence_class == "reporting"
 
 

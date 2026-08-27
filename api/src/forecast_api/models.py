@@ -1,5 +1,5 @@
-from typing import Literal, Optional
-from pydantic import BaseModel, Field, computed_field
+from typing import Any, Literal, Optional
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from .aggregation import confidence_bucket
 
@@ -209,11 +209,43 @@ class ClaimDetail(BaseModel):
     Nothing in aggregation reads this model. It is persistence surface only
     (daatan#1235 stores it), on the shadow-field pattern already proven twice
     by author_lean and fact_signal.
+
+    `certainty` and `claim_strength` are the SAME number under two names for one
+    schema cycle (retro#680): whichever a caller supplies, `_mirror_claim_strength`
+    fills the other, so a persisted row always carries both and no consumer has to
+    know which side of the rename produced it.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _mirror_claim_strength(cls, data: Any) -> Any:
+        """Keep the renamed field and its one-cycle alias in lockstep.
+
+        Accepts a row written before the rename (`certainty` only), one written
+        after (`claim_strength` only), or one carrying both. Both present and
+        unequal is a real inconsistency — two different numbers claiming to be
+        the same field — so it raises rather than silently picking a winner.
+        """
+        if not isinstance(data, dict):
+            return data
+        has_old = data.get("certainty") is not None
+        has_new = data.get("claim_strength") is not None
+        if has_old and has_new:
+            if data["certainty"] != data["claim_strength"]:
+                raise ValueError(
+                    "ClaimDetail.certainty and .claim_strength are one field under two "
+                    f"names and must match; got {data['certainty']} vs {data['claim_strength']}"
+                )
+        elif has_old:
+            data["claim_strength"] = data["certainty"]
+        elif has_new:
+            data["certainty"] = data["claim_strength"]
+        return data
     claim: str = Field(description="One-sentence neutral summary of the claim, as extracted")
     quote: Optional[str] = Field(default=None, description="The article's verbatim sentence(s) behind the claim. Kept so a persisted claim stands alone and stays auditable later — decomposition without the surrounding context yields atoms nobody can re-verify (DnDScore, arXiv:2412.13175)")
     stance: float = Field(ge=-1.0, le=1.0, description="This claim's directional outlook [-1, 1]")
-    certainty: float = Field(ge=0.0, le=1.0, description="Linguistic confidence [0, 1]; the weight in the within-article claim-weighted mean")
+    certainty: float = Field(ge=0.0, le=1.0, description="DEPRECATED ALIAS of `claim_strength`, kept populated for one schema cycle (Oracle 1.5 Phase 1, retro#680) so daatan's stored `claims_detail` and every existing consumer see no change. Always equal to `claim_strength`. Read `claim_strength` in new code")
+    claim_strength: float = Field(ge=0.0, le=1.0, description="Linguistic confidence [0, 1]; the weight in the within-article claim-weighted mean. Renamed from `certainty` (retro#680) — same elicited number, a name that does not also read as the *reader's* confidence in its own interpretation; that second quantity is `reader_confidence` (retro#681)")
     specificity: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Multiplies certainty in the within-article reduction (claim_weighted_stance); None ⇒ a neutral 1.0. The live extractor does not emit it — recorded so the reduction stays reproducible if it ever does")
     prediction_type: Optional[str] = Field(default=None, description="The claim's kind: binary | continuous | range | trend. Plain string on the wire so a new kind can't fail an existing caller's validation")
     evidence_class: Optional[Literal["reported_fact", "cited_probability", "cited_share", "reporting", "opinion"]] = Field(default=None, description="This claim's OWN evidence class — the honest per-claim label, of which SourceSignal.evidence_class is only the article's most common. Mixed-class articles are invisible at the article level; this is where class attribution becomes checkable")
@@ -411,7 +443,10 @@ class FetchUrlResponse(BaseModel):
 # real schema_version a caller can gate on, and the scattered fields
 # consolidated into one place instead of three.
 
-PROVENANCE_SCHEMA_VERSION = "1.0"
+# 1.1 (Oracle 1.5 Phase 1, retro#680): ClaimDetail carries `claim_strength` beside the
+# `certainty` it was renamed from. Additive — 1.0 consumers read `certainty` unchanged —
+# so this is a minor bump, not a break; a caller that wants the new name gates on >= 1.1.
+PROVENANCE_SCHEMA_VERSION = "1.1"
 
 
 class ProvenanceOracle(BaseModel):

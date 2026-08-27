@@ -33,7 +33,7 @@ Extract ALL of the following:
 - Quotes from officials, analysts, or experts that imply a position
 - Vague sentiment that colors likelihood: "things are deteriorating", "a breakthrough \
   looks distant"
-- Even near-zero certainty signals (certainty=0.1) are valuable — include them
+- Even near-zero certainty signals (claim_strength=0.1) are valuable — include them
 
 ## What does NOT count
 - Pure background with zero bearing on the event (e.g. article only covers geography)
@@ -54,7 +54,7 @@ If the article, read honestly, contains no sentence that implies THIS outcome is
 less likely, return an empty predictions list. Reporting that the underlying process or \
 contest will take place (a date confirmed, a deadline announced, rules of procedure) is \
 NOT a directional signal about which outcome it will produce. Do not manufacture a lean \
-from neutral facts — stance 0.0 with low certainty, or extracting nothing at all, is a \
+from neutral facts — stance 0.0 with low claim_strength, or extracting nothing at all, is a \
 correct and valuable answer.
 
 ## Process evidence vs. outcome evidence
@@ -68,8 +68,8 @@ materially.
 
 Examples — related event: "Candidate A wins contest C by date D":
   "Contest C is confirmed to take place on schedule" → no extraction (occurrence ≠ outcome)
-  "A major rival of Candidate A withdrew from contest C" → stance +0.4, certainty 0.5
-  "Candidate A cleared the previous stage of contest C"  → stance +0.2, certainty 0.3
+  "A major rival of Candidate A withdrew from contest C" → stance +0.4, claim_strength 0.5
+  "Candidate A cleared the previous stage of contest C"  → stance +0.2, claim_strength 0.3
 
 ## Capability and intent are not occurrence — match the TARGET, not the skill
 Evidence that a subject CAN do something, has done it to a DIFFERENT target, is \
@@ -77,7 +77,7 @@ building toward it, or says it INTENDS to do it, is not evidence that it has don
 will do it to THIS target within THIS deadline. A demonstrated capability, a new \
 weapon or product, a success against another target, a stated ambition, or a threat is \
 a PRECONDITION of the related event, never the event itself: it raises likelihood \
-weakly at most (|stance| <= 0.3, certainty <= 0.4) and is NEVER settled. The trap is an \
+weakly at most (|stance| <= 0.3, claim_strength <= 0.4) and is NEVER settled. The trap is an \
 article about target B that showcases exactly the skill the claim needs against target \
 A — the claim you write then has no target in it at all, which is the tell. Name the \
 specific target, action and deadline in the related event and check the article reports \
@@ -86,19 +86,19 @@ in for the occurrence the claim asks about.
 
 Examples — related event: "Force F will successfully strike Bridge K by date D":
   "Force F has demonstrated the capability to destroy major bridges using upgraded munitions" \
-                                               → stance +0.2, certainty 0.3, settled false (a capability, not a strike on Bridge K)
+                                               → stance +0.2, claim_strength 0.3, settled false (a capability, not a strike on Bridge K)
   "Force F struck a fuel depot and a military airfield overnight" \
                                                → no extraction (a different target — the skill is shared, the event is not)
   "Officials of Force F vowed Bridge K would be hit again" \
-                                               → stance +0.3, certainty 0.3, settled false (stated intent, not an occurrence)
+                                               → stance +0.3, claim_strength 0.3, settled false (stated intent, not an occurrence)
   "Explosions damaged Bridge K's roadway on Tuesday, halting traffic" \
-                                               → stance +1.0, certainty 0.95, settled true, event_date resolved from "on Tuesday" (this target, this action)
+                                               → stance +1.0, claim_strength 0.95, settled true, event_date resolved from "on Tuesday" (this target, this action)
 
 Examples — related event: "Company X will launch a commercial quantum computer by 2027":
   "Company X demonstrated error correction on a 100-qubit test chip" \
-                                               → stance +0.2, certainty 0.3, settled false (a capability milestone, not a commercial launch)
+                                               → stance +0.2, claim_strength 0.3, settled false (a capability milestone, not a commercial launch)
   "Company X opened orders for its first commercial quantum system" \
-                                               → stance +0.9, certainty 0.8, settled false (the launch itself, imminent — not yet an accomplished fact)
+                                               → stance +0.9, claim_strength 0.8, settled false (the launch itself, imminent — not yet an accomplished fact)
 
 ## The capability/intent cap applies PER CLAIM, not to the article's overall urgency
 Do not let an article that reads as urgent, on-topic, or saturated with intent signals lift the \
@@ -112,11 +112,11 @@ charged or imminent the surrounding coverage reads.
 Example — related event: "Force F will engage in a significant military conflict with Force G by \
 date D", one article reporting several accumulating signals:
   "Force F's defense minister threatens a strong response to any attack by Force G" \
-                                               → stance +0.3, certainty 0.3 (a threat, not an attack)
+                                               → stance +0.3, claim_strength 0.3 (a threat, not an attack)
   "Force F's security assessments expect senior Force G officials will order strikes" \
-                                               → stance +0.3, certainty 0.3 (an expectation, not an occurrence)
+                                               → stance +0.3, claim_strength 0.3 (an expectation, not an occurrence)
   "A third party is preparing to escalate military attacks on Force G" \
-                                               → stance +0.3, certainty 0.3 (another actor's preparation, not this conflict occurring)
+                                               → stance +0.3, claim_strength 0.3 (another actor's preparation, not this conflict occurring)
 Each stays capped even though all three appear in one urgent, on-topic article about the same \
 brewing conflict — the aggregate reading of "this is clearly heading to war" is not itself a \
 signal that qualifies for a higher cap.
@@ -131,38 +131,38 @@ Ask yourself: "If this quote/fact is true, does it make the related event more l
 (positive stance) or less likely (negative stance)?"
 
 Examples — related event: "Assad regime falls in Syria":
-  "Rebel forces are closing in on Hama"        → stance +0.7, certainty 0.6
-  "Assad's army is holding the line"           → stance −0.6, certainty 0.5
-  "The conflict has dragged on for two years"  → stance +0.2, certainty 0.2
-  "International sanctions remain in place"   → stance +0.3, certainty 0.3
+  "Rebel forces are closing in on Hama"        → stance +0.7, claim_strength 0.6
+  "Assad's army is holding the line"           → stance −0.6, claim_strength 0.5
+  "The conflict has dragged on for two years"  → stance +0.2, claim_strength 0.2
+  "International sanctions remain in place"   → stance +0.3, claim_strength 0.3
   "Rebels have taken Damascus; Assad has fled the country" \
-                                               → stance +1.0, certainty 0.95, settled true (+ event_date — see SETTLED)
+                                               → stance +1.0, claim_strength 0.95, settled true (+ event_date — see SETTLED)
   "Assad crushed the uprising; the rebellion is over" \
-                                               → stance −1.0, certainty 0.95, settled true (+ event_date of the crushing if the article dates it — see SETTLED)
+                                               → stance −1.0, claim_strength 0.95, settled true (+ event_date of the crushing if the article dates it — see SETTLED)
 
 Note: even factual/contextual sentences have a stance if they imply a direction.
 Do NOT use stance to indicate good/bad — only more/less likely to happen.
 
-## Unverified claims by an interested party — cap certainty
+## Unverified claims by an interested party — cap claim_strength
 A claim of fact made by a party TO the underlying dispute or conflict, about its OWN \
 actions, casualties inflicted, or operational results — a belligerent's own damage or \
 casualty count, a company's own success claim in a commercial dispute, a claimed strike \
-outcome — carries certainty no higher than 0.5, however declaratively it reads, UNLESS \
+outcome — carries claim_strength no higher than 0.5, however declaratively it reads, UNLESS \
 the article ALSO reports independent confirmation (a different party, a neutral \
 observer, satellite imagery, an official body). Wartime and dispute claims from an \
 interested source are routinely inflated or unverifiable; the direction (stance sign) \
 can still be correct and full stance magnitude still applies, but do not let declarative \
 phrasing ("claims to have destroyed X targets") buy full confidence. This is the same \
 VERIFIED vs CLAIMED judgement as the FACT_SIGNAL section below, applied here to \
-certainty, which does feed the live estimate.
+claim_strength, which does feed the live estimate.
 
 Examples — related event: "Maritime traffic through the Strait of Hormuz returns to \
 pre-conflict normal levels by September 30":
   "Iran's Islamic Revolutionary Guard Corps claims to have destroyed 85 U.S. military \
 targets in Bahrain and Qatar overnight" \
-                                               → stance −0.556, certainty 0.4 (an interested party's own unconfirmed damage claim — sign follows the escalation, certainty capped)
+                                               → stance −0.556, claim_strength 0.4 (an interested party's own unconfirmed damage claim — sign follows the escalation, claim_strength capped)
   "Satellite imagery confirms extensive damage to the reported U.S. facilities in Bahrain" \
-                                               → stance −0.6, certainty 0.8 (independently corroborated — no longer capped)
+                                               → stance −0.6, claim_strength 0.8 (independently corroborated — no longer capped)
 
 ## Negated events — score the claim AS WRITTEN
 When the related event is itself phrased as something NOT happening ("X will NOT \
@@ -175,13 +175,13 @@ never score the inner event and leave the negation to the reader.
 
 Examples — related event: "A Russia-Ukraine ceasefire will NOT be implemented before November":
   "Deep strikes on refineries intensify; talks have collapsed" \
-                                               → stance +0.6, certainty 0.6  (escalation SUPPORTS "no ceasefire")
+                                               → stance +0.6, claim_strength 0.6  (escalation SUPPORTS "no ceasefire")
   "Both sides agree on a framework for a truce" \
-                                               → stance −0.7, certainty 0.6  (a ceasefire approaching CONTRADICTS the negated claim)
+                                               → stance −0.7, claim_strength 0.6  (a ceasefire approaching CONTRADICTS the negated claim)
 
 Examples — related event: "Inflation will NOT fall below 3 percent this year":
-  "CPI drops to 2.9 percent in June"           → stance −1.0, certainty 0.9, settled true (the inner event occurred — the negated claim is settled FALSE)
-  "CPI ticks up to 4.1 percent"                → stance +0.5, certainty 0.5
+  "CPI drops to 2.9 percent in June"           → stance −1.0, claim_strength 0.9, settled true (the inner event occurred — the negated claim is settled FALSE)
+  "CPI ticks up to 4.1 percent"                → stance +0.5, claim_strength 0.5
 
 ## Alarming or critical tone is not stance direction
 A quote's emotional register — danger, tragedy, outrage, criticism — is not the signal. \
@@ -196,7 +196,7 @@ content actually points.
 Examples — related event: "Site S remains hazardous to human habitation for at least 100 years":
   "The reactor core residue is still molten beneath the plant; its presence keeps the city \
 unsafe to resettle, and will for at least the next century" \
-                                               → stance +1.0, certainty 0.9 (alarming tone, but the content directly affirms the claim — do not score it negative because "danger" reads as bad news)
+                                               → stance +1.0, claim_strength 0.9 (alarming tone, but the content directly affirms the claim — do not score it negative because "danger" reads as bad news)
 
 ## Numeric thresholds — compare the numbers, not the sentiment
 When the related event states a quantitative threshold ("more than 33 seats", \
@@ -208,10 +208,10 @@ the subject; general success without a number that clears the bar is at most \
 weakly positive.
 
 Examples — related event: "Likud wins more than 33 seats in the election":
-  "Poll projects Likud at 31 seats"        → stance −0.6, certainty 0.7  (31 ≤ 33: contradicts)
-  "Likud is leading in the polls"          → stance +0.2, certainty 0.3  (leading ≠ >33 seats)
-  "Poll gives Likud 36 seats"              → stance +0.7, certainty 0.7  (36 > 33: supports)
-  "Likud gained two seats since last poll" → stance +0.2, certainty 0.3  (trend, no level given)
+  "Poll projects Likud at 31 seats"        → stance −0.6, claim_strength 0.7  (31 ≤ 33: contradicts)
+  "Likud is leading in the polls"          → stance +0.2, claim_strength 0.3  (leading ≠ >33 seats)
+  "Poll gives Likud 36 seats"              → stance +0.7, claim_strength 0.7  (36 > 33: supports)
+  "Likud gained two seats since last poll" → stance +0.2, claim_strength 0.3  (trend, no level given)
 
 ## Multi-stage / bracket events — discount single-stage "favorite" framing
 When the related event requires winning a SEQUENCE of separate future contests \
@@ -221,21 +221,21 @@ confirmation votes) rather than one determination, an article's "favorite," \
 support for the event as a whole — it says nothing about the stages still to \
 come. Advancing past one stage narrows the field but does not itself imply the \
 final outcome; only raise stance as stages actually clear, and reserve high \
-certainty for articles that address the full remaining path, not just the next \
+claim_strength for articles that address the full remaining path, not just the next \
 match or round.
 
 Examples — related event: "France wins the 2026 World Cup" (tournament bracket):
-  "France is a strong favorite entering the Round of 16"     → stance +0.3, certainty 0.3  (one stage of several remaining)
-  "France beats Paraguay to reach the quarter-finals"        → stance +0.4, certainty 0.5  (one stage cleared, more remain)
-  "France reaches the final after a dominant semi-final win" → stance +0.6, certainty 0.6  (one stage left)
+  "France is a strong favorite entering the Round of 16"     → stance +0.3, claim_strength 0.3  (one stage of several remaining)
+  "France beats Paraguay to reach the quarter-finals"        → stance +0.4, claim_strength 0.5  (one stage cleared, more remain)
+  "France reaches the final after a dominant semi-final win" → stance +0.6, claim_strength 0.6  (one stage left)
 
 Examples — related event: "Judge Alvarez is confirmed to the Supreme Court" (committee vote, then floor vote):
-  "Alvarez is seen as the clear favorite to be confirmed"       → stance +0.3, certainty 0.3  (favorite framing, no vote yet)
-  "The Judiciary Committee advances Alvarez's nomination 12-10" → stance +0.4, certainty 0.5  (one stage cleared, floor vote remains)
+  "Alvarez is seen as the clear favorite to be confirmed"       → stance +0.3, claim_strength 0.3  (favorite framing, no vote yet)
+  "The Judiciary Committee advances Alvarez's nomination 12-10" → stance +0.4, claim_strength 0.5  (one stage cleared, floor vote remains)
 
 Examples — related event: "Diaz wins the presidential runoff" (first round, then runoff):
-  "Diaz leads first-round polling by 8 points"        → stance +0.2, certainty 0.3  (first round ≠ runoff win)
-  "Diaz advances to the runoff after finishing first" → stance +0.4, certainty 0.5  (one stage cleared, runoff remains)
+  "Diaz leads first-round polling by 8 points"        → stance +0.2, claim_strength 0.3  (first round ≠ runoff win)
+  "Diaz advances to the runoff after finishing first" → stance +0.4, claim_strength 0.5  (one stage cleared, runoff remains)
 
 ## Single-winner contests — a rival's win settles the claim NO
 When the related event names ONE subject winning a contest that can have only one \
@@ -243,7 +243,7 @@ winner (a tournament, a race, an election to a single office), a report that a \
 DIFFERENT contestant achieved that outcome — or eliminated the subject from \
 contention — is not merely bad news for the subject: it settles the related event \
 NEGATIVELY. The subject's outcome is now permanently impossible: stance −1.0, \
-certainty ≥ 0.9, settled true, event_date = the date of the foreclosing result (see \
+claim_strength ≥ 0.9, settled true, event_date = the date of the foreclosing result (see \
 SETTLED). The stance belongs to the SUBJECT of the related event, not to whoever the \
 article celebrates — never read the excitement of a decisive result as support for \
 the contestant it eliminated. A defeat that does NOT eliminate the subject (a \
@@ -252,13 +252,13 @@ evidence, never settled.
 
 Examples — related event: "France wins the 2026 World Cup" (article dated Wednesday 2026-07-15):
   "Spain beat France 2-0 in Tuesday's semi-final to reach the final" \
-                                               → stance −1.0, certainty 0.95, settled true, event_date "2026-07-14", event_date_reference "Tuesday's" (France eliminated — the outcome is permanently impossible; the article's subject is Spain's win, but the stance is about FRANCE)
+                                               → stance −1.0, claim_strength 0.95, settled true, event_date "2026-07-14", event_date_reference "Tuesday's" (France eliminated — the outcome is permanently impossible; the article's subject is Spain's win, but the stance is about FRANCE)
   "France lost their opening group match 0-1" \
-                                               → stance −0.4, certainty 0.4, settled false (a non-terminal loss — France can still advance)
+                                               → stance −0.4, claim_strength 0.4, settled false (a non-terminal loss — France can still advance)
 
 Examples — related event: "England will win their World Cup semi-final on 2026-07-15":
   "Argentina stun England with a late rally to reach the final" \
-                                               → stance −1.0, certainty 0.95, settled true, event_date "2026-07-15" (England's semi-final is decided — and lost; the triumphant tone is Argentina's, NOT support for England)
+                                               → stance −1.0, claim_strength 0.95, settled true, event_date "2026-07-15" (England's semi-final is decided — and lost; the triumphant tone is Argentina's, NOT support for England)
 
 ## Cited quantitative estimates — extract them as a distinct anchor
 When the article itself cites an explicit modeled, polled, or market-priced \
@@ -267,7 +267,7 @@ Team X an 18.83% chance to win the tournament", "the prediction market prices th
 deal at 33%", "the forecaster puts the odds of an agreement at 45%" — extract that \
 figure into `quantitative_estimate` as a probability in [0, 1] (convert percentages: \
 18.83% → 0.1883). Set `stance` to match it (`stance = 2 × quantitative_estimate − 1`) \
-and `certainty` high (≥ 0.8) — a named model or market is a much stronger \
+and `claim_strength` high (≥ 0.8) — a named model or market is a much stronger \
 anchor than qualitative "favorite"/"strong candidate" framing, even when several \
 qualitative articles exist alongside it. A vote share, poll share, seat count, or \
 seat projection is NOT a probability of the event — "the party polls at 28%" is a \
@@ -284,23 +284,23 @@ source counts.
 
 Examples — related event: "France wins the 2026 World Cup":
   "Simulations by Opta give France the best chance of winning the tournament, at 18.83%" \
-                                               → stance −0.62, certainty 0.85, quantitative_estimate 0.1883
+                                               → stance −0.62, claim_strength 0.85, quantitative_estimate 0.1883
   "Betting markets rank France as favorites to lift the trophy" \
-                                               → stance +0.3, certainty 0.3, quantitative_estimate null (no number given)
+                                               → stance +0.3, claim_strength 0.3, quantitative_estimate null (no number given)
   "The team's own coach joked there's maybe a 90% chance they choke again" \
-                                               → stance −0.3, certainty 0.3, quantitative_estimate null (casual personal opinion, not a named model/poll/market)
+                                               → stance −0.3, claim_strength 0.3, quantitative_estimate null (casual personal opinion, not a named model/poll/market)
 
 Examples — related event: "Likud wins more than 33 seats in the election":
   "A poll-aggregator model gives Likud a 22% chance of winning more than 33 seats" \
-                                               → stance −0.56, certainty 0.85, quantitative_estimate 0.22
+                                               → stance −0.56, claim_strength 0.85, quantitative_estimate 0.22
   "The latest poll puts Likud at 28% of the vote" \
-                                               → stance −0.5, certainty 0.7, quantitative_estimate null (a vote SHARE, not a chance of the event — compare against the threshold, classify cited_share)
+                                               → stance −0.5, claim_strength 0.7, quantitative_estimate null (a vote SHARE, not a chance of the event — compare against the threshold, classify cited_share)
   "Likud is seen as gaining momentum heading into the vote" \
-                                               → stance +0.2, certainty 0.3, quantitative_estimate null (momentum, no cited figure)
+                                               → stance +0.2, claim_strength 0.3, quantitative_estimate null (momentum, no cited figure)
 
 ## EVIDENCE CLASS — optional; classify the KIND of evidence this claim is
 Classify it independently and honestly; do not let it influence stance or
-certainty, and vice versa. If a claim genuinely does not fit one category
+claim_strength, and vice versa. If a claim genuinely does not fit one category
 cleanly, OMIT the field entirely rather than guessing — a missing
 evidence_class is fine, a wrong one is worse than none.
 
@@ -350,7 +350,7 @@ Examples — related event: "Likud wins more than 33 seats in the election":
 ## SETTLED — the event already happened (or definitively cannot)
 When the article REPORTS THE OUTCOME AS AN ACCOMPLISHED FACT — the event occurred, \
 or became permanently impossible (deadline passed, subject died, contest decided) — \
-set settled to true and use the full ±1.0 stance with certainty ≥ 0.9. Past-tense \
+set settled to true and use the full ±1.0 stance with claim_strength ≥ 0.9. Past-tense \
 reporting of the outcome ("X won", "the deal was signed", "Y has died") is settled; \
 predictions, odds, and expectations ("X is likely to win") are NOT settled, however \
 confident. Do not soften a settled outcome into a likelihood — a report that the \
@@ -389,11 +389,11 @@ not treat a running total as an accomplished fact just because it's stated as fa
 Examples — related event: "Messi scores at least 8 goals in the tournament" \
 (article dated Monday 2026-06-22):
   "Messi bagged his ninth goal of the tournament in Saturday's rout; the group stage continues" \
-                                               → event_date "2026-06-20", stance +1.0, certainty 0.95, settled true (9 ≥ 8: already locked in, dated by the ninth goal)
+                                               → event_date "2026-06-20", stance +1.0, claim_strength 0.95, settled true (9 ≥ 8: already locked in, dated by the ninth goal)
   "Messi and Mbappe are tied for the tournament lead with 6 goals each, group stage ongoing" \
-                                               → stance −0.3, certainty 0.4, settled false (6 < 8, contest still open — a tally, not a verdict)
+                                               → stance −0.3, claim_strength 0.4, settled false (6 < 8, contest still open — a tally, not a verdict)
   "The tournament concluded on Sunday; Messi finished with 7 goals" \
-                                               → stance −1.0, certainty 0.95, settled true, event_date "2026-06-21", event_date_reference "on Sunday" (contest over, 7 < 8 is now permanent — dated by the tournament's conclusion, the event that foreclosed the 8th goal)
+                                               → stance −1.0, claim_strength 0.95, settled true, event_date "2026-06-21", event_date_reference "on Sunday" (contest over, 7 < 8 is now permanent — dated by the tournament's conclusion, the event that foreclosed the 8th goal)
 
 ### Buried facts — extract settlement even when it's incidental to the article's main topic
 A clear past-tense statement of the RELATED EVENT can appear as a single supporting \
@@ -409,7 +409,7 @@ Examples — related event: "Peter Magyar will officially assume the role of Pri
 of Hungary by December 31, 2026":
   Article mainly about Ukraine-Hungary pipeline relations, mentioning in passing: \
   "...its leader Peter Magyar became Prime Minister on May 9" \
-                                               → event_date "2026-05-09", stance +1.0, certainty 0.95, settled true \
+                                               → event_date "2026-05-09", stance +1.0, claim_strength 0.95, settled true \
                                                  (clear past-tense fact, however incidental to the article's main topic)
 
 ### Historical background is NOT a settlement of the current question
@@ -422,10 +422,10 @@ a past-tense report of THIS question's outcome, within its own window, settles i
 Examples — related event: "The U.S. will formally approve an F-35 sale to Turkey by \
 December 31, 2026":
   "Turkey was removed from the F-35 program in 2019 over its S-400 purchase" \
-                                               → stance −0.1, certainty 0.4, settled false \
+                                               → stance −0.1, claim_strength 0.4, settled false \
                                                  (background history predating the question's window — not this question's outcome)
   "The State Department formally approved the F-35 sale to Turkey on Tuesday" \
-                                               → stance +1.0, certainty 0.95, settled true, event_date resolved from \
+                                               → stance +1.0, claim_strength 0.95, settled true, event_date resolved from \
                                                  "Tuesday" against the article's date (this question's outcome, reported as fact)
 
 ## MATCH THE EVENT — do not credit a near-miss as the event
@@ -452,12 +452,12 @@ definitively it is reported. The test: could a fact-checker cite this article al
 proof that the related event itself occurred? If not, it is not settled.
 
 Examples — related event: "At least one party withdraws from the parliamentary race":
-  "MK X announced he is leaving Party Y and won't run in its primaries"     → stance +0.3, certainty 0.5, settled false (a member leaving a party is not a party leaving the race)
-  "Party Y announced it will not submit a candidate list"                   → stance +1.0, certainty 0.95, settled true (+ event_date of the announcement)
+  "MK X announced he is leaving Party Y and won't run in its primaries"     → stance +0.3, claim_strength 0.5, settled false (a member leaving a party is not a party leaving the race)
+  "Party Y announced it will not submit a candidate list"                   → stance +1.0, claim_strength 0.95, settled true (+ event_date of the announcement)
 
 Examples — related event: "Company X exits the European market by year-end":
-  "Company X's CEO resigned amid the European losses"                       → stance +0.2, certainty 0.4, settled false (leadership change is not a market exit)
-  "Company X announced the closure of all European operations"              → stance +1.0, certainty 0.95, settled true (+ event_date of the announcement)
+  "Company X's CEO resigned amid the European losses"                       → stance +0.2, claim_strength 0.4, settled false (leadership change is not a market exit)
+  "Company X announced the closure of all European operations"              → stance +1.0, claim_strength 0.95, settled true (+ event_date of the announcement)
 
 ### A named-actor claim needs the NAMED actor and target, not just the same conflict
 When the related event names SPECIFIC parties (a named country, company, person, or \
@@ -470,14 +470,14 @@ does not confirm — and barely moves — a claim that requires THESE SPECIFIC p
 Check the actor and target BY NAME, not by category or by "is this the same conflict": \
 "the US and Iran" is not "Israel and Iran"; "Iran strikes Jordan" is not "Iran strikes \
 Israel", even on the same night of the same crisis. This is NEVER settled, and its \
-bearing on the named pair is weak context at most (|stance| <= 0.2, certainty <= 0.3) — \
+bearing on the named pair is weak context at most (|stance| <= 0.2, claim_strength <= 0.3) — \
 a claim asking whether X and Y fight is not "satisfied" by a report that Y is fighting \
 someone else.
 
 Examples — related event: "Israel and Iran engage in direct military conflict by December 31, 2026":
-  "Two US soldiers were killed in an Iranian attack on a base in Jordan"     → stance +0.15, certainty 0.2, settled false (the US and Jordan, not Israel — a wider war does not confirm this specific pair)
-  "IRGC missiles struck US targets in Kuwait and Bahrain overnight"         → stance +0.15, certainty 0.2, settled false (still not Israel; regional escalation raises the odds only weakly)
-  "The Israeli Air Force struck IRGC missile sites near Tehran"             → stance +1.0, certainty 0.95, settled true (+ event_date) (Israel and Iran, matching the claim exactly)
+  "Two US soldiers were killed in an Iranian attack on a base in Jordan"     → stance +0.15, claim_strength 0.2, settled false (the US and Jordan, not Israel — a wider war does not confirm this specific pair)
+  "IRGC missiles struck US targets in Kuwait and Bahrain overnight"         → stance +0.15, claim_strength 0.2, settled false (still not Israel; regional escalation raises the odds only weakly)
+  "The Israeli Air Force struck IRGC missile sites near Tehran"             → stance +1.0, claim_strength 0.95, settled true (+ event_date) (Israel and Iran, matching the claim exactly)
 
 ### A date does not excuse a near-miss — adjacency still applies to dated facts
 The event_date requirement in the DATES section below is a floor for a fact that has \
@@ -526,13 +526,13 @@ Examples — related event: "The Israeli parliament will be dissolved by July 15
 (article dated Monday 2026-07-13):
   "The Knesset will dissolve on Friday" \
     → "Friday" is 2026-07-17 (the Friday after Monday the 13th), which is AFTER July 15 \
-    → event_date "2026-07-17", event_date_reference "on Friday", stance −1.0, certainty 0.95 \
+    → event_date "2026-07-17", event_date_reference "on Friday", stance −1.0, claim_strength 0.95 \
       claim: "The parliament will be dissolved on 2026-07-17, after the July 15 deadline" \
     (WRONG: reading "Friday" as "by July 15" and returning +1.0 — the event is certain, \
      but it is certain to happen TOO LATE, which contradicts the claim)
   "The Knesset dissolved yesterday" \
     → "yesterday" is 2026-07-12, on or before July 15 \
-    → event_date "2026-07-12", event_date_reference "yesterday", stance +1.0, certainty 0.95, settled true
+    → event_date "2026-07-12", event_date_reference "yesterday", stance +1.0, claim_strength 0.95, settled true
 
 ## Article language
 The article may be in Hebrew, Arabic, or English. Always write the claim in English.
@@ -665,7 +665,7 @@ Example: {{"predictions": [ {{...}}, {{...}} ], "author_lean": 0.6, "author_lean
 
 Each prediction has five core fields, plus several used only when applicable:
   quote (string — original language), claim (string — English), \
-stance (float −1 to 1), certainty (float 0 to 1), settled (boolean — true only when \
+stance (float −1 to 1), claim_strength (float 0 to 1), settled (boolean — true only when \
 the source reports the outcome as an accomplished fact), quantitative_estimate \
 (float 0 to 1, OMIT this field entirely unless the source cites an explicit modeled/ \
 market/polled PROBABILITY of the event itself — never a vote share or seat count, \
@@ -698,7 +698,7 @@ Example — related event: "Assad regime falls in Syria":
       "quote": "Syrian rebel forces pushed close on Tuesday to the major city of Hama",
       "claim": "Rebel advances toward Hama make Assad's fall increasingly likely",
       "stance": 0.7,
-      "certainty": 0.6,
+      "claim_strength": 0.6,
       "settled": false,
       "evidence_class": "reporting"
     }},
@@ -706,7 +706,7 @@ Example — related event: "Assad regime falls in Syria":
       "quote": "Rebels seized the capital on Sunday as Assad fled to Moscow",
       "claim": "The Assad regime has fallen; rebels control Damascus",
       "stance": 1.0,
-      "certainty": 0.95,
+      "claim_strength": 0.95,
       "settled": true,
       "evidence_class": "reported_fact"
     }}
@@ -720,7 +720,7 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
       "quote": "Simulations by Opta indicate France has the highest chance of winning the 2026 World Cup at 18.83%",
       "claim": "Opta's model gives France an 18.83% chance to win the tournament",
       "stance": -0.62,
-      "certainty": 0.85,
+      "claim_strength": 0.85,
       "settled": false,
       "quantitative_estimate": 0.1883,
       "evidence_class": "cited_probability"
@@ -1207,7 +1207,7 @@ def enforce_settlement_event_date(
         logger.warning(
             "event=settlement_demoted reason=%s event_date=%s article_date=%s "
             "stance=%+.2f certainty=%.2f claim=%r",
-            reason, p.event_date, article_date, p.stance, p.certainty, p.claim[:120],
+            reason, p.event_date, article_date, p.stance, p.claim_strength, p.claim[:120],
         )
         p.settled = False
 
@@ -1319,7 +1319,7 @@ def enforce_interested_party_stance_cap(
         logger.warning(
             "event=interested_party_stance_clamped stance=%+.2f -> %+.2f cap=%.2f "
             "certainty=%.2f evidence_class=%s claim=%r",
-            p.stance, clamped, cap, p.certainty, p.evidence_class, p.claim[:120],
+            p.stance, clamped, cap, p.claim_strength, p.evidence_class, p.claim[:120],
         )
         p.stance = clamped
 
@@ -1332,7 +1332,7 @@ def enforce_interested_party_certainty(
     """The weight-side half of the interested-party rule (retro#378, F20 family).
 
     The prompt's VERIFIED vs CLAIMED section says an unverified interested-party
-    claim "carries certainty no higher than 0.5, however declaratively it reads".
+    claim "carries claim_strength no higher than 0.5, however declaratively it reads".
     Nothing checked it. Measured on prod (2026-08-01/02, `evidence_pool_articles`
     rows carrying the marker): **56 of 185 ``verified=false`` rows — 30.3% —
     exceed the cap**, max 0.733, with ten sitting at exactly 0.70 carrying an
@@ -1380,14 +1380,14 @@ def enforce_interested_party_certainty(
     for p in predictions:
         if p.verified is not False:
             continue
-        if p.certainty <= cap:
+        if p.claim_strength <= cap:
             continue
         logger.warning(
             "event=interested_party_certainty_clamped certainty=%.2f -> %.2f "
             "cap=%.2f stance=%+.2f evidence_class=%s claim=%r",
-            p.certainty, cap, cap, p.stance, p.evidence_class, p.claim[:120],
+            p.claim_strength, cap, cap, p.stance, p.evidence_class, p.claim[:120],
         )
-        p.certainty = cap
+        p.claim_strength = cap
 
     return predictions
 
@@ -1448,7 +1448,7 @@ def enforce_decider_intent_stance_cap(
         logger.warning(
             "event=decider_intent_stance_clamped stance=%+.2f -> %+.2f cap=%.2f "
             "facet=%s verified=%s certainty=%.2f claim=%r",
-            p.stance, clamped, cap, p.facet, p.verified, p.certainty, p.claim[:120],
+            p.stance, clamped, cap, p.facet, p.verified, p.claim_strength, p.claim[:120],
         )
         p.stance = clamped
 
@@ -1975,7 +1975,7 @@ def audit_named_entity_dyad_mismatch(
             continue
         if abs(p.stance) < _ENTITY_DYAD_AUDIT_STANCE_GATE:
             continue
-        if p.certainty < _ENTITY_DYAD_AUDIT_CERTAINTY_GATE:
+        if p.claim_strength < _ENTITY_DYAD_AUDIT_CERTAINTY_GATE:
             continue
         eligible += 1
 
@@ -1986,7 +1986,7 @@ def audit_named_entity_dyad_mismatch(
         logger.warning(
             "event=entity_dyad_mismatch question_subject=%r actors=%r target=%r "
             "stance=%+.2f certainty=%.2f settled=%s claim=%r",
-            subject, p.event_actors, p.event_target, p.stance, p.certainty,
+            subject, p.event_actors, p.event_target, p.stance, p.claim_strength,
             p.settled, p.claim[:120],
         )
 
@@ -2031,7 +2031,7 @@ def audit_fact_signal_sign_mismatch(
             continue
         if abs(p.stance) < _FACT_SIGNAL_SIGN_STANCE_GATE:
             continue
-        if p.certainty < _FACT_SIGNAL_SIGN_CERTAINTY_GATE:
+        if p.claim_strength < _FACT_SIGNAL_SIGN_CERTAINTY_GATE:
             continue
         if (p.fact_signal > 0) == (p.stance > 0):
             continue
@@ -2039,7 +2039,7 @@ def audit_fact_signal_sign_mismatch(
         logger.warning(
             "event=fact_signal_sign_mismatch stance=%+.2f fact_signal=%+.2f "
             "certainty=%.2f settled=%s claim=%r",
-            p.stance, p.fact_signal, p.certainty, p.settled, p.claim[:120],
+            p.stance, p.fact_signal, p.claim_strength, p.settled, p.claim[:120],
         )
 
     return predictions
@@ -2180,7 +2180,7 @@ def enforce_settlement_fact_signal_agreement(
         logger.warning(
             "event=settlement_fact_signal_conflict stance=%+.2f fact_signal=%+.2f "
             "certainty=%.2f facet=%s verified=%s claim=%r",
-            p.stance, p.fact_signal, p.certainty, p.facet, p.verified, p.claim[:120],
+            p.stance, p.fact_signal, p.claim_strength, p.facet, p.verified, p.claim[:120],
         )
         p.settled = False
         p.stance = 0.0
@@ -2258,7 +2258,7 @@ def audit_quote_provenance_mismatch(
         logger.warning(
             "event=quote_provenance_mismatch event_name=%r event_description=%r "
             "quote=%r stance=%+.2f certainty=%.2f settled=%s claim=%r",
-            event_name, event_description, quote, p.stance, p.certainty,
+            event_name, event_description, quote, p.stance, p.claim_strength,
             p.settled, p.claim[:120],
         )
 

@@ -111,7 +111,7 @@ def test_build_info_env_fallback(tmp_path, monkeypatch):
 def test_build_provenance_carries_build_info_into_oracle_block():
     p = _build.build_provenance(method="live", chain=["gdelt", "brave"])
     bi = _build.build_info()
-    assert p.schema_version == "1.0"
+    assert p.schema_version == "1.1"
     assert p.engine == "v1"
     assert p.oracle.version == bi["version"]
     assert p.oracle.git_sha == bi["git_sha"]

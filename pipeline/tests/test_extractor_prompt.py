@@ -83,8 +83,8 @@ def test_unverified_interested_party_section_present():
     unconfirmed wartime claim by a belligerent — sign was right, magnitude was not.
     Mirrors the VERIFIED vs CLAIMED test already in FACT_SIGNAL, but applied to the
     live-facing `certainty` field rather than the shadow fact_signal facet."""
-    assert "## Unverified claims by an interested party — cap certainty" in PROMPT_PREFIX
-    assert "carries certainty no higher than 0.5" in PROMPT_PREFIX
+    assert "## Unverified claims by an interested party — cap claim_strength" in PROMPT_PREFIX
+    assert "carries claim_strength no higher than 0.5" in PROMPT_PREFIX
     assert "UNLESS the article ALSO reports independent confirmation" in PROMPT_PREFIX
 
 
@@ -143,7 +143,7 @@ def test_capability_vs_occurrence_section_present():
     section's <= 0.5. Do not harmonize them."""
     assert "## Capability and intent are not occurrence" in PROMPT_PREFIX
     assert "a PRECONDITION of the related event, never the event itself" in PROMPT_PREFIX
-    assert "|stance| <= 0.3, certainty <= 0.4) and is NEVER settled" in PROMPT_PREFIX
+    assert "|stance| <= 0.3, claim_strength <= 0.4) and is NEVER settled" in PROMPT_PREFIX
     assert "never let a capability, an intent, or a success against another target stand" in PROMPT_PREFIX
 
 

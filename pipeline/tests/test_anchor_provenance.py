@@ -95,7 +95,7 @@ def test_an_unclassified_claim_is_never_touched(enforced):
 def test_a_demoted_claim_keeps_stance_certainty_and_its_number(enforced):
     """It loses the premium, not its vote — it still counts as ordinary evidence."""
     [out] = enforce_anchor_provenance([pred("a market prices this at 80%")])
-    assert (out.stance, out.certainty) == (0.6, 0.7)
+    assert (out.stance, out.claim_strength) == (0.6, 0.7)
     assert out.quantitative_estimate == 0.8
 
 

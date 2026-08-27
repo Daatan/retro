@@ -189,7 +189,7 @@ Consumers globbing `vault2/extractions/` must filter markers via
 `duel_report` already do).
 
 ### Prediction (extracted by LLM)
-Each prediction has: `quote`, `claim`, `stance` (−1 to +1, event probability), `certainty`, `settled` (bool — true when the source reports the outcome as an accomplished fact, not a prediction; the prompt explicitly excludes historical background such as a past removal/ban, see #244), and `quantitative_estimate` (optional [0,1] — an explicit modeled probability, poll number, or market price the source cites for the event itself; carries the quantitative-anchor weight premium).
+Each prediction has: `quote`, `claim`, `stance` (−1 to +1, event probability), `claim_strength` (named `certainty` before Oracle 1.5 Phase 1, retro#680; the old name is still emitted as a wire alias), `settled` (bool — true when the source reports the outcome as an accomplished fact, not a prediction; the prompt explicitly excludes historical background such as a past removal/ban, see #244), and `quantitative_estimate` (optional [0,1] — an explicit modeled probability, poll number, or market price the source cites for the event itself; carries the quantitative-anchor weight premium).
 
 Also requested, EXPERIMENTAL/shadow (Phase 2 of the author-scoring redesign — none of these fields pools, i.e. no aggregation step reads them; `fact_signal` and its facets are nonetheless consumed at EXTRACTION time, see below): `evidence_class` (reported_fact / cited_probability / cited_share / reporting / opinion — S2, see `docs/ORACLE_VARIABLES.md` §5), `fact_signal` (−1 to +1, what the reported facts alone imply, un-fused from the author's framing), `event_actors` / `event_target` (the fact's actor-target dyad, for cross-checking against the claim), `is_occurrence` (is the reported fact the event itself, or only a precursor), `verified` (independently reported vs. merely claimed by an interested party), `event_date` / `event_date_reference` (resolved absolute date + the article's original relative expression). Full field docs: `PredictionExtraction` in `pipeline/src/tm/models.py`.
 
@@ -209,15 +209,20 @@ Older atlas entries also carry: `sentiment`, `specificity`, `hedge_ratio`, `cond
 - `−1.0` = author is certain the event will NOT happen
 - `0.0`  = neutral / genuinely uncertain
 
-**certainty** = how much weight this claim should carry, independent of stance's
-direction or magnitude — it answers "how much should we trust that this signal
-really bears on the outcome," not "which way does it point."
+**claim_strength** (called `certainty` until Oracle 1.5 Phase 1, retro#680 — the old
+name is still emitted alongside it as a wire alias for one schema cycle) = how firmly
+**the source** commits to this claim, independent of stance's direction or magnitude.
+It answers "how hard did the source assert this," not "which way does it point" — and,
+since the rename, not "how confident is the reader that it read the source correctly"
+either: that second quantity is its own field (`reader_confidence`, retro#681). The two
+were genuinely being conflated — retro#664's Kenya case scored an unhedged span 0.30
+because the reader was unsure, not because the source hedged.
 - `~1.0` = decisive/explicit ("they clinched it", "the vote failed")
 - `~0.2` = hedged, vague, or only loosely connected ("pressure is mounting")
 
-Stance and certainty are meant to be independent axes (a hedged claim can point
-strongly in one direction with low certainty; a flatly-stated fact can carry high
-certainty with only mild stance), but the extractor prompt (`pipeline/src/tm/extractor.py`)
+Stance and claim_strength are meant to be independent axes (a hedged claim can point
+strongly in one direction with low claim_strength; a flatly-stated fact can carry high
+claim_strength with only mild stance), but the extractor prompt (`pipeline/src/tm/extractor.py`)
 only ever demonstrates them via correlated examples — it never states the distinction
 as a rule. See "Known limitations" below.
 
@@ -640,7 +645,7 @@ POST /forecast
   "provider_chain": ["news-indexer"],
   "distilled_query": null,
   "provenance": {
-    "schema_version": "1.0",
+    "schema_version": "1.1",
     "engine": "v1",
     "oracle": { "version": "1.65.x", "git_sha": "…", "built_at": "…" },
     "models": { "gatekeeper": "nova-micro", "extractor": "claude-haiku-4-5" },
@@ -672,7 +677,7 @@ with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
 
 **Stage 2 — Gatekeeper + Extractor** (parallel per article)
 1. `gatekeeper.check_is_prediction()` — LLM topic-relevance screen (graded `relevance_score`); the legacy method name predates the softening to a relevance filter. Content-free input never reaches the model: `gatekeeper.carries_proposition()` strips URLs/handles/hashtags and rejects text with no letters left (`is_prediction=false`, `relevance_score=0.0`, zero usage) — a model handed a bare URL confabulates rather than abstaining (retro#359).
-2. `extractor.extract_predictions()` — LLM extraction: `stance`, `certainty`, `claim`, etc.
+2. `extractor.extract_predictions()` — LLM extraction: `stance`, `claim_strength`, `claim`, etc.
 
 **Stage 3 — Weight by Source Credibility**
 1. `leaderboard.get_credibility_weight(source_id)` — OpenSkill conservative score (μ − 3σ) from `leaderboard.json`. That vault is **legacy**: nothing in production has regenerated it since 2026-03-28, so it returns a neutral 1.0 for almost every live source. Setting `RESOLUTION_SHADOW_CREDIBILITY_ENABLED=true` switches this to a shrunk **Brier** score over real daatan resolutions (`resolution_leaderboard.json`) instead — off by default, see [ORACLE_VARIABLES.md](ORACLE_VARIABLES.md) §9 for why Brier and not the vault's μ − 3σ transform

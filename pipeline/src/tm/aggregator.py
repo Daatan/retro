@@ -133,7 +133,7 @@ def aggregate_predictions(predictions: list[PredictionExtraction]) -> CellSignal
     if not predictions:
         raise ValueError("Cannot aggregate empty prediction list")
 
-    weights = [p.certainty * (p.specificity if p.specificity is not None else 1.0)
+    weights = [p.claim_strength * (p.specificity if p.specificity is not None else 1.0)
                for p in predictions]
 
     def wmean(attr: str) -> float:
@@ -153,7 +153,11 @@ def aggregate_predictions(predictions: list[PredictionExtraction]) -> CellSignal
     return CellSignal(
         claim_count=len(predictions),
         stance=wmean("stance"),
-        certainty=wmean("certainty"),
+        # CellSignal.certainty keeps its name (atlas lane, retro#680 renamed only
+        # the elicited PredictionExtraction field), but the value is read off
+        # PredictionExtraction by attribute NAME via getattr — so the argument
+        # here must be the new name or every aggregation raises AttributeError.
+        certainty=wmean("claim_strength"),
         sentiment=optional_wmean("sentiment"),
         specificity=optional_wmean("specificity"),
         hedge_ratio=optional_wmean("hedge_ratio"),

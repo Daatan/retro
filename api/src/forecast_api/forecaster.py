@@ -69,7 +69,7 @@ EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 # human-readable label only, see docs/PROMPT_VERSIONS.md. The *_HASH is computed from the
 # actual prompt text above, so it stays correct even if a version bump is forgotten.
 GATEKEEPER_PROMPT_VERSION = "v1"
-EXTRACTOR_PROMPT_VERSION = "v3"
+EXTRACTOR_PROMPT_VERSION = "v4"
 GATEKEEPER_PROMPT_HASH = hashlib.sha256(GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
 EXTRACTOR_PROMPT_HASH = hashlib.sha256(EXTRACTOR_PROMPT.encode()).hexdigest()[:16]
 
@@ -225,7 +225,8 @@ def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDe
             claim=p.claim,
             quote=p.quote or None,
             stance=p.stance,
-            certainty=p.certainty,
+            certainty=p.claim_strength,
+            claim_strength=p.claim_strength,
             specificity=p.specificity,
             prediction_type=p.prediction_type.value if p.prediction_type is not None else None,
             evidence_class=p.evidence_class,
@@ -1314,10 +1315,10 @@ async def _process_article(
     # tangential hedged ones (mirrors the cross-source weighting below).
     avg_stance = claim_weighted_stance(
         [p.stance for p in extraction.predictions],
-        [p.certainty for p in extraction.predictions],
+        [p.claim_strength for p in extraction.predictions],
         [p.specificity for p in extraction.predictions],
     )
-    avg_certainty = sum(p.certainty for p in extraction.predictions) / len(extraction.predictions)
+    avg_certainty = sum(p.claim_strength for p in extraction.predictions) / len(extraction.predictions)
     first_claim = (extraction.predictions[0].claim or "")[:160]
     logger.info(
         "event=article_outcome outcome=ok url=%s stance=%.3f certainty=%.3f n_preds=%d claim=%r",
@@ -1856,17 +1857,17 @@ async def _run_forecast_inner(
             # or it keeps evidence_class_weight's cited_probability premium below
             # while carrying an unrealigned, possibly wrong-direction stance.
             if p.settled and settlement_grade(
-                p.stance, p.certainty,
+                p.stance, p.claim_strength,
                 min_stance=settings.settlement_min_claim_stance,
                 min_certainty=settings.settlement_min_claim_certainty,
             ):
                 resolved_predictions.append(p)
                 continue
             stance, certainty = resolve_stance_certainty(
-                p.stance, p.certainty, p.quantitative_estimate,
+                p.stance, p.claim_strength, p.quantitative_estimate,
                 evidence_class=p.evidence_class,
             )
-            resolved_predictions.append(p.model_copy(update={"stance": stance, "certainty": certainty}))
+            resolved_predictions.append(p.model_copy(update={"stance": stance, "claim_strength": certainty}))
         predictions = resolved_predictions
 
         source_id = _source_id_from_url(result.url)

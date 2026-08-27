@@ -150,3 +150,50 @@ def test_matrix_state_tracking():
 def test_matrix_state_key():
     state = MatrixState()
     assert state.key("B01", "haaretz") == "B01:haaretz"
+
+
+class TestClaimStrengthCertaintyAlias:
+    """`certainty` was renamed to `claim_strength` in Oracle 1.5 Phase 1 (retro#680).
+
+    The old name stays live as a WIRE alias for one schema cycle: inbound it is
+    accepted, outbound it is still emitted. That keeps every already-persisted
+    atlas row and every reader that indexes the literal key ``certainty``
+    (`tm.utils.split_scored_predictions`, `tm.scorer`, `tm.backtest`,
+    `tm.render_atlas`) working unchanged across the deploy, rather than having
+    them silently reclassify new rows as malformed.
+
+    These tests are the contract. When the alias is dropped next cycle, the ones
+    asserting the old name are what should fail first.
+    """
+
+    def test_accepts_the_old_name_inbound(self):
+        pred = PredictionExtraction(quote="q", claim="c", stance=0.1, certainty=0.65)
+        assert pred.claim_strength == 0.65
+
+    def test_accepts_the_new_name_inbound(self):
+        pred = PredictionExtraction(quote="q", claim="c", stance=0.1, claim_strength=0.65)
+        assert pred.claim_strength == 0.65
+
+    def test_emits_both_names_with_the_same_value(self):
+        dumped = PredictionExtraction(
+            quote="q", claim="c", stance=0.1, claim_strength=0.65
+        ).model_dump()
+        assert dumped["claim_strength"] == 0.65
+        assert dumped["certainty"] == 0.65
+
+    def test_the_old_name_survives_a_dump_validate_round_trip(self):
+        pred = PredictionExtraction(quote="q", claim="c", stance=0.1, certainty=0.65)
+        assert PredictionExtraction.model_validate(pred.model_dump()).claim_strength == 0.65
+
+    def test_the_alias_is_not_offered_to_the_llm(self):
+        """The alias must live on the wire only, never in the elicitation schema.
+
+        A `@computed_field` would also emit both names — but it would additionally
+        publish `certainty` into the JSON schema instructor sends to the model,
+        re-teaching the model the name this rename exists to retire, and inviting
+        it to fill in two fields that must never disagree. `@model_serializer`
+        keeps the alias strictly outbound; this test is what tells the two apart.
+        """
+        props = PredictionExtraction.model_json_schema()["properties"]
+        assert "claim_strength" in props
+        assert "certainty" not in props

@@ -59,7 +59,7 @@ def test_certainty_and_fact_signal_survive_so_the_row_stays_auditable():
     """Only the sign-bearing fields move: the row keeps its weight and its evidence."""
     preds = [pred(-1.0, 1.0, certainty=0.95)]
     enforce_settlement_fact_signal_agreement(preds)
-    assert preds[0].certainty == 0.95
+    assert preds[0].claim_strength == 0.95
     assert preds[0].fact_signal == 1.0
 
 

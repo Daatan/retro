@@ -55,7 +55,7 @@ async def test_interested_party_stance_and_certainty_are_clamped():
     )]
     out = await _run_with_predictions(preds)
     assert out.predictions[0].stance == pytest.approx(0.3)
-    assert out.predictions[0].certainty == pytest.approx(0.5)
+    assert out.predictions[0].claim_strength == pytest.approx(0.5)
 
 
 async def test_decider_intent_stance_is_clamped():
@@ -102,7 +102,7 @@ async def test_well_formed_prediction_is_left_untouched():
     )]
     out = await _run_with_predictions(preds)
     assert out.predictions[0].stance == 0.6
-    assert out.predictions[0].certainty == 0.7
+    assert out.predictions[0].claim_strength == 0.7
 
 
 async def test_winner_entity_conflict_is_neutralised_using_article_event_name():
@@ -146,7 +146,7 @@ async def test_settlement_contradicting_its_own_fact_lane_is_neutralised():
     out = await _run_with_predictions(preds)
     assert out.predictions[0].stance == 0.0
     assert out.predictions[0].settled is False
-    assert out.predictions[0].certainty == pytest.approx(0.95)
+    assert out.predictions[0].claim_strength == pytest.approx(0.95)
 
 
 async def test_entity_dyad_mismatch_is_logged_using_article_event_name(caplog):
@@ -171,7 +171,7 @@ async def test_entity_dyad_mismatch_is_logged_using_article_event_name(caplog):
     assert result.extraction is not None
     out = result.extraction.predictions[0]
     assert out.stance == 0.9
-    assert out.certainty == 0.9
+    assert out.claim_strength == 0.9
     assert any("event=entity_dyad_mismatch" in r.message for r in caplog.records)
 
 
@@ -220,7 +220,7 @@ async def test_fabricated_quote_is_logged_using_article_event_fields(caplog):
     assert result.extraction is not None
     out = result.extraction.predictions[0]
     assert out.stance == 0.9
-    assert out.certainty == 0.9
+    assert out.claim_strength == 0.9
     assert any(
         "event=quote_provenance_mismatch " in r.message for r in caplog.records
     )

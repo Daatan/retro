@@ -112,7 +112,7 @@ async def _run_case(model: str, article_text: str) -> list[dict]:
         # The article's vote is the claim-weighted picture; for a pass/fail read
         # the dominant signed claim is what matters — a positive stance on ANY
         # settled claim is the incident's exact shape.
-        stances = [(p.stance, p.certainty, bool(p.settled)) for p in out.predictions]
+        stances = [(p.stance, p.claim_strength, bool(p.settled)) for p in out.predictions]
         worst = max(stances, key=lambda s: s[0], default=(None, None, False))
         out_rows.append({
             "n_claims": len(stances),

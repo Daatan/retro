@@ -145,7 +145,7 @@ def _primary(out) -> tuple:
     if not out.predictions:
         return None, None
     p = out.predictions[0]
-    return p.stance, p.certainty
+    return p.stance, p.claim_strength
 
 
 async def _run_case(model: str, case: dict) -> list[tuple]:

@@ -180,7 +180,7 @@ def test_a_neutralised_claim_keeps_every_other_field():
     [out] = enforce_winner_entity_consistency([p], INCIDENT_QUESTION)
     assert out.stance == 0.0
     assert out.settled is False
-    assert out.certainty == 0.85
+    assert out.claim_strength == 0.85
     assert out.verified is False
     assert (out.event_actors, out.event_target) == ("Argentina", "England")
     assert out.fact_signal == 1.0  # shadow lane untouched; nothing reads it yet

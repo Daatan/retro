@@ -43,33 +43,33 @@ def pred(
 
 def test_an_unverified_claim_above_the_cap_is_clamped():
     [out] = enforce_interested_party_certainty([pred(0.9)])
-    assert out.certainty == pytest.approx(CAP)
+    assert out.claim_strength == pytest.approx(CAP)
 
 
 def test_the_measured_worst_case_is_clamped():
     """0.733 was the highest certainty on a verified=false row in the prod audit."""
     [out] = enforce_interested_party_certainty([pred(0.733)])
-    assert out.certainty == pytest.approx(CAP)
+    assert out.claim_strength == pytest.approx(CAP)
 
 
 def test_the_modal_violation_is_clamped():
     """Ten rows sat at exactly 0.70 carrying avg |stance| 0.76 — the single
     largest cluster of violations, and the one this cap is really about."""
     [out] = enforce_interested_party_certainty([pred(0.70, stance=0.76)])
-    assert out.certainty == pytest.approx(CAP)
+    assert out.claim_strength == pytest.approx(CAP)
     assert out.stance == pytest.approx(0.76), "the location axis is #368's, not this one's"
 
 
 def test_an_unverified_claim_at_the_cap_is_untouched():
     [out] = enforce_interested_party_certainty([pred(CAP)])
-    assert out.certainty == pytest.approx(CAP)
+    assert out.claim_strength == pytest.approx(CAP)
 
 
 def test_an_unverified_claim_below_the_cap_is_untouched():
     """Unverified rows sit LOWER on both axes than verified ones (avg certainty
     0.456 vs 0.547) — most are already in contract and must not be disturbed."""
     [out] = enforce_interested_party_certainty([pred(0.3)])
-    assert out.certainty == pytest.approx(0.3)
+    assert out.claim_strength == pytest.approx(0.3)
 
 
 def test_the_r8_b4_shape_a_minimal_verified_pair():
@@ -79,9 +79,9 @@ def test_the_r8_b4_shape_a_minimal_verified_pair():
     unverified, verified = enforce_interested_party_certainty(
         [pred(0.9, verified=False), pred(0.9, verified=True)]
     )
-    assert unverified.certainty == pytest.approx(CAP)
-    assert verified.certainty == pytest.approx(0.9)
-    assert unverified.certainty != verified.certainty
+    assert unverified.claim_strength == pytest.approx(CAP)
+    assert verified.claim_strength == pytest.approx(0.9)
+    assert unverified.claim_strength != verified.claim_strength
 
 
 # ── what it must not touch ────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ def test_the_r8_b4_shape_a_minimal_verified_pair():
 
 def test_a_verified_claim_is_never_touched():
     [out] = enforce_interested_party_certainty([pred(0.9, verified=True)])
-    assert out.certainty == pytest.approx(0.9)
+    assert out.claim_strength == pytest.approx(0.9)
 
 
 def test_an_unjudged_claim_is_never_touched():
@@ -97,7 +97,7 @@ def test_an_unjudged_claim_is_never_touched():
     since 2026-07-09, never backfilled. Fail open: this cap is a no-op on
     historical rows and can only be validated forward."""
     [out] = enforce_interested_party_certainty([pred(0.9, verified=None)])
-    assert out.certainty == pytest.approx(0.9)
+    assert out.claim_strength == pytest.approx(0.9)
 
 
 def test_stance_and_class_are_untouched():
@@ -118,7 +118,7 @@ def test_an_empty_list_is_a_no_op():
 def test_the_cap_is_config_driven(monkeypatch):
     monkeypatch.setattr(settings, "interested_party_certainty_cap", 0.25)
     [out] = enforce_interested_party_certainty([pred(0.9)])
-    assert out.certainty == pytest.approx(0.25)
+    assert out.claim_strength == pytest.approx(0.25)
 
 
 def test_a_cap_above_every_certainty_is_inert(monkeypatch):
@@ -127,7 +127,7 @@ def test_a_cap_above_every_certainty_is_inert(monkeypatch):
     this function and nothing else (the trick that worked for F20)."""
     monkeypatch.setattr(settings, "interested_party_certainty_cap", 1.1)
     [out] = enforce_interested_party_certainty([pred(1.0)])
-    assert out.certainty == pytest.approx(1.0)
+    assert out.claim_strength == pytest.approx(1.0)
 
 
 def test_default_cap_matches_the_prompt_literal():
@@ -135,7 +135,7 @@ def test_default_cap_matches_the_prompt_literal():
     away from the sentence the model is still being taught (same pin as F9's)."""
     from tm.extractor import PROMPT_PREFIX
     assert settings.interested_party_certainty_cap == 0.5
-    assert "carries certainty no higher than 0.5" in PROMPT_PREFIX
+    assert "carries claim_strength no higher than 0.5" in PROMPT_PREFIX
 
 
 def test_the_clamp_is_logged_with_the_resolved_class(caplog):
@@ -158,4 +158,4 @@ def test_both_halves_clamp_the_same_claim_on_their_own_axis():
         enforce_interested_party_stance_cap([pred(0.9, stance=0.95)])
     )
     assert out.stance == pytest.approx(settings.interested_party_stance_cap)
-    assert out.certainty == pytest.approx(CAP)
+    assert out.claim_strength == pytest.approx(CAP)

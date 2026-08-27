@@ -283,7 +283,7 @@ def test_never_mutates_the_prediction():
     out = audit_named_entity_dyad_mismatch(preds, QUESTION)
     assert out is preds
     assert out[0].stance == 0.9
-    assert out[0].certainty == 0.9
+    assert out[0].claim_strength == 0.9
     assert out[0].settled is None
     assert out[0].event_actors == "Almog Cohen"
     assert out[0].event_target == "the Knesset"

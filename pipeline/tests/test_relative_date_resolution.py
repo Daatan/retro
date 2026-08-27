@@ -42,7 +42,7 @@ def test_a_correctly_resolved_weekday_is_left_alone():
 def test_stance_and_certainty_are_never_touched():
     [out] = enforce_relative_date_resolution([pred("2026-07-18", "on Friday", stance=1.0)], MONDAY)
     assert out.stance == 1.0
-    assert out.certainty == 0.95
+    assert out.claim_strength == 0.95
 
 
 # ── vocabulary ────────────────────────────────────────────────────────────────

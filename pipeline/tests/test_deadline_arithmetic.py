@@ -28,7 +28,7 @@ def test_the_knesset_case_confident_yes_on_a_date_after_the_deadline_is_flipped(
     """The Guardian article: dissolution on 2026-07-17, deadline 2026-07-15 → NO, not YES."""
     [out] = enforce_deadline_arithmetic([pred(1.0, "2026-07-17", settled=True)], DEADLINE, "arrival")
     assert out.stance == -1.0
-    assert out.certainty == 0.95  # only the sign moves
+    assert out.claim_strength == 0.95  # only the sign moves
     assert out.settled is True
 
 

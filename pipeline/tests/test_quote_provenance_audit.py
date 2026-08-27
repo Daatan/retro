@@ -54,7 +54,7 @@ def test_formatting_differences_still_match(caplog):
 def test_never_mutates_anything():
     preds = [pred(EVENT_NAME, stance=0.9, certainty=0.95)]
     audit_quote_provenance_mismatch(preds, EVENT_NAME, EVENT_DESCRIPTION)
-    assert (preds[0].stance, preds[0].certainty, preds[0].quote) == (0.9, 0.95, EVENT_NAME)
+    assert (preds[0].stance, preds[0].claim_strength, preds[0].quote) == (0.9, 0.95, EVENT_NAME)
 
 
 def test_returns_the_same_list_object():

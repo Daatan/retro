@@ -109,7 +109,7 @@ def print_result(result) -> None:
             t.add_row("Claim", pred.claim)
             t.add_row("Quote", f'"{pred.quote[:120]}..."' if len(pred.quote) > 120 else f'"{pred.quote}"')
             t.add_row("Stance", f"{pred.stance:+.2f}  {'▲ bullish' if pred.stance > 0 else '▼ bearish' if pred.stance < 0 else '→ neutral'}")
-            t.add_row("Certainty", f"{pred.certainty:.2f}  {'█' * int(pred.certainty * 10)}{'░' * (10 - int(pred.certainty * 10))}")
+            t.add_row("Certainty", f"{pred.claim_strength:.2f}  {'█' * int(pred.claim_strength * 10)}{'░' * (10 - int(pred.claim_strength * 10))}")
             t.add_row("Specificity", f"{pred.specificity:.2f}")
             t.add_row("Hedge ratio", f"{pred.hedge_ratio:.2f}")
             t.add_row("Magnitude", f"{pred.magnitude:.2f}")

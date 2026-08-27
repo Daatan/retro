@@ -13,8 +13,17 @@
 
 # Reuse daatan's existing SNS topic — no duplicate subscription, same pattern as
 # news-indexer/terraform/monitoring.tf.
+#
+# It must be the us-east-1 topic, and the provider alias below is the whole point:
+# a CloudWatch alarm can only publish to a topic in its OWN region, and the alarms
+# here are in us-east-1 because that is the only region AWS/Bedrock metrics exist
+# in. Pointing them at daatan-infra-alerts (eu-central-1) is what kept both alarms
+# from ever being created — PutMetricAlarm fails with "Invalid region eu-central-1
+# specified. Only us-east-1 is supported", and terraform plan shows a clean
+# "2 to add" right up until the apply. See #669.
 data "aws_sns_topic" "infra_alerts" {
-  name = "daatan-infra-alerts"
+  provider = aws.us_east_1
+  name     = "daatan-infra-alerts-us-east-1"
 }
 
 # Client-side errors on the live extractor model — the exact failure signature of a

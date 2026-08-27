@@ -27,8 +27,12 @@ terraform plan     # expect: No changes. Infrastructure matches configuration.
 Never run `apply` for a change you have not reviewed in `plan`. Use `-target` for
 surgical changes; never a blanket apply.
 
-## Deferred (follow-up PR — needs a low-traffic DNS-cutover window)
-The box currently has only an **ephemeral** public IP (`3.120.185.111`), so a stop/start
-would break `oracle`/`bayes` DNS. The follow-up adds:
-- `aws_eip` + association (one-time IP change)
-- `oracle.daatan.com` / `bayes.daatan.com` A records repointed at the EIP
+## Elastic IP (done 2026-08-27)
+The box previously had only an **ephemeral** public IP (`3.120.185.111`), so a stop/start
+would break `oracle`/`bayes` DNS. `eip.tf` now manages:
+- `aws_eip.oracle` + `aws_eip_association.oracle` — address is now `3.122.48.104`
+  (`eipalloc-05a6e2750d63d416e`), stable across stop/start
+- `aws_route53_record.oracle` / `.bayes` — **imported**, not created, then repointed at the
+  EIP. TTL lowered 300 → 60 first so the one-time address change drained in under a minute.
+
+This unblocks any window that needs a stop, notably the retro#436 encrypted-root-volume swap.

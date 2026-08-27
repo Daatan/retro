@@ -393,7 +393,9 @@ weighted_brier  = brier × weight
 - **EC2**: `t4g.small` (2 GiB RAM), Ubuntu, `eu-central-1` (Frankfurt)
 - **Access**: AWS SSM Session Manager (no SSH key — instance has no key pair)
 - **Instance name**: `truthmachine-pipeline` (`i-00ac444b94c5ff9b2`)
-- **Public IP**: `3.120.185.111` (dynamic — reassigned on stop/start)
+- **Public IP**: `3.122.48.104` — an **Elastic IP** (`eipalloc-05a6e2750d63d416e`), so it
+  survives stop/start. It was ephemeral (`3.120.185.111`) until 2026-08-27; back then any
+  stop handed the box a new address and broke `oracle`/`bayes` DNS until Route53 caught up.
 - **Terraform**: imported and managed in [`terraform/`](../terraform/) (`aws_instance.oracle`,
   state key `retro/` in `daatan-terraform-state`). `lifecycle.prevent_destroy = true` guards
   the box; `ignore_changes = [ami, user_data]` means the stack tracks the AWS-level resource

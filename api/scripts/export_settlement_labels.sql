@@ -33,6 +33,10 @@ SELECT json_build_object(
   'url',        a.url,
   'outlet',     a.source,
   'published',  left(a.published_date, 10),
+  -- when the row entered the pool: `facet` went live in the extractor the week of
+  -- 2026-08-10, so gate_facet_missing must be scored on rows added after that or
+  -- it grades a schema rollout instead of an elicitation failure.
+  'added',      to_char(a.added_at, 'YYYY-MM-DD'),
   'claim',      c->>'claim',
   'quote',      c->>'quote',
   -- gate inputs: for the scorer only, never for the labeller's prompt

@@ -17,10 +17,12 @@ from forecast_api.settlement_semantic import (
     claim_subject_from_question,
     gate_announcement_facet,
     gate_occurrence_consistency,
+    gate_facet_missing,
     gate_point_in_time,
     gate_predicate_echo,
     pin_survives,
 )
+from forecast_api.settlement_semantic import ALL_GATES
 
 PM_ON_A_DATE = "Benjamin Netanyahu will be the Prime Minister of Israel on December 31, 2026."
 WINS_ELECTION = (
@@ -121,6 +123,42 @@ class TestCheapGates:
 
     def test_unjudged_occurrence_fails_open(self):
         assert gate_occurrence_consistency(ClaimSubject(), _cand(is_occurrence=None)) is None
+
+
+class TestFacetMissing:
+    """The replacement for the refuted announcement gate (retro#691).
+
+    Measured on the 387-pair labelled set, post-facet-rollout rows only: 80% of
+    claims with no facet are ADJACENT (82 of 102) against a 56% base rate —
+    0.80 precision, and it costs 2 of 26 defensible pins.
+    """
+
+    def test_fires_when_no_facet_was_elicited(self):
+        subject = claim_subject_from_question(PM_ON_A_DATE)
+        cand = _cand(claim="The Knesset approved a coalition government.", facet=None)
+        assert gate_facet_missing(subject, cand) == "settled_without_facet"
+
+    def test_fires_on_empty_string_too(self):
+        subject = claim_subject_from_question(PM_ON_A_DATE)
+        cand = _cand(claim="The Knesset approved a coalition government.", facet="")
+        assert gate_facet_missing(subject, cand) == "settled_without_facet"
+
+    def test_leaves_announcement_alone(self):
+        """The whole point of the inversion: `announcement` sits BELOW the base
+        adjacency rate (45% vs 56%), so demoting it costs more good pins than it
+        saves. Firing here would reintroduce gate_announcement_facet's 129 false
+        positives and its 13-of-26 true-pin loss."""
+        subject = claim_subject_from_question(PM_ON_A_DATE)
+        cand = _cand(claim="The US imposed 50% tariffs on Canadian goods.", facet="announcement")
+        assert gate_facet_missing(subject, cand) is None
+
+    def test_leaves_any_populated_facet_alone(self):
+        subject = claim_subject_from_question(PM_ON_A_DATE)
+        for facet in ("announcement", "denial", "neither", "occurrence"):
+            assert gate_facet_missing(subject, _cand(claim="X happened.", facet=facet)) is None, facet
+
+    def test_registered_in_all_gates(self):
+        assert ALL_GATES["facet_missing"] is gate_facet_missing
 
 
 class TestPinArithmetic:

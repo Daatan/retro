@@ -2332,8 +2332,8 @@ Upstream, and already fixed there. news-indexer holds **19** articles whose stor
 `canonical_url` is a wrapper, **last indexed 2026-08-20** — the day #306 merged — and
 **zero since**. Those 19 stale rows keep being served by `/search`, which is why
 retro's pool still gained **24 wrapper rows between 2026-08-21 and 2026-08-26** long
-after the ingestion leak closed. Re-resolving those 19 rows is filed separately
-against news-indexer; this change is retro's own guard, and retro is where a wrong
+after the ingestion leak closed. Re-resolving those 19 rows is
+news-indexer#404; this change is retro's own guard, and retro is where a wrong
 outlet costs something.
 
 `tm.web_search_ingest.is_redirector_url` is host-and-path, never a substring match —

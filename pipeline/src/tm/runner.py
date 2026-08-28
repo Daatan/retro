@@ -128,6 +128,11 @@ async def run_article(
         extraction.predictions = enforce_relative_date_resolution(
             extraction.predictions, article.article_date,
         )
+        # Two args, not three: the third (`claim_created_at`, retro#704) bounds a
+        # settlement to the window after the question was asked, and a retroactive
+        # event has no such window — there is no claim with a creation date here,
+        # only an event. Omitting it fails open, which is the intended behaviour on
+        # this path, not an oversight.
         extraction.predictions = enforce_settlement_event_date(
             extraction.predictions, article.article_date,
         )

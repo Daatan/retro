@@ -87,6 +87,11 @@ def main() -> int:
     ap.add_argument("--candidates", type=Path, required=True)
     ap.add_argument("--labels", type=Path, required=True)
     ap.add_argument("--min-sources", type=int, default=2)
+    ap.add_argument("--added-after", default=None, metavar="YYYY-MM-DD",
+                    help="Drop rows added before this date. Required to score "
+                         "facet_missing honestly: `facet` went live in the extractor "
+                         "the week of 2026-08-10, so earlier nulls are a schema "
+                         "artifact, not an elicitation failure.")
     ap.add_argument("--json-out", type=Path)
     args = ap.parse_args()
 
@@ -95,6 +100,12 @@ def main() -> int:
     from label_settlement_candidates import candidate_key  # noqa: E402
 
     cands = load_jsonl(args.candidates)
+    if args.added_after:
+        before = len(cands)
+        undated = sum(1 for r in cands if not r.get("added"))
+        cands = [r for r in cands if (r.get("added") or "") >= args.added_after]
+        print(f"--added-after {args.added_after}: kept {len(cands)} of {before} rows"
+              f"{f' ({undated} had no added date and were dropped)' if undated else ''}")
     labels = {rec["key"]: rec for rec in load_jsonl(args.labels)}
 
     pairs = []

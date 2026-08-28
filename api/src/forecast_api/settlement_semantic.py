@@ -144,19 +144,31 @@ def gate_occurrence_consistency(subject: ClaimSubject, cand: SettlementCandidate
                                 *, deadline: Optional[date] = None) -> Optional[str]:
     """``settled`` and ``is_occurrence=false`` contradict each other.
 
-    Measured tiny in prod (2 grade-passing rows) — recorded so it is not mistaken
-    for a fix. An unjudged ``None`` is left alone.
+    Small but free. On the 387-pair labelled set it fires on 24 claims, **all 24
+    of them ADJACENT** — 1.00 precision, 0.11 recall, and it costs zero pins.
+    (An earlier read off the 9-block verifier set called this near-worthless on 2
+    catches; that sample was too small to say anything.) An unjudged ``None`` is
+    left alone.
     """
     return "settled_but_not_occurrence" if cand.is_occurrence is False else None
 
 
 def gate_announcement_facet(subject: ClaimSubject, cand: SettlementCandidate,
                             *, deadline: Optional[date] = None) -> Optional[str]:
-    """An announcement settles the announcement, never the outcome it describes.
+    """REFUTED — kept only so the measurement that refuted it stays reproducible.
 
-    ``enforce_decider_intent_stance_cap`` already caps this shape in the stance
-    lane but explicitly leaves ``settled`` alone, and fails open whenever the
-    model marked ``is_occurrence=true`` — which is exactly when it matters.
+    The reasoning was sound: an announcement settles the announcement, never the
+    outcome it describes. The data says the field does not carry that meaning.
+    On the 387-pair labelled set, ``facet=announcement`` claims are **45%
+    adjacent against a 56% base rate** — i.e. slightly *better* than average —
+    so this gate spends 129 false positives demoting 128 correctly-settled
+    claims, and it is the sole cause of true-pin loss in every gate combination
+    that includes it (10-11 of 29 defensible pins, versus 2 for every
+    combination without it).
+
+    :func:`gate_facet_missing` is what this gate was reaching for. Do not enforce
+    this one; do not re-derive its rationale from first principles without
+    re-reading those numbers.
     """
     return "settled_on_announcement" if cand.facet in ("announcement", "denial") else None
 
@@ -203,11 +215,38 @@ def gate_point_in_time(subject: ClaimSubject, cand: SettlementCandidate,
     return "settlement_before_evaluation_date"
 
 
+def gate_facet_missing(subject: ClaimSubject, cand: SettlementCandidate,
+                       *, deadline: Optional[date] = None) -> Optional[str]:
+    """No ``facet`` was elicited for this claim at all.
+
+    The strongest free signal on the 387-pair labelled set: **80% of claims with
+    no facet are ADJACENT** (82 of 102), against a 56% base rate — 0.80
+    precision, 0.43 recall, higher precision than :func:`gate_predicate_echo`
+    and it needs no classifier.
+
+    Two things this is NOT, both checked rather than assumed:
+
+    * It is not a schema artifact. ``facet`` went live in the extractor the week
+      of 2026-08-10; the numbers above are measured on rows added after that,
+      where 102 null and 236 populated claims coexist.
+    * It is not a per-claim property. Zero articles in the pool carry both a null
+      and a non-null facet, so this is really "the extractor did not populate the
+      field on this call" — a proxy for a low-quality extraction of the whole
+      article, not a judgement about this claim. It predicts adjacency well; it
+      does not explain it. That also caps it: it cannot discriminate inside a
+      mixed article, and 13% of adjacent claims live in one.
+
+    Fires on absence only. A populated facet — including ``announcement``, see
+    :func:`gate_announcement_facet` — is left alone.
+    """
+    return "settled_without_facet" if cand.facet in (None, "") else None
+
 ALL_GATES = {
     "predicate_echo": gate_predicate_echo,
     "point_in_time": gate_point_in_time,
     "announcement_facet": gate_announcement_facet,
     "occurrence_consistency": gate_occurrence_consistency,
+    "facet_missing": gate_facet_missing,
 }
 
 

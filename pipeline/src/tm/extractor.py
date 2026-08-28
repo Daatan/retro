@@ -736,11 +736,12 @@ absolute date outright — see the DATES section above)
 The following are EXPERIMENTAL shadow fields — include them together per the FACT_SIGNAL \
 section whenever a reported fact bears on the event: \
 fact_signal (float −1 to 1 — what the reported facts alone imply about the event), \
+facet (one of announcement / denial / neither — see FACET in the FACT_SIGNAL section), \
 event_actors (string — who acts in that fact), event_target (string — the target of the \
 action), is_occurrence (boolean — true only when the fact IS the event itself, false for a \
 precursor/precondition/escalation), verified (boolean — true when independently reported, \
 false when only claimed by an interested party). \
-When you OMIT fact_signal (and the four facets above with it), include \
+When you OMIT fact_signal (and the facets above with it), include \
 fact_signal_absent_reason instead (one of opinion / no_fact_found / contrary_below_anchor — \
 see the FACT_SIGNAL section for which applies) — never omit both.
 
@@ -769,6 +770,7 @@ Example — related event: "Assad regime falls in Syria":
       "settled": true,
       "evidence_class": "reported_fact",
       "fact_signal": 1.0,
+      "facet": "announcement",
       "event_actors": "Syrian rebel forces",
       "event_target": "Damascus and the Assad regime",
       "is_occurrence": true,

@@ -34,7 +34,7 @@ class SearchMode(str, Enum):
 # stored as `prompt_version` inside them. Bump when the extractor prompt
 # changes materially — negative markers written under an older version are
 # invalidated automatically (see _negative_marker_is_current).
-EXTRACTION_PROMPT_VERSION = "v4"
+EXTRACTION_PROMPT_VERSION = "v5"
 
 class Orchestrator:
     def __init__(self, data_dir: Path, mode: SearchMode = SearchMode.mock, force_reextract: bool = False, retry_empty: bool = False):

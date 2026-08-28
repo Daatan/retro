@@ -2295,3 +2295,53 @@ re-weighted up. Nothing here reads a flag back.
 There is no logged distribution to calibrate one against yet; that is what these lines
 produce, and picking the threshold first would encode a guess as if it were measured —
 the same reason retro#609 stopped at logging raw values.
+
+## 2026-08-29 — a search-engine link wrapper is not an article (retro#709)
+
+Some pool rows store a redirector URL rather than the publisher's:
+`https://google.com/goto?url=<opaque token>`. Measured on prod before the change —
+**72 of 21,848 rows (0.33%)**, spanning 2026-07-29 to 2026-08-26, touching 21
+predictions, 7 of them carrying `settled`.
+
+Three of the four harms this looked like it should cause turned out not to happen,
+and saying so is the point of writing the numbers down:
+
+- **Dating** — unharmed. All 72 carry a `published_date`; the provider supplies one.
+- **Fetching** — unharmed, in fact slightly better than baseline: 33.3% of the
+  wrapper rows are FAILED against **39.3%** across all rows. They resolve.
+- **Outlet identity** — this is the real one. **52 of the 72 store `google.com` as
+  their source, and every row in the entire pool whose source reads `google.com` is
+  one of these.** Not one of the 72 ever resolved an `outlet_name`.
+- **Dedup** — structurally true (two wrappers around one article are two strings)
+  but not separately measured.
+
+An outlet is not a cosmetic label: `settlement_min_sources` counts **distinct
+outlets**, so a wrong one can manufacture corroboration between two copies of the
+same article, and credibility weighting is per-outlet.
+
+### It is not unwrapped, because it cannot be
+
+The `url=CAES…` parameter is Google's **encrypted** article id, not an encoded URL.
+Decoding a live sample yields 188 bytes of ciphertext with no URL in it. The only way
+to resolve one is to follow the real 30x hop, which is what news-indexer does at
+ingestion (news-indexer#306, merged 2026-08-20).
+
+### Where it actually comes from
+
+Upstream, and already fixed there. news-indexer holds **19** articles whose stored
+`canonical_url` is a wrapper, **last indexed 2026-08-20** — the day #306 merged — and
+**zero since**. Those 19 stale rows keep being served by `/search`, which is why
+retro's pool still gained **24 wrapper rows between 2026-08-21 and 2026-08-26** long
+after the ingestion leak closed. Re-resolving those 19 rows is filed separately
+against news-indexer; this change is retro's own guard, and retro is where a wrong
+outlet costs something.
+
+`tm.web_search_ingest.is_redirector_url` is host-and-path, never a substring match —
+a real article that quotes a redirector in its query string, and a Google property
+that serves its own content, both survive. `_process_article` drops a match before
+the fetch (`event=article_outcome outcome=redirector_url`,
+`ArticleDebug(outcome="redirector_url")`), the same shape and the same reasoning as
+the retro#705 undatable drop it sits beside: an article we cannot attribute is not
+evidence. Expected cost once upstream is cleaned: zero.
+
+R8 protocol: no aggregation code touched, no matrix case moved.

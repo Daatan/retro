@@ -18,6 +18,7 @@ import asyncio
 import json
 import os
 import re
+from urllib.parse import urlparse
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -43,6 +44,52 @@ _URL_DATE_RE = re.compile(
     r"(?P<d>0?[1-9]|[12]\d|3[01])(?:/|$)",
     re.IGNORECASE,
 )
+
+
+# Search-engine link wrappers: the URL is the redirector's, not the publisher's
+# (retro#709). Kept next to `_date_from_url` because it is the same kind of thing —
+# a fact about a URL that both the batch and live paths must read identically.
+#
+# news-indexer resolves these at ingestion (news-indexer#306, merged 2026-08-20) by
+# following the fetch's real 30x hop, which is the only way: the `goto?url=CAES…`
+# parameter is Google's *encrypted* article id, not an encoded URL. Decoding a live
+# sample gives 188 bytes of ciphertext with no URL in it, so there is nothing to
+# unwrap offline and this predicate deliberately does not try.
+#
+# retro checks anyway, because retro is where a wrong outlet costs something: an
+# outlet is what `settlement_min_sources` counts distinct values of, and every one of
+# these arrives claiming the redirector as its publisher.
+_REDIRECTOR_HOSTS = frozenset({
+    "google.com", "www.google.com", "news.google.com",
+    "bing.com", "www.bing.com",
+    "duckduckgo.com", "r.search.yahoo.com",
+})
+# Path prefixes that make a link on those hosts a redirect rather than content.
+# news.google.com is a wrapper at every path, so it needs no prefix.
+_REDIRECTOR_PATH_PREFIXES = ("/goto", "/url", "/ck/a", "/l/")
+_ALWAYS_REDIRECTOR_HOSTS = frozenset({"news.google.com"})
+
+
+def is_redirector_url(url: Optional[str]) -> bool:
+    """True iff ``url`` is a search-engine link wrapper rather than an article.
+
+    Host-and-path, not a substring match: a publisher article that merely *mentions*
+    a redirector in a query parameter is a real article, and a news outlet with
+    "google" in a path segment is not Google.
+    """
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    host = (parsed.hostname or "").lower()
+    if host in _ALWAYS_REDIRECTOR_HOSTS:
+        return True
+    if host not in _REDIRECTOR_HOSTS:
+        return False
+    path = parsed.path or "/"
+    return any(path.startswith(prefix) for prefix in _REDIRECTOR_PATH_PREFIXES)
 
 
 def _date_from_url(url: str) -> Optional[str]:

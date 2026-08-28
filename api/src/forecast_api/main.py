@@ -17,6 +17,7 @@ from .cache import forecast_cache
 from .config import settings
 from .forecaster import (
     GATEKEEPER_PROMPT_HASH,
+    GATEKEEPER_SCHEMA_HASH,
     GATEKEEPER_PROMPT_VERSION,
     run_forecast,
     run_pool_aggregate,
@@ -402,6 +403,7 @@ async def relevance(
         model=_pipeline_settings.gatekeeper_model,
         gatekeeper_prompt_version=GATEKEEPER_PROMPT_VERSION,
         gatekeeper_prompt_hash=GATEKEEPER_PROMPT_HASH,
+        gatekeeper_schema_hash=GATEKEEPER_SCHEMA_HASH,
         token_usage=TokenUsage.from_usages([usage]),
     )
 

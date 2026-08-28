@@ -139,6 +139,12 @@ class TestForecastResponseProvider:
         assert resp.provenance.models.gatekeeper_prompt_hash == forecaster.GATEKEEPER_PROMPT_HASH
         assert resp.provenance.models.extractor_prompt_version == forecaster.EXTRACTOR_PROMPT_VERSION
         assert resp.provenance.models.extractor_prompt_hash == forecaster.EXTRACTOR_PROMPT_HASH
+        # retro#700: the response schema is prompt text too (MD_JSON serialises it into the
+        # call), so a persisted row needs both halves — the prose hash alone describes 73%
+        # of what the extractor actually read.
+        assert resp.provenance.models.gatekeeper_schema_hash == forecaster.GATEKEEPER_SCHEMA_HASH
+        assert resp.provenance.models.extractor_schema_hash == forecaster.EXTRACTOR_SCHEMA_HASH
+        assert resp.provenance.models.extractor_schema_hash != resp.provenance.models.extractor_prompt_hash
         # retro#652: the effective article ceiling (req.max_articles, unclamped here —
         # no per-key client) rides alongside model/prompt provenance.
         assert resp.provenance.max_articles == 7

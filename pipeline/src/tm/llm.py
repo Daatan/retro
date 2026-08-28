@@ -15,6 +15,7 @@ They now live here once. ``forecaster.py`` (in the API) also reuses
 
 import asyncio
 import functools
+import json
 import logging
 import re
 
@@ -52,6 +53,35 @@ litellm.api_key = settings.openrouter_api_key
 # Shared instructor-wrapped client. MD_JSON mode coaxes structured JSON out of
 # models without native tool-calling (Nova).
 client = instructor.from_litellm(litellm.acompletion, mode=instructor.Mode.MD_JSON)
+
+
+def rendered_response_schema(response_model) -> str:
+    """The response model's JSON schema **exactly as MD_JSON puts it in the prompt**.
+
+    This is prompt text, not plumbing (retro#700). Under ``Mode.MD_JSON`` instructor
+    serialises ``response_model.model_json_schema()`` into a system message — so every
+    ``Field(description=...)``, every enum member, and every model docstring (Pydantic
+    copies those into the schema's ``description``) is input the model reads, on every
+    call, alongside the hand-written PROMPT_PREFIX/PROMPT_SUFFIX.
+
+    It is reproduced here rather than approximated, because the two plausible
+    approximations both lie:
+
+    * ``sort_keys=True`` hides field **reordering** — Pydantic emits ``properties`` in
+      declaration order, so moving a field changes what the model sees while leaving a
+      sorted hash identical.
+    * the compact form under-counts the cost by ~43% (ExtractionOutput: 14,209 chars
+      compact vs 20,287 as actually rendered), which matters because the number this
+      feeds is a size ratchet.
+
+    Coupled to instructor's internals on purpose, and pinned by
+    ``pipeline/tests/test_rendered_schema.py`` against the message instructor really
+    builds. If an instructor upgrade changes this serialisation the pin fails — which is
+    correct, because the model's input changed and the prompt hash should move with it.
+    """
+    return json.dumps(
+        response_model.model_json_schema(), indent=2, ensure_ascii=False,
+    )
 
 # Retry schedule (seconds) for transient rate-limit / throttling errors.
 RATE_LIMIT_BACKOFF = [30, 60, 120]

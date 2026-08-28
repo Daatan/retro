@@ -23,6 +23,52 @@ computed `*_PROMPT_HASH` doesn't match the lock file — i.e. if a prompt edit
 landed without a version bump. Update the lock file (and this table) in the
 same PR as the prompt edit.
 
+## The prompt is the prose **and** the schema (retro#700)
+
+`PROMPT_PREFIX`/`PROMPT_SUFFIX` are not all the text the model reads. Both the
+gatekeeper and the extractor are structured calls through `instructor` in
+`Mode.MD_JSON`, which serialises the response model's JSON schema into a system
+message on every call — every `Field(description=...)`, every enum member, and
+every Pydantic **model docstring** (Pydantic copies those into the schema's
+`description` key). Measured on today's models:
+
+| Component | Hand-written prompt | Rendered schema | Schema share |
+|---|---|---|---|
+| extractor (`ExtractionOutput`) | 55,116 chars | 20,287 chars | **27%** |
+| gatekeeper (`GatekeeperOutput`) | 4,603 chars | 1,178 chars | **20%** |
+
+Until retro#700 none of it was hashed, so the schema could change arbitrarily
+with no hash movement, no lock diff and no version bump — a prompt-version lock
+that did not lock. It was found the expensive way: retro#681 shipped a 1,283-char
+docstring to the model on every call, changed Nova Lite's `fact_signal` fill
+measurably, and every prompt-version test stayed green.
+
+So the lock now pins **four** things per component — `version`, `hash`,
+`schema_hash`, and `schema_chars` — and a schema change is a prompt change:
+bump the version, add a row to the table, update the lock. In particular,
+**adding a field to `ExtractionOutput` is a prompt edit**, because it is.
+
+`schema_chars` is recorded next to the hash rather than implied by it on purpose.
+A hash mismatch says *something* moved; the retro#681 failure was not an
+unnoticed edit but unnoticed **growth**, and only a number in the diff catches
+that. The test reports the delta both ways (`20287 -> 20451 chars (+164, +0.8%)`).
+
+The hashed string is byte-for-byte what `instructor` sends —
+`json.dumps(schema, indent=2, ensure_ascii=False)`, reproduced in
+`tm.llm.rendered_response_schema` and pinned against instructor's real output by
+`pipeline/tests/test_rendered_schema.py`. The two obvious shortcuts were both
+rejected and are pinned as rejected: `sort_keys=True` is blind to field
+**reordering** (Pydantic emits `properties` in declaration order), and the
+compact form under-counts the prompt cost by ~43%. If an `instructor` upgrade
+changes that serialisation the pin fails — correctly, since the model's input
+changed with it.
+
+Both hashes ride on the wire: `provenance.models.{gatekeeper,extractor}_schema_hash`
+on `/forecast`, and `gatekeeper_schema_hash` on `/relevance`. They are kept
+separate from `*_prompt_hash` rather than folded in so a stored row says *which*
+half moved — "the instructions were reworded" and "a field was added" are
+different events with different explanations for a shift in results.
+
 | Component | Version | Hash | Effective from | PR | Summary |
 |---|---|---|---|---|---|
 | gatekeeper | v1 | `a09cdb5ecda0ce5e` | 2026-08-24 | retro#627 | Initial versioned baseline — no prior version existed on the live path. |

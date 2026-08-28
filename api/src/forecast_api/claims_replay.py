@@ -40,6 +40,10 @@ COMPARED_FIELDS = _ROUNDED_3DP + (
     "evidence_class", "settled", "settlement_event_date", "quantitative_estimate",
     "claims", "event_actors", "event_target", "is_occurrence", "verified",
     "fact_signal_absent_reason", "facet",
+    # retro#681. Rows written before the field existed carry neither column, and
+    # `replay_row` skips a field the export does not carry — so adding these here
+    # checks the new reduction on new rows without inventing drift on old ones.
+    "reader_confidence_level", "reader_confidence_traps",
 )
 
 
@@ -82,7 +86,7 @@ def _norm(field: str, value: Any) -> Any:
         return None
     if field in _ROUNDED_3DP:
         return round(float(value), 3)
-    if field == "claims":
+    if field in ("claims", "reader_confidence_traps"):
         return list(value)
     return value
 

@@ -22,7 +22,7 @@ from forecast_api.mcp_auth import (
     ScopeError,
     require_scope,
 )
-from forecast_api.models import ForecastResponse
+from forecast_api.models import PROVENANCE_SCHEMA_VERSION, ForecastResponse
 
 ISSUER = "https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_TESTPOOL"
 CLIENT_ID = "client-abc"
@@ -156,7 +156,7 @@ class TestForecastTool:
         _patch_forecast(monkeypatch, resp)
         out = await mcp_server.forecast("Will X happen by 2027?", verbose=True)
         assert out == resp.model_dump()
-        assert out["provenance"]["schema_version"] == "1.1"
+        assert out["provenance"]["schema_version"] == PROVENANCE_SCHEMA_VERSION
         assert out["provenance"]["chain"] == ["gdelt"]
         assert "std" in out and "n_eff" in out
 

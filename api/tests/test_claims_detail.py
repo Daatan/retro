@@ -450,6 +450,8 @@ class TestTheReductionReplaysFromPersistedClaims:
         assert replayed.verified == signal.verified
         assert replayed.fact_signal_absent_reason == signal.fact_signal_absent_reason
         assert replayed.facet == signal.facet
+        assert replayed.reader_confidence_level == signal.reader_confidence_level
+        assert replayed.reader_confidence_traps == signal.reader_confidence_traps
 
     async def test_every_scalar_replays_on_the_ordinary_path(self, monkeypatch):
         """Mixed classes, mixed fact-bearing, one anchor — the five reductions
@@ -458,9 +460,11 @@ class TestTheReductionReplaysFromPersistedClaims:
         s = await _one_source(monkeypatch, [
             _claim(claim="Reported fact.", stance=0.7, certainty=0.8,
                    evidence_class="reported_fact", fact_signal=0.2, is_occurrence=True,
-                   verified=True, event_actors="Alpha", event_target="Beta"),
+                   verified=True, event_actors="Alpha", event_target="Beta",
+                   reader_confidence={"level": "high"}),
             _claim(claim="Columnist's view.", stance=-0.4, certainty=0.3,
-                   evidence_class="opinion"),
+                   evidence_class="opinion",
+                   reader_confidence={"level": "low", "trap": "tone_vs_content"}),
             _claim(quote="Polymarket prices this at 85%.", claim="Cited market price.",
                    stance=0.2, certainty=0.3, quantitative_estimate=0.85,
                    evidence_class="cited_probability", fact_signal=0.55,
@@ -849,3 +853,133 @@ class TestClaimStrengthCertaintyAlias:
             {"claim": "c", "stance": 0.4, "claim_strength": 0.82}
         ).model_dump()
         assert dumped["certainty"] == dumped["claim_strength"] == 0.82
+
+
+class TestReaderConfidenceThreading:
+    """`reader_confidence` {level, trap} through the claim layer and its
+    article-level rollup (Oracle 1.5 Phase 1, retro#681).
+
+    The rollup is deliberately shaped like none of the other five reductions,
+    and that is what these pin. A mean would average away the one claim the
+    reader wobbled on — which is the only claim the field exists to surface —
+    and a most-common vote over traps would throw away the second of two
+    genuinely different difficulties. Both would look correct in review and
+    make the harvested data useless for the Phase 4 consumer.
+    """
+
+    @staticmethod
+    def _rc(level, trap=None):
+        return {"level": level, "trap": trap}
+
+    @staticmethod
+    def _reduce(claims):
+        from forecast_api.config import settings
+
+        return forecaster.reduce_article(
+            claims,
+            settlement_min_stance=settings.settlement_min_claim_stance,
+            settlement_min_certainty=settings.settlement_min_claim_certainty,
+            class_weights=settings.evidence_class_weight,
+            class_weight_default=settings.evidence_class_weight_default,
+            class_weight_unclassified_cap=settings.evidence_class_weight_unclassified_cap,
+        )
+
+    @staticmethod
+    def _detail(level=None, trap=None, **over):
+        payload = {"claim": "c", "stance": 0.4, "claim_strength": 0.6, **over}
+        if level is not None:
+            payload["reader_confidence"] = {"level": level, "trap": trap}
+        return ClaimDetail.model_validate(payload)
+
+    def test_the_claim_layer_carries_it_verbatim(self):
+        """daatan stores claims_detail as it arrives, so the shape the model
+        answered in is the shape that has to survive the projection."""
+        [detail] = forecaster.build_claims_detail([
+            _claim(reader_confidence={"level": "low", "trap": "negation"})
+        ])
+        assert detail.reader_confidence is not None
+        assert detail.reader_confidence.level == "low"
+        assert detail.reader_confidence.trap == "negation"
+
+    def test_a_claim_without_it_projects_to_none(self):
+        [detail] = forecaster.build_claims_detail([_claim()])
+        assert detail.reader_confidence is None
+
+    def test_the_article_takes_the_WORST_level_not_a_mean(self):
+        """An article is only as readable as its least readable claim. Two
+        confident claims must not average a `low` one out of existence."""
+        reduced = self._reduce([
+            self._detail("high"), self._detail("high"), self._detail("low")
+        ])
+        assert reduced.reader_confidence_level == "low"
+
+    def test_medium_beats_high_but_loses_to_low(self):
+        assert self._reduce(
+            [self._detail("high"), self._detail("medium")]
+        ).reader_confidence_level == "medium"
+        assert self._reduce(
+            [self._detail("medium"), self._detail("low")]
+        ).reader_confidence_level == "low"
+
+    def test_traps_are_collected_not_voted(self):
+        """Two claims tripping two different traps is two facts about this
+        article. `evidence_class`'s most-common vote would keep one."""
+        reduced = self._reduce([
+            self._detail("medium", "negation"),
+            self._detail("medium", "numeric_comparison"),
+        ])
+        assert reduced.reader_confidence_traps == ["negation", "numeric_comparison"]
+
+    def test_repeated_traps_are_deduped_in_first_seen_order(self):
+        reduced = self._reduce([
+            self._detail("medium", "tone_vs_content"),
+            self._detail("low", "negation"),
+            self._detail("high", "tone_vs_content"),
+        ])
+        assert reduced.reader_confidence_traps == ["tone_vs_content", "negation"]
+
+    def test_a_level_with_no_trap_contributes_a_level_and_no_trap(self):
+        reduced = self._reduce([self._detail("high"), self._detail("low")])
+        assert reduced.reader_confidence_level == "low"
+        assert reduced.reader_confidence_traps is None
+
+    def test_an_article_where_nothing_answered_rolls_up_to_none(self):
+        """Every row extracted before v5. Neither field may invent a value."""
+        reduced = self._reduce([self._detail(), self._detail()])
+        assert reduced.reader_confidence_level is None
+        assert reduced.reader_confidence_traps is None
+
+    def test_the_rollup_spans_claims_the_settlement_subset_excluded(self):
+        """`stance` reduces over the settlement-grade claims when an article
+        has any; this must not. A claim that failed the settlement bar is
+        still a claim the reader had to read, and hiding its `low` behind a
+        confident settlement claim is precisely the miss Phase 4 needs."""
+        reduced = self._reduce([
+            self._detail("high", stance=0.98, claim_strength=0.98, settled=True),
+            self._detail("low", "inference_needed", stance=0.2, claim_strength=0.3),
+        ])
+        assert reduced.settled is True
+        assert reduced.reader_confidence_level == "low"
+        assert reduced.reader_confidence_traps == ["inference_needed"]
+
+    async def test_it_reaches_the_wire_on_a_real_forecast(self, monkeypatch):
+        """End to end through the stubbed pipeline: the extractor answers, and
+        both the per-claim field and the article rollup come out on the
+        SourceSignal the caller persists."""
+        source = await _one_source(monkeypatch, [
+            _claim(claim="A", reader_confidence={"level": "high"}),
+            _claim(claim="B", reader_confidence={"level": "low", "trap": "negation"}),
+        ], "[P1-rc] Will the event occur?")
+
+        assert source.reader_confidence_level == "low"
+        assert source.reader_confidence_traps == ["negation"]
+        assert [c.reader_confidence.level for c in source.claims_detail] == ["high", "low"]
+
+
+def test_the_provenance_schema_version_is_pinned():
+    """The four wiring tests that used to hard-code "1.1" now derive from this
+    constant, so nothing else fails when it moves. This is the one place a bump
+    has to be deliberate — schema_version is what daatan gates on."""
+    from forecast_api.models import PROVENANCE_SCHEMA_VERSION
+
+    assert PROVENANCE_SCHEMA_VERSION == "1.2"

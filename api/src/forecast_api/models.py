@@ -186,6 +186,34 @@ class ForecastRequest(BaseModel):
     )
 
 
+READER_CONFIDENCE_LEVELS: tuple[str, ...] = ("high", "medium", "low")
+"""Ordered best → worst. `_min_reader_confidence_level()` reduces an article's
+claims by taking the LAST of these that any claim reported, so the order here is
+the reduction's definition, not documentation of it."""
+
+
+class ReaderConfidence(BaseModel):
+    """The EXTRACTOR's confidence in its own reading of one claim (retro#681).
+
+    The other half of the `certainty` split (retro#680): `claim_strength` is the
+    source's commitment to the claim; this is the reader's confidence in its own
+    interpretation of it. Carried verbatim from the elicited
+    `tm.models.ReaderConfidence` so daatan's stored `claims_detail` keeps the
+    shape the model answered in.
+
+    Not a scalar on purpose (plan §4.1): verbalised LLM confidence clusters at
+    0.8–0.9 whatever the input, so a float would record the model's register
+    rather than its difficulty. Each `trap` name is a class an independent
+    detector already exists for, which is what makes the self-flag checkable.
+
+    EXPERIMENTAL shadow — persisted, read by nothing. Phase 4 is where `low`
+    rows are down-weighted and kept out of the credibility bill, and where
+    settlement gains its second bar (`level == "high"`).
+    """
+    level: Literal["high", "medium", "low"] = Field(description="Whether another careful reader would extract the same stance sign from this span: high (the span says what it says) / medium (the direction is clear but something — a comparison, a referent, a date — had to be resolved first) / low (a careful reader could plausibly read it differently). NOT the source's hedging, which is claim_strength")
+    trap: Optional[Literal["negation", "numeric_comparison", "entity_or_event_mismatch", "tone_vs_content", "inference_needed", "conflicting_signals"]] = Field(default=None, description="The one known reading trap that applied to this span, or None when none did. Each name matches a detector that already exists — negation (retro#657), numeric_comparison (the PR#671 A/B cases), tone_vs_content (ab_cases/stance_tone_conflation.json), entity_or_event_mismatch (the dyad facets vs the question's actors) — so the model's self-flag can be scored against an independent judge. A trap does not imply a low level")
+
+
 class ClaimDetail(BaseModel):
     """One extracted claim, as the claim-level layer the article's fused
     scalars are reduced FROM (F1/F15, retro#364).
@@ -259,6 +287,7 @@ class ClaimDetail(BaseModel):
     is_occurrence: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when this claim's fact IS the event itself, False when it is only a precursor/precondition/escalation")
     verified: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when independently reported, False when only claimed by an interested party. Per-claim: the article-level field is the dominant claim's, so a lone over-cap interested-party claim diluted by in-contract siblings is invisible above this layer (retro#378)")
     facet: Optional[Literal["announcement", "denial", "neither"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#354 D2a) — whether this claim's reported fact ANNOUNCES the event, DENIES it, or is NEITHER. Per-claim: SourceSignal.facet is the dominant claim's only")
+    reader_confidence: Optional[ReaderConfidence] = Field(default=None, description="EXPERIMENTAL shadow (retro#681) — the extractor's confidence in its OWN reading of this claim, {level, trap}, as elicited. The reader's confidence, as against `claim_strength`, which is the source's; they were one field until retro#680. Verbatim from the extractor, unlike the article-level rollup on SourceSignal. None on a row extracted before the field existed, or when the model omitted it")
     # --- Conditional fields (v1.1, Phase 1 capture plan; see conditionals.md §4.4 + conditional-capture-phase1.md §3) ---
     # PRE-RESOLUTION: recorded BEFORE enforce_* chain (asymmetric with other ClaimDetail fields; documented per §3.3)
     is_conditional: Optional[bool] = Field(
@@ -326,6 +355,8 @@ class SourceSignal(BaseModel):
     is_occurrence: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when the dominant fact IS the event itself (or its definitive outcome), False when it is only a precursor/precondition/escalation. From the dominant claim; None when `fact_signal` is None.")
     verified: Optional[bool] = Field(default=None, description="EXPERIMENTAL shadow — True when the dominant fact is independently reported, False when only claimed by an interested party. From the dominant claim; None when `fact_signal` is None.")
     facet: Optional[Literal["announcement", "denial", "neither"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#354 D2a) — whether the dominant fact-bearing claim behind `fact_signal` ANNOUNCES the event happening/happened, DENIES it will/did happen, or is NEITHER (bears on the event without asserting either polarity, e.g. a precursor). Lets a future magnitude check (D2b/D3) compare |fact_signal| separately for announcement vs denial claims — a symmetric magnitude across the two would leave that refit structurally unable to find the asymmetry it's looking for. From the dominant claim; None when `fact_signal` is None.")
+    reader_confidence_level: Optional[Literal["high", "medium", "low"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#681) — the WORST `reader_confidence.level` among this article's claims, not the dominant claim's and not a mean. An article is only as readable as its least readable claim: a `low` claim that the mean would have hidden is exactly the row Phase 4 down-weights and keeps out of the credibility bill. None when no claim reported a level.")
+    reader_confidence_traps: Optional[list[str]] = Field(default=None, description="EXPERIMENTAL shadow (retro#681) — the distinct `reader_confidence.trap` values this article's claims reported, in first-seen order; collected rather than voted because two claims tripping two different traps is two facts, and a most-common vote would discard one of them. Plain strings so a new trap class can't fail an existing caller. None when no claim flagged a trap.")
     claims_detail: Optional[list[ClaimDetail]] = Field(default=None, description="This article's claims with their per-claim fields intact (F1/F15, retro#364) — the layer every scalar above is a reduction of. Same order and same count as `claims`, except that `claims` drops claims with an empty summary while this does not: a claim that voted in the article's stance must appear here, or the reduction stops being reproducible. Persist it (daatan#1235); nothing in aggregation reads it.")
 
 
@@ -446,7 +477,11 @@ class FetchUrlResponse(BaseModel):
 # 1.1 (Oracle 1.5 Phase 1, retro#680): ClaimDetail carries `claim_strength` beside the
 # `certainty` it was renamed from. Additive — 1.0 consumers read `certainty` unchanged —
 # so this is a minor bump, not a break; a caller that wants the new name gates on >= 1.1.
-PROVENANCE_SCHEMA_VERSION = "1.1"
+# 1.2 (Oracle 1.5 Phase 1, retro#681): ClaimDetail carries `reader_confidence` {level, trap},
+# and SourceSignal its article-level rollup (`reader_confidence_level` = worst level over the
+# claims, `reader_confidence_traps` = the distinct traps). Additive and shadow — nothing reads
+# either — so again a minor bump; a caller wanting the field gates on >= 1.2.
+PROVENANCE_SCHEMA_VERSION = "1.2"
 
 
 class ProvenanceOracle(BaseModel):

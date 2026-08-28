@@ -1,9 +1,13 @@
 import json as _json
+import logging
 from pydantic import (
     AliasChoices, BaseModel, ConfigDict, Field, model_serializer, model_validator,
 )
+from pydantic import ValidationError as _ValidationError
 from typing import Literal, Optional, Any
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 
 # --- LLM Output Schemas ---
@@ -15,6 +19,34 @@ def _unwrap_properties_envelope(data: Any) -> Any:
     it before field validation runs. See retro#306."""
     if isinstance(data, dict) and data.keys() == {"properties"} and isinstance(data["properties"], dict):
         return data["properties"]
+    return data
+
+
+def _coerce_nested_json_string(data: Any, key: str) -> Any:
+    """Parse a nested object the model double-serialized as a JSON string.
+
+    `ExtractionOutput._deserialize_string_predictions` already handles this one
+    level up — some models in TOOLS mode emit a nested object as a string rather
+    than an object. `reader_confidence` (retro#681) is the first nested field
+    INSIDE a prediction, so it needs the same treatment.
+
+    Deliberately narrow: a string that does not parse to a dict is left exactly
+    as it came, so Pydantic raises on it. Swallowing it into None would turn a
+    model that answers badly into a model that looks like it did not answer,
+    which is precisely the failure mode a shadow field's fill rate is supposed
+    to make visible.
+    """
+    if not isinstance(data, dict):
+        return data
+    raw = data.get(key)
+    if not isinstance(raw, str):
+        return data
+    try:
+        parsed = _json.loads(raw)
+    except (ValueError, TypeError):
+        return data
+    if isinstance(parsed, dict):
+        data = {**data, key: parsed}
     return data
 
 
@@ -52,6 +84,91 @@ class PredictionType(str, Enum):
     continuous = "continuous"
     range = "range"
     trend = "trend"
+
+
+# How firmly the EXTRACTOR stands behind its own reading of a span (retro#681).
+#
+# Rationale lives in comments, NOT in a docstring, and that is load-bearing rather than
+# stylistic: Pydantic copies a model's docstring into its JSON schema `description`, and
+# that schema is the LLM tool definition sent on every extraction call. `PredictionExtraction`
+# and `ExtractionOutput` both keep their rationale up here for the same reason and both
+# carry a zero-length class description. An earlier draft of this class used a docstring
+# and shipped 1,283 characters of the paragraphs below to the model on every call — 18% of
+# the whole ExtractionOutput schema, larger than any single field description in it.
+#
+# The other half of the `certainty` split (retro#680): `claim_strength` is the SOURCE's
+# commitment to the claim, this is the READER's confidence in its own interpretation of it.
+# One number carried both until Oracle 1.5 Phase 1, and the conflation was billed to the
+# source — retro#664's Kenya case is the evidence: on the flat span "retained the Central
+# Bank Rate at 8.75 percent" Haiku returned 0.70 and Nova Lite 0.30/stance 0.00. The 0.30 is
+# the reader's confusion filed as the source's hedge.
+#
+# Deliberately NOT a scalar (plan §4.1): verbalised LLM confidence clusters at 0.8–0.9
+# whatever the input, so a float would record the model's register, not its difficulty. The
+# three-level `level` plus a named `trap` is what a model can actually answer — and the trap
+# names are the classes for which detectors already exist (retro#657 negation, the PR#671
+# numeric cases, `stance_tone_conflation.json`, the dyad facets), so every self-flag is
+# checkable against an independent detector from day one.
+#
+# EXPERIMENTAL, shadow: populated and persisted, read by nothing. Phase 4 is where `low`
+# rows get down-weighted and excluded from the credibility bill, and where settlement gains
+# its second bar (`level == "high"`).
+class ReaderConfidence(BaseModel):
+    level: Literal["high", "medium", "low"] = Field(
+        description="How confident YOU are that another careful reader would extract the "
+                    "same stance sign from this span: 'high' the span says what it says; "
+                    "'medium' the direction is clear but you had to resolve something (a "
+                    "comparison, a referent, a date) to reach it; 'low' another careful "
+                    "reader could plausibly read it differently. NOT the source's hedging — "
+                    "that is claim_strength.",
+    )
+    trap: Optional[Literal[
+        "negation", "numeric_comparison", "entity_or_event_mismatch",
+        "tone_vs_content", "inference_needed", "conflicting_signals",
+    ]] = Field(
+        default=None,
+        description="Which ONE of the known reading traps applied to THIS span, or omit when "
+                    "none did: 'negation' the meaning turns on a not/no/fails-to/remains-below; "
+                    "'numeric_comparison' the direction came from comparing numbers, not from "
+                    "the words; 'entity_or_event_mismatch' the span is about a neighbouring "
+                    "actor, target or arena and had to be carried across; 'tone_vs_content' the "
+                    "tone points one way and the factual content the other; 'inference_needed' "
+                    "the span does not address the related event directly and reaching it took "
+                    "a reasoning step; 'conflicting_signals' the span carries two indications "
+                    "pointing opposite ways. A trap does not force a low level.",
+    )
+
+
+def _drop_malformed_reader_confidence(data: Any) -> Any:
+    """Never let the shadow field cost a real prediction (retro#681).
+
+    `ReaderConfidence` is strict — `level` is required and both enums are
+    closed — because a half-answer is not data. But `complete_structured` runs
+    instructor with `max_retries=1`: if the model still returns e.g.
+    `{"trap": "negation"}` with no level, the whole `ExtractionOutput` raises
+    and the article is dropped from the forecast. Paying a real article for a
+    field nothing reads is the wrong trade, so a malformed value is discarded
+    here and the prediction stands.
+
+    The drop is LOGGED rather than silent. A field harvested to be measured
+    must not be able to make "the model answered badly" look identical to "the
+    model did not answer" — that is the only distinction its fill rate exists
+    to draw. Grep `event=reader_confidence_malformed` to count them.
+
+    Strictness is kept where it belongs: constructing `ReaderConfidence`
+    directly, or validating a stored `ClaimDetail`, still raises.
+    """
+    if not isinstance(data, dict):
+        return data
+    raw = data.get("reader_confidence")
+    if raw is None:
+        return data
+    try:
+        ReaderConfidence.model_validate(raw)
+    except (_ValidationError, TypeError):
+        logger.warning("event=reader_confidence_malformed value=%r", raw)
+        return {**data, "reader_confidence": None}
+    return data
 
 
 class PredictionExtraction(BaseModel):
@@ -252,11 +369,25 @@ class PredictionExtraction(BaseModel):
         default=None,
         description="Who asserted the conditional: outlet name or quoted analyst. For attribution"
     )
+    # --- Reader confidence (Oracle 1.5 Phase 1, retro#681) ---
+    # Appended at the TAIL on purpose. retro#680 measured that perturbing the middle of this
+    # schema costs Nova Lite the whole fact_signal block (fill 42% → 25%); a new field added
+    # after every existing one leaves their relative order — and the text the model reads
+    # around them — untouched.
+    reader_confidence: Optional[ReaderConfidence] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow (retro#681) — how confident YOU are in your own "
+                    "reading of this span, as {level, trap}. The reader's confidence, NOT the "
+                    "source's commitment to the claim: that is claim_strength, and the two are "
+                    "independent (a flat categorical sentence you had to work to interpret is "
+                    "high claim_strength with a low level). Set it on every prediction.",
+    )
 
     @model_validator(mode="before")
     @classmethod
     def _unwrap_envelope(cls, data: Any) -> Any:
-        return _unwrap_properties_envelope(data)
+        data = _coerce_nested_json_string(_unwrap_properties_envelope(data), "reader_confidence")
+        return _drop_malformed_reader_confidence(data)
 
 
 class ExtractionOutput(BaseModel):

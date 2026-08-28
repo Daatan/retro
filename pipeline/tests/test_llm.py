@@ -497,10 +497,16 @@ class TestCallerDelegation:
         from tm.models import PredictionExtraction
 
         captured = {}
+        # A real model, not a string sentinel: since retro#681 the aggregator
+        # carries `reader_confidence` across the collapse, so it reads the
+        # object back. A sentinel that isn't a PredictionExtraction would only
+        # be testing that this function never touches its own return value.
+        sentinel = PredictionExtraction(quote="qA", claim="cA", stance=0.1, certainty=0.5)
+
         async def fake(model, response_model, prompt, *, max_tokens, timeout):
             captured.update(model=model, response_model=response_model,
                             max_tokens=max_tokens, timeout=timeout)
-            return ("THE_OUTPUT", {"total_tokens": 9})
+            return (sentinel, {"total_tokens": 9})
         monkeypatch.setattr(aggregator, "complete_structured", fake)
 
         preds = [
@@ -508,7 +514,7 @@ class TestCallerDelegation:
             PredictionExtraction(quote="q2", claim="c2", stance=-0.3, certainty=0.4),
         ]
         out = await aggregator.aggregate_article_predictions(preds, "Event", "src", "2024-01-01")
-        assert out == "THE_OUTPUT"  # usage is discarded by the aggregator
+        assert out is sentinel  # usage is discarded by the aggregator
         assert captured["model"] == aggregator.settings.extractor_model
         assert captured["response_model"] is PredictionExtraction
         assert captured["max_tokens"] == 1000

@@ -11,7 +11,7 @@ from tm import web_search
 
 from forecast_api import forecaster
 from forecast_api.forecaster import _empty_response, run_forecast
-from forecast_api.models import ArticleInput, ForecastRequest
+from forecast_api.models import PROVENANCE_SCHEMA_VERSION, ArticleInput, ForecastRequest
 
 
 class TestEmptyResponseForwardsProvider:
@@ -39,7 +39,7 @@ class TestEmptyResponseForwardsProvider:
             provider_chain=["gdelt", "ddg"],
         )
         assert r.provenance is not None
-        assert r.provenance.schema_version == "1.1"
+        assert r.provenance.schema_version == PROVENANCE_SCHEMA_VERSION
         assert r.provenance.method == "live"
         assert r.provenance.chain == ["gdelt", "ddg"]
 

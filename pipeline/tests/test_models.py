@@ -10,6 +10,7 @@ from tm.models import (
     PredictionType,
     MatrixState,
     CellStatus,
+    ReaderConfidence,
 )
 
 
@@ -197,3 +198,151 @@ class TestClaimStrengthCertaintyAlias:
         props = PredictionExtraction.model_json_schema()["properties"]
         assert "claim_strength" in props
         assert "certainty" not in props
+
+
+class TestReaderConfidence:
+    """`reader_confidence` {level, trap} — the READER's confidence in its own
+    reading, split from the SOURCE's `claim_strength` (Oracle 1.5 Phase 1,
+    retro#681).
+
+    Shadow: populated and persisted, read by nothing. What these tests pin is
+    that it can be populated *honestly* — an omitted field, a level with no
+    trap, and a value the model garbled are three different states, and the
+    field is only worth harvesting if the three stay distinguishable.
+    """
+
+    @staticmethod
+    def _pred(**over):
+        return PredictionExtraction(**{
+            "quote": "q", "claim": "c", "stance": 0.1, "claim_strength": 0.65, **over
+        })
+
+    def test_a_level_and_a_trap_both_land(self):
+        pred = self._pred(reader_confidence={"level": "low", "trap": "numeric_comparison"})
+        assert pred.reader_confidence.level == "low"
+        assert pred.reader_confidence.trap == "numeric_comparison"
+
+    def test_a_level_with_no_trap_is_the_ordinary_case(self):
+        """Most spans trip no trap, and the prompt asks for the field anyway.
+        A required trap would force the model to invent one."""
+        pred = self._pred(reader_confidence={"level": "high"})
+        assert pred.reader_confidence.level == "high"
+        assert pred.reader_confidence.trap is None
+
+    def test_an_absent_field_stays_absent(self):
+        """Every row extracted before v5 has no reader_confidence, and so does
+        every row where the model simply didn't answer. Both must parse, and
+        both must read as None rather than as some default level."""
+        assert self._pred().reader_confidence is None
+
+    def test_the_model_itself_is_strict(self):
+        """A half-answer is not data. `level` is what Phase 4 gates on, and the
+        trap names are the contract with the detectors that score them
+        (retro#657 negation, the PR#671 numeric cases, stance_tone_conflation) —
+        a free-text trap could not be checked against anything."""
+        with pytest.raises(ValidationError):
+            ReaderConfidence.model_validate({"trap": "negation"})
+        with pytest.raises(ValidationError):
+            ReaderConfidence.model_validate({"level": "high", "trap": "vibes"})
+        with pytest.raises(ValidationError):
+            ReaderConfidence.model_validate({"level": "very high"})
+
+    @pytest.mark.parametrize("bad", [
+        {"trap": "negation"},                    # no level
+        {"level": "high", "trap": "vibes"},      # trap outside the enum
+        {"level": "very high"},                  # level outside the enum
+        {"level": ["high"]},                     # wrong type entirely
+    ])
+    def test_a_malformed_answer_is_dropped_and_the_prediction_survives(self, bad, caplog):
+        """Strict model, tolerant boundary. `complete_structured` runs instructor
+        with max_retries=1, so a still-malformed value would raise out of
+        ExtractionOutput and drop the whole ARTICLE from the forecast. Paying a
+        real article for a field nothing reads is the wrong trade."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="tm.models"):
+            pred = self._pred(reader_confidence=bad)
+        assert pred.reader_confidence is None
+        assert pred.claim_strength == 0.65, "the rest of the prediction must be untouched"
+        assert "event=reader_confidence_malformed" in caplog.text, (
+            "a silent drop would make 'answered badly' look like 'did not answer', "
+            "which is the one distinction the fill rate exists to draw"
+        )
+
+    def test_a_double_serialized_object_is_parsed(self):
+        """Some models in TOOLS mode emit a nested object as a JSON *string*
+        (`ExtractionOutput._deserialize_string_predictions` already handles the
+        same thing one level up). reader_confidence is the first nested field
+        inside a prediction, so it needs the same unwrapping — otherwise the
+        field reads as 0% filled on exactly the models most likely to be
+        studied for fill rate."""
+        pred = PredictionExtraction.model_validate({
+            "quote": "q", "claim": "c", "stance": 0.1, "claim_strength": 0.65,
+            "reader_confidence": '{"level": "medium", "trap": "tone_vs_content"}',
+        })
+        assert pred.reader_confidence == ReaderConfidence(level="medium", trap="tone_vs_content")
+
+    def test_an_unparseable_string_is_dropped_loudly(self, caplog):
+        """The coercion above must not become a silent swallow-everything. A
+        model that answers in prose and a model that does not answer are
+        different findings, and the fill rate exists to tell them apart — so
+        the drop is logged, exactly like any other malformed value."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="tm.models"):
+            pred = PredictionExtraction.model_validate({
+                "quote": "q", "claim": "c", "stance": 0.1, "claim_strength": 0.65,
+                "reader_confidence": "pretty confident",
+            })
+        assert pred.reader_confidence is None
+        assert "event=reader_confidence_malformed" in caplog.text
+
+    def test_it_survives_a_dump_validate_round_trip(self):
+        """daatan persists this inside claims_detail verbatim (daatan#1235)."""
+        pred = self._pred(reader_confidence={"level": "low", "trap": "conflicting_signals"})
+        assert PredictionExtraction.model_validate(
+            pred.model_dump()
+        ).reader_confidence == pred.reader_confidence
+
+    def test_the_llm_schema_offers_the_object_and_every_trap_name(self):
+        """The prompt names six traps; the schema must accept exactly those six.
+        A drift either way means the model is told to answer something it cannot
+        express, or can express something no detector scores."""
+        schema = PredictionExtraction.model_json_schema()
+        assert "reader_confidence" in schema["properties"]
+        trap = schema["$defs"]["ReaderConfidence"]["properties"]["trap"]
+        names = {v for branch in trap["anyOf"] for v in branch.get("enum", [])}
+        assert names == {
+            "negation", "numeric_comparison", "entity_or_event_mismatch",
+            "tone_vs_content", "inference_needed", "conflicting_signals",
+        }
+
+    def test_no_llm_facing_model_pays_for_a_docstring(self):
+        """Pydantic copies a model's docstring into its JSON schema `description`,
+        and that schema IS the tool definition sent on every extraction call — so a
+        docstring here is not documentation, it is prompt text billed per request.
+        `PredictionExtraction` and `ExtractionOutput` keep their rationale in `#`
+        comments for this reason; `ReaderConfidence` is held to the same rule.
+
+        Pinned rather than left to review: the first draft of that class used a
+        docstring and shipped 1,283 characters of retro#664 rationale to the model
+        on every call, 18% of the whole schema and larger than any field in it.
+        """
+        for model in (ExtractionOutput, PredictionExtraction, ReaderConfidence):
+            desc = model.model_json_schema().get("description", "")
+            assert desc == "", (
+                f"{model.__name__} has a docstring; it is being sent to the LLM on "
+                f"every call as {len(desc)} chars of schema description. Move it to "
+                f"a `#` comment above the class."
+            )
+
+    def test_it_is_independent_of_claim_strength(self):
+        """The whole point of retro#680's split. retro#664's Kenya case is a
+        flat, categorical span — maximum source commitment — that Nova Lite
+        read badly; the two numbers have to be able to move opposite ways or
+        the reader's confusion goes on being billed to the source."""
+        pred = self._pred(
+            claim_strength=1.0, reader_confidence={"level": "low", "trap": "numeric_comparison"}
+        )
+        assert pred.claim_strength == 1.0
+        assert pred.reader_confidence.level == "low"

@@ -638,6 +638,51 @@ full strength.
 These facets are shadow fields for a future estimator; keep them honest and independent of \
 stance — never let fact_signal pull stance, or stance pull fact_signal.
 
+## READER_CONFIDENCE — your confidence in your OWN reading (EXPERIMENTAL, shadow)
+Every field above records something about the article. This one records something about YOU: \
+how far you would stand behind the reading you just produced for this span. It is NOT the \
+source's hedging — that is claim_strength, and the two are independent. A flat, categorical \
+sentence you had to work to interpret is high claim_strength with a LOW reader_confidence; a \
+heavily hedged sentence whose direction is obvious is low claim_strength with a HIGH one. When \
+you find yourself about to lower claim_strength because YOU were unsure, lower this instead.
+
+Set reader_confidence.level by one test — would another careful reader, working from this same \
+span and the same related event, extract the same stance sign?
+  high   — yes; the span says what it says.
+  medium — yes, but you had to resolve something first (a comparison, a referent, a date, a \
+scope) to get there.
+  low    — you would not be surprised if they read it differently.
+
+Then answer separately: which ONE of these applies to your reading of THIS span? Set \
+reader_confidence.trap to it, or omit trap when none of them does.
+  negation                 — the meaning turns on a "not" / "no" / "fails to" / "remains \
+below", or the related event is itself phrased as something not happening, and getting the \
+polarity right took work.
+  numeric_comparison       — you decided the direction by comparing numbers (a level against a \
+threshold, a count against a target), not by reading a direction off the words.
+  entity_or_event_mismatch — the span is about a neighbouring actor, target, arena or event, \
+and you had to judge how far it carries to the related event as written.
+  tone_vs_content          — the span's tone points one way and its factual content the other.
+  inference_needed         — the span does not address the related event directly; reaching it \
+required a reasoning step of your own.
+  conflicting_signals      — the span carries two indications that point in opposite \
+directions.
+
+A trap does not force a low level: naming the trap you navigated is the useful part, and you \
+may well have navigated it confidently. Report the reading you actually did — do not lower \
+level to look cautious, or raise it to look decisive. Set reader_confidence on EVERY \
+prediction, including the easy ones, where it is simply level high with no trap.
+
+Examples — related event: "Force F will successfully strike Bridge K by date D":
+  "Explosions damaged Bridge K's roadway on Tuesday, halting traffic" \
+                                               → level high (trap omitted)
+  "Force F ruled out striking Bridge K before the corridor talks conclude" \
+                                               → level medium, trap "negation"
+  "Force F massed 40 launchers near the corridor, short of the 60 its doctrine requires" \
+                                               → level medium, trap "numeric_comparison"
+  "Force G struck Bridge K's approach road overnight" \
+                                               → level low, trap "entity_or_event_mismatch"
+
 ## Output
 Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certainty \
 signals if they are the only content available.
@@ -691,6 +736,13 @@ When you OMIT fact_signal (and the four facets above with it), include \
 fact_signal_absent_reason instead (one of opinion / no_fact_found / contrary_below_anchor — \
 see the FACT_SIGNAL section for which applies) — never omit both.
 
+Separately, every prediction also carries reader_confidence (object) — YOUR confidence in your \
+own reading, not the source's commitment: \
+{{"level": one of high / medium / low, "trap": one of negation / numeric_comparison / \
+entity_or_event_mismatch / tone_vs_content / inference_needed / conflicting_signals, OMITTED \
+when none applies}}. See the READER_CONFIDENCE section above. Include it on every prediction, \
+including the straightforward ones.
+
 Example — related event: "Assad regime falls in Syria":
 {{
   "predictions": [
@@ -700,7 +752,8 @@ Example — related event: "Assad regime falls in Syria":
       "stance": 0.7,
       "claim_strength": 0.6,
       "settled": false,
-      "evidence_class": "reporting"
+      "evidence_class": "reporting",
+      "reader_confidence": {{"level": "medium", "trap": "inference_needed"}}
     }},
     {{
       "quote": "Rebels seized the capital on Sunday as Assad fled to Moscow",
@@ -708,7 +761,8 @@ Example — related event: "Assad regime falls in Syria":
       "stance": 1.0,
       "claim_strength": 0.95,
       "settled": true,
-      "evidence_class": "reported_fact"
+      "evidence_class": "reported_fact",
+      "reader_confidence": {{"level": "high"}}
     }}
   ]
 }}
@@ -723,7 +777,8 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
       "claim_strength": 0.85,
       "settled": false,
       "quantitative_estimate": 0.1883,
-      "evidence_class": "cited_probability"
+      "evidence_class": "cited_probability",
+      "reader_confidence": {{"level": "medium", "trap": "numeric_comparison"}}
     }}
   ]
 }}

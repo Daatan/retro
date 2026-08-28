@@ -195,7 +195,7 @@ Consumers globbing `vault2/extractions/` must filter markers via
 ### Prediction (extracted by LLM)
 Each prediction has: `quote`, `claim`, `stance` (−1 to +1, event probability), `claim_strength` (named `certainty` before Oracle 1.5 Phase 1, retro#680; the old name is still emitted as a wire alias), `settled` (bool — true when the source reports the outcome as an accomplished fact, not a prediction; the prompt explicitly excludes historical background such as a past removal/ban, see #244), and `quantitative_estimate` (optional [0,1] — an explicit modeled probability, poll number, or market price the source cites for the event itself; carries the quantitative-anchor weight premium).
 
-Also requested, EXPERIMENTAL/shadow (Phase 2 of the author-scoring redesign — none of these fields pools, i.e. no aggregation step reads them; `fact_signal` and its facets are nonetheless consumed at EXTRACTION time, see below): `evidence_class` (reported_fact / cited_probability / cited_share / reporting / opinion — S2, see `docs/ORACLE_VARIABLES.md` §5), `fact_signal` (−1 to +1, what the reported facts alone imply, un-fused from the author's framing), `event_actors` / `event_target` (the fact's actor-target dyad, for cross-checking against the claim), `is_occurrence` (is the reported fact the event itself, or only a precursor), `verified` (independently reported vs. merely claimed by an interested party), `event_date` / `event_date_reference` (resolved absolute date + the article's original relative expression). Full field docs: `PredictionExtraction` in `pipeline/src/tm/models.py`.
+Also requested, EXPERIMENTAL/shadow (Phase 2 of the author-scoring redesign — none of these fields pools, i.e. no aggregation step reads them; `fact_signal` and its facets are nonetheless consumed at EXTRACTION time, see below): `evidence_class` (reported_fact / cited_probability / cited_share / reporting / opinion — S2, see `docs/ORACLE_VARIABLES.md` §5), `fact_signal` (−1 to +1, what the reported facts alone imply, un-fused from the author's framing), `event_actors` / `event_target` (the fact's actor-target dyad, for cross-checking against the claim), `is_occurrence` (is the reported fact the event itself, or only a precursor), `verified` (independently reported vs. merely claimed by an interested party), `event_date` / `event_date_reference` (resolved absolute date + the article's original relative expression), and — since Oracle 1.5 Phase 1 (retro#681) — `reader_confidence` `{level, trap}`, which is about the extractor rather than the article: how confident it is in its OWN reading of the span, as against `claim_strength`, which is the source's commitment to the claim. The two were one field until retro#680. Unlike `fact_signal`, `reader_confidence` is shadow in the strict sense — nothing reads it, at extraction time or after. Full field docs: `PredictionExtraction` in `pipeline/src/tm/models.py`.
 
 **"Shadow" does not mean inert.** `fact_signal` was accepted as a **diagnostic/guardrail lane, not a
 pricing lane in waiting** (retro#533, 2026-08-15 — corr(stance, fact_signal) 0.905 on precursor rows,
@@ -649,7 +649,7 @@ POST /forecast
   "provider_chain": ["news-indexer"],
   "distilled_query": null,
   "provenance": {
-    "schema_version": "1.1",
+    "schema_version": "1.2",
     "engine": "v1",
     "oracle": { "version": "1.65.x", "git_sha": "…", "built_at": "…" },
     "models": { "gatekeeper": "nova-micro", "extractor": "claude-haiku-4-5" },

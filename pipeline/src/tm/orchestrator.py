@@ -12,6 +12,7 @@ from .config import settings
 from .dedup import SimhashIndex
 from .models import CellStatus, ExtractionOutput, PredictionExtraction, is_negative_marker
 from .aggregator import aggregate_predictions, needs_aggregation, aggregate_article_predictions
+from .archetype import select_extractor_model
 from .runner import run_article, ArticleInput, PipelineResult
 from .progress import update_cell, load_state
 from .utils import KNOWN_SOURCE_IDS, predates_outcome
@@ -72,13 +73,20 @@ class Orchestrator:
             return None
 
     @staticmethod
-    def _negative_marker_is_current(ext_data: dict) -> bool:
+    def _negative_marker_is_current(ext_data: dict, extractor_model: str) -> bool:
         """A negative marker only suppresses re-extraction while the models and
         prompt version that produced it are still the ones configured — the
-        'unless the prompt or model changed' invalidation of docs#57 item 2."""
+        'unless the prompt or model changed' invalidation of docs#57 item 2.
+
+        ``extractor_model`` is the model THIS row would run against now, which since
+        retro#688 is not necessarily ``settings.extractor_model``: a threshold-shaped
+        event routes elsewhere. Comparing a routed row against the global instead would
+        declare its marker stale on every cycle — a permanent re-extraction loop on
+        exactly the rows the routing exists to protect, and the expensive model is the
+        one it would loop on."""
         return (
             ext_data.get("prompt_version") == EXTRACTION_PROMPT_VERSION
-            and ext_data.get("extractor_model") == settings.extractor_model
+            and ext_data.get("extractor_model") == extractor_model
             and ext_data.get("gatekeeper_model") == settings.gatekeeper_model
         )
 
@@ -312,6 +320,13 @@ class Orchestrator:
             return None
         art_hash = self.get_article_hash(text)
 
+        # retro#688: which extractor this event routes to. None = the configured global.
+        # Computed once here and used for BOTH the run and every provenance/staleness
+        # comparison below, so the model a row claims and the model it ran on cannot
+        # diverge.
+        routed_model = select_extractor_model(event.get("name"))
+        effective_model = routed_model or settings.extractor_model
+
         # Near-duplicate detection: if a semantically-similar article was already
         # processed, reuse its extraction rather than calling the LLM again.
         canonical_hash = self._simhash_idx.find_near_duplicate(text)
@@ -320,7 +335,7 @@ class Orchestrator:
             if canonical_extract.exists():
                 canonical_data = self._load_extraction_file(canonical_extract)
                 if canonical_data is not None and is_negative_marker(canonical_data):
-                    if self._negative_marker_is_current(canonical_data):
+                    if self._negative_marker_is_current(canonical_data, effective_model):
                         # Near-duplicate of an article the gatekeeper rejected (or that
                         # yielded nothing) under the current models — same verdict applies.
                         console.print(f"    [dim]Near-duplicate of {canonical_hash[:8]} — negative marker, skipping[/dim]")
@@ -346,7 +361,7 @@ class Orchestrator:
         if extract_path.exists() and not self.force_reextract:
             cached = self._load_extraction_file(extract_path)
             if cached is not None and is_negative_marker(cached):
-                if self._negative_marker_is_current(cached):
+                if self._negative_marker_is_current(cached, effective_model):
                     # Gate-rejected / no-prediction under the current models — the
                     # whole point of docs#57 item 2: don't re-run the LLM every cycle.
                     console.print(f"    [dim]Negative marker ({cached.get('status')}) for {art_hash[:8]} — skipping[/dim]")
@@ -372,7 +387,7 @@ class Orchestrator:
             article_url=raw_art.get("url")
         )
         
-        result = await run_article(article_input)
+        result = await run_article(article_input, extractor_model=routed_model)
 
         if result.error:
             console.print(f"    [bold red]Runner Error:[/bold red] {result.error}")
@@ -404,7 +419,7 @@ class Orchestrator:
                         "status": "done",
                         "extraction": result.extraction.model_dump(),
                         "prompt_version": model_v,
-                        "extractor_model": settings.extractor_model,
+                        "extractor_model": result.extractor_model or effective_model,
                         "gatekeeper_model": settings.gatekeeper_model,
                         "gatekeeper_reason": result.gatekeeper_reason,
                         "run_date": datetime.now().isoformat()
@@ -428,7 +443,7 @@ class Orchestrator:
                         "status": status,
                         "extraction": None,
                         "prompt_version": model_v,
-                        "extractor_model": settings.extractor_model,
+                        "extractor_model": result.extractor_model or effective_model,
                         "gatekeeper_model": settings.gatekeeper_model,
                         "gatekeeper_reason": result.gatekeeper_reason,
                         "run_date": datetime.now().isoformat()

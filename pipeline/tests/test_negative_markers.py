@@ -73,7 +73,7 @@ def _marker(status="gate_rejected", extractor_model=None, gatekeeper_model=None,
 
 
 def _fake_runner(result_factory, called):
-    async def fake_run_article(article_input):
+    async def fake_run_article(article_input, extractor_model=None):
         called["n"] += 1
         return result_factory(article_input)
     return fake_run_article

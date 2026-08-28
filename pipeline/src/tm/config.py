@@ -17,6 +17,27 @@ class Settings(BaseSettings):
     extractor_model: str = "bedrock/us.amazon.nova-lite-v1:0"
     ground_truth_model: str = "bedrock/us.amazon.nova-lite-v1:0"
 
+    # retro#688 — per-event extractor override for threshold-shaped batch events, where
+    # a number decides the stance ("Brent crude oil exceeds $100/barrel"). PR#671
+    # (retro#664 P1) measured Nova Lite returning +0.00 on every between-bounds numeric
+    # case and inverting both tone traps; Phase 4's E3a (THRESHOLD_PRICING_ENABLED) needs
+    # usable batch rows on exactly that class. `archetype.is_threshold_shaped` decides
+    # which events qualify and says why it is a bool rather than daatan's four-way
+    # claim_archetype.
+    #
+    # EMPTY = OFF, and that is the shipped default: merging retro#688 changes no
+    # behaviour. The batch tree self-syncs to origin/main and re-execs every cycle
+    # (infra/ec2_run.sh), so a non-empty default here would be a live cost change within
+    # ~5 minutes of merge, unmeasured. Turning it on is one line in the box's
+    # ~/truthmachine/.env (which ec2_run.sh sources into the environment) — the batch
+    # equivalent of the live lane's oracle-api drop-in:
+    #
+    #   THRESHOLD_EXTRACTOR_MODEL=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+    #
+    # The live lane is unaffected either way: it passes its own `model=` per request and
+    # is already on Haiku via infra/oracle-api.service.d/extractor-model.conf.
+    threshold_extractor_model: str = ""
+
     # Kill-switch for Bedrock/Anthropic prompt caching (llm.py::complete_structured's
     # cached_prefix). Verified ON: smoke_test_prompt_cache.py confirmed reliable
     # cache_read/cache_creation token accounting against live Bedrock for Nova Micro

@@ -17,7 +17,7 @@ import pytest
 
 from forecast_api import forecaster
 from forecast_api.config import settings as api_settings
-from forecast_api.models import PoolAggregateRequest, PoolSourceInput
+from forecast_api.models import PROVENANCE_SCHEMA_VERSION, PoolAggregateRequest, PoolSourceInput
 
 
 def _prob(stance: float) -> float:
@@ -551,7 +551,7 @@ class TestProvenance:
             sources=[_source(stance=0.6), _source(stance=0.4)],
         ))
         assert resp.provenance is not None
-        assert resp.provenance.schema_version == "1.1"
+        assert resp.provenance.schema_version == PROVENANCE_SCHEMA_VERSION
         assert resp.provenance.engine == "v1"
         assert resp.provenance.method == "pool"
         assert resp.provenance.chain == []  # a recompute never searches

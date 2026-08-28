@@ -14,7 +14,7 @@ from statistics import median
 from collections import Counter
 from typing import Optional
 
-from .models import PredictionExtraction, CellSignal
+from .models import PredictionExtraction, CellSignal, ReaderConfidence
 from .config import settings
 from .llm import complete_structured
 
@@ -99,7 +99,35 @@ async def aggregate_article_predictions(
     output, _usage = await complete_structured(
         settings.extractor_model, PredictionExtraction, prompt, max_tokens=1000, timeout=120,
     )
+    # Direct assignment, deliberately not `model_copy(update=...)`: that API is
+    # UNVALIDATED in Pydantic v2, so a mistyped key becomes a stray attribute and
+    # the value silently never lands (retro#680 shipped that bug once already).
+    # Assignment raises on an unknown field name.
+    output.reader_confidence = _worst_reader_confidence(predictions)
     return output
+
+
+def _worst_reader_confidence(
+    predictions: list[PredictionExtraction],
+) -> Optional[ReaderConfidence]:
+    """The `reader_confidence` of the input claim its reader was least sure of.
+
+    Carried across the LLM collapse in code rather than elicited again (retro#681).
+    AGGREGATOR_PROMPT does not ask for the field, so without this the batch lane
+    would silently null it on exactly the articles that tripped aggregation —
+    articles whose claims disagree by more than STANCE_SPREAD_THRESHOLD, i.e. the
+    ones a reader is most likely to have struggled with. A shadow field that
+    vanishes where the interesting cases are is worse than no field.
+
+    Whole object, not just the level: the trap that came with the least-confident
+    claim is the one worth keeping, and re-pairing a level from one claim with a
+    trap from another would invent a reading nothing produced.
+    """
+    answered = [p.reader_confidence for p in predictions if p.reader_confidence is not None]
+    if not answered:
+        return None
+    order = {"high": 0, "medium": 1, "low": 2}
+    return max(answered, key=lambda rc: order[rc.level])
 
 
 def _weighted_mean(values: list[float], weights: list[float]) -> float:

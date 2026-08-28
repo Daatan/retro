@@ -69,7 +69,7 @@ EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 # human-readable label only, see docs/PROMPT_VERSIONS.md. The *_HASH is computed from the
 # actual prompt text above, so it stays correct even if a version bump is forgotten.
 GATEKEEPER_PROMPT_VERSION = "v1"
-EXTRACTOR_PROMPT_VERSION = "v4"
+EXTRACTOR_PROMPT_VERSION = "v7"
 GATEKEEPER_PROMPT_HASH = hashlib.sha256(GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
 EXTRACTOR_PROMPT_HASH = hashlib.sha256(EXTRACTOR_PROMPT.encode()).hexdigest()[:16]
 
@@ -100,6 +100,7 @@ from .models import (
     ForecastResponse,
     PoolAggregateRequest,
     PoolAggregateResponse,
+    READER_CONFIDENCE_LEVELS,
     SourceSignal,
     TokenUsage,
 )
@@ -247,6 +248,14 @@ def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDe
             event_target=p.event_target,
             is_occurrence=p.is_occurrence,
             verified=p.verified,
+            # retro#681. `model_dump()` rather than the tm object itself: ClaimDetail is the
+            # wire contract and must not gain a pipeline-internal type, and the two models are
+            # deliberately separate declarations (same reason `evidence_class`/`facet` are
+            # spelled out on both sides). A dump keeps the shape the model answered in, which
+            # is what daatan persists.
+            reader_confidence=(
+                p.reader_confidence.model_dump() if p.reader_confidence is not None else None
+            ),
             # Phase 1 conditional capture (#504) — pre-resolution shadow fields.
             # Omitted here from 2026-08-09 to retro#566: the prompt asked, the
             # model answered, and this projection dropped all nine on the wire.
@@ -296,6 +305,41 @@ class ArticleReduction:
     verified: Optional[bool]
     fact_signal_absent_reason: Optional[str]
     facet: Optional[str]
+    reader_confidence_level: Optional[str]
+    reader_confidence_traps: Optional[list[str]]
+
+
+def _reader_confidence_rollup(
+    claims: list[ClaimDetail],
+) -> tuple[Optional[str], Optional[list[str]]]:
+    """Roll one article's per-claim `reader_confidence` up to the article level.
+
+    A sixth reduction, and deliberately not shaped like the other five (retro#681):
+
+    - ``level`` is the WORST level any claim reported, not a mean and not the
+      dominant claim's. An article is only as readable as its least readable
+      claim, and the whole point of the field is to surface the row a reader
+      wobbled on — a mean would average that row away against its confident
+      siblings, which is the same defect `certainty` had before retro#680 split it.
+    - ``traps`` are COLLECTED, not voted. Two claims tripping two different traps
+      is two facts about this article; the most-common vote used for
+      `evidence_class` and `fact_signal_absent_reason` would throw one away.
+      First-seen order so the output is deterministic.
+
+    Reduces over ALL claims, like `certainty`/`evidence_weight` and unlike
+    `stance` — a claim the settlement subset excluded was still one the reader
+    had to read.
+    """
+    levels = [c.reader_confidence.level for c in claims if c.reader_confidence is not None]
+    level = next(
+        (lv for lv in reversed(READER_CONFIDENCE_LEVELS) if lv in levels), None
+    )
+    traps: list[str] = []
+    for c in claims:
+        trap = c.reader_confidence.trap if c.reader_confidence is not None else None
+        if trap is not None and trap not in traps:
+            traps.append(trap)
+    return level, (traps or None)
 
 
 def reduce_article(
@@ -309,8 +353,8 @@ def reduce_article(
 ) -> ArticleReduction:
     """Collapse one article's claims into the scalars the pool consumes.
 
-    Five reductions over five different subsets, which is exactly why the
-    per-claim layer had to survive:
+    Six reductions over different subsets, which is exactly why the per-claim
+    layer had to survive:
 
     - ``stance``   — claim-weighted mean over the SETTLEMENT-GRADE claims if the
       article has any, else over all of them. A verdict must not be averaged
@@ -324,6 +368,9 @@ def reduce_article(
     - ``fact_signal`` — claim-weighted mean over the same scored subset as
       ``stance``, but its qualifying facets ride from the single dominant
       (max |fact_signal|) claim so they stay internally coherent.
+    - ``reader_confidence`` (retro#681) — a sixth, shaped like none of the
+      others: worst level over all claims, traps collected rather than voted.
+      See ``_reader_confidence_rollup`` for why neither a mean nor a vote works.
 
     Pure: takes claims and configuration, touches no globals, and is therefore
     replayable over persisted ``claims_detail`` rows — which is the whole point
@@ -399,6 +446,9 @@ def reduce_article(
         reasons = [c.fact_signal_absent_reason for c in scored if c.fact_signal_absent_reason is not None]
         fact_signal_absent_reason = Counter(reasons).most_common(1)[0][0] if reasons else None
 
+    # reader_confidence lane — SHADOW (retro#681), over ALL claims, own reduction.
+    reader_confidence_level, reader_confidence_traps = _reader_confidence_rollup(claims)
+
     return ArticleReduction(
         stance=stance,
         certainty=certainty,
@@ -418,6 +468,8 @@ def reduce_article(
         verified=verified,
         fact_signal_absent_reason=fact_signal_absent_reason,
         facet=facet,
+        reader_confidence_level=reader_confidence_level,
+        reader_confidence_traps=reader_confidence_traps,
     )
 
 
@@ -2053,6 +2105,8 @@ async def _run_forecast_inner(
             verified=reduction.verified,
             fact_signal_absent_reason=reduction.fact_signal_absent_reason,
             facet=reduction.facet,
+            reader_confidence_level=reduction.reader_confidence_level,
+            reader_confidence_traps=reduction.reader_confidence_traps,
             # F1/F15 (retro#364): the claims every scalar above was reduced
             # FROM, kept instead of discarded. Additive — nothing in
             # aggregation reads it.

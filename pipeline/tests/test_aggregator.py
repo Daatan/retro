@@ -3,7 +3,7 @@ Pure math, no LLM/network (unlike aggregate_article_predictions, mocked elsewher
 
 import pytest
 
-from tm.aggregator import aggregate_predictions
+from tm.aggregator import aggregate_article_predictions, aggregate_predictions
 from tm.models import PredictionExtraction
 
 
@@ -127,3 +127,45 @@ def test_claim_count_and_quotes_claims_preserve_order():
     assert sig.claim_count == 2
     assert sig.quotes == ["q1", "q2"]
     assert sig.claims == ["c1", "c2"]
+
+
+class TestReaderConfidenceSurvivesTheArticleCollapse:
+    """`aggregate_article_predictions` asks the LLM for a unified signal, and
+    AGGREGATOR_PROMPT does not ask for `reader_confidence` (retro#681). The
+    field is carried across in code instead — otherwise the batch lane would
+    null it on precisely the articles that tripped aggregation, i.e. the ones
+    whose claims disagree most and whose reader is likeliest to have struggled.
+    """
+
+    @staticmethod
+    async def _collapse(monkeypatch, predictions):
+        from tm import aggregator
+
+        async def fake_complete_structured(*args, **kwargs):
+            return _pred(0.1, 0.5, claim="unified"), {}
+
+        monkeypatch.setattr(aggregator, "complete_structured", fake_complete_structured)
+        return await aggregate_article_predictions(predictions, "E", "S", "2026-08-28")
+
+    async def test_the_least_confident_reading_is_the_one_carried(self, monkeypatch):
+        out = await self._collapse(monkeypatch, [
+            _pred(0.8, 0.9, reader_confidence={"level": "high"}),
+            _pred(-0.3, 0.6, reader_confidence={"level": "low", "trap": "conflicting_signals"}),
+            _pred(0.2, 0.7, reader_confidence={"level": "medium", "trap": "negation"}),
+        ])
+        assert out.reader_confidence.level == "low"
+        assert out.reader_confidence.trap == "conflicting_signals"
+
+    async def test_the_level_and_its_own_trap_stay_paired(self, monkeypatch):
+        """Taking the worst level from one claim and a trap from another would
+        describe a reading no claim actually produced."""
+        out = await self._collapse(monkeypatch, [
+            _pred(0.8, 0.9, reader_confidence={"level": "low"}),
+            _pred(-0.3, 0.6, reader_confidence={"level": "high", "trap": "negation"}),
+        ])
+        assert out.reader_confidence.level == "low"
+        assert out.reader_confidence.trap is None
+
+    async def test_nothing_answered_stays_none(self, monkeypatch):
+        out = await self._collapse(monkeypatch, [_pred(0.8, 0.9), _pred(-0.3, 0.6)])
+        assert out.reader_confidence is None

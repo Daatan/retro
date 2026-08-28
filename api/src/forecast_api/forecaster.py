@@ -106,6 +106,13 @@ from .models import (
 from .config import settings
 from .resolution_scorer import archetype_base_rate
 from .settlement_verdict_store import get_verdict, put_verdict, verdict_key
+from .settlement_semantic import (
+    ALL_GATES,
+    SettlementCandidate,
+    apply_gates,
+    claim_subject_from_question,
+    pin_survives,
+)
 from .settlement_verifier import SettlementVote, Verdict, build_prompt, verify_settlement
 from .premise_verifier import PremiseResult, premise_check_triggered, verify_premise
 
@@ -573,6 +580,12 @@ def _settlement_votes(
     return [
         SettlementVote(
             outlet=outlet, claim=c.claim, quote=c.quote, event_date=c.event_date,
+            # Shadow fields for the deterministic gates (retro#691). Not
+            # rendered into the verifier prompt — see SettlementVote.
+            stance=c.stance, claim_strength=c.claim_strength,
+            event_actors=c.event_actors, event_target=c.event_target,
+            is_occurrence=c.is_occurrence, facet=c.facet,
+            evidence_class=c.evidence_class,
         )
         for c in (claims_detail or [])
         if c.settled
@@ -594,6 +607,64 @@ def _settlement_config_fingerprint() -> str:
     ))
 
 
+def _log_semantic_gate_shadow(
+    question: str, votes: Sequence[SettlementVote], *, claim_deadline: Optional[str],
+) -> None:
+    """Shadow-run the deterministic semantic gates over a pin about to publish.
+
+    Logs what they WOULD have demoted and whether the pin would still have
+    reached ``settlement_min_sources``. Changes nothing — see
+    ``settlement_semantic_gates_enabled`` in config for why there is no
+    enforcement knob here yet.
+
+    Emitted on the same vote-set the verifier is about to judge, immediately
+    before its own log line and carrying the same ``question`` hash, so a
+    single grep pairs the deterministic verdict with the LLM one. That pairing
+    is the point: the open question is whether these gates can stand in for a
+    call that fails open, and only agreement measured on live traffic answers it.
+
+    Never raises. A shadow signal that can break a forecast is worse than no
+    shadow signal, so every failure is swallowed and logged.
+
+    Unlike the verifier this is NOT decided once per vote-set — it is cheap and
+    deterministic, so it re-evaluates on every recompute. Anyone reading the
+    resulting logs must dedupe by (question hash, vote-set) before counting:
+    the verifier's own log looked like 622 decisions and turned out to be 23
+    distinct questions, one of them re-priced 144 times (retro#691).
+    """
+    if not settings.settlement_semantic_gates_enabled:
+        return
+    try:
+        gates = tuple(
+            g.strip() for g in settings.settlement_semantic_gates.split(",")
+            if g.strip() in ALL_GATES
+        )
+        if not gates:
+            return
+        subject = claim_subject_from_question(question)
+        candidates = [
+            SettlementCandidate(
+                claim=v.claim, stance=v.stance, certainty=v.claim_strength,
+                outlet=v.outlet, event_actors=v.event_actors,
+                event_target=v.event_target, event_date=v.event_date,
+                is_occurrence=v.is_occurrence, facet=v.facet,
+                evidence_class=v.evidence_class,
+            )
+            for v in votes
+        ]
+        outcome = apply_gates(subject, candidates, gates=gates, deadline=claim_deadline)
+        survives = pin_survives(outcome, min_sources=settings.settlement_min_sources)
+        logger.warning(
+            "event=settlement_semantic_gates would_block=%s votes=%d demoted=%d "
+            "outlets_left=%d gates=%s reasons=%r question=%s",
+            not survives, len(candidates), len(outcome.demoted),
+            outcome.distinct_outlets, ",".join(gates),
+            dict(Counter(r for _, r in outcome.demoted)), _question_hash(question),
+        )
+    except Exception:  # noqa: BLE001 — a shadow signal must never break a forecast
+        logger.exception("event=settlement_semantic_gates outcome=error")
+
+
 async def _apply_settlement_match_gate(
     agg,
     *,
@@ -601,6 +672,7 @@ async def _apply_settlement_match_gate(
     votes_for_index,
     rerun,
     settled_flags: Sequence[Optional[bool]],
+    claim_deadline: Optional[str] = None,
 ):
     """Ask whether the settling facts ARE this claim's outcome (retro#388/#360).
 
@@ -626,7 +698,7 @@ async def _apply_settlement_match_gate(
     demotion, not a deletion — and the published number is one the pooling code
     actually produced, so a recompute over the stored pool still reproduces it.
     """
-    if agg is None or not agg.settled or not settings.settlement_verifier_enabled:
+    if agg is None or not agg.settled:
         return agg
     if not question:
         logger.info("event=settlement_verifier outcome=skipped reason=no_question")
@@ -637,6 +709,15 @@ async def _apply_settlement_match_gate(
         votes.extend(votes_for_index(i))
     if not votes:
         logger.info("event=settlement_verifier outcome=skipped reason=no_claim_detail")
+        return agg
+
+    # Before the verifier and independent of its kill switch: the deterministic
+    # gates exist precisely because the verifier can be off, time out, or error,
+    # and shadow data collected only while it is healthy would miss the cases
+    # that motivate them.
+    _log_semantic_gate_shadow(question, votes, claim_deadline=claim_deadline)
+
+    if not settings.settlement_verifier_enabled:
         return agg
 
     # The direction matters as much as the match: facts that decide the question
@@ -2142,6 +2223,7 @@ async def _run_forecast_inner(
                 all_stances, all_weights, relevances, flags, **_pool_kwargs,
             ),
             settled_flags=all_settled,
+            claim_deadline=req.claim_deadline,
         )
         # retro#449 Stage B detector. After the match gate, not before: the
         # gate can re-run aggregation and drop the pin, and an alert for a pin
@@ -2560,6 +2642,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             ),
             rerun=lambda flags: aggregate_pool(stances, weights, relevances, flags, **_pool_kwargs),
             settled_flags=settled_flags,
+            claim_deadline=req.claim_deadline,
         )
         # retro#449 Stage B detector — recompute-path twin of the live path's,
         # same placement rationale (after the gate). No `url` guarantee here, so

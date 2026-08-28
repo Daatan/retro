@@ -111,11 +111,25 @@ Reply with one JSON object and nothing else:
 
 @dataclass(frozen=True)
 class SettlementVote:
-    """One settling claim, as the verifier sees it."""
+    """One settling claim, as the verifier sees it.
+
+    The first four fields are what :func:`build_prompt` renders. The rest are
+    the claim's shadow fields, carried for the deterministic gates in
+    ``settlement_semantic`` (retro#691) — they are NOT rendered into the
+    prompt, so adding them leaves the prompt text, and therefore every cached
+    verdict key, byte-identical.
+    """
     outlet: Optional[str]
     claim: str
     quote: Optional[str]
     event_date: Optional[str]
+    stance: float = 0.0
+    claim_strength: float = 0.0
+    event_actors: Optional[str] = None
+    event_target: Optional[str] = None
+    is_occurrence: Optional[bool] = None
+    facet: Optional[str] = None
+    evidence_class: Optional[str] = None
 
 
 @dataclass(frozen=True)

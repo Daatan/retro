@@ -535,6 +535,33 @@ class ApiSettings(BaseSettings):
     # evidence. A false pin publishes a confidently wrong 97% over a pool reading
     # 44%; a false veto merely publishes the pooled estimate — less confident,
     # not wrong.
+    # ── Deterministic semantic gates (retro#691) — SHADOW ONLY ───────────────
+    # The verifier above is one LLM call that fails open by design, and it is
+    # the ONLY check asking whether a settling fact is the claim's own event:
+    # every `enforce_*` guard and `settlement_vote_validity` reason is temporal.
+    # In prod logs 106 of its blocks carried >=2 votes, i.e. had already cleared
+    # every deterministic guard. These gates are the deterministic second
+    # opinion.
+    #
+    # They LOG and do nothing else. There is deliberately no `_enforce` knob:
+    # an enforcement path nobody has run is an inert seam that reads as shipped,
+    # and enforcing this belongs in its own reviewed change once a week of
+    # shadow data exists. `_enabled` is the kill switch, no deploy needed.
+    #
+    # Default set, measured against 387 independently labelled (question,
+    # settled claim) pairs from the prod pool — 0.79 precision, 0.47 recall,
+    # 26 -> 19 pins, 2 defensible pins lost:
+    #   point_in_time           0.73 prec, 0 pins lost
+    #   occurrence_consistency  1.00 prec, 0 pins lost
+    #   facet_missing           0.80 prec, 2 pins lost
+    # `predicate_echo` is left OUT of the default: it scores 0.68/0.46 on a
+    # regex proxy for the claim side and overlaps facet_missing heavily (86 and
+    # 82 catches alone, 111 together). It is worth turning on once retro#697
+    # supplies a real dyad, not before. `announcement_facet` is REFUTED — it
+    # destroys 13 of 26 defensible pins; never add it here.
+    settlement_semantic_gates_enabled: bool = True
+    settlement_semantic_gates: str = "point_in_time,occurrence_consistency,facet_missing"
+
     settlement_verifier_enabled: bool = True
     settlement_verifier_enforce: bool = True
     settlement_verifier_timeout_seconds: int = 12

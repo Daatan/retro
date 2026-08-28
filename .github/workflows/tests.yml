@@ -33,8 +33,17 @@ jobs:
       - name: shellcheck ec2_run.sh
         run: shellcheck -S error infra/ec2_run.sh
 
+      - name: shellcheck logs.sh
+        run: shellcheck -S error infra/logs.sh
+
       - name: Run ec2_run.sh guard regression tests
         run: bash infra/tests/test_ec2_run_guards.sh
+
+      # settlement_report.py is the tool that will answer "is it safe to enforce
+      # the settlement gates" (retro#691). It runs on EC2, so no pytest suite
+      # would ever reach it — these tests feed it synthetic log text here.
+      - name: Run settlement_report.py tests
+        run: bash infra/tests/test_settlement_report.sh
 
   pytest:
     runs-on: ubuntu-latest

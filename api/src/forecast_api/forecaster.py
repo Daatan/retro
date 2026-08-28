@@ -48,10 +48,10 @@ from tm.extractor import (
     PROMPT_PREFIX as _EXTRACTOR_PROMPT_PREFIX,
     PROMPT_SUFFIX as _EXTRACTOR_PROMPT_SUFFIX,
 )
-from tm.models import GatekeeperOutput, PredictionExtraction
+from tm.models import ExtractionOutput, GatekeeperOutput, PredictionExtraction
 from tm.web_search import NEWS_INDEXER_API_KEY, NEWS_INDEXER_URL, SearchResult, search_capturing
 from tm.config import settings as _pipeline_settings
-from tm.llm import complete_text_once_with_usage
+from tm.llm import complete_text_once_with_usage, rendered_response_schema
 from tm.net_guard import UnsafeURLError, safe_get
 # Same URL-path date parser the batch ingest uses. Sharing it keeps the two paths'
 # idea of "can we date this article" identical rather than growing a second dialect.
@@ -75,6 +75,25 @@ GATEKEEPER_PROMPT_VERSION = "v1"
 EXTRACTOR_PROMPT_VERSION = "v7"
 GATEKEEPER_PROMPT_HASH = hashlib.sha256(GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
 EXTRACTOR_PROMPT_HASH = hashlib.sha256(EXTRACTOR_PROMPT.encode()).hexdigest()[:16]
+
+# retro#700: the hashes above cover the hand-written prompt only, and that is not all the
+# text the model sees. Both calls are structured calls through instructor's MD_JSON mode,
+# which serialises the response model's JSON schema into a system message — field
+# descriptions, enum members and Pydantic docstrings included. On today's models that is
+# **27% of the extractor's prompt text and 20% of the gatekeeper's**, and it could change
+# arbitrarily with no hash movement, no lock diff and no version bump: a prompt-version
+# lock that does not lock. It was found the expensive way — retro#681 shipped a 1,283-char
+# docstring to the model on every call and the enforcement test stayed green throughout.
+#
+# Hashed SEPARATELY from the prose rather than folded in, so a lock diff says which half
+# moved: "someone reworded the instructions" and "someone added a field" are different
+# reviews. Both halves are pinned by docs/prompt_versions.lock.json, and the lock also
+# records the rendered length — the failure mode here was not "the schema changed" but
+# "the schema quietly grew", and only a number in the diff catches that.
+GATEKEEPER_SCHEMA = rendered_response_schema(GatekeeperOutput)
+EXTRACTOR_SCHEMA = rendered_response_schema(ExtractionOutput)
+GATEKEEPER_SCHEMA_HASH = hashlib.sha256(GATEKEEPER_SCHEMA.encode()).hexdigest()[:16]
+EXTRACTOR_SCHEMA_HASH = hashlib.sha256(EXTRACTOR_SCHEMA.encode()).hexdigest()[:16]
 
 from ._build import build_provenance
 from .auth import ApiKeyClient
@@ -2509,6 +2528,8 @@ async def _run_forecast_inner(
             gatekeeper_prompt_hash=GATEKEEPER_PROMPT_HASH,
             extractor_prompt_version=EXTRACTOR_PROMPT_VERSION,
             extractor_prompt_hash=EXTRACTOR_PROMPT_HASH,
+            gatekeeper_schema_hash=GATEKEEPER_SCHEMA_HASH,
+            extractor_schema_hash=EXTRACTOR_SCHEMA_HASH,
         ),
     )
 

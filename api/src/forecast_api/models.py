@@ -507,6 +507,15 @@ class ProvenanceModels(BaseModel):
     gatekeeper_prompt_hash: Optional[str] = Field(default=None, description="SHA-256 (first 16 hex chars) of tm.gatekeeper's rendered prompt template")
     extractor_prompt_version: Optional[str] = Field(default=None, description="Hand-bumped version label for tm.extractor's prompt")
     extractor_prompt_hash: Optional[str] = Field(default=None, description="SHA-256 (first 16 hex chars) of tm.extractor's rendered prompt template")
+    # retro#700: `*_prompt_hash` above covers the hand-written prompt only. instructor's
+    # MD_JSON mode also serialises the response model's JSON schema into the prompt —
+    # field descriptions, enum members and Pydantic docstrings, 27% of the extractor's
+    # text — so a row carrying only the prose hash cannot tell you what the model read.
+    # Kept as a separate field rather than folded into the hash above so a stored row
+    # says WHICH half moved: reworded instructions and an added field are different
+    # events with different explanations for a shift in results.
+    gatekeeper_schema_hash: Optional[str] = Field(default=None, description="SHA-256 (first 16 hex chars) of the GatekeeperOutput JSON schema as rendered into the prompt")
+    extractor_schema_hash: Optional[str] = Field(default=None, description="SHA-256 (first 16 hex chars) of the ExtractionOutput JSON schema as rendered into the prompt")
 
 
 class ProvenanceInput(BaseModel):
@@ -845,4 +854,7 @@ class RelevanceResponse(BaseModel):
     # constants rather than versioning a second copy (retro#637).
     gatekeeper_prompt_version: Optional[str] = Field(default=None, description="Hand-bumped version label for tm.gatekeeper's prompt (see retro/docs/PROMPT_VERSIONS.md)")
     gatekeeper_prompt_hash: Optional[str] = Field(default=None, description="SHA-256 (first 16 hex chars) of tm.gatekeeper's rendered prompt template")
+    # retro#700, same reason as ProvenanceModels: the gatekeeper is a structured call, so
+    # its response schema is prompt text too and the prose hash alone under-describes it.
+    gatekeeper_schema_hash: Optional[str] = Field(default=None, description="SHA-256 (first 16 hex chars) of the GatekeeperOutput JSON schema as rendered into the prompt")
     token_usage: Optional[TokenUsage] = Field(default=None, description="Token spend of this gatekeeper call; null when the backend reported no usage")

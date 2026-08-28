@@ -35,5 +35,6 @@ ssm_simple "bash $WORKDIR/infra/remote_stats.sh 2>/dev/null" | \
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  bash infra/logs.sh [tail [N] | warn | progress | grep <pat>]"
+echo "  bash infra/logs.sh settlement [YYYY-MM-DD]   # shadow gates vs verifier"
 echo "  bash infra/check_keys.sh"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

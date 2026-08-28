@@ -94,6 +94,7 @@ retro/
 │   │                            # reload isn't healthy (see docs/ORACLE_DEPLOY.md). Fails red on failure.
 │   ├── monitor.sh               # Local monitoring script (polls EC2 via SSM)
 │   ├── logs.sh                  # Tail EC2 pipeline logs via SSM
+│   ├── settlement_report.py     # Runs ON EC2: settlement shadow gates vs verifier
 │   ├── check_keys.sh            # Verify required AWS Secrets Manager keys exist
 │   ├── remote_stats.sh          # Fetch pipeline progress stats from EC2
 │   ├── oracle-api.service       # systemd unit for the Oracle API (gunicorn + uvicorn workers)

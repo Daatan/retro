@@ -646,12 +646,15 @@ sentence you had to work to interpret is high claim_strength with a LOW reader_c
 heavily hedged sentence whose direction is obvious is low claim_strength with a HIGH one. When \
 you find yourself about to lower claim_strength because YOU were unsure, lower this instead.
 
-Set reader_confidence.level by one test — would another careful reader, working from this same \
-span and the same related event, extract the same stance sign?
-  high   — yes; the span says what it says.
-  medium — yes, but you had to resolve something first (a comparison, a referent, a date, a \
-scope) to get there.
-  low    — you would not be surprised if they read it differently.
+Set reader_confidence.level by COUNTING the resolution steps between this span and the related \
+event — not by how sure you feel. A step is any of: resolving a comparison, a referent, a date, \
+a scope, or carrying a fact across from a neighbouring actor, target or arena.
+  high   — zero steps. The span states the outcome of the related event directly.
+  medium — exactly one step.
+  low    — two or more steps; OR the span never mentions the related event and the whole link \
+is your inference; OR two different stance signs are each defensible from this span.
+Count the steps you actually took. `low` is a normal answer for a span reached by inference — \
+it is a property of the distance you crossed, not an admission that you got it wrong.
 
 Then answer separately: which ONE of these applies to your reading of THIS span? Set \
 reader_confidence.trap to it, or omit trap when none of them does.
@@ -668,20 +671,25 @@ required a reasoning step of your own.
   conflicting_signals      — the span carries two indications that point in opposite \
 directions.
 
-A trap does not force a low level: naming the trap you navigated is the useful part, and you \
-may well have navigated it confidently. Report the reading you actually did — do not lower \
-level to look cautious, or raise it to look decisive. Set reader_confidence on EVERY \
-prediction, including the easy ones, where it is simply level high with no trap.
+level and trap are independent: a trap does not force a low level, and no trap does not force a \
+high one. Naming the trap you navigated is the useful part, and you may well have navigated it \
+confidently. Report the reading you actually did — do not lower level to look cautious, or \
+raise it to look decisive. Set reader_confidence on EVERY prediction, including the easy ones, \
+where it is simply level high with no trap.
 
 Examples — related event: "Force F will successfully strike Bridge K by date D":
-  "Explosions damaged Bridge K's roadway on Tuesday, halting traffic" \
-                                               → level high (trap omitted)
-  "Force F ruled out striking Bridge K before the corridor talks conclude" \
-                                               → level medium, trap "negation"
-  "Force F massed 40 launchers near the corridor, short of the 60 its doctrine requires" \
-                                               → level medium, trap "numeric_comparison"
-  "Force G struck Bridge K's approach road overnight" \
-                                               → level low, trap "entity_or_event_mismatch"
+  "Explosions damaged Bridge K's roadway on Tuesday, halting traffic"
+      → level high (zero steps; trap omitted)
+  "Force F ruled out striking Bridge K before the corridor talks conclude"
+      → level medium, trap "negation" (one step: resolve the polarity)
+  "Force F massed 40 launchers near the corridor, short of the 60 its doctrine requires"
+      → level medium, trap "numeric_comparison" (one step: 40 against the 60 threshold)
+  "Force F's commander said the corridor campaign is going to plan"
+      → level low, trap "inference_needed" (the span never mentions Bridge K; the link to a \
+strike on it is entirely inferred)
+  "Force G struck Bridge K's approach road overnight"
+      → level low, trap "entity_or_event_mismatch" (two steps: carry across from Force G to \
+Force F, and from the approach road to the bridge)
 
 ## Output
 Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certainty \
@@ -736,12 +744,10 @@ When you OMIT fact_signal (and the four facets above with it), include \
 fact_signal_absent_reason instead (one of opinion / no_fact_found / contrary_below_anchor — \
 see the FACT_SIGNAL section for which applies) — never omit both.
 
-Separately, every prediction also carries reader_confidence (object) — YOUR confidence in your \
-own reading, not the source's commitment: \
+Also on every prediction: reader_confidence — \
 {{"level": one of high / medium / low, "trap": one of negation / numeric_comparison / \
 entity_or_event_mismatch / tone_vs_content / inference_needed / conflicting_signals, OMITTED \
-when none applies}}. See the READER_CONFIDENCE section above. Include it on every prediction, \
-including the straightforward ones.
+when none applies}}. See the READER_CONFIDENCE section above.
 
 Example — related event: "Assad regime falls in Syria":
 {{
@@ -762,6 +768,11 @@ Example — related event: "Assad regime falls in Syria":
       "claim_strength": 0.95,
       "settled": true,
       "evidence_class": "reported_fact",
+      "fact_signal": 1.0,
+      "event_actors": "Syrian rebel forces",
+      "event_target": "Damascus and the Assad regime",
+      "is_occurrence": true,
+      "verified": true,
       "reader_confidence": {{"level": "high"}}
     }}
   ]
@@ -778,6 +789,7 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
       "settled": false,
       "quantitative_estimate": 0.1883,
       "evidence_class": "cited_probability",
+      "fact_signal_absent_reason": "opinion",
       "reader_confidence": {{"level": "medium", "trap": "numeric_comparison"}}
     }}
   ]

@@ -167,7 +167,7 @@ async def complete_structured(
     max_tokens: int,
     timeout: int,
     cached_prefix: str | None = None,
-    temperature: float = 0,
+    temperature: float | None = 0,
 ):
     """Make one structured-output LLM call and return ``(output, usage)``.
 
@@ -179,7 +179,11 @@ async def complete_structured(
     ``temperature`` defaults to 0: every current caller is a classification/
     extraction/aggregation task where the same input should reliably produce the
     same output, not a creative-generation one. Pass a higher value explicitly if
-    a future caller needs otherwise.
+    a future caller needs otherwise. Pass ``None`` to omit the parameter from the
+    request entirely — the newest Anthropic models on Bedrock reject it outright
+    (``BedrockException: `temperature` is deprecated for this model``), which
+    fails 100% of calls to them, so a caller reaching for one of those has no way
+    to say "leave it off" other than this.
 
     ``cached_prefix``, when given and ``settings.enable_prompt_cache`` is on, is sent
     as its own Bedrock/Anthropic cache-marked content block ahead of ``prompt`` — for
@@ -204,15 +208,17 @@ async def complete_structured(
         # concatenating it would silently ship every gatekeeper/extractor call
         # without its fixed instructions — this branch must never do that.
         content = (cached_prefix or "") + prompt
-    kwargs = apply_routing(dict(
+    call_kwargs = dict(
         model=model,
         response_model=response_model,
         messages=[{"role": "user", "content": content}],
         max_tokens=max_tokens,
         timeout=timeout,
         max_retries=1,
-        temperature=temperature,
-    ))
+    )
+    if temperature is not None:
+        call_kwargs["temperature"] = temperature
+    kwargs = apply_routing(call_kwargs)
     output, completion = await client.chat.completions.create_with_completion(**kwargs)
     return output, extract_usage(completion)
 

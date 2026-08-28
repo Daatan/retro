@@ -25,6 +25,7 @@ from .extractor import (
     audit_quote_provenance_mismatch,
     flag_claim_stance_sign_conflicts,
 )
+from .config import settings
 from .models import ExtractionOutput, CellStatus
 from .progress import update_cell
 
@@ -51,10 +52,30 @@ class PipelineResult:
     gatekeeper_reason: str
     extraction: Optional[ExtractionOutput] = None
     error: Optional[str] = None
+    # The extractor model this article was actually run against (retro#688). Set on
+    # every return path, including the failure ones, because the caller writes it as
+    # per-row provenance and previously wrote `settings.extractor_model` — a global
+    # that stops being the truth the moment any row is routed elsewhere. A caller
+    # that reads provenance to decide whether a cached row is stale (orchestrator's
+    # `_negative_marker_is_current`) gets the wrong answer forever if this lies.
+    extractor_model: str = ""
 
 
-async def run_article(article: ArticleInput) -> PipelineResult:
+async def run_article(
+    article: ArticleInput,
+    extractor_model: Optional[str] = None,
+) -> PipelineResult:
+    """Gatekeeper → extraction for one article.
+
+    ``extractor_model`` (retro#688) overrides the configured extractor for this article
+    only, exactly as ``extract_predictions``' own ``model`` parameter does — None keeps
+    ``settings.extractor_model``. The choice is made by the caller
+    (``archetype.select_extractor_model``, from the event); nothing here decides policy.
+    The gatekeeper is not routed: it is a cheap binary is-this-a-prediction call, and
+    retro#664's numeric failures were all in extraction.
+    """
     update_cell(article.event_id, article.source_id, CellStatus.in_progress)
+    effective_model = extractor_model or settings.extractor_model
 
     # Short-form sources are judged on content, not length (retro#297/#542): without this the
     # batch pipeline judges terse posts on the long-form prompts, whose ~200-word floor rejects
@@ -79,6 +100,7 @@ async def run_article(article: ArticleInput) -> PipelineResult:
                 article=article,
                 is_prediction=False,
                 gatekeeper_reason=gate.reason,
+                extractor_model=effective_model,
             )
 
         # Stage 2: Extraction
@@ -90,6 +112,7 @@ async def run_article(article: ArticleInput) -> PipelineResult:
             event_description=article.event_description,
             journalist=article.journalist or "unknown",
             short_form=short_form,
+            model=extractor_model,
         )
 
         # Same enforce_*/flag_* chain forecaster.py runs on the live Oracle path
@@ -171,6 +194,7 @@ async def run_article(article: ArticleInput) -> PipelineResult:
             is_prediction=True,
             gatekeeper_reason=gate.reason,
             extraction=extraction,
+            extractor_model=effective_model,
         )
 
     except Exception as e:
@@ -181,4 +205,5 @@ async def run_article(article: ArticleInput) -> PipelineResult:
             is_prediction=False,
             gatekeeper_reason="",
             error=error_msg,
+            extractor_model=effective_model,
         )

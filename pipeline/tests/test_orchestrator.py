@@ -435,7 +435,7 @@ class TestProcessArticle:
         orch = _make_orch(tmp_path)
         monkeypatch.setattr(orch._simhash_idx, "find_near_duplicate", lambda text: "c" * 64)
 
-        async def fake_run_article(article_input):
+        async def fake_run_article(article_input, extractor_model=None):
             return PipelineResult(article=article_input, is_prediction=True, gatekeeper_reason="", extraction=ExtractionOutput(predictions=[]))
 
         monkeypatch.setattr(orch_mod, "run_article", fake_run_article)
@@ -455,7 +455,7 @@ class TestProcessArticle:
 
         called = {"run_article": False}
 
-        async def fake_run_article(article_input):
+        async def fake_run_article(article_input, extractor_model=None):
             called["run_article"] = True
             raise AssertionError("should not be called")
 
@@ -474,7 +474,7 @@ class TestProcessArticle:
             "gatekeeper_model": "g", "gatekeeper_reason": "",
         })
 
-        async def fake_run_article(article_input):
+        async def fake_run_article(article_input, extractor_model=None):
             return PipelineResult(article=article_input, is_prediction=True, gatekeeper_reason="", extraction=ExtractionOutput(predictions=[_fake_prediction()]))
 
         monkeypatch.setattr(orch_mod, "run_article", fake_run_article)
@@ -485,7 +485,7 @@ class TestProcessArticle:
     async def test_runner_error_does_not_raise(self, tmp_path, monkeypatch):
         orch = _make_orch(tmp_path)
 
-        async def fake_run_article(article_input):
+        async def fake_run_article(article_input, extractor_model=None):
             return PipelineResult(article=article_input, is_prediction=False, gatekeeper_reason="", error="boom")
 
         monkeypatch.setattr(orch_mod, "run_article", fake_run_article)
@@ -495,7 +495,7 @@ class TestProcessArticle:
     async def test_no_extraction_writes_nothing(self, tmp_path, monkeypatch):
         orch = _make_orch(tmp_path)
 
-        async def fake_run_article(article_input):
+        async def fake_run_article(article_input, extractor_model=None):
             return PipelineResult(article=article_input, is_prediction=False, gatekeeper_reason="not a prediction", extraction=None)
 
         monkeypatch.setattr(orch_mod, "run_article", fake_run_article)
@@ -507,7 +507,7 @@ class TestProcessArticle:
         orch = _make_orch(tmp_path)
         preds = [_fake_prediction(stance=0.9), _fake_prediction(stance=-0.9)]
 
-        async def fake_run_article(article_input):
+        async def fake_run_article(article_input, extractor_model=None):
             return PipelineResult(article=article_input, is_prediction=True, gatekeeper_reason="", extraction=ExtractionOutput(predictions=preds))
 
         aggregated = _fake_prediction(stance=0.1)
@@ -525,7 +525,7 @@ class TestProcessArticle:
         orch = _make_orch(tmp_path)
         preds = [_fake_prediction(stance=0.9), _fake_prediction(stance=-0.9)]
 
-        async def fake_run_article(article_input):
+        async def fake_run_article(article_input, extractor_model=None):
             return PipelineResult(article=article_input, is_prediction=True, gatekeeper_reason="", extraction=ExtractionOutput(predictions=preds))
 
         async def fake_aggregate(*a, **kw):
@@ -540,7 +540,7 @@ class TestProcessArticle:
         orch = _make_orch(tmp_path)
         preds = [_fake_prediction(stance=0.5), _fake_prediction(stance=0.55)]
 
-        async def fake_run_article(article_input):
+        async def fake_run_article(article_input, extractor_model=None):
             return PipelineResult(article=article_input, is_prediction=True, gatekeeper_reason="", extraction=ExtractionOutput(predictions=preds))
 
         called = {"agg": False}

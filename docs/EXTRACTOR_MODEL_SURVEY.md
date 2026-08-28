@@ -162,7 +162,7 @@ five more LLM call sites that produce numbers/semantic judgments:
 
 | Task | Explanation | Model used |
 |---|---|---|
-| **Extractor** — *tested above* | Article → claims: extracts stance, certainty, settled, `quantitative_estimate`, `evidence_class` per prediction. Main "funnel" stage. | `extractor_model` — Nova Lite (batch default) / **Claude Haiku 4.5** (prod override, `oracle-api` systemd drop-in) |
+| **Extractor** — *tested above* | Article → claims: extracts stance, certainty, settled, `quantitative_estimate`, `evidence_class` per prediction. Main "funnel" stage. | `extractor_model` — Nova Lite (batch default) / **Claude Haiku 4.5** (prod override, `oracle-api` systemd drop-in), plus `threshold_extractor_model` for threshold-shaped batch events (retro#688, off by default — see below) |
 | **Gatekeeper** — *tested, see below* | Pre-filter: is this article even relevant to the forecast question? Produces `relevance_score` (0–1) and `prediction_count_estimate`. | `gatekeeper_model` — **Nova Micro** (own separate knob, no override anywhere) |
 | **Aggregator** | Collapses multiple predictions from one article into one combined read. | Reuses `extractor_model` (no separate knob) |
 | **Settlement verifier** — *tested, see below* | Vetoes false/premature "this claim is settled" calls before they pin the forecast. Built specifically for the false-settlement failure mode (retro#532). | `settlement_verifier_model` (config default `None`) → falls back to `extractor_model` |
@@ -290,3 +290,83 @@ cheaper candidates that looked competitive elsewhere do not reliably provide.
   they lived in a session scratch directory. Re-running this survey means
   rewriting the harness (S3 snapshot pull / daatan DB pull → replay per
   model → diff against a Haiku baseline), not resuming from saved state.
+
+## Threshold routing in the batch lane (retro#688, 2026-08-28)
+
+A third extractor knob, alongside the config default and the `oracle-api` drop-in:
+**`threshold_extractor_model`** routes threshold-shaped *batch* events — the class where a
+number decides the stance — to a different model. Off unless set. The live lane is untouched
+either way (it passes its own `model=` per request and is already on Haiku 4.5).
+
+### Where the seam turned out to be
+
+The issue asked to route `claim_archetype = threshold` questions. **The batch lane has no
+`claim_archetype`, and retro has no code that derives one.** The field belongs to the live
+Oracle's `ForecastRequest`, and its own description says so: *"Temporal archetype from the
+caller's claim classifier"* — daatan classifies its claims and sends the label over the wire.
+Batch has no caller: `orchestrator.process_article` builds an `(event, source, article)` triple
+from `data/events/*.json`, whose schema carries id / name / outcome / outcome_date /
+search_keywords / llm_referee_criteria / predictive_window_days / category / tags. No
+archetype — and no question either. Batch events are curated retroactive *event descriptions*
+("Shekel drops below 4.0 NIS/USD"), not binary questions. `runner.py` already records the same
+asymmetry for `enforce_deadline_arithmetic`: *"retroactive events don't pose a single binary
+question with a direction the way a live /forecast request does."*
+
+So `tm/archetype.py` supplies the missing input, deliberately as a **bool, not a four-way
+classifier**. Reproducing daatan's scheduled/diffuse/threshold/none taxonomy in retro would
+create a second classifier free to drift from the one that actually labels claims, with nothing
+comparing them. The bool is used for model routing only — never written to a row, never compared
+against a live `claim_archetype`. A misclassification costs money or quality on one extraction;
+it cannot corrupt data.
+
+### What it selects, measured on the real corpus
+
+Threshold-shaped requires **both** a magnitude (digits carrying a unit, currency, percentage or
+scale word) **and** a comparison/attainment cue (`exceeds`, `drops below`, `reaches`,
+`raises … to`, `top 5`, a trailing `+`). Requiring both is what separates the class from
+"contains a digit" — 18 of the 91 live events contain a digit that decides nothing.
+
+**12 of 91 events = 13.2%**, confirming the issue's "the share is small, so the cost is bounded":
+
+| | |
+|---|---|
+| **Routed** | Shekel drops below 4.0 NIS/USD · Bank of Israel raises interest rate to 4.75% · Israeli unemployment reaches 4.5%+ · protest movement reaches 100K+ weekly · Nvidia market cap exceeds $1 trillion · Israeli VC investment drops 50%+ YoY · Israeli AI startup raises $100M+ round · Israeli tech layoffs exceed 15,000 · Israel drops out of top 5 startup ecosystems · Brent crude exceeds $100/barrel · Europe reduces Russian gas dependency below 15% · Global oil price drops below $70/barrel |
+| **Not routed, though they contain digits** | `$23B`/`$32B` Wiz deal sizes (the number names the deal, it does not decide it) · "resigns after 45 days" and "operational after 1 year" (durations) · "(6th government)" (ordinal) · "GPT-4", "DeepSeek R1" (names) · every bare year |
+
+`Gemini Ultra surpasses GPT-4 on benchmarks` is the case that proves the two halves are ANDed:
+it has a cue *and* a digit, and is still correctly excluded because `4` is not a magnitude.
+
+### Two things that had to be fixed for this to be measurable at all
+
+Both were latent, and both would have made the acceptance criteria silently unverifiable:
+
+1. **Per-row provenance wrote `settings.extractor_model`, not the model that ran.** The global
+   stops being the truth the moment any row is routed, so acceptance criterion 1 ("provenance
+   shows Haiku on threshold rows") could never have been checked. `PipelineResult` now carries
+   `extractor_model`, set on every return path including the failure ones.
+2. **`_negative_marker_is_current` compared a cached row against the global.** A Haiku-produced
+   marker judged against Nova is stale on *every* cycle, so the pipeline would re-extract it
+   forever — on the expensive model, and only on the rows the routing exists to protect. It now
+   takes the row's own effective model.
+
+### Known limitation, not fixed here
+
+The extraction cache key is `(article_hash, event_id, prompt_version)` — **the model is not in
+it.** A row already extracted under Nova is reused as-is; routing only affects fresh extractions
+and re-extractions. That is cost-preserving and deliberate. Forcing routed events to re-extract
+would mean a one-off Haiku pass over the existing threshold corpus, which is a spend decision,
+not an implementation detail. The same applies to the near-duplicate reuse path, which was
+already model-agnostic before this change.
+
+### Turning it on
+
+Batch config comes from `~/truthmachine/.env` on the Oracle box, which `infra/ec2_run.sh` sources
+into the environment. One line, then let the loop pick it up (it re-execs on change):
+
+```
+THRESHOLD_EXTRACTOR_MODEL=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+```
+
+Empty or unset = off, which is what merging retro#688 ships. That default is deliberate: the
+batch tree self-syncs to `origin/main` and re-execs every cycle, so a non-empty default would be
+a live, unmeasured cost change within ~5 minutes of merge.

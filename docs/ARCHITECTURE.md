@@ -43,6 +43,9 @@ retro/
 │   │   ├── # --- Extraction ---
 │   │   ├── gatekeeper.py        # LLM stage 1: topic-relevance filter (is article on-topic for event?)
 │   │   ├── extractor.py         # LLM stage 2: extract up to 5 structured predictions per article
+│   │   ├── archetype.py         # Is a number what decides this event? Batch extractor routing only
+│   │   │                        # (retro#688, off by default). NOT daatan's claim_archetype — the
+│   │   │                        # batch lane has none; see the module docstring.
 │   │   ├── runner.py            # Orchestrates gatekeeper → extractor → article-aggregator per article
 │   │   ├── aggregator.py        # Stage 2b (LLM, article-level): collapse high-spread predictions
 │   │   │                        # within one article. Stage 3 (no LLM, cell-level): collapse all

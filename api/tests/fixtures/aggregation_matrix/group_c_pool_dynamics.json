@@ -418,12 +418,12 @@
     },
     {
       "id": "C6",
-      "name": "an undated article cannot outweigh a dated one",
+      "name": "an undated article is dropped, not down-weighted",
       "traces": [
         "R3",
         "F13"
       ],
-      "notes": "Fixed by the R3 bundle (retro#366): recency_weight used to return a neutral 1.0 when the date was missing, so an article that never said when it was written beat an honest dated three-week-old report 50-to-1 and the pool read +0.784 toward it. An undated article now decays straight to recency_floor, which is where the dated 2026-01-01 article already sat: both weigh 0.012, they cancel, and the mean is 0.0. Missing metadata can no longer raise influence — the invariant below states that directly. MOVED by retro#397 (std 0.8568 -> 0.9): the undated row's recency is the floor (0.02) for VOTING, which is what this case is about and is unchanged — but the valves now read un-floored recency, where an undated row contributes exactly 0.0. That is the same R3 reading one step further: a row that will not say when it was written cannot testify that the pool is fresh, so it widens the interval instead of propping it up. The dated row still outweighs it, which is the invariant this case exists to hold.",
+      "notes": "Fixed by the R3 bundle (retro#366): recency_weight used to return a neutral 1.0 when the date was missing, so an article that never said when it was written beat an honest dated three-week-old report 50-to-1 and the pool read +0.784 toward it. An undated article now decays straight to recency_floor, which is where the dated 2026-01-01 article already sat: both weigh 0.012, they cancel, and the mean is 0.0. Missing metadata can no longer raise influence — the invariant below states that directly. MOVED by retro#397 (std 0.8568 -> 0.9): the undated row's recency is the floor (0.02) for VOTING, which is what this case is about and is unchanged — but the valves now read un-floored recency, where an undated row contributes exactly 0.0. That is the same R3 reading one step further: a row that will not say when it was written cannot testify that the pool is fresh, so it widens the interval instead of propping it up. The dated row still outweighs it, which is the invariant this case exists to hold. MOVED by retro#705: the undated row no longer reaches aggregation at all. `_process_article` now resolves the article date from the provider or the URL path and DROPS the article when neither yields one, instead of substituting today() — that substitution told the gatekeeper and extractor an undated article was current, and fed `_apply_relative_date_override` a calendar anchor it then walked \"on Friday\" against, handing enforce_settlement_event_date a fresh, plausible, wrong event_date. This case's invariant is unchanged in spirit and stronger in fact: missing metadata cannot raise influence, and now cannot buy any. The floor-decay behaviour the R3/F397 notes above describe still lives in `aggregation.recency_weight` as defence in depth for callers that reach it directly; it is simply no longer reachable from the live path.",
       "articles": [
         {
           "source": "alpha",
@@ -453,37 +453,20 @@
         }
       ],
       "invariants": [
-        "sources[0]['recency_weight'] == 0.02",
-        "sources[0]['weight'] <= sources[1]['weight']",
-        "abs(mean) < 1e-9"
+        "n == 1",
+        "len(sources) == 1 and sources[0]['source'] == 'bravo'",
+        "mean < 0"
       ],
       "expect": {
         "insufficient_data": false,
         "reason": null,
-        "articles_used": 2,
+        "articles_used": 1,
         "settled": false,
-        "mean": 0.0,
+        "mean": -0.8,
         "std": 0.9,
         "ci_low": -0.98,
-        "ci_high": 0.98,
+        "ci_high": 0.1,
         "sources": [
-          {
-            "source": "alpha",
-            "stance": 0.8,
-            "certainty": 0.8,
-            "credibility_weight": 1.0,
-            "evidence_class": "reporting",
-            "evidence_weight": 0.6,
-            "recency_weight": 0.02,
-            "relevance_score": 1.0,
-            "weight": 0.012,
-            "settled": null,
-            "settlement_event_date": null,
-            "fact_signal": null,
-            "is_occurrence": null,
-            "verified": null,
-            "author_lean": null
-          },
           {
             "source": "bravo",
             "stance": -0.8,

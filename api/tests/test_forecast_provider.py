@@ -109,6 +109,7 @@ class TestForecastResponseProvider:
                 url="https://example.com/a",
                 title="Detailed analysis of whether the measure will pass this session",
                 snippet="Analysts weigh in on the vote.",
+                published_date="2026-08-01",
                 text="The measure is widely expected to pass given the coalition's majority. " * 4,
             )],
         )
@@ -169,6 +170,7 @@ class TestForecastResponseProvider:
                 url="https://example.com/b",
                 title="Detailed analysis of whether the measure will pass this session",
                 snippet="Analysts weigh in on the vote.",
+                published_date="2026-08-01",
                 text="The measure is widely expected to pass given the coalition's majority. " * 4,
             )],
         )
@@ -202,6 +204,7 @@ class TestForecastResponseProvider:
                 url="https://example.com/c",
                 title="Detailed analysis of whether the measure will pass this session",
                 snippet="Analysts weigh in on the vote.",
+                published_date="2026-08-01",
                 text="The measure is widely expected to pass given the coalition's majority. " * 4,
             )],
         )
@@ -241,6 +244,7 @@ class TestForecastResponseProvider:
                 url="https://example.com/fs",
                 title="Detailed report on whether the two states are in direct conflict",
                 snippet="Strikes and troop movements reported.",
+                published_date="2026-08-01",
                 text="Overnight strikes and border mobilisation were reported by multiple outlets. " * 4,
             )],
         )

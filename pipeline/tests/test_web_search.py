@@ -1,5 +1,7 @@
 """Unit tests for web_search.py — no network calls, no API keys required.
 
+Enforced, not just asserted: see the retro#708 fixture below.
+
 Source-level tests (SQL text, OAuth scope, global declaration order) read the
 file as plain text and require no dependencies beyond the stdlib.
 
@@ -44,12 +46,70 @@ def _can_import() -> bool:
 needs_deps = pytest.mark.skipif(not _can_import(), reason="httpx / pipeline deps not installed")
 
 
+# ---------------------------------------------------------------------------
+# retro#708 — make this file's own first line true again
+#
+# The docstring above says "no network calls, no API keys required". It wasn't:
+# `_secret()` falls back to SSM whenever an env var is absent, and `_fresh_ws()`
+# re-imports the module 50-odd times, so a full local run made ~700 live SSM
+# lookups (6m43s wall clock) and came back holding this machine's real provider
+# keys. That is both the slowness and the bug — a resolvable NEWS_INDEXER_URL puts
+# news-indexer at the head of the chain, which is why the Google-CSE ordering test
+# failed here and passed in CI.
+#
+# Priming os.environ with a sentinel makes `_secret()` return before it ever
+# reaches boto3. The names come from the source text, which is how the rest of this
+# file already works (see "Source-level tests" above) and avoids needing an import
+# to find out what to set before importing. `_fresh_ws()` then blanks the module
+# attributes, so tests see credentials absent unless they set one themselves.
+# ---------------------------------------------------------------------------
+
+_SECRET_NAMES = tuple(sorted(set(re.findall(r'_secret\(\s*"([A-Z0-9_]+)"', _SOURCE))))
+assert _SECRET_NAMES, "no _secret() calls found — has web_search.py's secret loading changed?"
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _no_ssm_in_tests():
+    """Every provider secret resolves from the environment, so SSM is never called."""
+    import os
+    saved = {n: os.environ.get(n) for n in _SECRET_NAMES}
+    for n in _SECRET_NAMES:
+        os.environ[n] = "test-sentinel-not-a-real-key"
+    yield
+    for n, v in saved.items():
+        if v is None:
+            os.environ.pop(n, None)
+        else:
+            os.environ[n] = v
+
+
 def _fresh_ws():
-    """Import web_search with reset globals (clears sys.modules cache)."""
+    """Import web_search with reset globals, and with every provider credential BLANK.
+
+    Re-importing re-runs the module's `_secret()` calls, which read SSM — so on a
+    machine with real credentials the module comes back with live provider keys and
+    the chain under test is not the chain CI runs. That is not hypothetical: it made
+    `TestGoogleCseProvider::test_runs_before_serpapi_when_configured` fail locally and
+    pass in CI for months (retro#708), because news-indexer is step 0 of the chain and
+    only appears when `NEWS_INDEXER_URL` resolves.
+
+    So "reset globals" now means reset *all* of them. Every test that wants a provider
+    configured already sets its key explicitly (the news-indexer tests set
+    `ws.NEWS_INDEXER_URL` themselves), which is the only way a test should ever get one:
+    ambient credentials are the environment leaking into the assertion. Driven off
+    `ws._SECRET_GLOBALS` rather than a list here, so a provider added tomorrow is
+    neutralised without anyone remembering to come back.
+    """
     for key in list(sys.modules):
         if "tm.web_search" in key:
             del sys.modules[key]
     import tm.web_search as ws
+    assert set(ws._SECRET_GLOBALS) == set(_SECRET_NAMES), (
+        "the source-scraped secret names no longer match the module's own registry — "
+        "the SSM-free fixture would miss one, and it would start reaching the network"
+    )
+    for name in ws._SECRET_GLOBALS:
+        setattr(ws, name, None)
     return ws
 
 
@@ -1020,12 +1080,7 @@ class TestSecretLoadingLogsLoudly:
     def test_log_unresolved_secrets_silent_when_all_present(self, caplog):
         """No warning at all once every provider secret has resolved."""
         ws = _fresh_ws()
-        for name in (
-            "DATAFORSEO_API_KEY", "SERPAPI_API_KEY", "SERPER_API_KEY", "BRAVE_API_KEY",
-            "BRIGHTDATA_API_KEY", "NIMBLEWAY_API_KEY", "SCRAPINGBEE_API_KEY",
-            "NEWSDATA_API_KEY", "TAVILY_API_KEY", "GOOGLE_CSE_API_KEY", "GOOGLE_CSE_CX",
-            "GCP_SA_KEY_JSON",
-        ):
+        for name in ws._SECRET_GLOBALS:  # every one, from the registry — see retro#708
             setattr(ws, name, "present")
 
         caplog.clear()  # _fresh_ws() import may itself have logged real unresolved-secret warnings

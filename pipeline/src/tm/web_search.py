@@ -127,6 +127,18 @@ def get_last_search_provider_chain() -> list[str]:
     return list(getattr(_provider_local, "chain", []))
 
 
+# Every provider credential `_secret()` has ever been asked for, as
+# {global name: SSM parameter name}. Populated by _secret() itself rather than
+# hand-listed, because the two hand-maintained copies of this list had already
+# drifted: _log_unresolved_secrets() was missing both NEWS_INDEXER_* entries (its
+# own docstring said "13 separate log lines" while listing 12), so the one line
+# meant to make a silently-disabled provider visible was silent about two of them.
+# Tests read it to neutralise every credential at once — a provider whose key
+# happens to resolve on the developer's machine otherwise joins the chain and
+# changes the ordering under test (retro#708).
+_SECRET_GLOBALS: dict[str, str] = {}
+
+
 def _secret(env_var: str, ssm_name: str) -> Optional[str]:
     """Return env var if set, otherwise fetch from SSM Parameter Store.
 
@@ -135,8 +147,11 @@ def _secret(env_var: str, ssm_name: str) -> Optional[str]:
     unavailable, not a startup error) — but that means a renamed/missing parameter
     silently disables a provider with no other signal. Logged at WARNING, and
     summarized by _log_unresolved_secrets(), so it shows up without debug logging
-    enabled.
+    enabled. Also records the name in _SECRET_GLOBALS.
     """
+    # Registered on the way in, so the record is complete whether or not the
+    # lookup succeeds — an unresolvable secret is exactly the one worth naming.
+    _SECRET_GLOBALS[env_var] = ssm_name
     val = os.environ.get(env_var)
     if val:
         return val
@@ -180,22 +195,10 @@ def _log_unresolved_secrets() -> None:
 
     _secret()'s fail-open behavior means a missing key silently disables a
     provider with no other signal — this makes that visible in one line
-    instead of requiring someone to notice 13 separate per-key log lines.
+    instead of requiring someone to notice one separate per-key log line each.
     """
-    keys = {
-        "/retro/prod/secrets/DATAFORSEO_API_KEY": DATAFORSEO_API_KEY,
-        "/retro/prod/secrets/SERPAPI_API_KEY": SERPAPI_API_KEY,
-        "/retro/prod/secrets/SERPER_API_KEY": SERPER_API_KEY,
-        "/retro/prod/secrets/BRAVE_API_KEY": BRAVE_API_KEY,
-        "/retro/prod/secrets/BRIGHTDATA_API_KEY": BRIGHTDATA_API_KEY,
-        "/retro/prod/secrets/NIMBLEWAY_API_KEY": NIMBLEWAY_API_KEY,
-        "/retro/prod/secrets/SCRAPINGBEE_API_KEY": SCRAPINGBEE_API_KEY,
-        "/retro/prod/secrets/NEWSDATA_API_KEY": NEWSDATA_API_KEY,
-        "/retro/prod/secrets/TAVILY_API_KEY": TAVILY_API_KEY,
-        "/retro/prod/secrets/GOOGLE_CSE_API_KEY": GOOGLE_CSE_API_KEY,
-        "/retro/prod/secrets/GOOGLE_CSE_CX": GOOGLE_CSE_CX,
-        "/retro/prod/secrets/GCP_SA_KEY_JSON": GCP_SA_KEY_JSON,
-    }
+    # Read from the registry, not a second hand-written copy: the copy drifted.
+    keys = {ssm: globals().get(var) for var, ssm in _SECRET_GLOBALS.items()}
     missing = [name for name, value in keys.items() if not value]
     if missing:
         logger.warning(

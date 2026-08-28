@@ -111,6 +111,7 @@ from .aggregation import (
 from .cache import forecast_cache, search_cache
 from .antecedent import antecedent_keep_mask, filter_pool_by_antecedent
 from .clustering import cluster_text_for_claims, cluster_texts_with_stats
+from .confusion_flags import log_confusion_flags
 from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight
 from .models import (
@@ -2293,6 +2294,17 @@ async def _run_forecast_inner(
                 source_signals[idx].credibility_weight,
                 _settlement_vote_verified(source_signals[idx].claims_detail),
             )
+    # Confusion flags (retro#687): deterministic self-inconsistency counts per
+    # rater. Placed here, over the post-`enforce_*` signals, because ClaimDetail
+    # records POST-resolution values (its own docstring) — flagging the
+    # extractor's raw output would flag rows the resolution chain already fixed.
+    log_confusion_flags(
+        source_signals,
+        question_hash=_question_hash(req.question),
+        extractor_model=effective_extractor_model,
+        claim_strength_min=settings.confusion_flag_claim_strength_min,
+        prediction_id=req.prediction_id,
+    )
     agg = aggregate_pool(all_stances, all_weights, relevances, all_settled, **_pool_kwargs)
     if agg is not None:
         # Gate 0 (retro#545 slice iii, enforced 2026-08-26): per-row lines plus
@@ -2615,6 +2627,22 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
                 settled=False, insufficient_data=True, reason="no_matching_antecedent",
                 provenance=build_provenance(method="pool"),
             )
+    # Confusion flags (retro#687) on the recompute path too: these rows are the
+    # accumulated pool daatan#1636's second-family re-read samples FROM, so
+    # flagging only live extractions would miss the population the filter is for.
+    #
+    # `extractor_model` is "unknown" here and deliberately not
+    # `settings.extractor_model`: a stored row was produced by whatever model ran
+    # at ITS extraction time, and stamping today's model on it would silently
+    # attribute one rater's confusions to another — corrupting the per-rater
+    # grouping that is the whole point of the measurement. PoolSourceInput does
+    # not carry the model that wrote it; when it does, pass it through here.
+    log_confusion_flags(
+        sources,
+        question_hash=_question_hash(req.question or ""),
+        extractor_model="unknown",
+        claim_strength_min=settings.confusion_flag_claim_strength_min,
+    )
     stances: list[float] = []
     weights: list[float] = []
     valve_weights: list[float] = []

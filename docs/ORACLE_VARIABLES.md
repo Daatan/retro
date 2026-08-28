@@ -2197,3 +2197,101 @@ change only makes the stored row agree with the vote already cast. A moved case
 would have meant the two layers were not in fact enforcing the same rule. Verified
 before the fix on prod as well: the six 2026 forecasts the 2022 article "settled"
 are all `settled = f` and ACTIVE.
+
+## 2026-08-29 — deterministic confusion flags, log-only (retro#687, Oracle 1.5 P1 item 1.9)
+
+**Reporting only. Nothing here changes a number.** No LLM call, no network call, no
+weight change, no master switch — the rules are pure functions over fields the
+extractor has already emitted, so there is nothing to gate. Phase 3 is where flagged
+rows leave the credibility bill; this slice only counts them.
+
+The Phase 1 goal is to measure the extractor **as an observer**, and the honest
+instrument for that is between-rater disagreement — which needs a second extraction
+per row. These rules are the tier below it that costs nothing: each names an
+*internal* inconsistency, visible on a single row with nothing to compare it against.
+
+A flagged row is **not known to be wrong.** It is a row whose own fields disagree about
+how much confidence anyone should place in it, which is exactly the sampling filter
+daatan#1636's second-family re-read wants — and a cheap prior on where between-rater
+disagreement will turn up when Phase 1 pays for it.
+
+`api/src/forecast_api/confusion_flags.py`, called from both live paths after the
+estimate is computed: `_run_forecast_inner` (live `/forecast`) and `run_pool_aggregate`
+(recompute over a stored pool).
+
+| rule | fires when | status |
+|---|---|---|
+| `trapped_strong_claim` | `reader_confidence.trap` is set **and** `claim_strength >= 0.8` | **live** — retro#681 landed `reader_confidence` on 08-28 |
+| `stance_vs_quantity` | the claim's own number and its stance sign disagree about a threshold question | **inert** — both inputs missing, see below |
+| `unsure_settlement` | `settled is True` **and** `reader_confidence.level != "high"` | **live** |
+
+`trapped_strong_claim` is keyed on `trap`, not on `level`. A trap is a *named* class with
+an independent detector behind it (`negation` → retro#657, `numeric_comparison` → the
+PR#671 A/B cases), which is what makes a self-report checkable against something other
+than itself. `ReaderConfidence`'s own docstring notes a trap does not imply a low level;
+that asymmetry is the rule, not an objection to it. The two fields being separable at all
+is what retro#680 bought — before the split, one `certainty` field carried both the
+source's commitment and the reader's, and this rule could not have been written.
+
+`unsure_settlement` is the one place where "the reader could plausibly read this
+differently" is not an acceptable margin, since a settlement can pin a forecast outright.
+Phase 4 turns it into settlement's second bar (`level == "high"` required); here it counts.
+
+**`stance_vs_quantity` ships inert, by construction and not as a placeholder.** It needs
+a claim-side number (`quantity`, retro#683) and a question-side threshold (Phase 2's
+`question_quantity`); neither exists. The claim side is read via `getattr`, so the rule
+starts firing the moment #683 lands with no edit here. `ClaimDetail.quantitative_estimate`
+is **not** that number and must not be substituted for it — it is a probability in [0,1]
+cited *for the event*, so comparing it against a question threshold ($100, 61 seats) would
+compare two different quantities and flag on noise. The comparison direction is a
+parameter rather than inferred from question wording: guessing "exceeds" vs "falls below"
+is the kind of judgement this module exists to avoid making.
+
+**Null-safety is the design constraint, not a defensive habit.** Two of the three rules
+read a shadow field that a row extracted before retro#681 does not have, and rule 2's
+inputs do not exist at all — so "input missing" is the common case in production right
+now, not an edge case. A rule with a missing input yields **no flag**: never a default,
+never a guess. The module therefore activates rule by rule as the fields land.
+
+### The lines
+
+One `event=confusion_flag` per firing (`rule`, `url`, `claim_index`), plus one
+`event=confusion_flags` summary **per pool, always** — including pools where nothing
+fired. Same rationale as `event=evidence_clusters` (§2.4) and Gate-0: without a
+denominator a zero is unreadable, since "no confusions" and "the path never ran" write
+the same nothing. `rows` vs `evaluable` separates those two — a pool of pre-#364 legacy
+rows carrying no claim layer is *unevaluable*, not clean — and every rule reports its
+count even at zero, so a rule that never fires stays distinguishable from one that was
+never evaluated.
+
+Both lines carry `question` (`_question_hash`), `prediction_id` and `extractor_model`, so
+per-rule counts group **per rater** — which is the Phase 1 exit report's unit.
+
+**`run_pool_aggregate` logs `extractor_model=unknown`, deliberately.** `PoolSourceInput`
+carries no extractor model, and the rows in a stored pool were extracted at different
+times by whatever model was configured then. Stamping today's `settings.extractor_model`
+on them would silently attribute one rater's confusions to another and corrupt the
+per-rater grouping that is the entire point of the measurement. `unknown` is recoverable;
+a plausible wrong value is not.
+
+Flags are computed over **post-resolution** `claims_detail` — after the `enforce_*` chain
+and `resolve_stance_certainty()` — because that is what `ClaimDetail` records. A row
+demoted by an `enforce_*` guard is scored as it ended up, not as the extractor first wrote
+it.
+
+### Config (`api/src/forecast_api/config.py`)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `confusion_flag_claim_strength_min` | `0.8` | The "flat enough to be worth pairing with a trap" bar for `trapped_strong_claim`. Inclusive — `claim_strength` clusters on round values, and an exclusive bar would silently drop the modal one. |
+
+### Explicitly out of scope for this slice
+
+**Any weight or estimate change.** Phase 3 is where flagged rows are excluded from the
+credibility bill, and the direction is one-way — flagged rows come *out*, never get
+re-weighted up. Nothing here reads a flag back.
+
+**A rate threshold.** No "flag rate above X means the rater is bad" number is picked here.
+There is no logged distribution to calibrate one against yet; that is what these lines
+produce, and picking the threshold first would encode a guess as if it were measured —
+the same reason retro#609 stopped at logging raw values.

@@ -248,6 +248,19 @@ class ApiSettings(BaseSettings):
     cluster_downweight_exponent: float = 0.0
     cluster_jaccard_threshold: float = 0.40
     cluster_shingle_size: int = 3
+    # ── Confusion flags (retro#687, Oracle 1.5 Phase 1 item 1.9) ─────────────
+    # Reporting only — `confusion_flags.py` emits `event=confusion_flag` per
+    # flagged claim plus an always-on `event=confusion_flags` summary, and
+    # nothing reads either. No LLM call, no weight change; Phase 3 is where
+    # flagged rows leave the credibility bill.
+    #
+    # The bar for rule 1's "the source is flat" half. 0.8 is the issue's own
+    # number and is deliberately NOT tuned here: `claim_strength` is elicited,
+    # so its live distribution per rater is one of the things the Phase 1 exit
+    # report is meant to produce. Tune this from that report, not from a guess —
+    # the log line carries the rule id, so a re-run at a different bar is
+    # comparable against the same rows.
+    confusion_flag_claim_strength_min: float = 0.8
     # ── Per-source mass cap (retro#458, Phase 1) ────────────────────────────
     # Distinct from clustering above: clustering discounts near-duplicate TEXT
     # ("two outlets wrote up one wire report"); this caps the total pooled

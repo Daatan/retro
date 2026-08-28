@@ -1075,6 +1075,7 @@ async def _process_article_bounded(
     article_debugs: list[ArticleDebug],
     timeout_s: float,
     claim_deadline: str | None = None,
+    claim_created_at: str | None = None,
     claim_direction: str | None = None,
     prediction_id: str | None = None,
     resolution_criteria: str | None = None,
@@ -1098,6 +1099,7 @@ async def _process_article_bounded(
                 timings=timings,
                 article_debugs=article_debugs,
                 claim_deadline=claim_deadline,
+                claim_created_at=claim_created_at,
                 claim_direction=claim_direction,
                 prediction_id=prediction_id,
                 resolution_criteria=resolution_criteria,
@@ -1152,6 +1154,7 @@ async def _process_article(
     timings: list[dict],
     article_debugs: list[ArticleDebug],
     claim_deadline: str | None = None,
+    claim_created_at: str | None = None,
     claim_direction: str | None = None,
     prediction_id: str | None = None,
     resolution_criteria: str | None = None,
@@ -1379,8 +1382,12 @@ async def _process_article(
         # undated accomplished-fact language is historical background (the Netanyahu
         # false pin: the sitting coalition "settling" the NEXT election). Runs after
         # deadline arithmetic so settled-but-weak stances keep their sign correction.
+        # `claim_created_at` (retro#704): an outcome dated before the question was
+        # asked cannot be that question's outcome. aggregation.settlement_vote_validity
+        # has demoted these votes since 2026-08-16; passing it here stops the extractor
+        # writing a `settled` bit the pooling layer will discount anyway.
         extraction.predictions = enforce_settlement_event_date(
-            extraction.predictions, article_date,
+            extraction.predictions, article_date, claim_created_at,
         )
         # A fact that merely PRECEDES the event is capped at |0.3| by the prompt and
         # by 24.4% of live pool rows ignored it (retro#367). Magnitude is estimator
@@ -1958,6 +1965,7 @@ async def _run_forecast_inner(
                 article_debugs=article_debugs,
                 timeout_s=settings.per_article_timeout_seconds,
                 claim_deadline=req.claim_deadline,
+                claim_created_at=req.claim_created_at,
                 claim_direction=req.claim_direction,
                 prediction_id=req.prediction_id,
                 resolution_criteria=req.resolution_criteria,

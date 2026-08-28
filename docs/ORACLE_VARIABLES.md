@@ -2152,3 +2152,48 @@ special scoring risk beyond Oracle's ordinary accuracy.
 prerequisite for *promoting* settled-grounding, not for shipping the shadow log. Both
 retro#601 (premise_verifier's own review) and this feature's equivalent follow-up are
 still open; the correlation check happens once both have real accumulated volume.
+
+## 2026-08-28 — a settlement cannot predate the question (retro#704)
+
+`aggregation.settlement_vote_validity` has bounded settlement votes to the window
+after the claim was created since 2026-08-16: an event dated before
+`claim_created_at` is *"a dated fact from before the claim existed: the
+2021/2022-article class"*, and its vote is discarded with
+`reason="event_before_claim_window"`. That check was applied on every archetype and
+it works.
+
+What it never did was reach the row. `tm.extractor.enforce_settlement_event_date` —
+the extraction-time guard, running one layer up — knew only `article_date`, so it
+kept writing `settled=true` on exactly the rows the pooling layer would then throw
+away. **144 of the 215 adjacent settlements in the retro#691 labelled set are of
+that shape.** The founding case is a China Daily piece on the 2022 Israeli election,
+correctly dated `2022-11-04` with a correct `event_date` of `2022-11-01`, which the
+extractor marked as settling six *2026* forecasts.
+
+The stored bit is not cosmetic. It is read by the settlement-pin ledger, by
+`logs.sh settlement`, by every backtest that counts settlements, and by anything
+downstream that trusts a boolean rather than re-deriving the vote — so the two
+layers disagreeing about the same rule is a reporting defect even where the estimate
+is safe.
+
+`enforce_settlement_event_date` now takes `claim_created_at` and demotes on
+`event_date < claim_created_at`, emitting the **same** `event_before_claim_window`
+reason string aggregation uses: one grep should find both layers, and the two must
+never be allowed to drift apart on the rule. Comparison is at date granularity and
+strictly `<`, so an event on the creation day still settles; an absent or
+unparseable value fails open, matching aggregation. `forecaster` threads
+`req.claim_created_at` through `_process_article_bounded` → `_process_article` to
+the enforcement call. The batch path (`tm.runner`) deliberately passes two
+arguments: a retroactive event has no claim and therefore no window, so failing open
+there is the intended behaviour, not an oversight.
+
+Demotion clears the settlement bit only — stance, claim strength and the rest of the
+row survive, and the article still votes as ordinary evidence. That is what makes
+this safe to apply at extraction time.
+
+R8 protocol: **no matrix case moved, and that is the acceptance test.** The bound is
+already applied downstream, so every affected vote is already being discarded; this
+change only makes the stored row agree with the vote already cast. A moved case
+would have meant the two layers were not in fact enforcing the same rule. Verified
+before the fix on prod as well: the six 2026 forecasts the 2022 article "settled"
+are all `settled = f` and ACTIVE.

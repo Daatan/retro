@@ -93,6 +93,9 @@ def _wire(monkeypatch, articles, certainty: float = 0.8, evidence_class=None):
         claim_deadline=None, claim_direction=None, prediction_id=None,
         resolution_criteria=None, usage_events=None,
         is_single_article=False, cache_coordinator=None, extractor_model=None,
+        # **_ so a new pass-through kwarg on the real signature does not break a
+        # stub that never cared about it (retro#704 added claim_created_at).
+        **_,
     ):
         rel, stance = by_url[result.url]
         timings.append({"url": result.url, "outcome": "ok"})

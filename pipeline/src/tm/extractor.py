@@ -1224,6 +1224,7 @@ def enforce_deadline_arithmetic(
 def enforce_settlement_event_date(
     predictions: list[PredictionExtraction],
     article_date: Optional[str],
+    claim_created_at: Optional[str] = None,
 ) -> list[PredictionExtraction]:
     """A settlement vote must be anchored to a date the outcome occurred.
 
@@ -1254,6 +1255,24 @@ def enforce_settlement_event_date(
       - ``event_date`` (either sign) after the article's own date: the article
         "reports" an outcome that hadn't happened yet when it was written — a
         scheduled event, not an accomplished fact — demote.
+      - ``event_date`` (either sign) BEFORE ``claim_created_at``: the outcome is
+        dated to before the question was asked, so it cannot be that question's
+        outcome — nobody asks whether something will happen by 2026 about an
+        event that happened in 2022 — demote.
+
+    That last check is not new policy. ``aggregation.settlement_vote_validity``
+    has applied it on every archetype since 2026-08-16, under the same reason
+    string (``event_before_claim_window``), and its docstring names this exact
+    class: "a dated fact from before the claim existed: the 2021/2022-article
+    class". What was new (retro#704) is that the rule lived ONLY at vote time, so
+    the extractor kept writing ``settled=true`` on rows the pooling layer then
+    silently discounted — 144 of the 215 adjacent settlements in the retro#691
+    labelled set are of exactly this shape. Applying it here changes no pooled
+    estimate; it makes the STORED bit agree with the vote already being cast.
+
+    Strict ``<`` at date granularity, matching aggregation, so an event on the
+    claim's creation day stays valid. Fails open on an absent or unparseable
+    ``claim_created_at`` — also matching aggregation.
 
     Unlike :func:`enforce_deadline_arithmetic` this deliberately fails CLOSED on
     a positive settlement's missing date. The cost of a wrong demotion is a
@@ -1263,6 +1282,7 @@ def enforce_settlement_event_date(
     Missing/unparseable ``article_date`` skips only the future-dated check.
     """
     article = _parse_iso_date(article_date)
+    created = _parse_iso_date(claim_created_at)
     for p in predictions:
         if not p.settled:
             continue
@@ -1271,12 +1291,17 @@ def enforce_settlement_event_date(
             reason = "missing_event_date"
         elif event_date is not None and article is not None and event_date > article:
             reason = "event_date_after_article"
+        elif event_date is not None and created is not None and event_date < created:
+            # Same reason string aggregation uses, deliberately: one grep should
+            # find both layers, and the two must never disagree about the rule.
+            reason = "event_before_claim_window"
         else:
             continue
         logger.warning(
             "event=settlement_demoted reason=%s event_date=%s article_date=%s "
-            "stance=%+.2f certainty=%.2f claim=%r",
-            reason, p.event_date, article_date, p.stance, p.claim_strength, p.claim[:120],
+            "claim_created_at=%s stance=%+.2f certainty=%.2f claim=%r",
+            reason, p.event_date, article_date, claim_created_at or "",
+            p.stance, p.claim_strength, p.claim[:120],
         )
         p.settled = False
 

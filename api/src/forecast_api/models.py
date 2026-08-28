@@ -338,7 +338,7 @@ class SourceSignal(BaseModel):
     certainty: float = Field(description="Author certainty [0, 1]")
     credibility_weight: float = Field(description="Source trust from leaderboard [0, ∞], 1.0 = neutral")
     claims: list[str] = Field(description="Extracted claim summaries")
-    published_date: Optional[str] = Field(default=None, description="Article publish date (YYYY-MM-DD) if known; drives recency weighting")
+    published_date: Optional[str] = Field(default=None, description="Article publish date (YYYY-MM-DD). Optional only when the URL path carries the date (/2024/03/15/) — an article that cannot be dated either way is DROPPED, not dated to today (retro#705). Drives recency weighting.")
     recency_weight: Optional[float] = Field(default=None, description="Time-decay weight applied to this source in aggregation [recency_floor, 1.0]")
     relevance_score: Optional[float] = Field(default=None, description="Graded topic relevance [0,1]; its square multiplies this source's aggregation weight")
     settled: Optional[bool] = Field(default=None, description="True when this source reports the event's outcome as an accomplished fact (settlement claim), not a prediction")
@@ -392,7 +392,7 @@ class TokenUsage(BaseModel):
 
 class ArticleDebug(BaseModel):
     url: str
-    outcome: str = Field(description="ok | gate_rejected | no_predictions | fetch_error | gate_error | extract_error | empty_text")
+    outcome: str = Field(description="ok | gate_rejected | no_predictions | fetch_error | gate_error | extract_error | empty_text | no_date")
     gate_passed: Optional[bool] = None
     gate_reason: Optional[str] = None
     gate_prediction_count_estimate: Optional[int] = None

@@ -53,6 +53,9 @@ from tm.web_search import NEWS_INDEXER_API_KEY, NEWS_INDEXER_URL, SearchResult, 
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once_with_usage
 from tm.net_guard import UnsafeURLError, safe_get
+# Same URL-path date parser the batch ingest uses. Sharing it keeps the two paths'
+# idea of "can we date this article" identical rather than growing a second dialect.
+from tm.web_search_ingest import _date_from_url
 
 # gatekeeper.py/extractor.py each split their PROMPT into a cacheable PROMPT_PREFIX
 # (fixed instructions) + PROMPT_SUFFIX (article/variable fields) so llm.py can mark
@@ -947,6 +950,27 @@ def _fetch_archived_text(url: str) -> str | None:
         return None
 
 
+def _resolve_article_date(result: SearchResult) -> str | None:
+    """The article's publication date, or None if we genuinely do not know it.
+
+    Provider date first, then the date embedded in the URL path (``/2024/03/15/``).
+    **No fallback to today** — that substitution (retro#705) told the gatekeeper and
+    the extractor that an undated article was current, and `article_date` is not a
+    display field: it is what ``_apply_relative_date_override`` walks the calendar
+    against, so "on Friday" in an undated 2019 piece resolved into the last week and
+    handed ``enforce_settlement_event_date`` a fresh, plausible, wrong date. It also
+    made that guard's future-dated check vacuous, since nothing can be after today.
+
+    HTML-metadata recovery (``tm.web_search_ingest._date_from_html``) is deliberately
+    NOT added here: it needs the parsed soup, which would mean changing
+    :func:`_fetch_article_text`'s return type, and the measured footprint does not
+    justify that — 20 of 13,196 pool rows have no date at all, and none of them ever
+    settled. Add it if the ``no_date`` skip counter says otherwise.
+    """
+    provider = (result.published_date or "").strip()[:10]
+    return provider or _date_from_url(result.url)
+
+
 def _fetch_article_text(url: str, fallback: str, *, try_archived: bool = True) -> str:
     """Fetch full article body with trafilatura; return fallback on error.
 
@@ -1165,6 +1189,21 @@ async def _process_article(
     if not fallback or len(fallback) < min_fallback_chars:
         return None
 
+    # An article we cannot date cannot be recency-weighted, cannot have its relative
+    # expressions resolved, and cannot be checked for future-dating — so it has no
+    # business voting, least of all settling (retro#705). Log it and drop it rather
+    # than inventing a date. Checked before the fetch: a dropped article should not
+    # cost a request and a per-host throttle slot. Same rule the batch path has always
+    # applied (`web_search_ingest.py`'s `skipped_no_date`).
+    article_date = _resolve_article_date(result)
+    if not article_date:
+        logger.info(
+            "event=article_outcome outcome=no_date url=%s source=%s prediction_id=%s",
+            result.url, result.source or "", prediction_id or "",
+        )
+        article_debugs.append(ArticleDebug(url=result.url, outcome="no_date"))
+        return None
+
     # Use caller-supplied text if available; otherwise fetch via trafilatura.
     fetch_start = time.perf_counter()
     if result._prefetched_text:
@@ -1202,7 +1241,6 @@ async def _process_article(
     text = _truncate_article(text, max_article_chars)
 
     source_name = result.source or _source_id_from_url(result.url)
-    article_date = result.published_date or datetime.now().strftime("%Y-%m-%d")
 
     gate_start = time.perf_counter()
     supplied = _supplied_verdict(result) if settings.reuse_supplied_relevance else None
@@ -2041,7 +2079,11 @@ async def _run_forecast_inner(
         all_settled.append(reduction.settled)
         all_settlement_dates.append(reduction.settlement_event_date)
         # Layer B: down-weight older articles via exponential recency decay.
-        article_date = result.published_date or None
+        # Same resolution the extractor was given (retro#705). Leaving this as
+        # `result.published_date or None` was how the two derivations drifted in
+        # the first place; a URL-path date good enough to anchor the extractor's
+        # calendar arithmetic is good enough to decay against and to store.
+        article_date = _resolve_article_date(result)
         rweight = recency_weight(
             article_date,
             ref_date,

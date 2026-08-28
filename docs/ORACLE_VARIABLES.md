@@ -1618,6 +1618,41 @@ so F14 is purely defensive on today's traffic. The blast radius is small in ever
 direction — these are guards against the shapes that are rare precisely because
 they are pathological.
 
+### An article we cannot date is dropped (retro#705)
+
+`forecaster` used to derive `article_date` twice in the same flow: the pooling
+layer took `result.published_date or None` and let `recency_weight` fail open,
+while the extraction layer took `result.published_date or datetime.now()`. An
+undated article was therefore presented to the gatekeeper and the extractor as
+**today's news**.
+
+That value is not a display field. It is the calendar anchor
+`_apply_relative_date_override` walks "on Friday" against, so an undated old piece
+could hand `enforce_settlement_event_date` a fresh, plausible, wrong `event_date` —
+the one thing a positive settlement requires. It also made that guard's
+future-dated check vacuous, since nothing can be after today. And it contradicted
+the extractor prompt one level up, which says *"Never substitute the article's own
+publication date for an event the article does not actually date."*
+
+Both call sites now go through `_resolve_article_date`: provider date, then the
+date in the URL path (`/2024/03/15/`), then **drop the article** — logged as
+`event=article_outcome outcome=no_date` with an `ArticleDebug(outcome="no_date")`,
+checked before the fetch so a dropped article costs no request and no per-host
+throttle slot. This is the rule the batch path has always applied
+(`web_search_ingest.py`'s `skipped_no_date`); the live path now matches it.
+
+Blast radius, measured on prod before the change (13,196 COMPLETE evidence-pool
+rows): **20 rows (0.15%)** carry no `published_date`, and **0 of 618 settled rows**
+do. Latent, not live — filed and fixed as the guard it is. `ArticleInput`'s
+`published_date` is consequently optional only for callers whose URLs carry the
+date in the path.
+
+R8 protocol: one matrix case moved, declared — **C6**, which is no longer about an
+undated article tying a stale dated one at the floor: the undated row does not
+reach aggregation at all, so the pool is the dated row alone. The floor-decay
+behaviour stays in `aggregation.recency_weight` as defence in depth for callers
+that reach it directly.
+
 R8 protocol: four matrix cases moved, all declared — **C6** (F13, the undated
 article now ties the stale dated one at the floor instead of beating it 50-to-1),
 **D2** and **A14** (F10, the capped fallback), **B16** (F14, now abstains). Their

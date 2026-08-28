@@ -56,6 +56,11 @@ _VERIFIER = re.compile(
 #: pricing of the same question, and pairing across it would invent agreement.
 PAIR_WINDOW_SECONDS = 120
 
+#: Below this, the percentages above are arithmetic on a handful of rows, not a
+#: measurement — and a report that prints "reproduces 0% of blocks" off n=1
+#: without saying so is how a shadow rollout gets abandoned on noise.
+MIN_DECISIONS_TO_READ = 20
+
 
 def _seconds(ts: str) -> int:
     """Coarse clock for the pairing window. Same-day arithmetic is enough: the
@@ -180,7 +185,8 @@ def report(rows: list[dict], raw_shadow: int, raw_verdict: int, shadow_errors: i
         fp = sum(1 for r in live if r["block"] and r["verdict"]["settles"])
         fn = sum(1 for r in live if not r["block"] and not r["verdict"]["settles"])
         tn = sum(1 for r in live if not r["block"] and r["verdict"]["settles"])
-        p(f"\nAGREEMENT on the {len(live)} decisions where both actually decided")
+        noun = "decision" if len(live) == 1 else "decisions"
+        p(f"\nAGREEMENT on the {len(live)} {noun} where both actually decided")
         p(f"{'':<22}{'verifier BLOCKED':>18}{'verifier allowed':>18}")
         p(f"{'gates would block':<22}{tp:>18}{fp:>18}")
         p(f"{'gates would allow':<22}{fn:>18}{tn:>18}")
@@ -189,6 +195,10 @@ def report(rows: list[dict], raw_shadow: int, raw_verdict: int, shadow_errors: i
         if tp + fn:
             p(f"  reproduces           {100 * tp / (tp + fn):.0f}% of the verifier's blocks")
         p(f"  cost                 {fp} pins the verifier allowed would be blocked")
+        if len(live) < MIN_DECISIONS_TO_READ:
+            p(f"\n  !! {len(live)} {noun} is too few to read a rate off. The gate set was")
+            p(f"     chosen against 387 labelled pairs; wait for {MIN_DECISIONS_TO_READ}+ here")
+            p("     before treating the percentages above as a measurement.")
         p("\n  Neither side is ground truth: the verifier is one fail-open LLM call,")
         p("  and the gates carry a regex proxy for the claim side. Disagreement is a")
         p("  question to go read, not a defect on either side.")

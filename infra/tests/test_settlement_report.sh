@@ -82,6 +82,17 @@ check "agreement is reported"                 'agreement +50%'          "$OUT"
 check "cost in lost pins is named"            'cost +1 pins'            "$OUT"
 check "reasons are aggregated"                'settled_without_facet'   "$OUT"
 
+echo "== a small sample is labelled as one =="
+# Verified against real traffic: the first live pairing after PR #698 printed
+# "reproduces 0% of the verifier's blocks" off a single decision. Unlabelled,
+# that number reads as a verdict on the gates instead of as noise.
+: > "$TMP/log.txt"
+shadow   "2026-08-28 12:10:00" False 6 0 3 "{}" abcabcabcabc >> "$TMP/log.txt"
+verifier "2026-08-28 12:10:01" False False True 6 abcabcabcabc >> "$TMP/log.txt"
+OUT="$(run)"
+check "singular reads correctly"  'AGREEMENT on the 1 decision where' "$OUT"
+check "small sample is flagged"   'too few to read a rate off' "$OUT"
+
 echo "== an errored verifier is unchecked, not allowed =="
 : > "$TMP/log.txt"
 shadow   "2026-08-28 13:00:00" True 3 2 1 "{'settled_without_facet': 2}" 555555555555 >> "$TMP/log.txt"

@@ -344,6 +344,42 @@ class TestModelSupportsPromptCache:
         assert llm._model_supports_prompt_cache(model) is False
 
 
+class TestCompleteStructuredTemperature:
+    """`temperature` is optional on the wire, not just in the signature.
+
+    Bedrock's newest Anthropic models reject the parameter outright
+    ("`temperature` is deprecated for this model"), which fails 100% of calls
+    to them — the same shape of breakage retro#650 hit with cache_control.
+    Passing None must omit the key entirely; every existing caller passes
+    nothing and must keep getting 0."""
+
+    @staticmethod
+    def _patch_client(monkeypatch):
+        captured = {}
+        async def fake_create(**kwargs):
+            captured.update(kwargs)
+            return ("OUT", SimpleNamespace(usage=None))
+        monkeypatch.setattr(llm.client.chat.completions, "create_with_completion", fake_create)
+        return captured
+
+    async def test_default_still_sends_zero(self, monkeypatch):
+        captured = self._patch_client(monkeypatch)
+        await llm.complete_structured("bedrock/x", dict, "P", max_tokens=10, timeout=5)
+        assert captured["temperature"] == 0
+
+    async def test_explicit_value_is_forwarded(self, monkeypatch):
+        captured = self._patch_client(monkeypatch)
+        await llm.complete_structured("bedrock/x", dict, "P", max_tokens=10, timeout=5,
+                                      temperature=0.7)
+        assert captured["temperature"] == 0.7
+
+    async def test_none_omits_the_parameter_entirely(self, monkeypatch):
+        captured = self._patch_client(monkeypatch)
+        await llm.complete_structured("bedrock/eu.anthropic.claude-sonnet-5", dict, "P",
+                                      max_tokens=10, timeout=5, temperature=None)
+        assert "temperature" not in captured
+
+
 class TestCompleteStructuredPromptCaching:
     """cached_prefix wiring in complete_structured itself — the content shape sent
     to the underlying instructor/litellm client, not just that callers pass the

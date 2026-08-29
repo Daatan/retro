@@ -72,3 +72,17 @@ class TestBuildComment:
     def test_missing_reason_falls_back(self):
         comment = build_comment({}, probability=0.5)
         assert "Forecast from Daatan Oracle." in comment
+
+
+def test_required_env_rejects_unset_and_blank(monkeypatch):
+    # An unset GitHub secret arrives as "" — must name the variable, not fail later in httpx.
+    from sync import _required_env
+
+    monkeypatch.delenv("METACULUS_API_KEY", raising=False)
+    with pytest.raises(SystemExit, match="METACULUS_API_KEY"):
+        _required_env("METACULUS_API_KEY")
+    monkeypatch.setenv("METACULUS_API_KEY", "   ")
+    with pytest.raises(SystemExit, match="METACULUS_API_KEY"):
+        _required_env("METACULUS_API_KEY")
+    monkeypatch.setenv("METACULUS_API_KEY", " tok ")
+    assert _required_env("METACULUS_API_KEY") == "tok"

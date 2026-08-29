@@ -1,0 +1,74 @@
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from sync import build_comment, needs_forecast, question_text
+
+NOW = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
+STALE_AFTER = timedelta(hours=24)
+
+
+class TestNeedsForecast:
+    def test_never_forecasted(self):
+        assert needs_forecast({"my_forecasts": {"latest": None}}, STALE_AFTER, NOW) is True
+
+    def test_missing_my_forecasts_key(self):
+        assert needs_forecast({}, STALE_AFTER, NOW) is True
+
+    def test_recent_forecast_is_not_stale(self):
+        recent = (NOW - timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+        question = {"my_forecasts": {"latest": {"start_time": recent}}}
+        assert needs_forecast(question, STALE_AFTER, NOW) is False
+
+    def test_old_forecast_is_stale(self):
+        old = (NOW - timedelta(hours=48)).isoformat().replace("+00:00", "Z")
+        question = {"my_forecasts": {"latest": {"start_time": old}}}
+        assert needs_forecast(question, STALE_AFTER, NOW) is True
+
+    def test_latest_present_but_no_timestamp_field(self):
+        question = {"my_forecasts": {"latest": {}}}
+        assert needs_forecast(question, STALE_AFTER, NOW) is True
+
+
+class TestQuestionText:
+    def test_joins_description_criteria_and_fine_print(self):
+        post = {"title": "Will X happen?"}
+        question = {
+            "description": "Background.",
+            "resolution_criteria": "Resolves YES if X.",
+            "fine_print": "Edge cases here.",
+        }
+        title, criteria = question_text(post, question)
+        assert title == "Will X happen?"
+        assert criteria == "Background.\n\nResolves YES if X.\n\nEdge cases here."
+
+    def test_no_criteria_fields_yields_none(self):
+        title, criteria = question_text({"title": "Q"}, {})
+        assert title == "Q"
+        assert criteria is None
+
+    def test_falls_back_to_question_title_when_post_title_missing(self):
+        title, _ = question_text({}, {"title": "Fallback title"})
+        assert title == "Fallback title"
+
+
+class TestBuildComment:
+    def test_includes_probability_and_sources(self):
+        result = {
+            "reason": "Evidence favors YES.",
+            "mean": 0.4,
+            "articles_used": 7,
+            "sources": ["a.com", "b.com", "c.com", "d.com", "e.com", "f.com"],
+        }
+        comment = build_comment(result, probability=0.7)
+        assert "Evidence favors YES." in comment
+        assert "p=0.70" in comment
+        assert "mean stance 0.400" in comment
+        assert "7 articles" in comment
+        # Only the first 5 sources are included.
+        assert "f.com" not in comment
+        assert "e.com" in comment
+
+    def test_missing_reason_falls_back(self):
+        comment = build_comment({}, probability=0.5)
+        assert "Forecast from Daatan Oracle." in comment

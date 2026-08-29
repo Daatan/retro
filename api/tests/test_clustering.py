@@ -190,7 +190,7 @@ class TestClusterLogIsUnconditional:
 
         caplog.clear()
         with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
-            _cluster_ids(texts, "q-hash")
+            _cluster_ids(texts, [None] * len(texts), "q-hash")
         lines = [r.getMessage() for r in caplog.records if "evidence_clusters" in r.getMessage()]
         assert len(lines) == 1, f"expected exactly one line, got {lines}"
         return lines[0]
@@ -228,9 +228,11 @@ class TestClusterLogIsUnconditional:
     def test_a_short_pool_still_returns_none_so_the_discount_path_is_untouched(self):
         from forecast_api.forecaster import _cluster_ids
 
-        assert _cluster_ids(["only one row"], "q") is None
-        assert _cluster_ids([], "q") is None
-        assert _cluster_ids(["alpha beta gamma", "zeta eta theta"], "q") == (0, 1)
+        assert _cluster_ids(["only one row"], [None], "q") is None
+        assert _cluster_ids([], [], "q") is None
+        assert _cluster_ids(
+            ["alpha beta gamma", "zeta eta theta"], [None, None], "q"
+        ) == (0, 1)
 
 
 class TestClusterTextForClaims:

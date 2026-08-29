@@ -122,9 +122,23 @@ def run(
     return processed
 
 
+def _required_env(name: str) -> str:
+    """Fail with the variable's *name* when it is unset or blank.
+
+    An unset GitHub secret is passed to the job as an empty string, not a
+    missing variable — so ``os.environ[name]`` succeeds and the failure surfaces
+    much later as httpx's ``Illegal header value b'Token '`` (retro#727 dry run,
+    2026-08-29). Say which secret is missing instead.
+    """
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise SystemExit(f"{name} is unset or empty — check the workflow's repo secrets")
+    return value
+
+
 def main() -> None:
-    metaculus_token = os.environ["METACULUS_API_KEY"]
-    oracle_api_key = os.environ["ORACLE_API_KEY"]
+    metaculus_token = _required_env("METACULUS_API_KEY")
+    oracle_api_key = _required_env("ORACLE_API_KEY")
     tournament = os.environ.get("METACULUS_TOURNAMENT", "bot-testing-area")
     oracle_base_url = os.environ.get("ORACLE_BASE_URL", "https://oracle.daatan.com")
     max_questions = int(os.environ.get("MAX_QUESTIONS_PER_RUN", "5"))

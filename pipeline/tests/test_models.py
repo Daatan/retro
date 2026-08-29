@@ -346,3 +346,172 @@ class TestReaderConfidence:
         )
         assert pred.claim_strength == 1.0
         assert pred.reader_confidence.level == "low"
+
+
+class TestReportKindAndConsensusView:
+    """`report_kind` (per claim) and `consensus_view` (per article) — the two
+    fields unparked from retro#673 in retro#686 (Oracle 1.5 Phase 1).
+
+    Shadow: populated, read by nothing. `report_kind` is persisted for free
+    (daatan's `claims_detail` is a JSON column); `consensus_view` is per-source
+    and has no column yet, so for now it lives only on the `/forecast` response
+    and in the A/B harness's article-level fill. Both are flat enums
+    rather than scalars on purpose — #673's own caveat is that a graded field
+    is a fresh site for the #394 pathology, where a scalar collapses onto its
+    band labels. What these tests pin is the same thing #681's do: that an
+    omitted value, a filled value and a garbled one stay three distinguishable
+    states, because the fill rate is the entire product of a shadow field.
+    """
+
+    @staticmethod
+    def _pred(**over):
+        return PredictionExtraction(**{
+            "quote": "q", "claim": "c", "stance": 0.1, "claim_strength": 0.65, **over
+        })
+
+    # --- report_kind ---
+
+    def test_both_members_land(self):
+        assert self._pred(report_kind="level").report_kind == "level"
+        assert self._pred(report_kind="change").report_kind == "change"
+
+    def test_an_absent_field_stays_absent(self):
+        """Every row extracted before v8 has no report_kind, and so does every
+        row where the model judged that neither member fits — the prompt asks
+        it to omit rather than guess. Both must read as None, not as a default
+        member: a defaulted 'level' would be indistinguishable from a real one
+        and would quietly inflate exactly the statistic this field is for."""
+        assert self._pred().report_kind is None
+
+    def test_it_is_independent_of_stance(self):
+        """The distinction the field exists to draw. 'unemployment is at 7%'
+        and 'unemployment rose to 7%' carry the same stance toward a
+        'above 6%?' question and are not the same evidence — a level restates
+        a standing situation a prior article may already have supplied, a
+        change is new movement. Nothing about the stance sign predicts which."""
+        rising = self._pred(stance=0.8, report_kind="change")
+        standing = self._pred(stance=0.8, report_kind="level")
+        assert rising.stance == standing.stance == 0.8
+        assert rising.report_kind != standing.report_kind
+
+    @pytest.mark.parametrize("bad", ["levels", "Level", "change_level", "", 1, ["level"]])
+    def test_a_garbled_value_is_dropped_and_the_prediction_survives(self, bad, caplog):
+        """Strict field, tolerant boundary — the retro#681 trade, applied to a
+        flat enum. `complete_structured` runs instructor with max_retries=1, so
+        a model that keeps answering 'levels' would raise out of
+        ExtractionOutput and drop the whole ARTICLE from the forecast. Paying a
+        real article for a field nothing reads is the wrong trade, and a brand
+        new enum name is precisely where a model gets it wrong.
+
+        Note `Level` is in this list: the drop is case-SENSITIVE. A silent
+        .lower() would be a second, undocumented way to answer, and the fill
+        rate could no longer say whether the model returned the name it was
+        given.
+        """
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="tm.models"):
+            pred = self._pred(report_kind=bad)
+        assert pred.report_kind is None
+        assert pred.claim_strength == 0.65, "the rest of the prediction must be untouched"
+        assert "event=report_kind_malformed" in caplog.text, (
+            "a silent drop would make 'answered badly' look like 'did not answer', "
+            "which is the one distinction the fill rate exists to draw"
+        )
+
+    def test_it_survives_a_dump_validate_round_trip(self):
+        """daatan persists this inside claims_detail verbatim (daatan#1235)."""
+        pred = self._pred(report_kind="change")
+        assert PredictionExtraction.model_validate(pred.model_dump()).report_kind == "change"
+
+    def test_the_llm_schema_offers_exactly_two_members(self):
+        """The prompt names two; the schema must accept exactly those two. A
+        third member added here without the prose block — or vice versa — is
+        how a field starts being asked for something it cannot express."""
+        prop = PredictionExtraction.model_json_schema()["properties"]["report_kind"]
+        names = {v for branch in prop["anyOf"] for v in branch.get("enum", [])}
+        assert names == {"level", "change"}
+
+    def test_it_is_appended_after_every_pre_existing_field(self):
+        """retro#680 measured that perturbing the MIDDLE of this schema costs
+        Nova Lite the whole fact_signal block (fill 42% -> 25%). Both new
+        fields go at the tail so every existing field keeps its neighbours and
+        its position in the text the model reads."""
+        props = list(PredictionExtraction.model_json_schema()["properties"])
+        assert props[-1] == "report_kind"
+        assert props.index("reader_confidence") < props.index("report_kind")
+
+    # --- consensus_view ---
+
+    def test_every_member_lands(self):
+        for v in ("expects_yes", "expects_no", "divided"):
+            assert ExtractionOutput(predictions=[], consensus_view=v).consensus_view == v
+
+    def test_an_absent_consensus_view_stays_absent(self):
+        """Most articles never say what anyone else expects. Null is the
+        ordinary answer here, not a failure — a default would make the field
+        look filled on exactly the articles that carry no consensus at all."""
+        assert ExtractionOutput(predictions=[]).consensus_view is None
+
+    def test_it_is_independent_of_author_lean(self):
+        """The field's entire reason for existing, and its kill criterion. An
+        article whose byline expects the event while reporting that everyone
+        else does not is the interesting case — if consensus_view could only
+        agree with author_lean it would be a copy of a field we already have."""
+        out = ExtractionOutput(predictions=[], author_lean=0.8, consensus_view="expects_no")
+        assert out.author_lean == 0.8
+        assert out.consensus_view == "expects_no"
+
+    @pytest.mark.parametrize("bad", ["expects yes", "yes", "EXPECTS_YES", "split", 0, {"v": "divided"}])
+    def test_a_garbled_consensus_view_is_dropped_and_the_article_survives(self, bad, caplog):
+        """Same trade as report_kind, one level up — and it matters more here,
+        because this value rides on the ExtractionOutput itself: a raise takes
+        every prediction in the article with it, not one field of one claim."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="tm.models"):
+            out = ExtractionOutput.model_validate({
+                "predictions": [], "author_lean": 0.4, "consensus_view": bad,
+            })
+        assert out.consensus_view is None
+        assert out.author_lean == 0.4, "the rest of the extraction must be untouched"
+        assert "event=consensus_view_malformed" in caplog.text
+
+    def test_the_drop_survives_the_properties_envelope(self, caplog):
+        """Nova Lite's spurious {"properties": {...}} wrapper (retro#306) is
+        unwrapped before field validation. The guard has to run after that
+        unwrap, or the one model most likely to garble a new enum is also the
+        one model the guard never protects."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="tm.models"):
+            out = ExtractionOutput.model_validate({
+                "properties": {"predictions": [], "consensus_view": "unsure"}
+            })
+        assert out.consensus_view is None
+        assert "event=consensus_view_malformed" in caplog.text
+
+    def test_consensus_view_survives_a_dump_validate_round_trip(self):
+        out = ExtractionOutput(predictions=[], consensus_view="divided")
+        assert ExtractionOutput.model_validate(out.model_dump()).consensus_view == "divided"
+
+    def test_the_llm_schema_offers_exactly_three_members(self):
+        prop = ExtractionOutput.model_json_schema()["properties"]["consensus_view"]
+        names = {v for branch in prop["anyOf"] for v in branch.get("enum", [])}
+        assert names == {"expects_yes", "expects_no", "divided"}
+
+    def test_consensus_view_is_appended_after_author_lean_certainty(self):
+        """Article-level and next to author_lean because it is the same shape
+        of question — what the AUTHOR thinks vs what the author says EVERYONE
+        ELSE thinks — and at the tail for the retro#680 reason above."""
+        props = list(ExtractionOutput.model_json_schema()["properties"])
+        assert props[-1] == "consensus_view"
+        assert props.index("author_lean_certainty") < props.index("consensus_view")
+
+    def test_neither_field_pays_for_a_docstring(self):
+        """Pydantic copies a model docstring into the JSON schema description,
+        and that schema IS the tool definition sent on every call (retro#700).
+        Re-pinned here because both new fields landed on models that already
+        carry their rationale in `#` comments for exactly this reason."""
+        for model in (ExtractionOutput, PredictionExtraction):
+            assert model.model_json_schema().get("description", "") == ""

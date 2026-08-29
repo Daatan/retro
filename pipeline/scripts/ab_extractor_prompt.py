@@ -57,6 +57,7 @@ import asyncio
 import json
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 from tm import llm
@@ -77,11 +78,22 @@ def _git_commit() -> str:
         return "unknown"
 
 
-async def _run_case(case: Case, model: str, *, use_control: bool, runs: int) -> list[list[dict]]:
+# Everything on ExtractionOutput that is NOT the predictions list. The gate scores
+# per-prediction facets only, so until retro#686 an arm's results file recorded nothing
+# at all about the article-level elicited fields — you could add one, ship it, and have
+# no way to ask this harness whether the model ever filled it. `author_lean` had been
+# invisible here since it landed. Recorded per run, beside the predictions.
+_ARTICLE_FIELDS = ("author_lean", "author_lean_certainty", "consensus_view")
+
+
+async def _run_case(
+    case: Case, model: str, *, use_control: bool, runs: int,
+) -> tuple[list[list[dict]], list[dict], list[dict]]:
+    """Returns (per-run predictions, per-run article-level fields, per-run token usage)."""
     description = case.control_event_description if use_control else case.event_description
     if use_control and description is None:
         print(f"    [{case.id}] no control_event_description on this case — skipping control run")
-        return []
+        return [], [], []
     prompt = PROMPT_SUFFIX.format(
         article_text=case.article_text,
         source_name=case.source_name,
@@ -92,9 +104,11 @@ async def _run_case(case: Case, model: str, *, use_control: bool, runs: int) -> 
         claim_deadline=case.claim_deadline,
     )
     runs_out: list[list[dict]] = []
+    article_out: list[dict] = []
+    usage_out: list[dict] = []
     for _ in range(runs):
         try:
-            out, _usage = await llm.complete_structured(
+            out, usage = await llm.complete_structured(
                 model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
                 cached_prefix=PROMPT_PREFIX,
             )
@@ -102,7 +116,9 @@ async def _run_case(case: Case, model: str, *, use_control: bool, runs: int) -> 
             print(f"    [{case.id}] EXCEPTION: {type(exc).__name__}: {exc}")
             continue
         runs_out.append([p.model_dump() for p in out.predictions])
-    return runs_out
+        article_out.append({f: getattr(out, f, None) for f in _ARTICLE_FIELDS})
+        usage_out.append(dict(usage or {}))
+    return runs_out, article_out, usage_out
 
 
 async def _cmd_run(args: argparse.Namespace) -> None:
@@ -111,21 +127,51 @@ async def _cmd_run(args: argparse.Namespace) -> None:
     print(f"Running {len(cases)} cases x{args.runs_per_case} against {model}"
           f"{' (control description)' if args.use_control_description else ''}")
     results: dict[str, list[list[dict]]] = {}
+    article: dict[str, list[dict]] = {}
+    usage: dict[str, list[dict]] = {}
     for case in cases:
-        runs = await _run_case(
+        runs, article_runs, usage_runs = await _run_case(
             case, model, use_control=args.use_control_description, runs=args.runs_per_case,
         )
         results[case.id] = runs
+        article[case.id] = article_runs
+        usage[case.id] = usage_runs
         print(f"  [{case.id}] {len(runs)} usable runs")
     payload = {
         "label": args.label,
         "git_commit": _git_commit(),
         "model": model,
         "use_control_description": args.use_control_description,
-        "cases": {cid: {"case": _case_asdict(c), "runs": results[c.id]} for c in cases for cid in [c.id]},
+        "cases": {
+            c.id: {
+                "case": _case_asdict(c),
+                "runs": results[c.id],
+                "article_runs": article[c.id],
+                "usage_runs": usage[c.id],
+            }
+            for c in cases
+        },
     }
     Path(args.out).write_text(json.dumps(payload, indent=2))
     print(f"Wrote {args.out}")
+
+    # A one-line-per-field fill summary for the article-level elicitations. The gate
+    # cannot speak to these -- it scores per-prediction facets -- so without this an
+    # arm's only evidence about a new article-level field is a JSON file nobody reads.
+    all_article = [a for runs_ in article.values() for a in runs_]
+    if all_article:
+        print(f"\nArticle-level fill over {len(all_article)} run(s):")
+        for f in _ARTICLE_FIELDS:
+            vals = [a[f] for a in all_article if a[f] is not None]
+            share = f"{100 * len(vals) / len(all_article):.0f}%"
+            counts = Counter(v for v in vals if isinstance(v, str))
+            detail = "  " + ", ".join(f"{k}={n}" for k, n in counts.most_common()) if counts else ""
+            print(f"  {f:<24} {len(vals):>3}/{len(all_article)} ({share:>4}){detail}")
+    total_tokens = sum(u.get("total_tokens", 0) for runs_ in usage.values() for u in runs_)
+    n_calls = sum(len(runs_) for runs_ in usage.values())
+    if n_calls:
+        print(f"\nTokens: {total_tokens} over {n_calls} call(s) "
+              f"({total_tokens / n_calls:.0f}/call)")
 
     # Fail closed on an empty arm. Every per-case exception is caught in _run_case so one
     # bad case can't abort the sweep -- but that also means a run where EVERY call failed

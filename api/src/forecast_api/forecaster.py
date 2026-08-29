@@ -76,7 +76,7 @@ EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 # human-readable label only, see docs/PROMPT_VERSIONS.md. The *_HASH is computed from the
 # actual prompt text above, so it stays correct even if a version bump is forgotten.
 GATEKEEPER_PROMPT_VERSION = "v1"
-EXTRACTOR_PROMPT_VERSION = "v7"
+EXTRACTOR_PROMPT_VERSION = "v8"
 GATEKEEPER_PROMPT_HASH = hashlib.sha256(GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
 EXTRACTOR_PROMPT_HASH = hashlib.sha256(EXTRACTOR_PROMPT.encode()).hexdigest()[:16]
 
@@ -288,6 +288,10 @@ def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDe
             reader_confidence=(
                 p.reader_confidence.model_dump() if p.reader_confidence is not None else None
             ),
+            # retro#686. Projected for the same reason as every shadow field above: the prompt
+            # asks, so the wire must carry it or daatan stores nothing and the two-week
+            # distribution #689 needs never accrues (the retro#566 failure, noted below).
+            report_kind=p.report_kind,
             # Phase 1 conditional capture (#504) — pre-resolution shadow fields.
             # Omitted here from 2026-08-09 to retro#566: the prompt asked, the
             # model answered, and this projection dropped all nine on the wire.
@@ -1160,7 +1164,7 @@ async def _process_article_bounded(
     is_single_article: bool = False,
     cache_coordinator: CacheWriteCoordinator | None = None,
     extractor_model: str | None = None,
-) -> tuple[SearchResult, float, list, float | None, float | None] | None:
+) -> tuple[SearchResult, float, list, float | None, float | None, str | None] | None:
     """Run _process_article under a per-article wall-clock ceiling.
 
     Articles are processed in parallel, so one slow LLM call would otherwise
@@ -1239,7 +1243,7 @@ async def _process_article(
     is_single_article: bool = False,
     cache_coordinator: CacheWriteCoordinator | None = None,
     extractor_model: str | None = None,
-) -> tuple[SearchResult, float, list, float | None, float | None] | None:
+) -> tuple[SearchResult, float, list, float | None, float | None, str | None] | None:
     """
     Run gatekeeper + extractor for one article.
     Fetches full article text via trafilatura; falls back to title+snippet.
@@ -1628,12 +1632,15 @@ async def _process_article(
     # author_lean / author_lean_certainty are the byline author's OWN forecast
     # (retro #308/#309) — surfaced per-source for daatan's author-accuracy scoring
     # lane, kept entirely OUT of the estimate (never merged into stance/predictions).
+    # consensus_view (retro#686) rides here for the same reason and under the same
+    # rule: it is article-level, not per-claim, and nothing in aggregation reads it.
     return (
         result,
         gate.relevance_score,
         extraction.predictions,
         extraction.author_lean,
         extraction.author_lean_certainty,
+        extraction.consensus_view,
     )
 
 
@@ -2115,7 +2122,7 @@ async def _run_forecast_inner(
             continue
         if outcome is None:
             continue
-        _, relevance, predictions, author_lean, author_lean_certainty = outcome
+        _, relevance, predictions, author_lean, author_lean_certainty, consensus_view = outcome
         for p in predictions:
             if p.evidence_class is not None:
                 evidence_class_counts[p.evidence_class] = evidence_class_counts.get(p.evidence_class, 0) + 1
@@ -2245,6 +2252,7 @@ async def _run_forecast_inner(
             settlement_event_date=reduction.settlement_event_date,
             author_lean=author_lean,
             author_lean_certainty=author_lean_certainty,
+            consensus_view=consensus_view,
             fact_signal=round(reduction.fact_signal, 3) if reduction.fact_signal is not None else None,
             event_actors=reduction.event_actors,
             event_target=reduction.event_target,

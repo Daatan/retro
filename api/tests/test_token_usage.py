@@ -57,7 +57,7 @@ def _extractor():
     async def _extract(**kwargs):
         return SimpleNamespace(predictions=[PredictionExtraction(
             quote="q", claim="c", stance=0.6, certainty=0.8, specificity=1.0, settled=None,
-        )], author_lean=None, author_lean_certainty=None), dict(EXTRACT_USAGE)
+        )], author_lean=None, author_lean_certainty=None, consensus_view=None), dict(EXTRACT_USAGE)
     return _extract
 
 

@@ -691,6 +691,45 @@ strike on it is entirely inferred)
       → level low, trap "entity_or_event_mismatch" (two steps: carry across from Force G to \
 Force F, and from the approach road to the bridge)
 
+## REPORT_KIND — a standing situation, or a step in it (EXPERIMENTAL, shadow)
+For each prediction, say whether the quote reports a LEVEL or a CHANGE.
+  level  — the standing situation as it is: "the reservoir is at 41% of capacity", "the \
+border post remains closed", "as of today the line is still not in service". A direct \
+measurement of the state.
+  change — a movement in it: "the reservoir fell six points", "the border post reopened", \
+"the line was extended by two stops". A step, not the state.
+Omit report_kind when the quote is neither — a pure expectation about the future with no \
+present state and no movement reported ("hydrologists see a further drop coming").
+
+The test is what the sentence would still tell you a month later, not its verb tense. \
+"Operators held the reservoir at 41%" is a level: the number is the point, and holding is \
+the absence of a step. "Operators drew it down by six points" is a change: without knowing \
+where it started, the new state is unknown.
+
+report_kind never changes your stance. It says what KIND of report the quote is, not how \
+strongly it bears on the event; a level that satisfies the question is exactly as positive \
+as a change that satisfies it.
+
+## CONSENSUS_VIEW — what the article says OTHERS expect (EXPERIMENTAL, shadow)
+Once per article, not per prediction. Report what the ARTICLE says most observers — analysts, \
+markets, polls, "widely expected", "few believe" — expect for the related event.
+  expects_yes — the article reports that most expect it to happen.
+  expects_no  — the article reports that most expect it will not.
+  divided     — the article reports opinion as genuinely split.
+Omit consensus_view when the article does not say what anyone else expects.
+
+Three things this is NOT, and each of them is the common mistake:
+  - It is not YOUR view. You are reporting what the article claims about other people, and \
+you record it even when you think those people are wrong.
+  - It is not the byline author's own forecast — that is author_lean. "Forecasters expect \
+the reservoir to refill, but this is wishful thinking" is consensus_view expects_yes with a \
+NEGATIVE author_lean.
+  - It is not the stance of the quotes you extracted. An article may carry one discouraging \
+quote and still report that most observers expect yes; record what it says about them.
+Report it from the article's own words about others, not from counting your own predictions.
+Like report_kind, it never changes a stance: extract the predictions exactly as you would \
+have without this field.
+
 ## Output
 Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certainty \
 signals if they are the only content available.
@@ -713,8 +752,11 @@ Claim deadline: {claim_deadline}
 IMPORTANT: Your response must be a JSON object with a "predictions" key containing a list, \
 plus OPTIONAL top-level "author_lean" (float -1 to 1) and "author_lean_certainty" (float 0 \
 to 1) fields — the byline author's OWN forecast, per the AUTHOR_LEAN section. OMIT both when \
-the author takes no position of their own.
-Example: {{"predictions": [ {{...}}, {{...}} ], "author_lean": 0.6, "author_lean_certainty": 0.5}}
+the author takes no position of their own. Also OPTIONAL at top level: "consensus_view" (one \
+of expects_yes / expects_no / divided) — what the article says OTHERS expect, per the \
+CONSENSUS_VIEW section; OMIT it when the article does not say.
+Example: {{"predictions": [ {{...}}, {{...}} ], "author_lean": 0.6, "author_lean_certainty": \
+0.5, "consensus_view": "expects_yes"}}
 
 Each prediction has five core fields, plus several used only when applicable:
   quote (string — original language), claim (string — English), \
@@ -748,7 +790,9 @@ see the FACT_SIGNAL section for which applies) — never omit both.
 Also on every prediction: reader_confidence — \
 {{"level": one of high / medium / low, "trap": one of negation / numeric_comparison / \
 entity_or_event_mismatch / tone_vs_content / inference_needed / conflicting_signals, OMITTED \
-when none applies}}. See the READER_CONFIDENCE section above.
+when none applies}}. See the READER_CONFIDENCE section above. \
+And report_kind (one of level / change — does the quote report the standing situation or a \
+step in it; OMIT it when the quote reports neither, per the REPORT_KIND section).
 
 Example — related event: "Assad regime falls in Syria":
 {{
@@ -760,7 +804,8 @@ Example — related event: "Assad regime falls in Syria":
       "claim_strength": 0.6,
       "settled": false,
       "evidence_class": "reporting",
-      "reader_confidence": {{"level": "medium", "trap": "inference_needed"}}
+      "reader_confidence": {{"level": "medium", "trap": "inference_needed"}},
+      "report_kind": "change"
     }},
     {{
       "quote": "Rebels seized the capital on Sunday as Assad fled to Moscow",
@@ -775,9 +820,11 @@ Example — related event: "Assad regime falls in Syria":
       "event_target": "Damascus and the Assad regime",
       "is_occurrence": true,
       "verified": true,
-      "reader_confidence": {{"level": "high"}}
+      "reader_confidence": {{"level": "high"}},
+      "report_kind": "change"
     }}
-  ]
+  ],
+  "consensus_view": "expects_yes"
 }}
 
 Example — related event: "France wins the 2026 World Cup" (a source citing a named model):
@@ -792,9 +839,11 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
       "quantitative_estimate": 0.1883,
       "evidence_class": "cited_probability",
       "fact_signal_absent_reason": "opinion",
-      "reader_confidence": {{"level": "medium", "trap": "numeric_comparison"}}
+      "reader_confidence": {{"level": "medium", "trap": "numeric_comparison"}},
+      "report_kind": "level"
     }}
-  ]
+  ],
+  "consensus_view": "expects_no"
 }}
 """
 

@@ -109,6 +109,38 @@ Both ends now refuse instead:
 Read those exit codes directly, not through a pipe — `cmd | tail` reports `tail`'s status, not
 `cmd`'s.
 
+## What the gate cannot tell you: article-level fields (retro#686)
+
+`unmet_facets` scores per-**prediction** facets. Nothing on `ExtractionOutput`
+itself is in `_FACET_READERS` and nothing can be — `author_lean`,
+`author_lean_certainty` and `consensus_view` are one value per article, not per
+claim, so a gate built on "did any prediction match" has no place to put them.
+
+For most of this harness's life that meant an arm's results file recorded
+nothing about them at all: you could add an article-level field, ship it, and
+have no way to ask this harness whether the model ever filled it. `author_lean`
+was invisible here from the day it landed.
+
+`run` now records them per run alongside the predictions (`article_runs` in the
+results file) and prints a fill summary at the end of the arm:
+
+```
+Article-level fill over 105 run(s):
+  author_lean               61/105 ( 58%)
+  author_lean_certainty     61/105 ( 58%)
+  consensus_view            32/105 ( 30%)  expects_yes=19, divided=8, expects_no=5
+
+Tokens: 1683402 over 105 call(s) (16032/call)
+```
+
+Read it as a **fill rate, not a gate**. It says whether the model answers and
+how the answers distribute — the two questions a shadow field is harvested to
+settle, and the two the zero-regression gate is silent on. A field that comes
+back >90% one value has collapsed and is measuring nothing, which is a finding;
+it just isn't one `compare` can express. `usage_runs` carries the per-call token
+usage behind the totals line, so a prompt edit's cost shows up next to its
+effect.
+
 ## Adding a case
 
 Cases live in JSON files under `pipeline/scripts/ab_cases/`. Each case:

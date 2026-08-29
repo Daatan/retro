@@ -1,0 +1,88 @@
+[
+  {
+    "id": "bracket-favorite-one-stage-of-several",
+    "event_name": "Team M wins the 2026 Continental Cup",
+    "event_description": "Team M must win the tournament outright. Reaching the final, or being eliminated at any earlier round, does not count.",
+    "claim_deadline": "2026-11-30",
+    "article_date": "2026-10-14",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Team M enter Saturday's round-of-16 tie as overwhelming favourites, the bookmakers' clear pick and, on current form, the most convincing side in the competition. Their defence has conceded once in six matches and their forward line is the tournament's most productive. Few observers expect them to be troubled by an opponent that scraped through the group stage on goal difference.",
+    "expect": {
+      "stance_sign": 1,
+      "stance_band": "weak",
+      "claim_strength_band": "weak",
+      "settled": false
+    },
+    "control_event_description": null,
+    "tags": ["retro-720", "multi-stage", "bracket-favorite", "rater-split"]
+  },
+  {
+    "id": "bracket-series-lead-not-the-series",
+    "event_name": "Team M wins the 2026 championship series",
+    "event_description": "Team M must win the best-of-seven series, i.e. take four games. Leading the series does not count.",
+    "claim_deadline": "2026-11-30",
+    "article_date": "2026-11-02",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Team M took a 3-1 lead in the best-of-seven championship series on Sunday, winning 104-98 to move within a single victory of the title. Game 5 is on Tuesday. Their opponents have lost twice at home in the series and must now win three straight to survive.",
+    "expect": {
+      "stance_sign": 1,
+      "stance_band": "moderate",
+      "settled": false
+    },
+    "control_event_description": null,
+    "tags": ["retro-720", "multi-stage", "series-lead", "no-worked-example"]
+  },
+  {
+    "id": "bracket-runoff-first-round-lead",
+    "event_name": "Candidate D wins the presidential runoff in Country R",
+    "event_description": "Candidate D must win the second-round runoff. Leading, or finishing first, in the first round does not count.",
+    "claim_deadline": "2026-12-15",
+    "article_date": "2026-11-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Candidate D finished first in Sunday's opening round with 34 percent, eight points clear of the second-placed candidate, and will face them in a runoff on December 6. Analysts noted that the combined vote of the eliminated candidates, most of whom campaigned against D's economic programme, exceeds D's own total, and that two of them have yet to say whom they will endorse.",
+    "expect": {
+      "stance_sign": 1,
+      "stance_band": "weak",
+      "settled": false
+    },
+    "control_event_description": null,
+    "tags": ["retro-720", "multi-stage", "runoff"]
+  },
+  {
+    "id": "bracket-regulatory-first-of-two-gates",
+    "event_name": "Company X's merger with Company Y receives final regulatory approval in Country R",
+    "event_description": "Only the competition authority's final decision counts. A favourable preliminary or advisory opinion, a committee recommendation, or clearance in another jurisdiction does not.",
+    "claim_deadline": "2027-02-28",
+    "article_date": "2026-12-08",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "The competition authority's advisory panel recommended on Monday that the merger between Company X and Company Y be allowed to proceed, clearing the first of two stages in the review. The authority's board will issue the binding decision, expected in the first quarter, and is not required to follow the panel. In two of the last five contested cases it did not.",
+    "expect": {
+      "stance_sign": 1,
+      "stance_band": "weak",
+      "settled": false
+    },
+    "control_event_description": null,
+    "tags": ["retro-720", "multi-stage", "staged-approval"]
+  },
+  {
+    "id": "bracket-final-stage-cleared",
+    "event_name": "Team M wins the 2026 Continental Cup",
+    "event_description": "Team M must win the tournament outright. Reaching the final, or being eliminated at any earlier round, does not count.",
+    "claim_deadline": "2026-11-30",
+    "article_date": "2026-11-18",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Team M reached the final on Tuesday with a 3-0 semi-final win, their most complete performance of the tournament. One match now stands between them and the trophy. They will play the winner of Wednesday's second semi-final, a tie between two sides they have already beaten this season.",
+    "expect": {
+      "stance_sign": 1,
+      "stance_band": "moderate",
+      "settled": false
+    },
+    "control_event_description": null,
+    "tags": ["retro-720", "multi-stage", "last-stage", "rater-split"]
+  }
+]

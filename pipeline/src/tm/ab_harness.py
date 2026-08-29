@@ -34,11 +34,50 @@ def _sign(x: Optional[float]) -> Optional[int]:
     return 0
 
 
+# Magnitude buckets, deliberately coarse (retro#720). `_sign` answers "which way",
+# which is the only question most of this corpus needs — but some prompt sections
+# exist to control HOW STRONGLY, not which way, and for those a sign reader is blind.
+#
+# The `## Multi-stage / bracket events` section is the case in point: every one of
+# its seven worked examples is POSITIVE (+0.2 … +0.6), so deleting the section
+# entirely cannot move `stance_sign` on a single bracket case. It moves the
+# magnitude — a single-stage "strong favourite" framing read as full support
+# instead of weak support — and until this reader existed the harness had no way
+# to see that. A bracket corpus scored on sign alone would have passed the deletion
+# as clean, which is exactly the false comfort retro#720 warns about.
+#
+# Four buckets, not a threshold predicate, because `unmet_facets` compares with
+# `==`: a bucket is the only shape that fits without changing that contract.
+# Boundaries are read off the section's own numbers (0.2/0.3/0.4 for "one stage of
+# several remaining", 0.6 for "one stage left"), so `weak` vs `moderate` splits
+# exactly where the prompt tells the model to split. Magnitude only — sign stays
+# `stance_sign`'s job, so a case can assert both independently.
+_MAGNITUDE_BANDS: tuple[tuple[float, str], ...] = (
+    (0.15, "none"),
+    (0.50, "weak"),
+    (0.80, "moderate"),
+)
+
+
+def _band(x: Optional[float]) -> Optional[str]:
+    if x is None:
+        return None
+    magnitude = abs(x)
+    for upper, name in _MAGNITUDE_BANDS:
+        if magnitude < upper:
+            return name
+    return "strong"
+
+
 # Facets the harness knows how to check. Each reads one value off a single
 # PredictionExtraction; a case's `expect` dict names which facets it cares
 # about and what value each must equal on at least one extracted prediction.
 _FACET_READERS = {
     "stance_sign": lambda p: _sign(p.stance),
+    # Magnitude, for the sections that exist to control strength rather than
+    # direction — see _band above. "none" | "weak" | "moderate" | "strong".
+    "stance_band": lambda p: _band(p.stance),
+    "claim_strength_band": lambda p: _band(p.claim_strength),
     "fact_signal_sign": lambda p: _sign(p.fact_signal) if p.fact_signal is not None else None,
     "fact_signal_null": lambda p: p.fact_signal is None,
     "is_occurrence": lambda p: p.is_occurrence,

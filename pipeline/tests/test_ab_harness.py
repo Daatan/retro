@@ -10,8 +10,18 @@ from pathlib import Path
 
 import pytest
 
-from tm.ab_harness import Case, build_case_results, gate_exit_code, load_cases, unmet_facets
+from tm.ab_harness import (
+    _FACET_READERS,
+    _band,
+    Case,
+    build_case_results,
+    gate_exit_code,
+    load_cases,
+    unmet_facets,
+)
 from tm.models import PredictionExtraction
+
+CASE_DIR = Path(__file__).resolve().parents[1] / "scripts" / "ab_cases"
 
 
 def _pred(**over) -> PredictionExtraction:
@@ -107,6 +117,83 @@ class TestUnmetFacets:
         expect = {"facet": "neither"}
         runs = [[_pred(facet="announcement")], [_pred(facet=None)]]
         assert unmet_facets(runs, expect) == {"facet"}
+
+
+class TestMagnitudeBands:
+    """retro#720: the facet set could read direction but not strength.
+
+    Every worked example in the `## Multi-stage / bracket events` section is
+    positive (+0.2 … +0.6), so deleting the section outright cannot move
+    `stance_sign` on any bracket case — it moves how strongly a single-stage
+    "favourite" framing is read. Scored on sign alone, that deletion reports as
+    a clean pass, which is the false comfort the bracket corpus exists to
+    prevent.
+    """
+
+    @pytest.mark.parametrize("stance,band", [
+        (0.0, "none"), (0.1, "none"), (-0.14, "none"),
+        (0.15, "weak"), (0.2, "weak"), (0.3, "weak"), (0.49, "weak"),
+        (0.5, "moderate"), (0.6, "moderate"), (0.79, "moderate"),
+        (0.8, "strong"), (1.0, "strong"),
+    ])
+    def test_band_boundaries(self, stance: float, band: str):
+        assert unmet_facets([[_pred(stance=stance)]], {"stance_band": band}) == set()
+
+    def test_band_is_magnitude_only(self):
+        """A band must not encode direction — that is `stance_sign`'s job, and a
+        case asserting both is asserting two independent things."""
+        expect = {"stance_band": "moderate"}
+        assert unmet_facets([[_pred(stance=-0.6)]], expect) == set()
+        assert unmet_facets([[_pred(stance=0.6)]], expect) == set()
+
+    def test_sign_and_band_are_independently_checkable(self):
+        runs = [[_pred(stance=-0.6)]]
+        assert unmet_facets(runs, {"stance_sign": 1, "stance_band": "moderate"}) == {"stance_sign"}
+
+    def test_claim_strength_band_reads_its_own_field(self):
+        runs = [[_pred(stance=0.9, claim_strength=0.3)]]
+        expect = {"stance_band": "strong", "claim_strength_band": "weak"}
+        assert unmet_facets(runs, expect) == set()
+
+    def test_absent_value_is_not_the_none_band(self):
+        """An unfilled field is `None`, not the `"none"` band a genuine 0.0
+        lands in — so a case asserting a band on a field the model left blank
+        fails rather than quietly matching.
+
+        Unreachable through the two readers registered today (`stance` and
+        `claim_strength` are both required on `PredictionExtraction`), which is
+        why this asserts on the helper directly. The branch exists because
+        `_sign` needed exactly it the moment a nullable field — `fact_signal` —
+        got a reader, and the next band reader may well be nullable too."""
+        assert _band(None) is None
+        assert _band(0.0) == "none"
+
+
+class TestShippedCaseFiles:
+    """Every committed case file must load and name only real facets.
+
+    `unmet_facets` raises on an unknown facet, but nothing calls it until
+    `compare` — so a typo'd facet name survives an entire Bedrock sweep and
+    blows up after the money is spent. This is the cheap version of that check.
+    """
+
+    @pytest.mark.parametrize("path", sorted(CASE_DIR.glob("*.json")), ids=lambda p: p.name)
+    def test_case_file_loads_with_known_facets(self, path: Path):
+        cases = load_cases(path)
+        assert cases, f"{path.name} holds no cases"
+        for case in cases:
+            unknown = set(case.expect) - set(_FACET_READERS)
+            assert not unknown, f"{case.id}: unknown facet(s) {sorted(unknown)}"
+
+    def test_case_ids_are_unique_across_files(self):
+        """`compare` keys results by case id across whichever files an arm ran,
+        so a duplicate silently scores one case against the other's runs."""
+        seen: dict[str, str] = {}
+        for path in sorted(CASE_DIR.glob("*.json")):
+            for case in load_cases(path):
+                assert case.id not in seen, \
+                    f"case id {case.id!r} in both {seen[case.id]} and {path.name}"
+                seen[case.id] = path.name
 
 
 class TestRegressionGate:

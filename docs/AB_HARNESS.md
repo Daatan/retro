@@ -141,6 +141,44 @@ it just isn't one `compare` can express. `usage_runs` carries the per-call token
 usage behind the totals line, so a prompt edit's cost shows up next to its
 effect.
 
+## The corpus
+
+One file per defect the corpus was built to catch. A prompt edit should run
+every file whose subject it could plausibly touch, not just the one it targets —
+retro#720 was found because a numeric-threshold case moved when an unrelated
+bracket section was cut.
+
+| file | n | issue | what it holds down |
+|---|---|---|---|
+| `deadline_and_resolution_rules.json` | 5 | retro#351/#352/#353 | a fact that defers the event past the claim deadline bears *against* it; plus the decider-statement sentinel and a control-arm reference case |
+| `numeric_threshold_blindness.json` | 10 | retro#664 | a number decides the stance, not the sentence's tone — at-or-below, strictly-above, between-bounds, and the exact/near boundaries |
+| `poll_facet_neither.json` | 4 | retro#541 | a poll or seat projection is `facet: neither`, not an announcement or a denial |
+| `stance_tone_conflation.json` | 2 | retro#545 | an alarmed tone about a hazard is not evidence the hazard occurred |
+| `multi_stage_brackets.json` | 5 | retro#720 | winning one stage of a bracket, series, runoff or staged approval is weak support for winning the whole thing |
+
+### What the bracket file measured on `main` (2026-08-29, 5 runs/case)
+
+Committed as a baseline before the section it covers is touched, since a corpus
+with no multi-stage cases scores deleting that section as a clean win.
+
+- **Haiku 4.5** (the live extractor): **5/5 pass**. It follows the section
+  closely enough to reproduce its worked examples — a round-of-16 favourite
+  reads +0.30/0.30 against the prompt's stated +0.3/0.3, five runs out of five
+  with no variance.
+- **Nova Lite** (the batch extractor): **3/5 pass**, both failures on magnitude
+  alone. The three it passes — a runoff first-round lead, an advisory-panel
+  recommendation, a 3–1 series lead — are the situations with a near-verbatim
+  worked example in the section, or none of its business. The two it fails are
+  the ones governed only by the section's *prose*: a knockout-tie favourite
+  reads +0.90/0.80 where the prompt says +0.3/0.3, and reaching the final reads
+  +0.90 where the prompt says +0.6.
+
+Read together: on the weaker rater the section's **worked examples are doing
+essentially all of the work and its prose almost none** — the same mechanism
+retro#720 identified, seen from the other side. Anything that rewrites those
+examples should re-measure both raters, because the two lanes are not failing
+the same way.
+
 ## Adding a case
 
 Cases live in JSON files under `pipeline/scripts/ab_cases/`. Each case:
@@ -161,11 +199,44 @@ Cases live in JSON files under `pipeline/scripts/ab_cases/`. Each case:
 
 `expect` names the facets a correct extraction must get right — see
 `_FACET_READERS` in `ab_harness.py` for the current set (`stance_sign`,
-`fact_signal_sign`, `fact_signal_null`, `is_occurrence`, `verified`,
-`settled`, `evidence_class`). A facet is satisfied if **any** prediction, in
-**any** run, matches the expected value — matching how one correct signal
-among several extracted predictions (or one correct run among several,
-given LLM non-determinism) is enough.
+`stance_band`, `claim_strength_band`, `fact_signal_sign`, `fact_signal_null`,
+`is_occurrence`, `facet`, `verified`, `settled`, `evidence_class`). A facet is
+satisfied if **any** prediction, in **any** run, matches the expected value —
+matching how one correct signal among several extracted predictions (or one
+correct run among several, given LLM non-determinism) is enough.
+
+### Direction vs strength (retro#720)
+
+`stance_sign` answers *which way*, which is all most of this corpus needs. But
+some prompt sections exist to control *how strongly*, and for those a sign
+reader is blind: every worked example in `## Multi-stage / bracket events` is
+positive (+0.2 … +0.6), so deleting that section outright cannot move
+`stance_sign` on a single bracket case. Scored on sign alone, the deletion
+reports as a clean pass while tournaments, playoff series and multi-round
+elections quietly start reading as near-certainties.
+
+`stance_band` and `claim_strength_band` are the magnitude readers, deliberately
+coarse — `none` (<0.15), `weak` (<0.5), `moderate` (<0.8), `strong`. Four
+buckets rather than a threshold predicate because `unmet_facets` compares with
+`==`; the boundaries are read off the section's own numbers so `weak` vs
+`moderate` splits where the prompt tells the model to split. They are magnitude
+only, so a case can assert sign and strength independently. Being coarse, they
+report a real improvement that stays inside one bucket as `no change` — read
+the per-run values alongside, as with any other facet here.
+
+### Target facets — an expectation `main` does not yet meet
+
+Ordinarily a case must pass on `main` before it is committed; one that already
+fails proves nothing about a later edit. The exception is a facet where the
+prompt states a rule the model demonstrably does not follow. Such a facet can
+only ever report as `improved` (`regressions` is `baseline_met & patched_unmet`,
+and it was never in `baseline_met`), so it cannot gate a merge falsely — it just
+makes the gap visible instead of invisible. Two of the bracket cases carry one
+on Nova Lite, tagged `rater-split`.
+
+Only assert one where the target value is defensible from the prompt's own text.
+Where the right magnitude is genuinely arguable, leave the facet out — or use
+`expect: {}` — rather than freezing a premature numeric call into the corpus.
 
 **`expect: {}` is a legitimate pattern** — a reference case with no automated
 assertion, included so a genuinely disputed or nuanced scenario (e.g. "how

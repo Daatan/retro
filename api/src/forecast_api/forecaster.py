@@ -55,7 +55,7 @@ from tm.llm import complete_text_once_with_usage, rendered_response_schema
 from tm.net_guard import UnsafeURLError, safe_get
 # Same URL-path date parser the batch ingest uses. Sharing it keeps the two paths'
 # idea of "can we date this article" identical rather than growing a second dialect.
-from tm.web_search_ingest import _date_from_url
+from tm.web_search_ingest import _date_from_url, is_redirector_url
 
 # gatekeeper.py/extractor.py each split their PROMPT into a cacheable PROMPT_PREFIX
 # (fixed instructions) + PROMPT_SUFFIX (article/variable fields) so llm.py can mark
@@ -1225,6 +1225,26 @@ async def _process_article(
             result.url, result.source or "", prediction_id or "",
         )
         article_debugs.append(ArticleDebug(url=result.url, outcome="no_date"))
+        return None
+
+    # A search-engine link wrapper is not an article and its host is not a publisher
+    # (retro#709). Dropped for the same reason an undatable article is: we cannot say
+    # who published it, and an outlet is not a cosmetic label — it is what
+    # `settlement_min_sources` counts distinct values of, so a wrong one can manufacture
+    # corroboration between two copies of the same wrapper.
+    #
+    # Not unwrapped here, because it cannot be: the `goto?url=CAES…` token is Google's
+    # encrypted article id, and news-indexer already resolves the ones it can by
+    # following the real 30x hop at ingestion (news-indexer#306). This is the guard for
+    # what still gets through — measured on prod, every one of the 52 pool rows whose
+    # stored source reads `google.com` is one of these, and not one of the 72 wrapper
+    # rows ever resolved an `outlet_name` at all.
+    if is_redirector_url(result.url):
+        logger.info(
+            "event=article_outcome outcome=redirector_url url=%s source=%s prediction_id=%s",
+            result.url, result.source or "", prediction_id or "",
+        )
+        article_debugs.append(ArticleDebug(url=result.url, outcome="redirector_url"))
         return None
 
     # Use caller-supplied text if available; otherwise fetch via trafilatura.

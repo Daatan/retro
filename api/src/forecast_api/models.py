@@ -392,7 +392,7 @@ class TokenUsage(BaseModel):
 
 class ArticleDebug(BaseModel):
     url: str
-    outcome: str = Field(description="ok | gate_rejected | no_predictions | fetch_error | gate_error | extract_error | empty_text | no_date")
+    outcome: str = Field(description="ok | gate_rejected | no_predictions | fetch_error | gate_error | extract_error | empty_text | no_date | redirector_url")
     gate_passed: Optional[bool] = None
     gate_reason: Optional[str] = None
     gate_prediction_count_estimate: Optional[int] = None

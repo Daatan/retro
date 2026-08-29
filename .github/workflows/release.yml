@@ -1,0 +1,52 @@
+name: Release
+
+# Cuts a GitHub release when a version tag is pushed. The tag is a LABEL on
+# code that is already deployed (deploy-oracle.yml ships every merge to main);
+# it does not deploy anything. Release notes are the matching `## [x.y.z]`
+# section of CHANGELOG.md — so tag only after that section exists, and only a
+# tag that agrees with api/pyproject.toml. See docs/ORACLE_DEPLOY.md
+# § Cutting a release and the versioning umbrella retro#742.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: GitHub release from CHANGELOG
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Tag must match api/pyproject.toml
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(sed -n 's/^version = "\(.*\)"/\1/p' api/pyproject.toml | head -1)
+          if [[ "$TAG" != "$PKG" ]]; then
+            echo "::error::tag v$TAG but api/pyproject.toml says $PKG — bump pyproject first"
+            exit 1
+          fi
+
+      - name: Extract the CHANGELOG section
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          # Lines strictly between "## [VER]" and the next "## [" heading.
+          awk -v ver="$VER" '
+            /^## \[/ { if (found) exit; found = index($0, "## [" ver "]") == 1; next }
+            found && /^\[/ { exit }   # link-reference block at the bottom
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::no '## [$VER]' section in CHANGELOG.md — move Unreleased under a version heading first"
+            exit 1
+          fi
+          cat notes.md
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md

@@ -1,0 +1,43 @@
+name: Changelog
+
+# A PR that changes Oracle code (api/** or pipeline/src/**) must add a line to
+# CHANGELOG.md, unless labelled `no-changelog`. Data-only atlas commits and
+# docs/infra-only PRs don't match and pass trivially. The release notes are
+# built from this file (release.yml), so a skipped line is a silent gap in
+# the next release. See retro#742 / retro#743.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    name: CHANGELOG touched
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Require a CHANGELOG line for code changes
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          git fetch origin main --quiet
+          CHANGED=$(git diff --name-only origin/main...HEAD)
+          if ! grep -Eq '^(api/|pipeline/src/)' <<<"$CHANGED"; then
+            echo "no Oracle code changed — nothing to require"; exit 0
+          fi
+          if grep -qx 'CHANGELOG.md' <<<"$CHANGED"; then
+            echo "CHANGELOG.md updated"; exit 0
+          fi
+          if [[ ",$LABELS," == *",no-changelog,"* ]]; then
+            echo "opted out via no-changelog label"; exit 0
+          fi
+          echo "::error::this PR changes api/ or pipeline/src/ but not CHANGELOG.md — add a line under '## [Unreleased]' (or apply the no-changelog label)"
+          exit 1

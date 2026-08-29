@@ -65,11 +65,52 @@ Two consequences, both measured rather than assumed:
   forecast that actually gets scored. A 24h value meant one forecast at
   discovery and no update, which throws away the spot-score mechanic.
 
+## Scheduling — a systemd timer on the oracle box, not Actions cron
+
+Discovery runs from `infra/metaculus-sync.timer` (every 20 minutes), not from a
+`schedule:` block in `.github/workflows/metaculus-sync.yml`. **Do not add a cron
+there as well** — two schedulers would double-submit into the same question
+window.
+
+The reason is not preference. GitHub Actions cron is delayed and skipped under
+load, and that unreliability is the stated reason Metaculus temporarily widened
+the question window from 1.5h to 3h. Scheduling our discovery on the same
+substrate would inherit precisely the risk the widening exists to absorb, and on
+a 1.5h window a missed poll is a forfeited question (retro#728).
+
+Install or refresh the units (idempotent, safe after any deploy that changed
+them):
+
+```
+sudo bash /home/ubuntu/oracle-api/infra/install_metaculus_timer.sh
+```
+
+The service is gated on `ConditionPathExists=/home/ubuntu/truthmachine/.env.metaculus`,
+so **the schedule can be installed before the credentials exist** (retro#725):
+until that file is placed, each activation is skipped cleanly rather than
+failing every 20 minutes. That file holds `METACULUS_API_KEY`, `ORACLE_API_KEY`
+(the named capped relay key, never the primary) and `METACULUS_TOURNAMENT`; the
+box has no Secrets Manager access, so it is placed by hand.
+
+Logs go to the journal, **not** to `truthmachine/oracle_log.txt` — that file is
+the Oracle API's convention, is already ~341 MB and is unrotated, and a job that
+fires 72 times a day does not belong in it:
+
+```
+journalctl -u metaculus-sync.service -n 100
+systemctl list-timers metaculus-sync.timer
+```
+
+`workflow_dispatch` on the Actions workflow stays, and is still the right way to
+run a manual dry run without touching the box.
+
 ## Not yet done
 
 - The `ORACLE_API_KEYS` named-key entry for this relay hasn't been added to
-  the live oracle-api host — required before any real (even unscored) run.
-- `.github/workflows/metaculus-sync.yml` exists but its cron/secrets wiring
-  needs those to land first.
+  the live oracle-api host — required before any real (even unscored) run
+  (retro#725). Neither has `/home/ubuntu/truthmachine/.env.metaculus`, which the
+  timer is gated on.
+- The systemd units are committed but **not yet installed on the box** — run
+  `infra/install_metaculus_timer.sh` there once the credentials are placed.
 - Still points at `bot-testing-area` (unscored) — deliberately not pointed at
   a real AIB/MiniBench tournament yet.

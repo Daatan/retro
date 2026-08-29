@@ -14,23 +14,27 @@ on:
         description: "Log what would be submitted without writing to Metaculus"
         type: boolean
         default: true
-  # No `schedule:` trigger until the oracle-api relay key exists (retro#725)
-  # and a manual dry run has been verified clean (retro#727) — a cron enabled
-  # before then just fails every 20 minutes.
+  # NO `schedule:` TRIGGER HERE — BY DECISION, NOT BY OMISSION (retro#728).
   #
-  # When enabling, the cadence is ~20 minutes, NOT the 6 hours an earlier
-  # version of this comment proposed. That figure assumed Oracle's /forecast
-  # was a multi-minute call; retro#617 has since measured it over n=20,000
-  # production forecasts — p50 7.3s, p99 25.0s, max 45.9s, zero timeouts.
-  # Tournament questions close 1.5h (temporarily 3h) after opening, so a 6h
-  # cron misses most of them outright while 20 minutes is easily affordable:
+  # Discovery is scheduled by a systemd timer on the oracle box instead:
+  # `infra/metaculus-sync.timer`, every 20 minutes, installed with
+  # `infra/install_metaculus_timer.sh`. Do not add a cron here as well — two
+  # schedulers would double-submit into the same question window.
   #
-  #   schedule:
-  #     - cron: "*/20 * * * *"
+  # Why not Actions cron: it is delayed and skipped under load, and that
+  # unreliability is the stated reason Metaculus temporarily widened the
+  # question window from 1.5h to 3h. Scheduling our discovery on the same
+  # substrate would inherit exactly the risk the widening exists to absorb, and
+  # on a 1.5h window a missed poll is a forfeited question.
   #
-  # Note GitHub Actions cron is both delayed under load and the reason
-  # Metaculus temporarily widened the window to 3h; retro#728 tracks moving
-  # discovery to a systemd timer on the oracle box instead.
+  # Why 20 minutes: questions close 1.5h (temporarily 3h) after opening, so the
+  # 6h cadence an earlier version of this comment proposed would miss most of
+  # them. That figure assumed /forecast was a multi-minute call; retro#617 has
+  # since measured it over n=20,000 production forecasts — p50 7.3s, p99 25.0s,
+  # max 45.9s, zero timeouts.
+  #
+  # This workflow stays `workflow_dispatch`-only, which is still the right way
+  # to run a manual dry run (retro#727) without touching the box.
 
 jobs:
   test:

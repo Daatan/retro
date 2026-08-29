@@ -1,0 +1,49 @@
+[Unit]
+Description=Metaculus sync — submit Oracle forecasts into a Metaculus tournament
+Documentation=https://github.com/Daatan/retro/blob/main/metaculus/README.md
+After=network-online.target
+Wants=network-online.target
+
+# Do nothing until the credentials exist (retro#725). Without this the timer
+# would fire every 20 minutes and fail every time, turning a not-yet-provisioned
+# state into a wall of red in `systemctl list-units --failed`. With it, the unit
+# is skipped cleanly and `systemctl status metaculus-sync.timer` still shows the
+# schedule is live and waiting.
+ConditionPathExists=/home/ubuntu/truthmachine/.env.metaculus
+
+[Service]
+Type=oneshot
+User=ubuntu
+
+# Runs out of the API-only checkout, the same tree deploy_oracle.sh resets to
+# origin/main. Deliberately NOT /home/ubuntu/truthmachine — that tree carries
+# the ingest loop's unpushed commits and has its own lifecycle.
+WorkingDirectory=/home/ubuntu/oracle-api/metaculus
+
+# Credentials only — never committed, mode 600, root-owned. Provisioned by hand
+# alongside the oracle-api relay key (retro#725); the box has no Secrets Manager
+# access, so the values are placed here directly.
+#   METACULUS_API_KEY=...       the Daatan-v1 bot token
+#   ORACLE_API_KEY=...          the NAMED, CAPPED relay key -- never the primary
+#   METACULUS_TOURNAMENT=bot-testing-area
+EnvironmentFile=/home/ubuntu/truthmachine/.env.metaculus
+
+# --frozen so a drifted lockfile fails loudly instead of silently resolving a
+# different dependency set on a box we only observe through logs.
+ExecStart=/home/ubuntu/.local/bin/uv run --frozen python sync.py
+
+# Bounds a hung run well inside the 20-minute period. Overlap is already
+# impossible (systemd will not start a second activation of a running oneshot),
+# but without a timeout a wedged HTTP call would block every later run
+# indefinitely rather than failing one of them.
+TimeoutStartSec=900
+
+# Logs to the journal, NOT to truthmachine/oracle_log.txt. That file is the
+# Oracle API's convention and is already 341 MB with no rotation; a job that
+# fires 72 times a day does not belong in it. Read this one with:
+#   journalctl -u metaculus-sync.service -n 100
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

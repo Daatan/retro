@@ -46,6 +46,15 @@ jobs:
       - name: Run settlement_report.py tests
         run: bash infra/tests/test_settlement_report.sh
 
+      # The Metaculus timer units only ever execute on the oracle box, so
+      # nothing else in CI would notice a decision in them being undone —
+      # notably the poll cadence, which retro#728 exists to correct.
+      - name: shellcheck install_metaculus_timer.sh
+        run: shellcheck -S error infra/install_metaculus_timer.sh
+
+      - name: Run metaculus-sync systemd unit tests
+        run: bash infra/tests/test_metaculus_timer.sh
+
   pytest:
     runs-on: ubuntu-latest
     strategy:

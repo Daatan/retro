@@ -1,0 +1,36 @@
+[Unit]
+Description=Run the Metaculus sync every 20 minutes
+Documentation=https://github.com/Daatan/retro/blob/main/metaculus/README.md
+
+[Timer]
+# Every 20 minutes on the wall clock (:00, :20, :40).
+#
+# Why 20 minutes and not the 6 hours an earlier version of the workflow
+# proposed: tournament questions are open for only 1.5h (temporarily 3h), so a
+# 6-hour poll misses most of them outright. The 6h figure assumed Oracle's
+# /forecast was a multi-minute call; retro#617 measured it over n=20,000
+# production forecasts — p50 7.3s, p99 25.0s, max 45.9s, zero timeouts — so
+# polling this often is easily affordable (retro#728).
+#
+# Why a systemd timer rather than a GitHub Actions cron: Actions cron is delayed
+# and skipped under load, and that unreliability is the stated reason Metaculus
+# temporarily widened the question window to 3h. Scheduling our discovery on the
+# same substrate would inherit the exact risk the window was widened to absorb.
+# On a 1.5h window a missed poll is a forfeited question.
+OnCalendar=*:0/20
+
+# Fire once shortly after boot too, so a reboot inside a question window does
+# not wait up to 20 minutes for the next slot.
+OnBootSec=3min
+
+# Catch up after downtime. If the box was off across one or more slots, run once
+# on resume rather than silently skipping the window.
+Persistent=true
+
+# Don't hit Metaculus exactly on the minute alongside every other bot polling on
+# a round schedule. Small enough to be irrelevant against a 1.5h window.
+RandomizedDelaySec=90
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

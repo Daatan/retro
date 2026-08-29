@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Added
+- Batch lane: every vault extraction JSON (done and gate_rejected/no_predictions markers) now carries `oracle_version` + `git_sha` of the running pipeline tree (retro#744) (#747)
 - CHANGELOG, `release.yml` (tag → GitHub release) and the changelog-touched PR check (retro#743)
 - Provenance block + `schema_version` on `/forecast` and `/pool/aggregate` (retro#593, #612); prompt version/hash in `ProvenanceModels` (retro#627, #628); gatekeeper prompt version/hash on `/relevance` (#639); effective article ceiling in provenance (retro#652, #653)
 - Oracle 2.0 playground — `/v2/forecast` traced jobs + `oracle-v2-test.html` (#595, #597, #599, #614)

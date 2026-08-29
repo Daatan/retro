@@ -23,6 +23,11 @@ computed `*_PROMPT_HASH` doesn't match the lock file — i.e. if a prompt edit
 landed without a version bump. Update the lock file (and this table) in the
 same PR as the prompt edit.
 
+The lock covers **three** kinds of text, added in that order as each was found to
+be unwatched: the hand-written prompt (retro#632), the serialised response schema
+(retro#700), and the blocks appended at call time (retro#731). Each section below
+explains what the previous one missed.
+
 ## The prompt is the prose **and** the schema (retro#700)
 
 `PROMPT_PREFIX`/`PROMPT_SUFFIX` are not all the text the model reads. Both the
@@ -72,6 +77,52 @@ on `/forecast`, and `gatekeeper_schema_hash` on `/relevance`. They are kept
 separate from `*_prompt_hash` rather than folded in so a stored row says *which*
 half moved — "the instructions were reworded" and "a field was added" are
 different events with different explanations for a shift in results.
+
+## And a third half: the appended blocks (retro#731)
+
+`PROMPT_PREFIX + PROMPT_SUFFIX` plus the schema still is not everything. Five
+instruction blocks are appended to `prompt` **after** `PROMPT_SUFFIX.format(...)`
+returns — at the tails of `extractor.extract_predictions` and
+`gatekeeper.check_is_prediction` — so they fall outside the reconstructed
+`*_PROMPT` in `forecaster.py` and, until retro#731, outside every hash in the lock:
+
+| Block | Chars | Reaches an article when |
+|---|---:|---|
+| `extractor._CONDITIONAL_BLOCK` | 4,233 | `has_conditional_language()` matches the lexicon |
+| `extractor._SHORT_FORM_OVERRIDE` | 604 | the host is on the short-form allowlist |
+| `extractor._LANGUAGE_HINT` | 189 | the article is not in English |
+| `gatekeeper._SHORT_FORM_OVERRIDE` | 1,354 | the host is on the short-form allowlist |
+| `gatekeeper._LANGUAGE_HINT` | 196 | the article is not in English |
+| **total** | **6,576** | |
+
+`_CONDITIONAL_BLOCK` alone is larger than the entire gatekeeper prompt and its
+schema together, and it carries three worked examples. retro#720 is what an
+unwatched block of worked examples costs: `## Multi-stage / bracket events` — a
+section inside the *hashed* prefix — suppressed Nova Lite on **unrelated**
+numeric-threshold claims, 8/20 → 18/20 when removed, because its seven examples
+were uniformly low-stance. Not a length effect: a 1,702-char cut changed nothing
+and an 1,886-char cut changed everything. That is the retro#700 mechanism running
+forwards, and `_CONDITIONAL_BLOCK` is the same shape of hazard.
+
+These blocks also carry a hazard the prefix does not: they are **conditionally
+injected**. A lexical pre-filter decides who gets the conditional block; a host
+allowlist decides who gets short-form. So a regression in one lands on a subset of
+traffic and presents as unexplained drift rather than as a change with a date.
+
+The lock now carries a `tail_blocks` section, **one entry per block**, each with a
+`hash` and a `chars`. One folded hash over the concatenation would have been less
+code and would report every change as "the tail moved" — which is not a review.
+Five entries mean CI names the block.
+
+**Editing one of these is a prompt edit.** Bump the owning prompt's version, add a
+row to the table below, update the lock. And if the block you touched carries worked
+examples, run the A/B harness before you touch it — that is the whole lesson of
+retro#720.
+
+`test_every_appended_block_is_locked` holds the partition: a sixth block appended at
+call time but never registered would otherwise be covered by nothing, which is
+exactly how this gap was born — `_CONDITIONAL_BLOCK` was added, appended and shipped,
+and every enforcement test in the file stayed green for its entire life.
 
 | Component | Version | Hash | Effective from | PR | Summary |
 |---|---|---|---|---|---|

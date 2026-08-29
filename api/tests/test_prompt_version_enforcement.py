@@ -6,6 +6,8 @@ prompt_version label goes stale relative to what actually ran (retro#632).
 import json
 from pathlib import Path
 
+import pytest
+
 from forecast_api import forecaster
 
 LOCK_PATH = Path(__file__).resolve().parents[2] / "docs" / "prompt_versions.lock.json"
@@ -89,4 +91,90 @@ def test_schema_sizes_match_lock_file():
     assert lock["extractor"]["schema_chars"] == len(forecaster.EXTRACTOR_SCHEMA), (
         "Extractor schema size moved: "
         + _delta(len(forecaster.EXTRACTOR_SCHEMA), lock["extractor"]["schema_chars"])
+    )
+
+
+# ── the conditionally-appended tail blocks (retro#731) ───────────────────────
+#
+# The four tests above cover `PROMPT_PREFIX + PROMPT_SUFFIX` and the serialised
+# schema. Neither call sends only that: five instruction blocks are appended to
+# `prompt` AFTER `PROMPT_SUFFIX.format(...)` returns, so they fall outside the
+# reconstructed *_PROMPT and were outside every hash here. 6,576 chars of live
+# prompt text, 4,233 of it in `_CONDITIONAL_BLOCK` alone — larger than the whole
+# gatekeeper prompt and its schema together, and carrying three worked examples.
+#
+# retro#720 is the standing demonstration of what an unwatched block of worked
+# examples does: `## Multi-stage / bracket events`, inside the *hashed* prefix,
+# suppressed Nova Lite on unrelated numeric-threshold claims (8/20 -> 18/20 when
+# removed), because its examples all pointed one way. Same hazard here, and until
+# now none of the protection.
+#
+# One assertion per block. A single hash over the concatenation would be cheaper
+# and would report every change as "the tail moved", which tells a reviewer
+# nothing about what to review.
+
+
+def _tail_lock(name: str) -> dict:
+    entry = _lock().get("tail_blocks", {}).get(name)
+    assert entry is not None, (
+        f"docs/prompt_versions.lock.json has no tail_blocks entry for '{name}'. "
+        "A block reaching the model with no lock entry is exactly the gap retro#731 closed."
+    )
+    return entry
+
+
+@pytest.mark.parametrize("name", sorted(forecaster.PROMPT_TAIL_BLOCKS))
+def test_tail_block_hash_matches_lock_file(name: str):
+    entry = _tail_lock(name)
+    text = forecaster.PROMPT_TAIL_BLOCKS[name]
+    assert entry["hash"] == forecaster.PROMPT_TAIL_BLOCK_HASHES[name], (
+        f"The '{name}' prompt block changed ({_delta(len(text), entry['chars'])}). "
+        "It is appended to the prompt at call time, so this is a PROMPT EDIT, not a "
+        "code change: bump the owning prompt's *_PROMPT_VERSION, add a row to "
+        "docs/PROMPT_VERSIONS.md, and update docs/prompt_versions.lock.json. If the "
+        "block carries worked examples, run the A/B harness first — retro#720."
+    )
+
+
+@pytest.mark.parametrize("name", sorted(forecaster.PROMPT_TAIL_BLOCKS))
+def test_tail_block_size_matches_lock_file(name: str):
+    """The size ratchet again, per block — see test_schema_sizes_match_lock_file.
+
+    Same reasoning: a hash mismatch says *something* moved, and the cheapest way
+    to smuggle a regression past review is growth nobody costed.
+    """
+    entry = _tail_lock(name)
+    text = forecaster.PROMPT_TAIL_BLOCKS[name]
+    assert entry["chars"] == len(text), (
+        f"The '{name}' prompt block's size moved: {_delta(len(text), entry['chars'])}"
+    )
+
+
+def test_every_appended_block_is_locked():
+    """The partition guard: no block reaches the model unlocked.
+
+    The two tests above iterate `PROMPT_TAIL_BLOCKS`, so a block added to
+    extractor.py/gatekeeper.py and appended at call time — but never registered
+    here — would be covered by nothing and no test would notice. That is precisely
+    how this gap was born: `_CONDITIONAL_BLOCK` was added, appended, and shipped,
+    and every enforcement test in this file stayed green for its whole life.
+
+    Kept as a hard-coded expectation rather than derived from the same dict the
+    other tests iterate: a guard that reads its own answer off the thing it guards
+    cannot fail. Adding a sixth block should make this fail and force a decision.
+    """
+    assert set(forecaster.PROMPT_TAIL_BLOCKS) == {
+        "extractor.conditional",
+        "extractor.short_form",
+        "extractor.language_hint",
+        "gatekeeper.short_form",
+        "gatekeeper.language_hint",
+    }, (
+        "The set of prompt blocks appended after PROMPT_SUFFIX.format() changed. If you added "
+        "one, register it in forecaster.PROMPT_TAIL_BLOCKS, add a docs/prompt_versions.lock.json "
+        "entry, and add it here. If you removed one, drop it from all three."
+    )
+    assert set(forecaster.PROMPT_TAIL_BLOCKS) == set(_lock()["tail_blocks"]), (
+        "forecaster.PROMPT_TAIL_BLOCKS and the lock file's tail_blocks disagree about which "
+        "blocks exist."
     )

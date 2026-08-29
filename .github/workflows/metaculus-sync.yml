@@ -14,11 +14,23 @@ on:
         description: "Log what would be submitted without writing to Metaculus"
         type: boolean
         default: true
-  # Intentionally no `schedule:` trigger yet — see metaculus/README.md
-  # "Not yet done". Add one (e.g. every 6 hours, matched to Oracle's own
-  # multi-minute /forecast latency, not the 20-minute cadence bot templates
-  # default to) once the relay key exists and a manual dry run has been
-  # verified clean.
+  # No `schedule:` trigger until the oracle-api relay key exists (retro#725)
+  # and a manual dry run has been verified clean (retro#727) — a cron enabled
+  # before then just fails every 20 minutes.
+  #
+  # When enabling, the cadence is ~20 minutes, NOT the 6 hours an earlier
+  # version of this comment proposed. That figure assumed Oracle's /forecast
+  # was a multi-minute call; retro#617 has since measured it over n=20,000
+  # production forecasts — p50 7.3s, p99 25.0s, max 45.9s, zero timeouts.
+  # Tournament questions close 1.5h (temporarily 3h) after opening, so a 6h
+  # cron misses most of them outright while 20 minutes is easily affordable:
+  #
+  #   schedule:
+  #     - cron: "*/20 * * * *"
+  #
+  # Note GitHub Actions cron is both delayed under load and the reason
+  # Metaculus temporarily widened the window to 3h; retro#728 tracks moving
+  # discovery to a systemd timer on the oracle box instead.
 
 jobs:
   test:

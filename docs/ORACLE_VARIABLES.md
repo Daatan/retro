@@ -2345,3 +2345,53 @@ the retro#705 undatable drop it sits beside: an article we cannot attribute is n
 evidence. Expected cost once upstream is cleaned: zero.
 
 R8 protocol: no aggregation code touched, no matrix case moved.
+
+## 2026-08-29 — a provider's date is normalised, not trusted (retro#714)
+
+`_resolve_article_date` took the provider's string as gospel:
+
+```python
+provider = (result.published_date or "").strip()[:10]
+return provider or _date_from_url(result.url)
+```
+
+Any non-empty string won, so the URL-path leg behind it was unreachable whenever the
+provider said *anything at all*. Nothing raised. The string was stored,
+`aggregation._parse_date` returned None on it, and `recency_weight` applied the **floor**
+— 0.02 instead of ~1.0, by design rule R3 (missing data must never increase influence).
+A correctly dated article in an unexpected format therefore lost **50×** its weight,
+silently, and was read as maximally stale. The `[:10]` slice manufactured garbage of its
+own: `"Feb 24, 2026"` was stored as `"Feb 24, 20"`.
+
+`tm.web_search_ingest.normalise_published_date` now converts before accepting: ISO (with
+or without a time suffix), English month-name forms in either order, unambiguous numeric
+forms, and the relative grammar (`"2 days ago"`) delegated to
+`web_search._absolutize_relative_date` so retro#562 keeps one copy of those rules.
+Unicode format characters (bidi marks, the BOM) are stripped first — invisible, carrying
+no date information, and fatal to every parser.
+
+**Recovery, not stricter rejection, is the point.** A row with an unparseable date keeps
+its vote today at floor weight; validating alone would have converted that into an
+outright drop (retro#705), which is worse. Only 1 of the 13 non-ISO rows in the live pool
+had a datable URL, so a naive validate-then-fall-through would have dropped 12 of 13.
+
+**Ambiguous numeric dates are refused on purpose.** `05/09/2026` is 5 September to most
+of the world and 9 May in the US, and nothing in a SERP payload says which. A guess would
+be *believed*: `article_date` is what `_apply_relative_date_override` walks the calendar
+against, so a wrong one propagates into `event_date`. `16/09/2026` is accepted — 16
+cannot be a month, so it resolves itself. Rejections log
+`event=provider_date_rejected` with the raw value, keeping "a format we do not parse yet"
+separate from "the provider sent no date" — the distinction `event_date_state` (retro#554)
+draws for settlement dates.
+
+**Measured footprint — the stored rows were not the live vector.** 13 of 13,170 voting
+pool rows carried a non-ISO `published_date` (0.099%). Origin analysis dissolves them:
+6 are `origin=retry` google.com rows that retro#709 now drops as redirectors, and 7 are
+`origin=backfill` from a single run on 2026-08-16 (7 of only 11 backfill rows in the whole
+pool). The `news-indexer` origin — 10,238 rows, 78% of the pool — has **zero**. The live
+vector is in the code rather than the table: `web_search.py` assigns Brave's `age` field
+raw (`published_date=item.get("age", "")`), and that field is relative ("2 days ago") as
+often as it is a date. Brave is step 4 of the chain, so it rarely wins, which is why the
+pool shows almost nothing. Its assignment site is left alone here — `_filter_by_date`
+absolutizes transiently for filtering and changing what is *written* has its own
+consequences for the batch path.

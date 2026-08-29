@@ -55,7 +55,11 @@ from tm.llm import complete_text_once_with_usage, rendered_response_schema
 from tm.net_guard import UnsafeURLError, safe_get
 # Same URL-path date parser the batch ingest uses. Sharing it keeps the two paths'
 # idea of "can we date this article" identical rather than growing a second dialect.
-from tm.web_search_ingest import _date_from_url, is_redirector_url
+from tm.web_search_ingest import (
+    _date_from_url,
+    is_redirector_url,
+    normalise_published_date,
+)
 
 # gatekeeper.py/extractor.py each split their PROMPT into a cacheable PROMPT_PREFIX
 # (fixed instructions) + PROMPT_SUFFIX (article/variable fields) so llm.py can mark
@@ -986,9 +990,30 @@ def _resolve_article_date(result: SearchResult) -> str | None:
     :func:`_fetch_article_text`'s return type, and the measured footprint does not
     justify that — 20 of 13,196 pool rows have no date at all, and none of them ever
     settled. Add it if the ``no_date`` skip counter says otherwise.
+
+    The provider date is **normalised, not trusted** (retro#714). It used to be taken
+    as ``(result.published_date or "").strip()[:10]``, so any non-empty string won and
+    the URL leg behind it became unreachable — Brave hands its ``age`` field over raw,
+    which is ``"2 days ago"`` as often as a date. Nothing raised: the string was stored,
+    ``aggregation._parse_date`` returned None on it, and ``recency_weight`` applied the
+    **floor** (0.02 rather than ~1.0, design rule R3 — missing data must never increase
+    influence). A correctly dated article in an unexpected format therefore took a 50x
+    weight penalty, silently. The ``[:10]`` slice made it worse by manufacturing
+    garbage of its own: ``"Feb 24, 2026"`` was stored as ``"Feb 24, 20"``.
     """
-    provider = (result.published_date or "").strip()[:10]
-    return provider or _date_from_url(result.url)
+    provider = normalise_published_date(result.published_date)
+    if provider:
+        return provider
+    raw = (result.published_date or "").strip()
+    if raw:
+        # Not an outcome — the URL leg below may still date this article. Logged so the
+        # rejected population stays measurable, the same reason `event_date_state`
+        # exists for settlement dates (retro#554): a format we do not yet parse and a
+        # provider that genuinely sent no date are different problems.
+        logger.info(
+            "event=provider_date_rejected raw=%s url=%s", raw[:40], result.url,
+        )
+    return _date_from_url(result.url)
 
 
 def _fetch_article_text(url: str, fallback: str, *, try_archived: bool = True) -> str:

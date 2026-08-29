@@ -92,6 +92,99 @@ def is_redirector_url(url: Optional[str]) -> bool:
     return any(path.startswith(prefix) for prefix in _REDIRECTOR_PATH_PREFIXES)
 
 
+# Unicode format characters (category Cf): bidi marks, zero-width joiners, the BOM.
+# A search provider rendering a date under an RTL locale wraps the numerals in U+200F,
+# which is invisible, carries no date information, and defeats every parser. Stripping
+# them is pure noise removal — it cannot change which date a string denotes.
+_FORMAT_CHARS_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
+
+_ISO_RE = re.compile(r"^(?P<y>(?:19|20)\d{2})-(?P<m>\d{1,2})-(?P<d>\d{1,2})")
+#: "Feb 24, 2026" / "February 24 2026" / "Feb. 24, 2026"
+_MONTH_FIRST_RE = re.compile(
+    r"^(?P<mon>[a-z]{3,9})\.?\s+(?P<d>\d{1,2})(?:st|nd|rd|th)?\s*,?\s+(?P<y>(?:19|20)\d{2})$",
+    re.IGNORECASE,
+)
+#: "24 Feb 2026" / "24 February, 2026"
+_DAY_FIRST_RE = re.compile(
+    r"^(?P<d>\d{1,2})(?:st|nd|rd|th)?\s+(?P<mon>[a-z]{3,9})\.?\s*,?\s+(?P<y>(?:19|20)\d{2})$",
+    re.IGNORECASE,
+)
+#: "16/09/2026", "09.16.2026", "16-09-2026" — order NOT assumed, see below.
+_NUMERIC_RE = re.compile(r"^(?P<a>\d{1,2})[/.-](?P<b>\d{1,2})[/.-](?P<y>(?:19|20)\d{2})$")
+
+
+def _ymd(y: int, m: int, d: int) -> Optional[str]:
+    try:
+        return datetime(y, m, d).strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def normalise_published_date(
+    value: Optional[str], *, now: Optional[datetime] = None
+) -> Optional[str]:
+    """A provider's publication date as ``YYYY-MM-DD``, or None if it is not a date.
+
+    Kept beside :func:`_date_from_url` and :func:`is_redirector_url` for the same
+    reason those live here: it is a fact about a search result that the live and batch
+    paths must read identically, and the two have drifted before.
+
+    **Returning None is not cosmetic** — ``_resolve_article_date`` falls through to the
+    URL leg and then drops the article (retro#705), while a string that merely *looks*
+    like a date is stored, fails ``aggregation._parse_date``, and lands the row on the
+    recency **floor** (0.02 instead of ~1.0, design rule R3: missing data never
+    increases influence). So a real date in an unexpected format costs a 50x weight
+    penalty today. This function exists to recover those rather than to reject harder.
+
+    Accepted, in order: ISO (with or without a time suffix), English month-name forms
+    in either order, unambiguous numeric forms, and the relative grammar
+    (``"2 days ago"``) that Brave's ``age`` field emits raw — that last one delegates to
+    ``web_search._absolutize_relative_date`` rather than re-implementing it, so retro#562
+    keeps a single copy of the relative-date rules.
+
+    **Ambiguous numeric dates are refused on purpose.** ``05/09/2026`` is 5 September to
+    most of the world and 9 May in the US, and nothing in a SERP payload says which. A
+    guess here would be silently wrong half the time and would be *believed*, because
+    ``article_date`` is what ``_apply_relative_date_override`` walks the calendar
+    against. ``16/09/2026`` is accepted — 16 cannot be a month, so it resolves itself.
+    """
+    if not value:
+        return None
+    text = _FORMAT_CHARS_RE.sub("", str(value)).strip()
+    if not text:
+        return None
+
+    m = _ISO_RE.match(text)
+    if m:
+        return _ymd(int(m.group("y")), int(m.group("m")), int(m.group("d")))
+
+    for pattern in (_MONTH_FIRST_RE, _DAY_FIRST_RE):
+        m = pattern.match(text)
+        if m:
+            mon = _MONTH_ABBR.get(m.group("mon").lower()[:4].rstrip(".")) or _MONTH_ABBR.get(
+                m.group("mon").lower()[:3]
+            )
+            if mon:
+                return _ymd(int(m.group("y")), mon, int(m.group("d")))
+            return None
+
+    m = _NUMERIC_RE.match(text)
+    if m:
+        a, b, y = int(m.group("a")), int(m.group("b")), int(m.group("y"))
+        if a > 12 and b <= 12:
+            return _ymd(y, b, a)          # day-first, forced
+        if b > 12 and a <= 12:
+            return _ymd(y, a, b)          # month-first, forced
+        return None                        # genuinely ambiguous — refuse to guess
+
+    absolutized = _ws._absolutize_relative_date(text, now)
+    if absolutized != text:
+        m = _ISO_RE.match(absolutized)
+        if m:
+            return _ymd(int(m.group("y")), int(m.group("m")), int(m.group("d")))
+    return None
+
+
 def _date_from_url(url: str) -> Optional[str]:
     """Extract YYYY-MM-DD from URL paths like /2025/dec/11/ or /2024/03/15/."""
     m = _URL_DATE_RE.search(url)

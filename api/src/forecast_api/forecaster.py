@@ -114,7 +114,12 @@ from .aggregation import (
 )
 from .cache import forecast_cache, search_cache
 from .antecedent import antecedent_keep_mask, filter_pool_by_antecedent
-from .clustering import cluster_text_for_claims, cluster_texts_with_stats
+from .clustering import (
+    cluster_by_event_key,
+    cluster_text_for_claims,
+    cluster_texts_with_stats,
+    event_key_for_row,
+)
 from .confusion_flags import log_confusion_flags
 from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight
@@ -594,7 +599,25 @@ def _cluster_text_of(s) -> Optional[str]:
     )
 
 
-def _cluster_ids(texts: list[Optional[str]], question_hash: str) -> Optional[tuple[int, ...]]:
+def _event_key_of(s) -> Optional[str]:
+    """The event key of one row, from either a live ``SourceSignal`` or a caller-supplied
+    ``PoolSourceInput`` — both carry ``claims_detail`` and the row-level facets, and both
+    MUST resolve identically, for the same reason :func:`_cluster_text_of` must
+    (retro#404)."""
+    return event_key_for_row(
+        getattr(s, "claims_detail", None),
+        event_actors=getattr(s, "event_actors", None),
+        event_target=getattr(s, "event_target", None),
+        settlement_event_date=getattr(s, "settlement_event_date", None),
+        published_date=getattr(s, "published_date", None),
+    )
+
+
+def _cluster_ids(
+    texts: list[Optional[str]],
+    keys: list[Optional[str]],
+    question_hash: str,
+) -> Optional[tuple[int, ...]]:
     """Cluster a pool's rows and log the echo structure (retro#355).
 
     Runs even when the discount is inert — that is the point. The decision to enable it
@@ -615,6 +638,12 @@ def _cluster_ids(texts: list[Optional[str]], question_hash: str) -> Optional[tup
     Unlike the clusters themselves, this measurement accrues at TRAFFIC rate rather than
     at resolution rate — it observes pool structure, not forecast accuracy — so it does
     not wait on the resolved-forecast backlog that gates enabling the discount (#403).
+
+    ``event_*`` (retro#682) reports the same pool under a second, paraphrase-invariant
+    key — ``(actor, target, day)`` from the retro#313 facets — logged **beside** the
+    Jaccard numbers rather than replacing them, so the two can be compared on identical
+    pools before anything is switched over. The returned ids are still the Jaccard ones:
+    the discount is unchanged and remains gated on #403.
     """
     ids, stats = cluster_texts_with_stats(
         texts,
@@ -625,14 +654,17 @@ def _cluster_ids(texts: list[Optional[str]], question_hash: str) -> Optional[tup
     for cid in ids:
         sizes[cid] = sizes.get(cid, 0) + 1
     echoed = {c: k for c, k in sizes.items() if k > 1}
+    _, ekstats = cluster_by_event_key(keys)
     logger.info(
         "event=evidence_clusters question=%s rows=%d textful=%d pairs=%d clusters=%d "
-        "largest=%d echoed_rows=%d max_jaccard=%.3f threshold=%.2f exponent=%.2f hist=%s",
+        "largest=%d echoed_rows=%d max_jaccard=%.3f threshold=%.2f exponent=%.2f hist=%s "
+        "event_keyed=%d event_clusters=%d event_echoed_rows=%d event_largest=%d",
         question_hash, stats.rows, stats.textful, stats.pairs, len(sizes),
         max(sizes.values()) if sizes else 0, sum(echoed.values()),
         stats.max_jaccard, settings.cluster_jaccard_threshold,
         settings.cluster_downweight_exponent,
         ",".join(str(c) for c in stats.histogram),
+        ekstats.keyed, ekstats.clusters, ekstats.echoed_rows, ekstats.largest,
     )
     # Below two rows there is nothing to group; returning None keeps the discount path
     # untouched, exactly as before — only the logging above is new.
@@ -2313,7 +2345,9 @@ async def _run_forecast_inner(
         settlement_post_deadline_grace_days=settings.settlement_post_deadline_grace_days,
         settlement_quality_floor=settings.settlement_quality_floor,
         cluster_ids=_cluster_ids(
-            [_cluster_text_of(s) for s in source_signals], _question_hash(req.question),
+            [_cluster_text_of(s) for s in source_signals],
+            [_event_key_of(s) for s in source_signals],
+            _question_hash(req.question),
         ),
         cluster_downweight_exponent=settings.cluster_downweight_exponent,
         valve_weights=all_valve_weights,
@@ -2779,7 +2813,9 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         # This is the first estimator use of claims_detail, which run_pool_aggregate's
         # whitelist comment reserved for exactly this issue (retro#355).
         cluster_ids=_cluster_ids(
-            [_cluster_text_of(s) for s in sources], _question_hash(req.question or ""),
+            [_cluster_text_of(s) for s in sources],
+            [_event_key_of(s) for s in sources],
+            _question_hash(req.question or ""),
         ),
         cluster_downweight_exponent=settings.cluster_downweight_exponent,
         valve_weights=valve_weights,

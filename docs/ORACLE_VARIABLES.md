@@ -2395,3 +2395,69 @@ often as it is a date. Brave is step 4 of the chain, so it rarely wins, which is
 pool shows almost nothing. Its assignment site is left alone here — `_filter_by_date`
 absolutizes transiently for filtering and changing what is *written* has its own
 consequences for the batch path.
+
+## 2026-08-29 — same development, not same words: the event key (retro#682)
+
+`clustering.cluster_texts` asks whether two pool rows used the same wording. Measured
+over the `event=evidence_clusters` log in prod — **13,035 pools, 19,926,967 pairwise
+comparisons** — that question almost never gets a yes:
+
+| band | pairs | share |
+|---|---|---|
+| [0.0,0.1) | 19,871,389 | **99.721%** |
+| [0.1,0.2) | 44,932 | 0.225% |
+| [0.2,0.3) | 5,787 | 0.029% |
+| [0.3,0.4) | 2,401 | 0.012% |
+| ≥0.40 (fires today) | 2,458 | 0.012% |
+
+`max_jaccard` is exactly **0.0 in 8,658 of 13,035 pools**. Pool rows are LLM paraphrases
+of twenty different outlets' prose, so one development routinely shares almost no
+trigram with itself.
+
+**Lowering `cluster_jaccard_threshold` is not the alternative.** The [0.3,0.4) band holds
+2,401 pairs against 2,458 already firing — dropping the bar to 0.30 moves the firing rate
+from 0.012% of pairs to 0.024%. That is noise either way, and `config.py`'s instruction to
+tune the threshold "against the logged cluster structure" is now answered: there is no
+mass sitting just under it. Do not re-propose a threshold change on this evidence.
+
+`event_key_for_row` asks a paraphrase-invariant question instead — same `(actor, target,
+day)`? — off the retro#313 facets, which were elicited but barely consumed before this.
+
+**The day is not optional, and neither is the `published_date` fallback.** One key per
+row (highest `claim_strength` claim, ties by array position):
+
+| key | keyed rows | rows collapsed | pools with echo | largest cluster | clusters >20 |
+|---|---|---|---|---|---|
+| Jaccard ≥0.40 (today) | 7,376 clusterable | 0.57% echoed | 19.2% | — | — |
+| dyad only | 5,524 | 40.4% | 78.4% | **171** | 20 |
+| dyad + `event_date` only | **793** | 24.4% | 41.9% | — | — |
+| dyad + day, `event_date` ?? `published_date` | 5,497 | 17.7% | 62.1% | 24 | 2 |
+| **+ row-level facet fallback (shipped)** | **6,886** | **18.8%** | **62.7%** | **24** | 3 |
+
+Two failure modes bracket the design. Requiring `event_date` keys 6% of the pool — the
+field's own instruction is "omit entirely when the article states no date", and most
+articles state none. Dropping the date instead produces a **171-row** cluster on
+`united states -> iran`, because a dyad is a *relationship*, not an event: months of
+coverage collapse into one "story", and with the discount enabled that pool would go to
+`n_eff ≈ 1`. Adding the publication day splits that same group into 34 sub-clusters,
+largest 24. The row-level `event_actors`/`event_target` fallback then buys +27% coverage
+(5,403 → 6,886 rows) with the largest cluster unchanged.
+
+**Reporting only. R8: no case moved.** `_cluster_ids` returns the same Jaccard ids it
+always did; the event key is logged *beside* the Jaccard numbers
+(`event_keyed`, `event_clusters`, `event_echoed_rows`, `event_largest`) so the two can be
+compared on identical pools before anything is switched over.
+`cluster_downweight_exponent` stays 0.0 and enabling the discount remains gated on #355's
+December backtest (#403). This changes the key the seam will use *when* it turns on, not
+whether it turns on.
+
+Normalisation is stdlib and deterministic — lowercase, punctuation stripped, leading
+article removed, multi-actor strings split on commas and **sorted** so "United States,
+Israel" and "Israel, the United States" are one key. The alias table is deliberately tiny
+and holds only nation-state synonyms whose merge is not a judgement call; metonyms
+("Washington", "Number 10") are left alone because their correctness depends on context
+and a wrong merge silently fuses two developments. news-indexer entity ids are the Phase 2
+escalation, and the 18.8% collapse rate says they are not needed yet. The date is taken by
+**slice, not parse**: `published_date` is free text that holds non-ISO junk, and an
+exception inside the clusterer would fail a `/forecast` request over a reporting-only
+measurement.

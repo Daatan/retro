@@ -19,6 +19,7 @@ from .utils import KNOWN_SOURCE_IDS, predates_outcome
 from .gnews_ingest import _is_stub_page
 from .net_guard import safe_get_async
 from .crawler import _source_domain
+from .build_info import git_sha, oracle_version
 import httpx
 from bs4 import BeautifulSoup
 
@@ -422,7 +423,11 @@ class Orchestrator:
                         "extractor_model": result.extractor_model or effective_model,
                         "gatekeeper_model": settings.gatekeeper_model,
                         "gatekeeper_reason": result.gatekeeper_reason,
-                        "run_date": datetime.now().isoformat()
+                        "run_date": datetime.now().isoformat(),
+                        # Which code produced this record (retro#744). Provenance
+                        # only — not a skip key, see _negative_marker_is_current.
+                        "oracle_version": oracle_version(),
+                        "git_sha": git_sha()
                     }
                     json.dump(data, f, indent=2)
                 console.print(f"    [dim]Saved to vault: {extract_path}[/dim]")
@@ -446,7 +451,11 @@ class Orchestrator:
                         "extractor_model": result.extractor_model or effective_model,
                         "gatekeeper_model": settings.gatekeeper_model,
                         "gatekeeper_reason": result.gatekeeper_reason,
-                        "run_date": datetime.now().isoformat()
+                        "run_date": datetime.now().isoformat(),
+                        # Which code produced this record (retro#744). Provenance
+                        # only — not a skip key, see _negative_marker_is_current.
+                        "oracle_version": oracle_version(),
+                        "git_sha": git_sha()
                     }, f, indent=2)
                 console.print(f"    [dim]Negative marker saved: {extract_path}[/dim]")
             except Exception as e:

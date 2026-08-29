@@ -1,0 +1,48 @@
+name: Metaculus Sync
+
+# Submits Oracle forecasts into a Metaculus tournament under the daatan-v1
+# bot account (daatan#1554). Deliberately points at the unscored
+# "bot-testing-area" tournament by default — see metaculus/README.md for why,
+# and for what's still missing before this can run for real (the oracle-api
+# named relay key isn't provisioned yet, so this workflow is not yet enabled
+# on a schedule).
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Log what would be submitted without writing to Metaculus"
+        type: boolean
+        default: true
+  # Intentionally no `schedule:` trigger yet — see metaculus/README.md
+  # "Not yet done". Add one (e.g. every 6 hours, matched to Oracle's own
+  # multi-minute /forecast latency, not the 20-minute cadence bot templates
+  # default to) once the relay key exists and a manual dry run has been
+  # verified clean.
+
+jobs:
+  test:
+    uses: ./.github/workflows/tests.yml
+
+  sync:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        working-directory: metaculus
+        run: uv sync --frozen --extra dev
+
+      - name: Run sync
+        working-directory: metaculus
+        env:
+          METACULUS_API_KEY: ${{ secrets.METACULUS_ORACLE_V1_API_KEY }}
+          ORACLE_API_KEY: ${{ secrets.ORACLE_RELAY_API_KEY }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: uv run python sync.py

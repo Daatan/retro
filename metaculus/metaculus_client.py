@@ -1,0 +1,87 @@
+"""Thin client for the Metaculus bot API (https://www.metaculus.com/api).
+
+Auth is a per-bot ``Authorization: Token`` header. Each Daatan bot identity
+(``daatan-v1``, and later ``daatan-v2``) has its own token — see README.md for
+where those live in Secrets Manager. Only binary questions are supported: the
+Oracle's ``mean`` stance in [-1, 1] maps cleanly to a binary probability, but
+it has no numeric/date/categorical output shape today.
+"""
+
+from __future__ import annotations
+
+import httpx
+
+BASE_URL = "https://www.metaculus.com/api"
+
+
+class MetaculusClient:
+    def __init__(self, token: str, timeout: float = 30.0, transport: httpx.BaseTransport | None = None):
+        self._client = httpx.Client(
+            base_url=BASE_URL,
+            headers={"Authorization": f"Token {token}"},
+            timeout=timeout,
+            transport=transport,
+        )
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> "MetaculusClient":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
+    def open_binary_questions(self, tournament: str, limit: int = 50) -> list[dict]:
+        """List open binary questions in a tournament, newest-activity first."""
+        results: list[dict] = []
+        offset = 0
+        while len(results) < limit:
+            page_size = min(50, limit - len(results))
+            resp = self._client.get(
+                "/posts/",
+                params={
+                    "tournaments": tournament,
+                    "statuses": "open",
+                    "forecast_type": "binary",
+                    "order_by": "-hotness",
+                    "limit": page_size,
+                    "offset": offset,
+                },
+            )
+            resp.raise_for_status()
+            page = resp.json()
+            page_results = page.get("results", [])
+            results.extend(page_results)
+            if not page.get("next") or not page_results:
+                break
+            offset += len(page_results)
+        return results[:limit]
+
+    def get_question(self, post_id: int) -> dict:
+        resp = self._client.get(f"/posts/{post_id}/")
+        resp.raise_for_status()
+        return resp.json()
+
+    def submit_binary_forecast(self, question_id: int, probability_yes: float) -> None:
+        # Metaculus retains uncertainty by clamping submissions away from the
+        # extremes; keep our own margin so a rounding edge never gets rejected.
+        clamped = min(max(probability_yes, 0.03), 0.97)
+        resp = self._client.post(
+            "/questions/forecast/",
+            json=[{"question": question_id, "source": "api", "probability_yes": clamped}],
+        )
+        resp.raise_for_status()
+
+    def post_comment(self, post_id: int, text: str, *, private: bool = True) -> None:
+        resp = self._client.post(
+            "/comments/create/",
+            json={
+                "text": text,
+                "parent": None,
+                "included_forecast": True,
+                "is_private": private,
+                "on_post": post_id,
+            },
+        )
+        resp.raise_for_status()

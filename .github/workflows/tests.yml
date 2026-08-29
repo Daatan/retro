@@ -12,6 +12,7 @@ on:
       - api/**
       - pipeline/**
       - bayesoracle/**
+      - metaculus/**
       # The case studies are hand-edited data, and test_event_validation.py
       # validates the committed set — so a bad edit to an event file alone must
       # trigger this workflow, not just changes under pipeline/.
@@ -50,7 +51,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [api, pipeline, bayesoracle]
+        project: [api, pipeline, bayesoracle, metaculus]
     defaults:
       run:
         working-directory: ${{ matrix.project }}

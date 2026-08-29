@@ -44,7 +44,13 @@ async def test_default_prompt_is_unchanged_byte_for_byte():
     """THE safety property. Every existing caller sends no short_form, and its prompt must be
     exactly what it was — the override may only ever append, never edit the base text."""
     default = await _capture_prompt()
-    expected = (extractor.PROMPT_PREFIX + extractor.PROMPT_SUFFIX).format(
+    # Built the way the runtime builds it: the prefix goes to the model VERBATIM as
+    # `cached_prefix` and only the suffix is `.format()`-ed. Formatting the
+    # concatenation instead read identically for as long as the prefix happened to
+    # contain no braces, and stopped when retro#683's QUANTITY block added a worked
+    # JSON object to it — a reconstruction that has to be escaped differently from the
+    # real one is not pinning the real one.
+    expected = extractor.PROMPT_PREFIX + extractor.PROMPT_SUFFIX.format(
         **_ARGS, journalist="unknown", claim_deadline="not given"
     )
     assert default == expected

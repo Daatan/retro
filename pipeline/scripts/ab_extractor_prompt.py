@@ -61,7 +61,10 @@ from collections import Counter
 from pathlib import Path
 
 from tm import llm
-from tm.ab_harness import Case, build_case_results, gate_exit_code, load_cases
+from tm.ab_harness import (
+    Case, QuantityDiagnostic, build_case_results, gate_exit_code, load_cases,
+    quantity_diagnostics,
+)
 from tm.config import settings
 from tm.extractor import PROMPT_PREFIX, PROMPT_SUFFIX
 from tm.models import ExtractionOutput, PredictionExtraction
@@ -167,6 +170,8 @@ async def _cmd_run(args: argparse.Namespace) -> None:
             counts = Counter(v for v in vals if isinstance(v, str))
             detail = "  " + ", ".join(f"{k}={n}" for k, n in counts.most_common()) if counts else ""
             print(f"  {f:<24} {len(vals):>3}/{len(all_article)} ({share:>4}){detail}")
+    _print_quantity_report(cases, results, arm=args.label)
+
     total_tokens = sum(u.get("total_tokens", 0) for runs_ in usage.values() for u in runs_)
     n_calls = sum(len(runs_) for runs_ in usage.values())
     if n_calls:
@@ -188,6 +193,62 @@ async def _cmd_run(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+# ── the quantity report (retro#683 item 1.6) ─────────────────────────────────
+#
+# "Compare `quantity` against the question's threshold in code and log the result per
+# rater beside `stance`." An arm is one model, so an arm's report IS the per-rater row.
+#
+# It is a DIAGNOSTIC and not part of the gate, on purpose: `quantity` is a shadow field
+# whose validator has not been run yet, and `unmet_facets` is what decides whether a
+# prompt PR may land. See the note on `Case.question_threshold`.
+
+def _diag_rows(cases: list[Case], results: dict[str, list[list[dict]]]) -> list[QuantityDiagnostic]:
+    parsed = {
+        cid: [[PredictionExtraction(**p) for p in run] for run in runs]
+        for cid, runs in results.items()
+    }
+    return quantity_diagnostics(cases, parsed)
+
+
+def _pct(n: int, d: int) -> str:
+    return f"{100 * n / d:.0f}%" if d else "  --"
+
+
+def _print_quantity_report(
+    cases: list[Case], results: dict[str, list[list[dict]]], *, arm: str,
+) -> None:
+    diags = _diag_rows(cases, results)
+    if not diags:
+        return
+    print(f"\nQuantity vs question threshold — rater: {arm}")
+    print(f"  {'case':<45} {'fill':>10} {'exact':>10} {'code=stance':>13} {'code ok':>9} {'stance ok':>10}")
+    for d in diags:
+        print(f"  {d.case_id:<45} "
+              f"{d.filled:>3}/{d.predictions:<3} {_pct(d.filled, d.predictions):>3} "
+              f"{d.exact:>3}/{d.labelled:<3} {_pct(d.exact, d.labelled):>3} "
+              f"{d.agree:>3}/{d.agree + d.disagree:<3} {_pct(d.agree, d.agree + d.disagree):>4} "
+              f"{d.code_correct:>4} {d.stance_correct:>9}")
+    print("  " + _quantity_summary(diags))
+
+
+def _quantity_summary(diags: list[QuantityDiagnostic]) -> str:
+    """One line: fill, validator match, and the code-vs-stance gap the issue is after."""
+    preds = sum(d.predictions for d in diags)
+    filled = sum(d.filled for d in diags)
+    exact = sum(d.exact for d in diags)
+    labelled = sum(d.labelled for d in diags)
+    agree = sum(d.agree for d in diags)
+    decided = agree + sum(d.disagree for d in diags)
+    undecidable = sum(d.undecidable for d in diags)
+    code_ok = sum(d.code_correct for d in diags)
+    stance_ok = sum(d.stance_correct for d in diags)
+    return (f"TOTAL fill {filled}/{preds} ({_pct(filled, preds).strip()}), "
+            f"exact {exact}/{labelled} ({_pct(exact, labelled).strip()}), "
+            f"code agrees with stance {agree}/{decided} ({_pct(agree, decided).strip()}), "
+            f"code abstained {undecidable}; "
+            f"correct: code {code_ok}, stance {stance_ok}, of {preds} prediction(s)")
+
+
 def _case_asdict(case: Case) -> dict:
     return {
         "id": case.id, "event_name": case.event_name,
@@ -195,6 +256,9 @@ def _case_asdict(case: Case) -> dict:
         "article_date": case.article_date, "article_text": case.article_text,
         "expect": case.expect, "source_name": case.source_name, "journalist": case.journalist,
         "control_event_description": case.control_event_description, "tags": list(case.tags),
+        # retro#683 — without these the arm's results file could not answer any quantity
+        # question after the fact, which is the same blindness _ARTICLE_FIELDS fixed.
+        "question_threshold": case.question_threshold, "expect_quantity": case.expect_quantity,
     }
 
 
@@ -238,6 +302,19 @@ def _cmd_compare(args: argparse.Namespace) -> None:
         sys.exit(2)
 
     results = build_case_results(cases, baseline_preds, patched_preds)
+
+    # The gate below scores facets; `quantity` is not one of them (retro#683). Print both
+    # arms' quantity lines here anyway — a results file outlives the `run` that printed
+    # them, and an arm-vs-arm read of fill and validator match is the whole reason two
+    # arms exist.
+    for label, payload in (("baseline", baseline_payload), ("patched", patched_payload)):
+        diags = quantity_diagnostics(
+            cases, {cid: [[PredictionExtraction(**p) for p in run] for run in e["runs"]]
+                    for cid, e in payload["cases"].items()},
+        )
+        if diags:
+            print(f"  quantity [{label}: {payload['model']}] {_quantity_summary(diags)}")
+    print()
 
     print(f"\nbaseline: {baseline_payload['label']} @ {baseline_payload['git_commit']} "
           f"({baseline_payload['model']})")

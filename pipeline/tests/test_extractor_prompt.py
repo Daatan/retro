@@ -539,3 +539,104 @@ def test_consensus_view_is_not_taught_as_the_authors_own_view():
     a worked example that says otherwise."""
     assert "what the article says OTHERS expect" in PROMPT_SUFFIX
     assert "the byline author's OWN forecast" in PROMPT_SUFFIX
+
+
+def test_quantity_section_present():
+    """retro#683 (Oracle 1.5 Phase 1, item 1.1). PR#671 measured the reason this
+    field exists: on ten synthetic numeric-threshold cases Nova Lite returned
+    stance +0.00 on every between-bounds case and inverted both tone traps. Three
+    prompt sections already tell it to compare the numbers; #664's P2 was resolved
+    as *the field, not another prompt fix*.
+
+    So the elicitation has to ask for the NUMBER and not the verdict, and these
+    strings are what keep it that way — a later edit that rephrases the block as
+    "does the figure satisfy the question" would turn the field back into the
+    judgment it was created to replace, with nothing else in CI to notice.
+    """
+    assert "## QUANTITY" in PROMPT_PREFIX
+    flat = " ".join(PROMPT_PREFIX.split())
+    assert "Do NOT decide whether it satisfies the question" in flat
+    assert "it is done in code against the question's own threshold" in flat
+    # every key the schema offers must be elicited by name
+    for key in ("value", "unit", "comparator", "value_hi", "as_of"):
+        assert key in PROMPT_PREFIX, f"the QUANTITY block never names {key}"
+    # all six comparators, so the model is not told to answer something the
+    # code-side comparison cannot read
+    for comparator in ('"="', '"<"', '"<="', '">"', '">="', '"between"'):
+        assert comparator in flat, f"the QUANTITY block never shows {comparator}"
+
+
+def test_quantity_records_the_articles_relation_not_the_questions():
+    """The field's whole failure mode in one rule. If the model rewrites "exports
+    stayed below 40 million tonnes" to ">" because the QUESTION asks about
+    exceeding 40 million tonnes, the extracted comparator is a restatement of the
+    question and the code-side comparison compares the question to itself."""
+    flat = " ".join(PROMPT_PREFIX.split())
+    assert "Record the ARTICLE's relation, never the question's" in flat
+    assert "destroys the one thing this field carries" in flat
+
+
+def test_quantity_is_kept_apart_from_quantitative_estimate():
+    """retro#362 narrowed `quantitative_estimate` to a cited PROBABILITY and sent
+    shares, counts and rates to `cited_share` with nowhere to put the number.
+    This is that nowhere, and the two must not re-merge: a level written into
+    `quantitative_estimate` is rewritten to stance = 2*qe-1 in code, which is the
+    bit-exact prod bug #362 was filed for."""
+    flat = " ".join(PROMPT_PREFIX.split())
+    assert "`quantity` is not `quantitative_estimate`" in flat
+    assert "A level, a share, a count, a rate or a tonnage is not a probability" in flat
+
+
+def test_quantity_disclaims_any_effect_on_stance():
+    """Same sentence report_kind and consensus_view carry, for the same reason —
+    but load-bearing here in a way it is not for them. This field is elicited on
+    exactly the claims whose stance is hardest, so a model that reads it as
+    permission to re-score would move the numbers the A/B corpus watches."""
+    flat = " ".join(PROMPT_PREFIX.split())
+    assert "Like report_kind, quantity never changes your stance" in flat
+    assert "score the stance exactly as you would have without this field" in flat
+
+
+def test_quantity_in_output_contract():
+    """The v7 lesson: a rule stated only in the prose block 100 lines above loses
+    to the output contract where the model actually emits the field."""
+    assert '"comparator"' in PROMPT_SUFFIX
+    assert "one of = / < / <= / > / >= / between" in PROMPT_SUFFIX
+    assert "never whether it satisfies the question" in PROMPT_SUFFIX
+    assert "OMIT quantity when the quote states no figure" in PROMPT_SUFFIX
+
+
+def test_at_least_one_worked_prediction_carries_quantity():
+    """The v6/v7 finding, applied to an optional field.
+
+    `facet` went from 68% fill to 0% on both models when v6 showed its block in a
+    worked example without it — a worked example is read as the definitive
+    enumeration. `quantity` is legitimately absent from most predictions, so the
+    rule is not "on every one" the way report_kind's is; it is that at least one
+    example must SHOW it, or a field the prose asks for appears in none of the
+    JSON the model is copying and its fill rate measures the omission instead of
+    the model.
+    """
+    blocks = _worked_prediction_blocks()
+    carrying = [b for b in blocks if '"quantity"' in b]
+    assert carrying, "no worked prediction shows quantity; its fill rate would measure the prompt"
+    assert len(carrying) < len(blocks), (
+        "every worked prediction carries quantity, which teaches that a figure is "
+        "always available; the field is optional and the examples must show that"
+    )
+
+
+def test_the_quantity_examples_do_not_quote_the_ab_corpus():
+    """`test_the_prompt_does_not_quote_its_own_ab_cases` pins three needles from
+    the v8 collision. This one states the rule for the case corpus this field is
+    measured on: the retro#664 numbers must not appear in the block that teaches
+    the model how to extract them, or the validator scores recall of the prompt.
+    """
+    # Scoped to the text this issue adds. The sections that predate it keep their
+    # own examples, and three of their needles are already pinned above.
+    quantity_block = PROMPT_PREFIX.split("## QUANTITY")[1]
+    example = PROMPT_SUFFIX.split('Example — related event: "Airline A')[1]
+    for needle in ("8.75", "8.99", "9.00 percent", "33 seats", "36 seats", "31 seats",
+                   "2.4 percent", "4.1 percent", "policy rate", "inflation"):
+        assert needle not in quantity_block, f"the QUANTITY block quotes {needle!r} from the case corpus"
+        assert needle not in example, f"the worked quantity example quotes {needle!r} from the case corpus"

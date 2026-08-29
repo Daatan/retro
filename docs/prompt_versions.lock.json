@@ -1,6 +1,6 @@
 {
-  "_comment": "Source of truth for api/tests/test_prompt_version_enforcement.py. Each entry pins BOTH halves of the text the model actually sees. `hash` is the SHA-256 (first 16 hex chars) of the hand-written prompt (forecaster.py's GATEKEEPER_PROMPT_HASH/EXTRACTOR_PROMPT_HASH). `schema_hash`/`schema_chars` cover the response model's JSON schema, which instructor's MD_JSON mode serialises into the prompt on every call — field descriptions, enum members and Pydantic docstrings included (retro#700); `schema_chars` is recorded separately from the hash so that growth shows up as a number in the diff, which is how the retro#681 regression should have been caught. Whenever an edit to either half changes model behavior materially: bump the matching *_PROMPT_VERSION constant in forecaster.py, add a row to docs/PROMPT_VERSIONS.md, and update this file to match. The test fails otherwise.",
-  "_tail_blocks_comment": "`tail_blocks` (retro#731) is the THIRD half: instruction blocks appended to `prompt` AFTER PROMPT_SUFFIX.format() returns, so they sit outside the reconstructed *_PROMPT and outside the `hash` above. 6,576 chars of live prompt text that no lock could see. One entry per block on purpose — a single folded hash over the concatenation would report every change as 'the tail moved', which is not a review. Editing one of these IS a prompt edit (the retro#700 rule): bump the owning prompt's version, add a PROMPT_VERSIONS.md row, update the entry here. They are also CONDITIONALLY injected — a lexical pre-filter gates `extractor.conditional`, a host allowlist gates the two `short_form` blocks — so a regression in one lands on a subset of traffic and reads as drift rather than as a change.",
+  "_comment": "Source of truth for api/tests/test_prompt_version_enforcement.py. Each entry pins BOTH halves of the text the model actually sees. `hash` is the SHA-256 (first 16 hex chars) of the hand-written prompt (forecaster.py's GATEKEEPER_PROMPT_HASH/EXTRACTOR_PROMPT_HASH). `schema_hash`/`schema_chars` cover the response model's JSON schema, which instructor's MD_JSON mode serialises into the prompt on every call \u2014 field descriptions, enum members and Pydantic docstrings included (retro#700); `schema_chars` is recorded separately from the hash so that growth shows up as a number in the diff, which is how the retro#681 regression should have been caught. Whenever an edit to either half changes model behavior materially: bump the matching *_PROMPT_VERSION constant in forecaster.py, add a row to docs/PROMPT_VERSIONS.md, and update this file to match. The test fails otherwise.",
+  "_tail_blocks_comment": "`tail_blocks` (retro#731) is the THIRD half: instruction blocks appended to `prompt` AFTER PROMPT_SUFFIX.format() returns, so they sit outside the reconstructed *_PROMPT and outside the `hash` above. 6,576 chars of live prompt text that no lock could see. One entry per block on purpose \u2014 a single folded hash over the concatenation would report every change as 'the tail moved', which is not a review. Editing one of these IS a prompt edit (the retro#700 rule): bump the owning prompt's version, add a PROMPT_VERSIONS.md row, update the entry here. They are also CONDITIONALLY injected \u2014 a lexical pre-filter gates `extractor.conditional`, a host allowlist gates the two `short_form` blocks \u2014 so a regression in one lands on a subset of traffic and reads as drift rather than as a change.",
   "gatekeeper": {
     "version": "v1",
     "hash": "a09cdb5ecda0ce5e",
@@ -8,10 +8,10 @@
     "schema_chars": 1178
   },
   "extractor": {
-    "version": "v8",
-    "hash": "a0ce599eff01356d",
-    "schema_hash": "f57de8d2e33b324c",
-    "schema_chars": 21339
+    "version": "v9",
+    "hash": "79eed80894b8df7f",
+    "schema_hash": "4b66dbf0a64625b3",
+    "schema_chars": 23795
   },
   "tail_blocks": {
     "extractor.conditional": {

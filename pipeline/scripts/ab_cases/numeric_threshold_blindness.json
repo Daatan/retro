@@ -6,8 +6,25 @@
     "claim_deadline": "2026-12-31",
     "article_date": "2026-08-12",
     "article_text": "The central bank of Country A has kept its benchmark interest rate at 8.75 percent, saying the current setting remains appropriate.\nThe rate-setting committee retained the policy rate at 8.75 percent at its meeting on Tuesday, with inflation still inside the target band.\nThe committee said it saw no immediate need to move in either direction.",
-    "expect": {"stance_sign": 1},
-    "tags": ["retro-664", "numeric-threshold", "at-or-below", "satisfies"]
+    "expect": {
+      "stance_sign": 1
+    },
+    "tags": [
+      "retro-664",
+      "numeric-threshold",
+      "at-or-below",
+      "satisfies"
+    ],
+    "question_threshold": {
+      "comparator": "<=",
+      "value": 9,
+      "unit": "percent"
+    },
+    "expect_quantity": {
+      "value": 8.75,
+      "unit": "percent",
+      "comparator": "="
+    }
   },
   {
     "id": "threshold-at-or-below-contradicted",
@@ -16,8 +33,25 @@
     "claim_deadline": "2026-12-31",
     "article_text": "The central bank of Country B raised its benchmark interest rate to 9.5 percent on Tuesday, its second increase this year.\nThe rate-setting committee lifted the policy rate by 50 basis points, citing inflation that has run above target for six consecutive months.\nThe committee signalled that further tightening could not be ruled out before the end of the year.",
     "article_date": "2026-08-12",
-    "expect": {"stance_sign": -1},
-    "tags": ["retro-664", "numeric-threshold", "at-or-below", "contradicts"]
+    "expect": {
+      "stance_sign": -1
+    },
+    "tags": [
+      "retro-664",
+      "numeric-threshold",
+      "at-or-below",
+      "contradicts"
+    ],
+    "question_threshold": {
+      "comparator": "<=",
+      "value": 9,
+      "unit": "percent"
+    },
+    "expect_quantity": {
+      "value": 9.5,
+      "unit": "percent",
+      "comparator": "="
+    }
   },
   {
     "id": "threshold-strictly-above-satisfied",
@@ -26,8 +60,25 @@
     "claim_deadline": "2026-11-30",
     "article_date": "2026-08-18",
     "article_text": "A poll published on Monday projects Party P winning 36 seats in the next legislative election.\nThe survey of 1,200 voters puts the party comfortably ahead of its nearest rival, which is projected at 24 seats.\nTurnout assumptions are unchanged from the previous wave.",
-    "expect": {"stance_sign": 1},
-    "tags": ["retro-664", "numeric-threshold", "strictly-above", "satisfies"]
+    "expect": {
+      "stance_sign": 1
+    },
+    "tags": [
+      "retro-664",
+      "numeric-threshold",
+      "strictly-above",
+      "satisfies"
+    ],
+    "question_threshold": {
+      "comparator": ">",
+      "value": 33,
+      "unit": "seats"
+    },
+    "expect_quantity": {
+      "value": 36,
+      "unit": "seats",
+      "comparator": "="
+    }
   },
   {
     "id": "threshold-strictly-above-contradicted",
@@ -36,8 +87,25 @@
     "claim_deadline": "2026-11-30",
     "article_date": "2026-08-18",
     "article_text": "A poll published on Monday projects Party Q winning 31 seats in the next legislative election.\nThe survey of 1,200 voters shows the party holding a narrow lead over its nearest rival, projected at 27 seats.\nTurnout assumptions are unchanged from the previous wave.",
-    "expect": {"stance_sign": -1},
-    "tags": ["retro-664", "numeric-threshold", "strictly-above", "contradicts"]
+    "expect": {
+      "stance_sign": -1
+    },
+    "tags": [
+      "retro-664",
+      "numeric-threshold",
+      "strictly-above",
+      "contradicts"
+    ],
+    "question_threshold": {
+      "comparator": ">",
+      "value": 33,
+      "unit": "seats"
+    },
+    "expect_quantity": {
+      "value": 31,
+      "unit": "seats",
+      "comparator": "="
+    }
   },
   {
     "id": "threshold-between-bounds-satisfied",
@@ -46,8 +114,26 @@
     "claim_deadline": "2026-12-31",
     "article_date": "2026-08-15",
     "article_text": "Annual consumer-price inflation in Country C came in at 2.4 percent in July, the statistics office said on Friday.\nThe reading was unchanged from June and remains inside the central bank's stated comfort range.\nFood and energy prices were the main contributors to the monthly move.",
-    "expect": {"stance_sign": 1},
-    "tags": ["retro-664", "numeric-threshold", "between-bounds", "satisfies"]
+    "expect": {
+      "stance_sign": 1
+    },
+    "tags": [
+      "retro-664",
+      "numeric-threshold",
+      "between-bounds",
+      "satisfies"
+    ],
+    "question_threshold": {
+      "comparator": "between",
+      "value": 2,
+      "value_hi": 3,
+      "unit": "percent"
+    },
+    "expect_quantity": {
+      "value": 2.4,
+      "unit": "percent",
+      "comparator": "="
+    }
   },
   {
     "id": "threshold-between-bounds-contradicted",
@@ -56,8 +142,26 @@
     "claim_deadline": "2026-12-31",
     "article_date": "2026-08-15",
     "article_text": "Annual consumer-price inflation in Country D accelerated to 4.1 percent in July, the statistics office said on Friday.\nThe reading was up from 3.6 percent in June and is the fastest pace recorded in more than two years.\nEconomists said the increase was broad-based rather than driven by a single category.",
-    "expect": {"stance_sign": -1},
-    "tags": ["retro-664", "numeric-threshold", "between-bounds", "contradicts"]
+    "expect": {
+      "stance_sign": -1
+    },
+    "tags": [
+      "retro-664",
+      "numeric-threshold",
+      "between-bounds",
+      "contradicts"
+    ],
+    "question_threshold": {
+      "comparator": "between",
+      "value": 2,
+      "value_hi": 3,
+      "unit": "percent"
+    },
+    "expect_quantity": {
+      "value": 4.1,
+      "unit": "percent",
+      "comparator": "="
+    }
   },
   {
     "id": "threshold-tone-positive-number-contradicts",
@@ -66,8 +170,25 @@
     "claim_deadline": "2026-11-30",
     "article_date": "2026-08-19",
     "article_text": "Party R surged to its strongest showing in a decade, according to a poll published on Tuesday, in what its leader called a historic breakthrough.\nThe survey projects the party at 30 seats, up sharply from the 19 it holds today, and supporters celebrated outside the party's headquarters late into the evening.\nAnalysts described the result as a remarkable turnaround for a party written off two years ago.",
-    "expect": {"stance_sign": -1},
-    "tags": ["retro-664", "numeric-threshold", "tone-trap", "contradicts"]
+    "expect": {
+      "stance_sign": -1
+    },
+    "tags": [
+      "retro-664",
+      "numeric-threshold",
+      "tone-trap",
+      "contradicts"
+    ],
+    "question_threshold": {
+      "comparator": ">",
+      "value": 33,
+      "unit": "seats"
+    },
+    "expect_quantity": {
+      "value": 30,
+      "unit": "seats",
+      "comparator": "="
+    }
   },
   {
     "id": "threshold-tone-negative-number-satisfies",
@@ -76,8 +197,25 @@
     "claim_deadline": "2026-10-15",
     "article_date": "2026-08-19",
     "article_text": "Support for Candidate S has collapsed to just 35 percent, a new poll showed on Tuesday, the campaign's worst result since it began and a humiliating fall from the 52 percent recorded in the spring.\nAdvisers privately described the numbers as devastating and conceded the campaign had lost control of the agenda.\nThe survey of 1,500 voters was conducted over three days last week.",
-    "expect": {"stance_sign": 1},
-    "tags": ["retro-664", "numeric-threshold", "tone-trap", "satisfies"]
+    "expect": {
+      "stance_sign": 1
+    },
+    "tags": [
+      "retro-664",
+      "numeric-threshold",
+      "tone-trap",
+      "satisfies"
+    ],
+    "question_threshold": {
+      "comparator": ">=",
+      "value": 30,
+      "unit": "percent"
+    },
+    "expect_quantity": {
+      "value": 35,
+      "unit": "percent",
+      "comparator": "="
+    }
   },
   {
     "id": "threshold-near-boundary-satisfied",
@@ -86,8 +224,25 @@
     "claim_deadline": "2026-12-31",
     "article_date": "2026-08-14",
     "article_text": "The central bank of Country E trimmed its benchmark rate to 8.99 percent on Wednesday, an unusually fine adjustment the committee said was intended to signal caution rather than a change of direction.\nThe policy rate had stood at 9.10 percent since March.\nThe committee gave no guidance on its next move.",
-    "expect": {"stance_sign": 1},
-    "tags": ["retro-664", "numeric-threshold", "near-boundary", "satisfies"]
+    "expect": {
+      "stance_sign": 1
+    },
+    "tags": [
+      "retro-664",
+      "numeric-threshold",
+      "near-boundary",
+      "satisfies"
+    ],
+    "question_threshold": {
+      "comparator": "<=",
+      "value": 9,
+      "unit": "percent"
+    },
+    "expect_quantity": {
+      "value": 8.99,
+      "unit": "percent",
+      "comparator": "="
+    }
   },
   {
     "id": "threshold-exact-boundary-inclusive",
@@ -96,7 +251,24 @@
     "claim_deadline": "2026-12-31",
     "article_date": "2026-08-14",
     "article_text": "The central bank of Country F cut its benchmark rate to exactly 9.00 percent on Wednesday, down from 9.25 percent.\nThe committee said the move completed the adjustment it had signalled at its previous meeting.\nNo further changes were flagged for the remainder of the year.",
-    "expect": {"stance_sign": 1},
-    "tags": ["retro-664", "numeric-threshold", "exact-boundary", "satisfies"]
+    "expect": {
+      "stance_sign": 1
+    },
+    "tags": [
+      "retro-664",
+      "numeric-threshold",
+      "exact-boundary",
+      "satisfies"
+    ],
+    "question_threshold": {
+      "comparator": "<=",
+      "value": 9,
+      "unit": "percent"
+    },
+    "expect_quantity": {
+      "value": 9.0,
+      "unit": "percent",
+      "comparator": "="
+    }
   }
 ]

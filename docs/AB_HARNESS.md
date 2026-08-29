@@ -141,6 +141,47 @@ it just isn't one `compare` can express. `usage_runs` carries the per-call token
 usage behind the totals line, so a prompt edit's cost shows up next to its
 effect.
 
+## The other thing the gate cannot tell you: `quantity` vs the threshold (retro#683)
+
+`quantity` is not in `_FACET_READERS` either, and deliberately not: it is a
+shadow field whose validator (exact match on (value, unit, comparator) over 100
+hand-labelled claims, accuracy ≥ 0.9 **per rater**) has not been run. Gating
+every future prompt PR on it would make it a requirement before it is a
+measurement.
+
+What `run` prints instead is a diagnostic, over the cases that carry a
+`question_threshold` — the bar the QUESTION sets, hand-declared on the case
+rather than parsed, because the live parse (`question_quantity`) is Oracle 1.5
+Phase 2 and a second unmeasured parser here would just be something for Phase 2
+to disagree with:
+
+```
+Quantity vs question threshold — rater: patched
+  case                                                fill      exact   code=stance   code ok  stance ok
+  threshold-at-or-below-satisfied                    5/5  100%   5/5  100%   5/5  100%      5         5
+  threshold-between-bounds-contradicted              5/6   83%   4/5   80%   1/4   25%      4         1
+  ...
+  TOTAL fill 48/55 (87%), exact 41/48 (85%), code agrees with stance 31/44 (70%), code abstained 4; correct: code 44, stance 33, of 55 prediction(s)
+```
+
+Read the last two numbers together. **`code ok` against `stance ok` is the
+finding**, not a pass/fail: the issue expects agreement to be high on Haiku and
+low on Nova Lite, and the gap is the argument for moving the comparison out of
+the model's head. A row where the model extracted the right number and still
+scored the stance the wrong way is retro#664 reproduced in one line.
+
+`code abstained` is its own column for a reason. The comparison answers by
+interval containment, so a bounded report ("stayed below 5%") is decidable
+whenever every value it allows lands on one side, and abstains when it straddles
+the bar or when the units do not match. An abstention is not a wrong answer and
+must not be counted as one — and it is a different failure from an empty
+`quantity`, which is why `fill` is separate from it.
+
+`expect_quantity` on a case is the validator's other half: what a correct reader
+should have extracted from THIS article, i.e. the "PR#671 known values". The
+comparison is pinned in `tests/test_threshold_compare.py` to get all ten
+retro#664 cases right from those values — the arithmetic was never the hard part.
+
 ## The corpus
 
 One file per defect the corpus was built to catch. A prompt edit should run
@@ -151,7 +192,7 @@ bracket section was cut.
 | file | n | issue | what it holds down |
 |---|---|---|---|
 | `deadline_and_resolution_rules.json` | 5 | retro#351/#352/#353 | a fact that defers the event past the claim deadline bears *against* it; plus the decider-statement sentinel and a control-arm reference case |
-| `numeric_threshold_blindness.json` | 10 | retro#664 | a number decides the stance, not the sentence's tone — at-or-below, strictly-above, between-bounds, and the exact/near boundaries |
+| `numeric_threshold_blindness.json` | 10 | retro#664 | a number decides the stance, not the sentence's tone — at-or-below, strictly-above, between-bounds, and the exact/near boundaries; every case also carries a `question_threshold` + `expect_quantity` for the retro#683 diagnostic above |
 | `poll_facet_neither.json` | 4 | retro#541 | a poll or seat projection is `facet: neither`, not an announcement or a denial |
 | `stance_tone_conflation.json` | 2 | retro#545 | an alarmed tone about a hazard is not evidence the hazard occurred |
 | `multi_stage_brackets.json` | 5 | retro#720 | winning one stage of a bracket, series, runoff or staged approval is weak support for winning the whole thing |
@@ -196,6 +237,13 @@ Cases live in JSON files under `pipeline/scripts/ab_cases/`. Each case:
   "tags": ["retro-352"]
 }
 ```
+
+Two optional keys are diagnostic-only and never reach the gate (retro#683):
+`question_threshold` — `{"comparator": "<="|"<"|">="|">"|"="|"between", "value":
+9, "unit": "percent", "value_hi": null}`, the bar the question sets — and
+`expect_quantity`, the `{value, unit, comparator}` a correct reader should have
+extracted from the article. Add both on a case where a number decides the event;
+omit both otherwise, and the case is simply left out of the quantity report.
 
 `expect` names the facets a correct extraction must get right — see
 `_FACET_READERS` in `ab_harness.py` for the current set (`stance_sign`,

@@ -210,6 +210,104 @@ _REPORT_KIND_VALUES = frozenset({"level", "change"})
 _CONSENSUS_VIEW_VALUES = frozenset({"expects_yes", "expects_no", "divided"})
 
 
+# --- Quantity (Oracle 1.5 Phase 1, retro#683) ---
+#
+# What this replaces was measured, not assumed. retro#664 P1 (PR#671) ran ten synthetic
+# numeric-threshold cases: Nova Lite returned stance +0.00 on every between-bounds case
+# and inverted both tone traps. It reads the sentiment of the sentence, not the number in
+# it. But "is the rate at or below 9%" is decided by COMPARING numbers, and #664's P2 was
+# resolved as *the field, not another prompt fix* — three prompt sections already tell the
+# model to compare, and it still does not.
+#
+# So the model is asked for the number rather than for the verdict: the value, its unit,
+# and the relation the article asserts about it. Whether that satisfies the question is
+# arithmetic, and arithmetic belongs in code (`tm.threshold_compare`), where it is
+# deterministic, auditable and identical for every rater.
+#
+# Deliberately NOT the same field as `quantitative_estimate`, which is narrow on purpose:
+# a cited PROBABILITY of the event itself, on [0, 1], with vote shares, seat counts and
+# rates explicitly excluded from it (retro#362). Those are exactly what this carries.
+#
+# Strict on purpose — a half-answered quantity is not a number, it is a guess with a unit
+# attached, and code that compares it would produce a confident wrong sign rather than an
+# abstention. `_drop_malformed_quantity` is what keeps that strictness from costing a real
+# prediction; see it for the trade.
+#
+# EXPERIMENTAL, shadow: populated and persisted, read by nothing. Per the issue, Nova
+# Lite's values stay excluded from every consumer until the field clears its validator
+# (exact match on value/unit/comparator, accuracy >= 0.9) for that rater.
+class Quantity(BaseModel):
+    # Every description here is billed on every call (the schema is ~27% of the extractor
+    # prompt, retro#700), so they say WHICH value the field wants, not HOW to find it —
+    # the QUANTITY prose block carries the rule and the worked examples.
+    value: float = Field(
+        description="The number itself, as a plain number (8.75, 36, 1400000). Strip "
+                    "separators, symbols and scale words; put the scale in `unit`.",
+    )
+    unit: str = Field(
+        description="What the number counts, in the article's own terms: 'percent', "
+                    "'seats', 'USD per barrel', 'containers'. Never a bare '%' sign.",
+    )
+    comparator: Literal["=", "<", "<=", ">", ">=", "between"] = Field(
+        description="The relation the ARTICLE asserts about the value — '=' for a stated "
+                    "level, an inequality for a bound ('below 3%' is '<'), 'between' for "
+                    "a range. NOT the question's threshold, and never a verdict.",
+    )
+    value_hi: Optional[float] = Field(
+        default=None,
+        description="The upper bound, and ONLY when comparator is 'between'; `value` is "
+                    "then the lower one. Omit otherwise.",
+    )
+    as_of: Optional[str] = Field(
+        default=None,
+        description="ISO date (YYYY-MM-DD) the figure describes, resolved against the "
+                    "article's date. Omit when the article does not date it.",
+    )
+
+    @model_validator(mode="after")
+    def _check_range(self) -> "Quantity":
+        if self.comparator == "between":
+            if self.value_hi is None:
+                raise ValueError("comparator 'between' requires value_hi")
+            if self.value_hi <= self.value:
+                raise ValueError("value_hi must be greater than value")
+        elif self.value_hi is not None:
+            raise ValueError("value_hi is only meaningful with comparator 'between'")
+        return self
+
+
+def _drop_malformed_quantity(data: Any) -> Any:
+    """The nested-object version of `_drop_out_of_enum`, for retro#683.
+
+    Same trade as `_drop_malformed_reader_confidence`, and for a field with more
+    ways to be wrong than either of its predecessors: five keys, a closed enum, a
+    conditional requirement between two of them, and a model that has never been
+    asked for any of it before. `complete_structured` runs instructor with
+    `max_retries=1`, so a `{"value": 36}` with no unit would raise out of
+    `ExtractionOutput` and drop a real article from a real forecast. Paying a real
+    article for a field nothing reads yet is the wrong trade.
+
+    Logged, never silent, for the reason the other two are: a shadow field exists
+    to be counted, and a silent coercion to None makes "answered badly"
+    indistinguishable from "did not answer" — the one distinction its fill rate is
+    there to draw. Grep `event=quantity_malformed`.
+
+    Strictness is kept where it belongs: constructing `Quantity` directly, or
+    validating a stored row, still raises.
+    """
+    if not isinstance(data, dict):
+        return data
+    raw = data.get("quantity")
+    if raw is None:
+        return data
+    try:
+        Quantity.model_validate(raw)
+    except (_ValidationError, TypeError, ValueError):
+        logger.warning("event=quantity_malformed value=%r", raw)
+        return {**data, "quantity": None}
+    return data
+
+
 class PredictionExtraction(BaseModel):
     # `claim_strength` was named `certainty` until Oracle 1.5 Phase 1 (retro#680). The
     # elicitation text is unchanged — only the name moved, so the number this field carries
@@ -432,12 +530,26 @@ class PredictionExtraction(BaseModel):
         description="EXPERIMENTAL, shadow (retro#686) — the standing situation ('level') or a "
                     "step in it ('change'). See REPORT_KIND; omit when neither fits.",
     )
+    # retro#683. Appended after report_kind for retro#680's reason: perturbing the MIDDLE
+    # of this schema cost Nova Lite the whole fact_signal block (fill 42% -> 25%), so every
+    # new field goes at the tail, where the relative order of the existing ones — and the
+    # text the model reads around them — is untouched.
+    quantity: Optional[Quantity] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow (retro#683) — the number this quote reports "
+                    "about the event, with its unit and the relation the article asserts "
+                    "({value, unit, comparator, value_hi, as_of}). The number, NOT whether "
+                    "it satisfies the question: code does that comparison. See QUANTITY; "
+                    "omit when the quote reports no figure about the event.",
+    )
 
     @model_validator(mode="before")
     @classmethod
     def _unwrap_envelope(cls, data: Any) -> Any:
         data = _coerce_nested_json_string(_unwrap_properties_envelope(data), "reader_confidence")
+        data = _coerce_nested_json_string(data, "quantity")
         data = _drop_malformed_reader_confidence(data)
+        data = _drop_malformed_quantity(data)
         return _drop_out_of_enum(data, "report_kind", _REPORT_KIND_VALUES)
 
 

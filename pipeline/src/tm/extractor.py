@@ -730,6 +730,49 @@ Report it from the article's own words about others, not from counting your own 
 Like report_kind, it never changes a stance: extract the predictions exactly as you would \
 have without this field.
 
+## QUANTITY — the number the article gives, never the verdict (EXPERIMENTAL, shadow)
+When a quote reports a FIGURE that bears on the related event, record it in `quantity`. \
+Record what the article says the number IS. Do NOT decide whether it satisfies the \
+question — that comparison is arithmetic, it is done in code against the question's own \
+threshold, and it is done there because that is where it is reliable.
+  value       — the number itself, symbols and separators stripped, the scale multiplied \
+out: "1.4 million containers" is 1400000 with unit "containers"; "$62 a barrel" is 62 \
+with unit "USD per barrel".
+  unit        — what the number counts, in the article's own terms: "percent", "seats", \
+"containers", "daily departures", "USD per barrel". Write "percent", never "%".
+  comparator  — the relation the ARTICLE asserts about the value: "=" for a stated level \
+("handled 1.4 million containers"), "<" / "<=" / ">" / ">=" for a bound ("stayed below 40 \
+million tonnes" is "<", "at least 12 vessels" is ">="), "between" for a range.
+  value_hi    — the upper bound, and only with "between"; `value` is then the lower one.
+  as_of       — the date the figure describes, resolved to YYYY-MM-DD against the \
+article's date. Omit it when the article does not date the figure.
+
+Record the ARTICLE's relation, never the question's. If the question asks whether exports \
+exceed 40 million tonnes and the article says "exports stayed below 40 million tonnes", \
+that is comparator "<" with value 40 — the bound the article asserted. Flipping it to ">" \
+because the question is phrased that way destroys the one thing this field carries.
+
+Omit `quantity` entirely when the quote states no figure about the event: a direction \
+without a number ("shipments rose sharply"), a bare date, or a count belonging to some \
+other subject. A number about a neighbouring actor or arena is not this claim's quantity.
+
+`quantity` is not `quantitative_estimate`. That field is deliberately narrow — a cited \
+PROBABILITY of the event itself, on a 0-1 scale. A level, a share, a count, a rate or a \
+tonnage is not a probability: it belongs here, and `quantitative_estimate` stays omitted.
+
+Like report_kind, quantity never changes your stance. Record the figure, then score the \
+stance exactly as you would have without this field.
+
+Examples — related event: "Port terminal T handles more than 2 million containers in 2026":
+  "Terminal T handled 1.4 million containers in the twelve months to 30 June 2026"
+      → {"value": 1400000, "unit": "containers", "comparator": "=", "as_of": "2026-06-30"}
+  "Throughput at Terminal T has stayed below 2 million containers every year since it opened"
+      → {"value": 2000000, "unit": "containers", "comparator": "<"}
+  "Analysts put Terminal T's 2026 volume between 1.8 and 2.2 million containers"
+      → {"value": 1800000, "unit": "containers", "comparator": "between", "value_hi": 2200000}
+  "Terminal T reported its busiest quarter on record"
+      → omit quantity (a direction, no figure)
+
 ## Output
 Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certainty \
 signals if they are the only content available.
@@ -792,7 +835,13 @@ Also on every prediction: reader_confidence — \
 entity_or_event_mismatch / tone_vs_content / inference_needed / conflicting_signals, OMITTED \
 when none applies}}. See the READER_CONFIDENCE section above. \
 And report_kind (one of level / change — does the quote report the standing situation or a \
-step in it; OMIT it when the quote reports neither, per the REPORT_KIND section).
+step in it; OMIT it when the quote reports neither, per the REPORT_KIND section). \
+And quantity — {{"value": number, "unit": string, "comparator": one of = / < / <= / > / \
+>= / between, "value_hi": number (ONLY with "between"), "as_of": "YYYY-MM-DD" (OMITTED \
+when the article does not date the figure)}} — the figure the quote reports about the \
+event, per the QUANTITY section. Record the number the article gives and the relation the \
+ARTICLE asserts about it, never whether it satisfies the question; OMIT quantity when the \
+quote states no figure.
 
 Example — related event: "Assad regime falls in Syria":
 {{
@@ -844,6 +893,31 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
     }}
   ],
   "consensus_view": "expects_no"
+}}
+
+Example — related event: "Airline A operates more than 250 daily departures from Hub H by \
+30 September 2026" (a reported figure, mid-window):
+{{
+  "predictions": [
+    {{
+      "quote": "Airline A is currently running 214 daily departures from Hub H",
+      "claim": "Airline A operates 214 daily departures from Hub H",
+      "stance": -0.4,
+      "claim_strength": 0.85,
+      "settled": false,
+      "evidence_class": "reported_fact",
+      "fact_signal": -0.4,
+      "facet": "neither",
+      "event_actors": "Airline A",
+      "event_target": "daily departures from Hub H",
+      "is_occurrence": false,
+      "verified": true,
+      "reader_confidence": {{"level": "medium", "trap": "numeric_comparison"}},
+      "report_kind": "level",
+      "quantity": {{"value": 214, "unit": "daily departures", "comparator": "="}}
+    }}
+  ],
+  "consensus_view": "divided"
 }}
 """
 

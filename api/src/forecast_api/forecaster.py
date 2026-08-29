@@ -21,12 +21,19 @@ from urllib.parse import urlparse
 import httpx
 import trafilatura
 
+# The `_`-prefixed prompt blocks are imported deliberately (retro#731). Renaming them
+# public would be the tidier-looking option and the wrong one: they are private to the
+# calling convention — nothing outside their own module may APPEND them — and a public
+# name invites exactly that. What this module does with them is neither calling nor
+# formatting, only hashing, so the privacy the underscore asks for is intact.
 from tm.gatekeeper import (
     check_is_prediction,
     has_no_article_page,
     is_short_form,
     PROMPT_PREFIX as _GATEKEEPER_PROMPT_PREFIX,
     PROMPT_SUFFIX as _GATEKEEPER_PROMPT_SUFFIX,
+    _SHORT_FORM_OVERRIDE as _GATEKEEPER_SHORT_FORM_BLOCK,
+    _LANGUAGE_HINT as _GATEKEEPER_LANGUAGE_HINT_BLOCK,
 )
 from tm.extractor import (
     extract_predictions,
@@ -47,6 +54,9 @@ from tm.extractor import (
     flag_claim_stance_sign_conflicts,
     PROMPT_PREFIX as _EXTRACTOR_PROMPT_PREFIX,
     PROMPT_SUFFIX as _EXTRACTOR_PROMPT_SUFFIX,
+    _CONDITIONAL_BLOCK as _EXTRACTOR_CONDITIONAL_BLOCK,
+    _SHORT_FORM_OVERRIDE as _EXTRACTOR_SHORT_FORM_BLOCK,
+    _LANGUAGE_HINT as _EXTRACTOR_LANGUAGE_HINT_BLOCK,
 )
 from tm.models import ExtractionOutput, GatekeeperOutput, PredictionExtraction
 from tm.web_search import NEWS_INDEXER_API_KEY, NEWS_INDEXER_URL, SearchResult, search_capturing
@@ -98,6 +108,44 @@ GATEKEEPER_SCHEMA = rendered_response_schema(GatekeeperOutput)
 EXTRACTOR_SCHEMA = rendered_response_schema(ExtractionOutput)
 GATEKEEPER_SCHEMA_HASH = hashlib.sha256(GATEKEEPER_SCHEMA.encode()).hexdigest()[:16]
 EXTRACTOR_SCHEMA_HASH = hashlib.sha256(EXTRACTOR_SCHEMA.encode()).hexdigest()[:16]
+
+# retro#731: and a THIRD half. The two pairs above cover `PROMPT_PREFIX + PROMPT_SUFFIX`
+# and the serialised schema — but neither call sends only that. Five instruction blocks
+# are appended to `prompt` AFTER `PROMPT_SUFFIX.format(...)` returns (see the tails of
+# extractor.extract_predictions and gatekeeper.check_is_prediction), so they are outside
+# the reconstructed *_PROMPT above and were outside every hash in the lock. 6,576 chars of
+# live prompt text that a lock diff could not see.
+#
+# `_CONDITIONAL_BLOCK` is 4,233 of those — LARGER than the whole gatekeeper prompt and its
+# schema together — and carries three worked examples. retro#720 is what that costs when it
+# goes unwatched: `## Multi-stage / bracket events`, a section inside the *hashed* prefix,
+# suppressed Nova Lite on unrelated numeric-threshold claims (8/20 -> 18/20 when removed),
+# and the cause was the uniform direction of its worked examples, not its length. That is
+# retro#700's mechanism running forwards, and this block is the same shape of hazard with
+# none of the protection.
+#
+# Worse than un-hashed: these blocks are CONDITIONALLY injected — a lexical pre-filter picks
+# who gets the conditional block, a host allowlist picks who gets short-form. A regression in
+# one lands on a subset of traffic, which reads as drift rather than as a change.
+#
+# ONE ENTRY PER BLOCK, not one folded hash over the concatenation. Folding would make the
+# lock cheaper to write and useless to read: every failure would say "the tail moved". Five
+# entries mean CI names the block, and the reviewer knows whether they are looking at a
+# lexicon-gated instruction change or a Telegram-formatting tweak.
+#
+# `chars` alongside `hash` for the same reason `schema_chars` exists (retro#681): the failure
+# mode is not "it changed" but "it quietly grew", and only a number in the diff catches that.
+PROMPT_TAIL_BLOCKS: dict[str, str] = {
+    "extractor.conditional": _EXTRACTOR_CONDITIONAL_BLOCK,
+    "extractor.short_form": _EXTRACTOR_SHORT_FORM_BLOCK,
+    "extractor.language_hint": _EXTRACTOR_LANGUAGE_HINT_BLOCK,
+    "gatekeeper.short_form": _GATEKEEPER_SHORT_FORM_BLOCK,
+    "gatekeeper.language_hint": _GATEKEEPER_LANGUAGE_HINT_BLOCK,
+}
+PROMPT_TAIL_BLOCK_HASHES: dict[str, str] = {
+    name: hashlib.sha256(text.encode()).hexdigest()[:16]
+    for name, text in PROMPT_TAIL_BLOCKS.items()
+}
 
 from ._build import build_provenance
 from .auth import ApiKeyClient

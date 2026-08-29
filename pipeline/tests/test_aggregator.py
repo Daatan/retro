@@ -169,3 +169,132 @@ class TestReaderConfidenceSurvivesTheArticleCollapse:
     async def test_nothing_answered_stays_none(self, monkeypatch):
         out = await self._collapse(monkeypatch, [_pred(0.8, 0.9), _pred(-0.3, 0.6)])
         assert out.reader_confidence is None
+
+
+class TestTheLeadClaimsReadingSurvivesTheArticleCollapse:
+    """retro#721 — the same failure as `reader_confidence` above, on eleven more
+    fields. AGGREGATOR_PROMPT's output template names twelve fields; the schema
+    instructor serialises into the call names ~35; the template wins and the rest
+    come back null. Measured deterministic, 5/5 identical runs, on ~25% of batch
+    extractions. Carried in code, from the one claim the aggregate followed.
+
+    `_collapse` returns a BARE prediction on purpose — that is exactly what the
+    real model does, so these tests fail without the carry.
+    """
+
+    @staticmethod
+    async def _collapse(monkeypatch, predictions, agg_stance=0.7):
+        from tm import aggregator
+
+        async def fake_complete_structured(*args, **kwargs):
+            return _pred(agg_stance, 0.5, claim="unified"), {}
+
+        monkeypatch.setattr(aggregator, "complete_structured", fake_complete_structured)
+        return await aggregate_article_predictions(predictions, "E", "S", "2026-08-28")
+
+    @staticmethod
+    def _rich(stance, **overrides):
+        overrides.setdefault("settled", True)
+        overrides.setdefault("event_date", "2026-03-15")
+        overrides.setdefault("evidence_class", "reported_fact")
+        overrides.setdefault("fact_signal", 0.7)
+        overrides.setdefault("facet", "announcement")
+        overrides.setdefault("report_kind", "change")
+        overrides.setdefault("event_actors", "the central bank")
+        overrides.setdefault("event_target", "benchmark rate")
+        overrides.setdefault("is_occurrence", True)
+        overrides.setdefault("quantitative_estimate", 0.45)
+        overrides.setdefault("speaker", "Rossi")
+        return _pred(stance, 0.8, **overrides)
+
+    async def test_the_fields_the_llm_drops_are_restored(self, monkeypatch):
+        out = await self._collapse(monkeypatch, [
+            self._rich(0.8), self._rich(-0.7, settled=False, report_kind="level"),
+        ])
+        assert out.settled is True
+        assert out.event_date == "2026-03-15"
+        assert out.evidence_class == "reported_fact"
+        assert out.fact_signal == 0.7
+        assert out.facet == "announcement"
+        assert out.report_kind == "change"
+        assert out.event_actors == "the central bank"
+        assert out.event_target == "benchmark rate"
+        assert out.is_occurrence is True
+        assert out.quantitative_estimate == 0.45
+
+    async def test_the_nearest_same_sign_claim_is_the_one_carried(self, monkeypatch):
+        """Two positive claims: the aggregate follows the nearer one."""
+        out = await self._collapse(monkeypatch, [
+            self._rich(0.2, event_date="2026-01-01"),
+            self._rich(0.75, event_date="2026-09-09"),
+            self._rich(-0.6, event_date="2026-12-31"),
+        ], agg_stance=0.7)
+        assert out.event_date == "2026-09-09"
+
+    async def test_a_settlement_is_not_inherited_across_a_sign_flip(self, monkeypatch):
+        """The guard that matters. Aggregation fires precisely on articles whose
+        claims disagree, so a settling claim and the aggregate routinely point
+        opposite ways. `settled` gates an ENFORCING resolution path — inheriting
+        it from a claim the aggregate rejected would manufacture an outcome the
+        article does not carry."""
+        out = await self._collapse(monkeypatch, [
+            self._rich(0.9, settled=True, event_date="2026-03-15"),
+            self._rich(-0.2, settled=False, event_date=None),
+        ], agg_stance=-0.6)
+        assert out.settled is False
+        assert out.event_date is None
+
+    async def test_no_same_sign_claim_leaves_the_fields_null(self, monkeypatch):
+        """If nothing in the article points the way the aggregate does, no claim's
+        evidence describes it — null is the honest answer, not a nearest guess."""
+        out = await self._collapse(monkeypatch, [
+            self._rich(0.8), self._rich(0.4),
+        ], agg_stance=-0.5)
+        assert out.settled is None
+        assert out.event_date is None
+        assert out.report_kind is None
+
+    async def test_a_zero_stance_aggregate_carries_nothing(self, monkeypatch):
+        out = await self._collapse(monkeypatch, [self._rich(0.8)], agg_stance=0.0)
+        assert out.settled is None
+
+    async def test_speaker_is_deliberately_dropped(self, monkeypatch):
+        """A collapsed article signal has no single speaker; taking the lead
+        claim's would attribute the whole article to one quoted person."""
+        out = await self._collapse(monkeypatch, [self._rich(0.8), self._rich(0.6)])
+        assert out.speaker is None
+
+    async def test_the_llm_keeps_the_fields_it_actually_synthesises(self, monkeypatch):
+        """The carry must not overwrite the collapse's own output."""
+        out = await self._collapse(monkeypatch, [
+            self._rich(0.8), self._rich(0.6),
+        ], agg_stance=0.7)
+        assert out.stance == 0.7
+        assert out.claim == "unified"
+
+    async def test_conditional_fields_stay_with_their_own_antecedent(self, monkeypatch):
+        """`is_conditional` resolved separately from `antecedent_text` would yield
+        a conditional claim with no antecedent — a reading no claim produced."""
+        out = await self._collapse(monkeypatch, [
+            self._rich(0.8, is_conditional=True, antecedent_text="if the vote passes"),
+            self._rich(0.1, is_conditional=False),
+        ], agg_stance=0.75)
+        assert out.is_conditional is True
+        assert out.antecedent_text == "if the vote passes"
+
+    def test_every_field_is_either_synthesised_or_carried(self):
+        """The partition must stay total. A field added to PredictionExtraction
+        and listed nowhere is carried by default — which is the safe direction —
+        but one added to _LLM_SYNTHESISED_FIELDS without being added to
+        AGGREGATOR_PROMPT's template would be silently nulled again. This asserts
+        the two sets only ever name fields that exist."""
+        from tm.aggregator import _LLM_SYNTHESISED_FIELDS, _SPECIALLY_HANDLED_FIELDS
+
+        known = set(PredictionExtraction.model_fields)
+        assert _LLM_SYNTHESISED_FIELDS <= known, (
+            f"names no longer on the model: {_LLM_SYNTHESISED_FIELDS - known}"
+        )
+        assert _SPECIALLY_HANDLED_FIELDS <= known, (
+            f"names no longer on the model: {_SPECIALLY_HANDLED_FIELDS - known}"
+        )
+        assert not (_LLM_SYNTHESISED_FIELDS & _SPECIALLY_HANDLED_FIELDS)

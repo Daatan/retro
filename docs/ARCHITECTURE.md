@@ -289,7 +289,11 @@ orchestrator.py  (local_file mode)
   │    runner.py → gatekeeper.py (LLM: topic-relevant for event?)
   │                extractor.py  (LLM: extract up to 5 structured predictions)
   │                aggregator.aggregate_article_predictions
-  │                              (LLM: collapse to one signal if stance spread > 0.4)
+  │                              (LLM: collapse to one signal if stance spread > 0.4;
+  │                               the LLM synthesises only the 13 fields
+  │                               AGGREGATOR_PROMPT's template names — every other
+  │                               field is carried from the lead claim in code,
+  │                               retro#721/#681)
   │    aggregator.aggregate_predictions → cell_signal.json (no LLM, weighted mean)
   │    Save extraction (or negative marker) to vault2/extractions/{hash}_{event}_v1.json
   │    Save atlas link to atlas/{event}/{source}/entry_{hash[:8]}.json

@@ -48,6 +48,23 @@ uv run --project metaculus python metaculus/sync.py
 with `METACULUS_API_KEY`, `ORACLE_API_KEY` set (and optionally `DRY_RUN=true`
 to log without submitting).
 
+## Cadence
+
+Tournament questions are open for **1.5 hours** (temporarily 3h), launch at
+random hours up to 5 at a time, and are scored on **spot peer score** — only
+the last forecast before close counts.
+
+Two consequences, both measured rather than assumed:
+
+- **Poll every ~20 minutes.** retro#617 measured `/forecast` over n=20,000
+  production calls: p50 7.3s, p99 25.0s, max 45.9s, zero timeouts against a
+  90s cap. Latency is not a constraint, so the 6-hour cadence an earlier draft
+  proposed would simply miss most questions.
+- **`STALE_AFTER_HOURS` defaults to 0.75**, not 24. At 45 minutes we get ~2
+  forecasts per question, so news breaking mid-window still reaches the
+  forecast that actually gets scored. A 24h value meant one forecast at
+  discovery and no update, which throws away the spot-score mechanic.
+
 ## Not yet done
 
 - The `ORACLE_API_KEYS` named-key entry for this relay hasn't been added to

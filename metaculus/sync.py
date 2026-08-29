@@ -14,8 +14,13 @@ Env vars:
                               slug only once a clean run history exists here.
     MAX_QUESTIONS_PER_RUN     default 5 — caps Oracle calls per run (each one
                               costs real LLM spend and can take minutes).
-    STALE_AFTER_HOURS          default 24 — re-forecast a question only if our
+    STALE_AFTER_HOURS          default 0.75 — re-forecast a question only if our
                               last submission is older than this, or missing.
+                              Tournament questions close 1.5h (temporarily 3h)
+                              after opening and only the LAST forecast before
+                              close is scored, so this must be well under the
+                              window: 0.75h gives ~2 forecasts per question,
+                              letting news that breaks mid-window still count.
     DRY_RUN                   "true" to log what would be submitted without
                               calling Metaculus's write endpoints.
 """
@@ -123,7 +128,7 @@ def main() -> None:
     tournament = os.environ.get("METACULUS_TOURNAMENT", "bot-testing-area")
     oracle_base_url = os.environ.get("ORACLE_BASE_URL", "https://oracle.daatan.com")
     max_questions = int(os.environ.get("MAX_QUESTIONS_PER_RUN", "5"))
-    stale_after = timedelta(hours=float(os.environ.get("STALE_AFTER_HOURS", "24")))
+    stale_after = timedelta(hours=float(os.environ.get("STALE_AFTER_HOURS", "0.75")))
     dry_run = os.environ.get("DRY_RUN", "").lower() in ("1", "true", "yes")
 
     run(metaculus_token, oracle_api_key, tournament, oracle_base_url, max_questions, stale_after, dry_run=dry_run)

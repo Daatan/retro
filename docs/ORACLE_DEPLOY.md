@@ -153,3 +153,26 @@ gh variable set AWS_DEPLOY_ROLE_ARN --body "arn:aws:iam::<account-id>:role/gha-d
 ```
 
 Example policy documents live under `infra/iam/`.
+
+## Cutting a release
+
+Deploys are merge-driven (above); a **release is a label on what is already deployed**, plus its
+notes. Versions follow the generation scheme in [`CHANGELOG.md`](../CHANGELOG.md) (retro#742):
+`1.4.x` is the live v1 engine, `1.5.x` / `2.x` are reserved and flip only on an explicit decision.
+
+1. Bump `version` in `api/pyproject.toml` (and `pipeline/pyproject.toml` — one product). The
+   pre-release check in `release.yml` refuses a tag that disagrees with it.
+2. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] — YYYY-MM-DD`, add a fresh empty
+   `## [Unreleased]` above it, and update the compare links at the bottom.
+3. Merge that PR; wait for `deploy-oracle.yml`; confirm on the box:
+   ```bash
+   curl -s localhost:8001/version   # base_version == X.Y.Z, git_sha == the merge commit
+   ```
+4. Tag the merge commit and push the tag — `release.yml` builds the GitHub release from the
+   `## [X.Y.Z]` section:
+   ```bash
+   git tag vX.Y.Z <merge-sha> && git push origin vX.Y.Z
+   ```
+
+Between releases every PR touching `api/**` or `pipeline/src/**` adds its line under
+`## [Unreleased]` (the `Changelog` check enforces it; the `no-changelog` label opts out).

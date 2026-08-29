@@ -43,10 +43,11 @@ def _sr(url="http://x.com/1", *, relevance=None, is_prediction=None):
 def _extractor_stub():
     async def _extract(**kwargs):
         # author_lean / author_lean_certainty mirror ExtractionOutput's shadow fields
-        # (retro #308/#309) so _process_article can surface them per-source.
+        # (retro #308/#309) so _process_article can surface them per-source;
+        # consensus_view (retro#686) is the third of them and rides the same tuple.
         return SimpleNamespace(predictions=[PredictionExtraction(
             quote="q", claim="c", stance=0.6, certainty=0.8, specificity=1.0, settled=None,
-        )], author_lean=0.5, author_lean_certainty=0.4), {}
+        )], author_lean=0.5, author_lean_certainty=0.4, consensus_view="divided"), {}
     return _extract
 
 
@@ -74,11 +75,12 @@ class TestReuseSuppliedVerdict:
         out = await _process(monkeypatch, _sr(relevance=0.83, is_prediction=True), flag=True, gk=gk)
         gk.assert_not_awaited()                 # the double-judge is gone
         assert out is not None
-        _, relevance, preds, author_lean, author_lean_certainty = out
+        _, relevance, preds, author_lean, author_lean_certainty, consensus_view = out
         assert relevance == 0.83                 # the supplied verdict, not a re-judge
         assert preds                             # extractor still ran
         assert author_lean == 0.5                # the byline author's own forecast, surfaced per-source
         assert author_lean_certainty == 0.4      # (shadow — never enters the estimate)
+        assert consensus_view == "divided"       # what the article says OTHERS expect (retro#686)
 
     async def test_supplied_reject_drops_without_judging(self, monkeypatch):
         gk = _gk_spy()

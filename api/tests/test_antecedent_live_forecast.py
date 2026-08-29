@@ -64,7 +64,10 @@ def _install_stubs(monkeypatch, article_to_predictions: dict):
 
     async def _extract(*, article_text, **kwargs):
         preds = article_to_predictions[article_text]
-        return SimpleNamespace(predictions=preds, author_lean=None, author_lean_certainty=None), {}
+        return SimpleNamespace(
+            predictions=preds, author_lean=None, author_lean_certainty=None,
+            consensus_view=None,
+        ), {}
 
     monkeypatch.setattr(forecaster, "check_is_prediction", gk)
     monkeypatch.setattr(forecaster, "extract_predictions", _extract)

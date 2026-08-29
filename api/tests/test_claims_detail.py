@@ -983,3 +983,130 @@ def test_the_provenance_schema_version_is_pinned():
     from forecast_api.models import PROVENANCE_SCHEMA_VERSION
 
     assert PROVENANCE_SCHEMA_VERSION == "1.2"
+
+
+class TestReportKindAndConsensusViewThreading:
+    """`report_kind` (per claim) and `consensus_view` (per article) through the
+    live path (Oracle 1.5 Phase 1, retro#686 — unparked from #673).
+
+    Both are shadow: populated, read by nothing. Which is exactly
+    why they get an end-to-end test rather than a projection test. A shadow
+    field nothing reads has no consumer to notice it arriving as None, so the
+    only thing standing between "harvested" and "silently 0% filled for a month"
+    is a test that runs the real pipeline and looks at what comes out the far
+    end.
+    """
+
+    async def test_report_kind_reaches_the_claim_layer_per_claim(self, monkeypatch):
+        """daatan persists claims_detail verbatim (daatan#1235), so the value
+        the model answered has to survive the projection unchanged — and stay
+        attached to ITS claim. An article mixing a level report and a change
+        report is the normal case, not an edge case."""
+        source = await _one_source(monkeypatch, [
+            _claim(claim="The rate stands at 8.75%", report_kind="level"),
+            _claim(claim="The bank cut by 25bp", report_kind="change"),
+        ], "[P1-rk] Will the event occur?")
+
+        assert [c.report_kind for c in source.claims_detail] == ["level", "change"]
+
+    async def test_a_claim_without_report_kind_projects_to_none(self, monkeypatch):
+        """Every claim extracted before v8, and every claim where the model
+        judged that neither kind fits — the prompt asks it to omit rather than
+        guess, so None has to mean "no answer", not "defaulted to level"."""
+        source = await _one_source(
+            monkeypatch, [_claim(claim="A")], "[P1-rk-null] Will the event occur?"
+        )
+        assert source.claims_detail[0].report_kind is None
+
+    async def test_consensus_view_reaches_the_source_signal(self, monkeypatch):
+        """The field is article-level, so it rides on the SourceSignal beside
+        `author_lean` rather than on any claim. This is the test that fails if
+        `_process_article`'s tuple widens without its unpack site following —
+        the failure mode that makes an added field look shipped and arrive
+        None."""
+        async def fake_extract(**kwargs):
+            return (
+                ExtractionOutput(predictions=[_claim(claim="A")], consensus_view="divided"),
+                {"total_tokens": 0},
+            )
+
+        _patch(monkeypatch, [_claim(claim="A")])
+        monkeypatch.setattr(forecaster, "extract_predictions", fake_extract)
+
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="[P1-cv] Will the event occur?",
+            articles=[ArticleInput(
+                url="https://fixture.example.test/a1",
+                title="Vellum sonata dispatch",
+                snippet="Fixture snippet, long enough to be usable by the pipeline.",
+                source="fixture",
+                published_date="2026-07-28",
+                text=_BODY,
+            )],
+        ))
+        assert resp.sources[0].consensus_view == "divided"
+
+    async def test_consensus_view_does_not_displace_author_lean(self, monkeypatch):
+        """Both are article-level, both ride the same widened tuple, and they
+        are adjacent in it — so a positional unpack that slipped by one would
+        still populate every field and still look right in review. Values that
+        cannot be mistaken for each other are what makes that detectable: an
+        author who expects yes while reporting that everyone else expects no.
+        """
+        async def fake_extract(**kwargs):
+            return (
+                ExtractionOutput(
+                    predictions=[_claim(claim="A")],
+                    author_lean=0.8,
+                    author_lean_certainty=0.45,
+                    consensus_view="expects_no",
+                ),
+                {"total_tokens": 0},
+            )
+
+        _patch(monkeypatch, [_claim(claim="A")])
+        monkeypatch.setattr(forecaster, "extract_predictions", fake_extract)
+
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="[P1-cv-order] Will the event occur?",
+            articles=[ArticleInput(
+                url="https://fixture.example.test/a1",
+                title="Vellum sonata dispatch",
+                snippet="Fixture snippet, long enough to be usable by the pipeline.",
+                source="fixture",
+                published_date="2026-07-28",
+                text=_BODY,
+            )],
+        ))
+        source = resp.sources[0]
+        assert source.author_lean == 0.8
+        assert source.author_lean_certainty == 0.45
+        assert source.consensus_view == "expects_no"
+
+    async def test_an_article_that_says_nothing_rolls_up_to_none(self, monkeypatch):
+        """Most articles never report what anyone else expects. Null is the
+        ordinary answer, and a default would make the field read as filled on
+        exactly the articles carrying no consensus at all."""
+        source = await _one_source(
+            monkeypatch, [_claim(claim="A")], "[P1-cv-null] Will the event occur?"
+        )
+        assert source.consensus_view is None
+
+    def test_report_kind_gets_no_article_rollup_on_purpose(self):
+        """`reader_confidence` rolls up to the SourceSignal (worst level, union
+        of traps) because its Phase 4 consumer gates a whole article. This one
+        does not, and the asymmetry is deliberate rather than an oversight:
+        E3b's recency integrator reads report_kind per CLAIM — a level report
+        resets the decay, a change report enters it — so an article-level
+        summary would answer a question nothing asks and would have to invent a
+        reduction (a vote? a worst-case?) with no consumer to justify it.
+
+        Pinned because the obvious review note is "why isn't this rolled up
+        like the last one".
+        """
+        from forecast_api.models import SourceSignal
+
+        assert "report_kind" in ClaimDetail.model_fields
+        assert "report_kind" not in SourceSignal.model_fields
+        assert "consensus_view" in SourceSignal.model_fields
+        assert "consensus_view" not in ClaimDetail.model_fields

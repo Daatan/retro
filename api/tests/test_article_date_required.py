@@ -67,7 +67,7 @@ class TestUndatedArticleIsDropped:
                 quote="q", claim="The elections were held.", stance=0.6, certainty=0.8,
                 specificity=1.0, settled=None,
             )],
-            author_lean=None, author_lean_certainty=None,
+            author_lean=None, author_lean_certainty=None, consensus_view=None,
         ), {}))
         monkeypatch.setattr(forecaster, "check_is_prediction", gk)
         monkeypatch.setattr(forecaster, "extract_predictions", ex)

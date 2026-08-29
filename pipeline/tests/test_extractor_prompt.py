@@ -393,3 +393,149 @@ def test_quantitative_estimate_share_exclusion_present():
     assert "a model gives Team X an 18.83% chance to win the tournament" in PROMPT_PREFIX
     # and the output contract must carry the same exclusion
     assert "never a vote share or seat count" in PROMPT_SUFFIX
+
+
+def test_report_kind_section_present():
+    """retro#686 (unparked from #673 §2): "the rate is 8.75%" and "the rate was
+    cut to 8.75%" carry the same stance toward "above 8%?" and are not the same
+    evidence — one restates a standing situation a prior article may already
+    have supplied, the other is new movement. The disciplining test in the
+    section is deliberately semantic ("what would the sentence still tell you a
+    month later") rather than grammatical: verb tense reads "held the rate" as a
+    change, which is exactly backwards."""
+    assert "## REPORT_KIND" in PROMPT_PREFIX
+    assert "level  — the standing situation as it is" in PROMPT_PREFIX
+    assert "change — a movement in it" in PROMPT_PREFIX
+    assert "not its verb tense" in PROMPT_PREFIX
+    assert "holding is the absence of a step" in PROMPT_PREFIX.replace("\n", " ")
+    # The omit case is the field's honesty valve: a pure expectation is neither
+    # member, and forcing one would fill the field with noise on op-eds.
+    assert "Omit report_kind when the quote is neither" in PROMPT_PREFIX
+
+
+def test_consensus_view_section_present():
+    """retro#686 (unparked from #673's "predicted consensus"). Its kill
+    criterion is >20% of non-null rows carrying the MODEL's own view rather than
+    the article's, so all three of the "this is NOT" clauses are load-bearing —
+    each names one of the three things that get recorded here by mistake."""
+    assert "## CONSENSUS_VIEW" in PROMPT_PREFIX
+    assert "Once per article, not per prediction" in PROMPT_PREFIX
+    assert "It is not YOUR view" in PROMPT_PREFIX
+    assert "that is author_lean" in PROMPT_PREFIX
+    assert "It is not the stance of the quotes you extracted" in PROMPT_PREFIX
+    # The worked disagreement case: consensus and author_lean must be able to
+    # point opposite ways, or the field is a copy of one we already have.
+    assert "wishful thinking" in PROMPT_PREFIX
+    assert "Omit consensus_view when the article does not say" in PROMPT_PREFIX
+
+
+def test_both_shadow_fields_disclaim_any_effect_on_stance():
+    """Both blocks say, in their own words, that they do not move `stance`.
+
+    A shadow field is supposed to be free: it is read by nothing, so the only
+    way it can cost anything is by changing an answer that IS read. Describing
+    two new kinds of judgement right before the output contract invites the
+    model to treat them as scoring dimensions — a `change` reading as stronger
+    evidence than a `level`, a `divided` consensus damping a confident quote.
+    The sentences are cheap and the failure they prevent is silent, so they are
+    pinned rather than left to a reviewer's eye.
+    """
+    flat = PROMPT_PREFIX.replace("\n", " ")
+    assert "report_kind never changes your stance" in flat
+    assert "a level that satisfies the question is exactly as positive" in flat
+    assert "Like report_kind, it never changes a stance" in flat
+    assert "exactly as you would have without this field" in flat
+
+
+def test_the_prompt_does_not_quote_its_own_ab_cases():
+    """A prompt that quotes a case from its own test set is a broken instrument.
+
+    v8's first draft illustrated `report_kind` with "the rate is 8.75%" / "the
+    central bank held the rate at 8.75%" — the numbers and sentence shape of the
+    A/B case `threshold-at-or-below-satisfied`, which the same PR then used to
+    decide whether the edit regressed anything. A case the prompt has already
+    answered cannot measure the prompt. (The length-control experiment later
+    showed this collision was NOT what moved Nova Lite — the rewrite stands on
+    the principle, not on that result.)
+    """
+    flat = PROMPT_PREFIX.replace("\n", " ")
+    for needle in ("8.75", "8.99", "benchmark interest rate"):
+        assert needle not in flat, (
+            f"the prompt quotes {needle!r}, which appears in an ab_cases fixture; "
+            f"illustrate the rule from a domain the case corpus does not use"
+        )
+
+
+def test_report_kind_and_consensus_view_in_output_contract():
+    assert "report_kind" in PROMPT_SUFFIX
+    assert '"consensus_view"' in PROMPT_SUFFIX
+    # Both must name their enum members where the model is told to emit them,
+    # not only in the prose block far above.
+    assert "one of level / change" in PROMPT_SUFFIX
+    assert "expects_yes / expects_no / divided" in PROMPT_SUFFIX
+
+
+def _worked_prediction_blocks() -> list[str]:
+    """The prediction objects inside PROMPT_SUFFIX's worked examples.
+
+    Split on the quote key, which starts every one of them; the leading chunk
+    before the first is the instruction text and is dropped.
+    """
+    return PROMPT_SUFFIX.split('"quote":')[1:]
+
+
+def test_every_worked_prediction_carries_report_kind():
+    """The v7 lesson, pinned rather than left to review (docs/PROMPT_VERSIONS.md).
+
+    v6 added the fact block to a worked example but omitted `facet` from it —
+    `facet` was specified only in the prefix section — and its fill went from
+    68% to **0% on both models**. A worked example is read as the definitive
+    enumeration of its block, so omission from one is a far stronger signal
+    than presence in the prose. A new per-prediction field therefore has to
+    appear on EVERY worked prediction, not on a representative one.
+    """
+    blocks = _worked_prediction_blocks()
+    assert len(blocks) >= 3, "the worked examples themselves went missing"
+    missing = [i for i, b in enumerate(blocks) if '"report_kind"' not in b]
+    assert not missing, (
+        f"worked prediction(s) {missing} omit report_kind; v6 zeroed `facet` "
+        f"on both models exactly this way"
+    )
+
+
+def test_every_worked_example_carries_consensus_view():
+    """Same rule one level up — consensus_view is article-level, so its unit of
+    enumeration is the top-level example object, not the prediction."""
+    examples = PROMPT_SUFFIX.split('"predictions": [\n')[1:]
+    assert len(examples) >= 2, "the worked examples themselves went missing"
+    assert all('"consensus_view"' in e for e in examples)
+
+
+def test_the_worked_report_kinds_do_not_all_agree():
+    """report_kind's own kill criterion is ">90% one value" — a field that
+    answers the same way everywhere has measured nothing. Worked examples that
+    all showed `change` would manufacture precisely the failure the A/B is run
+    to detect, and the measurement would then be of the prompt, not the model.
+    """
+    blocks = _worked_prediction_blocks()
+    values = [b.split('"report_kind": "')[1].split('"')[0] for b in blocks]
+    assert set(values) == {"level", "change"}, (
+        f"worked report_kind values are {values}; both members must be shown"
+    )
+
+
+def test_the_worked_consensus_views_do_not_all_agree():
+    """Same argument, and sharper here: consensus_view is one value per
+    article, so a model copying the examples has far less to average over."""
+    examples = PROMPT_SUFFIX.split('"consensus_view": "')[1:]
+    values = [e.split('"')[0] for e in examples]
+    assert len(set(values)) > 1, f"worked consensus_view values are {values}"
+
+
+def test_consensus_view_is_not_taught_as_the_authors_own_view():
+    """The one confusion that would make the field worthless. The output
+    contract has to keep the two apart where the model actually emits them —
+    the prose block is 100 lines further up and, per the v7 finding, loses to
+    a worked example that says otherwise."""
+    assert "what the article says OTHERS expect" in PROMPT_SUFFIX
+    assert "the byline author's OWN forecast" in PROMPT_SUFFIX

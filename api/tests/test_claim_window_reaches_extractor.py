@@ -42,7 +42,7 @@ async def _run(monkeypatch, *, claim_created_at):
                 stance=1.0, certainty=0.95, specificity=1.0,
                 settled=True, event_date="2022-11-01",
             )],
-            author_lean=None, author_lean_certainty=None,
+            author_lean=None, author_lean_certainty=None, consensus_view=None,
         ), {},
     )))
     monkeypatch.setattr(forecaster, "enforce_deadline_arithmetic", lambda p, dl, d: p)

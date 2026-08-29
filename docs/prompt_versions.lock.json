@@ -7,9 +7,9 @@
     "schema_chars": 1178
   },
   "extractor": {
-    "version": "v7",
-    "hash": "8470e187c3b7d30b",
-    "schema_hash": "711211151e689044",
-    "schema_chars": 20287
+    "version": "v8",
+    "hash": "a0ce599eff01356d",
+    "schema_hash": "f57de8d2e33b324c",
+    "schema_chars": 21339
   }
 }

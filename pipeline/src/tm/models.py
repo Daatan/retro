@@ -171,6 +171,45 @@ def _drop_malformed_reader_confidence(data: Any) -> Any:
     return data
 
 
+def _drop_out_of_enum(data: Any, key: str, allowed: frozenset[str]) -> Any:
+    """The flat-enum version of the guard above, for retro#686's shadow fields.
+
+    Same trade, same reasoning: `report_kind` and `consensus_view` are read by
+    nothing yet, and `complete_structured` runs instructor with `max_retries=1`,
+    so a model that keeps answering `"levels"` or `"expects yes"` would raise out
+    of `ExtractionOutput` and drop a real article from a real forecast. A new
+    enum is exactly where that happens — the model has never been asked for
+    these names before, and the models most likely to garble them are the ones
+    this field is being harvested to study.
+
+    Logged, never silent, for the reason `reader_confidence` is: a shadow field
+    exists to be counted, and a silent coercion to None makes "answered badly"
+    indistinguishable from "did not answer". Grep `event=<field>_malformed`.
+
+    Deliberately NOT applied to `evidence_class`, `facet` or
+    `fact_signal_absent_reason`. Those are read by live consumers, where a
+    dropped value changes a forecast rather than a fill rate — relaxing them is
+    a behaviour change that belongs to whoever owns those fields, not to this
+    one.
+    """
+    if not isinstance(data, dict):
+        return data
+    raw = data.get(key)
+    if raw is None:
+        return data
+    # The isinstance guard is load-bearing, not defensive: a model that answers
+    # with a list or an object hands `in` an unhashable value, and the raise
+    # would come from the guard that exists to prevent raises.
+    if isinstance(raw, str) and raw in allowed:
+        return data
+    logger.warning("event=%s_malformed value=%r", key, raw)
+    return {**data, key: None}
+
+
+_REPORT_KIND_VALUES = frozenset({"level", "change"})
+_CONSENSUS_VIEW_VALUES = frozenset({"expects_yes", "expects_no", "divided"})
+
+
 class PredictionExtraction(BaseModel):
     # `claim_strength` was named `certainty` until Oracle 1.5 Phase 1 (retro#680). The
     # elicitation text is unchanged — only the name moved, so the number this field carries
@@ -382,12 +421,24 @@ class PredictionExtraction(BaseModel):
                     "independent (a flat categorical sentence you had to work to interpret is "
                     "high claim_strength with a low level). Set it on every prediction.",
     )
+    # retro#686 (unparked from #673 §2). A flat two-member enum, not a scalar: #673's own
+    # caveat is that every new graded field is a fresh place for the #394 pathology, where a
+    # scalar collapses onto a handful of band labels anyway. One bit cannot collapse.
+    report_kind: Optional[Literal["level", "change"]] = Field(
+        default=None,
+        # Deliberately terse: the REPORT_KIND prose block carries the rule and the worked
+        # test. Every char here is billed on every call and the schema is ~27% of the
+        # extractor prompt (retro#700), so the schema says WHICH field, not HOW to decide it.
+        description="EXPERIMENTAL, shadow (retro#686) — the standing situation ('level') or a "
+                    "step in it ('change'). See REPORT_KIND; omit when neither fits.",
+    )
 
     @model_validator(mode="before")
     @classmethod
     def _unwrap_envelope(cls, data: Any) -> Any:
         data = _coerce_nested_json_string(_unwrap_properties_envelope(data), "reader_confidence")
-        return _drop_malformed_reader_confidence(data)
+        data = _drop_malformed_reader_confidence(data)
+        return _drop_out_of_enum(data, "report_kind", _REPORT_KIND_VALUES)
 
 
 class ExtractionOutput(BaseModel):
@@ -407,6 +458,21 @@ class ExtractionOutput(BaseModel):
         default=None, ge=0.0, le=1.0,
         description="How firmly the byline author commits to author_lean (0 = heavily hedged, "
                     "1 = emphatic). Null when author_lean is null.")
+    # retro#686 (unparked from #673's "predicted consensus"). Article-level, next to
+    # author_lean, because it is a property of the article's reporting rather than of any one
+    # claim — and deliberately the same shape question as author_lean so the two stay
+    # comparable: author_lean is what the AUTHOR thinks, this is what the author says EVERYONE
+    # ELSE thinks. Categorical rather than a signed float for #394's reason (see report_kind);
+    # the consumer needs a sign it can disagree with the pool about, not a magnitude.
+    consensus_view: Optional[Literal["expects_yes", "expects_no", "divided"]] = Field(
+        default=None,
+        # Terse for the same reason as report_kind. The one clause kept here is the
+        # never-your-own-view guard: it is the field's whole failure mode, its kill criterion
+        # (>20% of non-null rows carrying the model's own view), and the one thing a reader of
+        # the schema alone would otherwise get wrong.
+        description="EXPERIMENTAL, shadow (retro#686) — what the ARTICLE says OTHERS expect "
+                    "for the event; never your own view, never the byline author's (that is "
+                    "author_lean). See CONSENSUS_VIEW; omit when the article does not say.")
 
     @model_validator(mode="before")
     @classmethod
@@ -418,6 +484,7 @@ class ExtractionOutput(BaseModel):
           2. YAML-style strings:   'quote: ... source_authority: 0.8'
         """
         data = _unwrap_properties_envelope(data)
+        data = _drop_out_of_enum(data, "consensus_view", _CONSENSUS_VIEW_VALUES)
         if isinstance(data, dict) and "predictions" in data:
             preds = data["predictions"]
             if not isinstance(preds, list):

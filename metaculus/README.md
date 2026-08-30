@@ -51,20 +51,32 @@ to log without submitting).
 
 ## Cadence
 
-Tournament questions are open for **1.5 hours** (temporarily 3h), launch at
-random hours up to 5 at a time, and are scored on **spot peer score** — only
-the last forecast before close counts.
+Tournament questions are open for **3.0 hours**, launch at random hours up to 5
+at a time, and are scored on **spot peer score** — only the last forecast
+before close counts.
 
-Two consequences, both measured rather than assumed:
+The 3.0h is measured, not quoted: every one of the 60 questions in the
+2026-08-24 MiniBench round had exactly a 3.00h window (min = p50 = max), and
+that has held for the five rounds since 2026-06-15. Metaculus's own resources
+notebook still says 1.5h; it is stale. Do not reason from 1.5h.
+
+Two knobs, routinely confused — one is about *catching* a question, the other
+about *how many times we answer it*:
 
 - **Poll every ~20 minutes.** retro#617 measured `/forecast` over n=20,000
   production calls: p50 7.3s, p99 25.0s, max 45.9s, zero timeouts against a
   90s cap. Latency is not a constraint, so the 6-hour cadence an earlier draft
-  proposed would simply miss most questions.
-- **`STALE_AFTER_HOURS` defaults to 0.75**, not 24. At 45 minutes we get ~2
-  forecasts per question, so news breaking mid-window still reaches the
-  forecast that actually gets scored. A 24h value meant one forecast at
-  discovery and no update, which throws away the spot-score mechanic.
+  proposed would simply miss most questions. Unchanged by anything below.
+- **`STALE_AFTER_HOURS` defaults to 4** — deliberately *above* the 3h window,
+  so each question gets exactly one forecast. The FutureEval rules state that
+  "bot makers should only submit one forecast per question in these bot-only
+  tournaments". An earlier 0.75 default was chosen to get ~2 forecasts and let
+  mid-window news reach the scored submission; that is better for the score and
+  against the rules, so retro#755 inverted it. The cost is real — we forgo the
+  mid-window update — and it is the price of entering compliant.
+
+`bot-testing-area` is the exception the rule itself names ("testing areas where
+resubmission is encouraged"), so a lower value is fine there.
 
 ## Scheduling — a systemd timer on the oracle box, not Actions cron
 
@@ -74,10 +86,16 @@ there as well** — two schedulers would double-submit into the same question
 window.
 
 The reason is not preference. GitHub Actions cron is delayed and skipped under
-load, and that unreliability is the stated reason Metaculus temporarily widened
-the question window from 1.5h to 3h. Scheduling our discovery on the same
-substrate would inherit precisely the risk the widening exists to absorb, and on
-a 1.5h window a missed poll is a forfeited question (retro#728).
+load, and that unreliability is the stated reason Metaculus widened the question
+window to 3h. Scheduling our discovery on the same substrate would inherit
+precisely the risk the widening exists to absorb, and inside a 3h window a
+missed poll is a forfeited question (retro#728).
+
+This matters more than the window length suggests. A MiniBench round is not a
+leisurely fortnight: all ~60 questions of the 2026-08-24 round opened and closed
+inside **46 hours** (first open 08-24 00:00:00Z, last close 08-25 22:04:35Z),
+across 21 distinct UTC hours, and that burst has compressed from ~6.7 days in
+May to ~1.8 days now. There is no quiet hour to miss.
 
 Install or refresh the units (idempotent, safe after any deploy that changed
 them):

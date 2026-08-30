@@ -23,13 +23,19 @@ Env vars:
                               anything.
     MAX_QUESTIONS_PER_RUN     default 5 — caps Oracle calls per run (each one
                               costs real LLM spend and can take minutes).
-    STALE_AFTER_HOURS          default 0.75 — re-forecast a question only if our
+    STALE_AFTER_HOURS          default 4 — re-forecast a question only if our
                               last submission is older than this, or missing.
-                              Tournament questions close 1.5h (temporarily 3h)
-                              after opening and only the LAST forecast before
-                              close is scored, so this must be well under the
-                              window: 0.75h gives ~2 forecasts per question,
-                              letting news that breaks mid-window still count.
+                              Set ABOVE the question window on purpose, so we
+                              submit exactly once: the FutureEval rules say
+                              "bot makers should only submit one forecast per
+                              question in these bot-only tournaments"
+                              (retro#755). An earlier 0.75 default deliberately
+                              produced ~2 forecasts to exploit the spot score —
+                              correct for the score, against the rules.
+                              The window is 3.0h, measured 2026-08-30 across all
+                              60 questions of the current MiniBench round (the
+                              1.5h in Metaculus's own docs is stale), so 4h
+                              clears it with margin.
     DRY_RUN                   "true" to log what would be submitted without
                               calling Metaculus's write endpoints.
 """
@@ -82,6 +88,34 @@ def select_season_tournament(tournaments: list[dict], now: datetime) -> str | No
     return best[1] if best else None
 
 
+def _parse_forecast_time(value: object) -> datetime | None:
+    """Read `my_forecasts.latest.start_time`, which is NOT an ISO string.
+
+    Metaculus returns this one field as a float epoch in seconds
+    (`1788083931.233327`), unlike every other timestamp in the API. Until
+    2026-08-30 the bot had never forecast anything, so `latest` was always
+    `None` and this branch never ran — the first real submission turned every
+    subsequent poll into `AttributeError: 'float' object has no attribute
+    'replace'`, which aborts the whole run, not just that question (retro#727).
+
+    Both shapes are accepted: the payload is undocumented and older code read a
+    `timestamp` key that may still arrive as a string.
+    """
+    if isinstance(value, bool):  # bool is an int subclass; not a timestamp
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
+
+
 def needs_forecast(question: dict, stale_after: timedelta, now: datetime) -> bool:
     latest = (question.get("my_forecasts") or {}).get("latest")
     if not latest:
@@ -89,7 +123,16 @@ def needs_forecast(question: dict, stale_after: timedelta, now: datetime) -> boo
     start_time = latest.get("start_time") or latest.get("timestamp")
     if not start_time:
         return True
-    forecast_time = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+    forecast_time = _parse_forecast_time(start_time)
+    if forecast_time is None:
+        # A forecast exists but cannot be dated. Skip rather than re-submit:
+        # bot-only tournaments ask for one forecast per question (retro#755),
+        # so a duplicate is a worse failure than a missed refresh.
+        log.warning(
+            "Undatable forecast timestamp %r on question %s — skipping",
+            start_time, question.get("id"),
+        )
+        return False
     return now - forecast_time > stale_after
 
 
@@ -193,7 +236,7 @@ def main() -> None:
     tournament = os.environ.get("METACULUS_TOURNAMENT", "bot-testing-area")
     oracle_base_url = os.environ.get("ORACLE_BASE_URL", "https://oracle.daatan.com")
     max_questions = int(os.environ.get("MAX_QUESTIONS_PER_RUN", "5"))
-    stale_after = timedelta(hours=float(os.environ.get("STALE_AFTER_HOURS", "0.75")))
+    stale_after = timedelta(hours=float(os.environ.get("STALE_AFTER_HOURS", "4")))
     dry_run = os.environ.get("DRY_RUN", "").lower() in ("1", "true", "yes")
 
     run(metaculus_token, oracle_api_key, tournament, oracle_base_url, max_questions, stale_after, dry_run=dry_run)

@@ -19,9 +19,10 @@ import json
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
-from .models import PredictionExtraction
+from .models import PredictionExtraction, Quantity
+from .threshold_compare import QuestionThreshold, compare, normalise_unit
 
 
 def _sign(x: Optional[float]) -> Optional[int]:
@@ -108,6 +109,26 @@ class Case:
     journalist: str = "unknown"
     control_event_description: Optional[str] = None
     tags: tuple[str, ...] = ()
+    # --- retro#683, diagnostic only ---
+    # Deliberately NOT inside `expect`, which is the zero-regression gate. `quantity` is a
+    # shadow field whose validator (exact match on 100 hand-labelled claims, accuracy >= 0.9
+    # per rater) has not been run yet, and gating every future prompt PR on an unvalidated
+    # field would make it a requirement before it is a measurement. These two feed the
+    # quantity report and nothing else.
+    #
+    # `question_threshold` is the bar the QUESTION sets, hand-declared rather than parsed:
+    # the live parse is Oracle 1.5 Phase 2 (`question_quantity`), and a second, unmeasured
+    # parser here would be something for Phase 2 to disagree with. `expect_quantity` is what
+    # a correct reader should have extracted from THIS article — the "PR#671 known values"
+    # half of the validator.
+    question_threshold: Optional[dict[str, Any]] = None
+    expect_quantity: Optional[dict[str, Any]] = None
+
+    @property
+    def threshold(self) -> Optional[QuestionThreshold]:
+        if self.question_threshold is None:
+            return None
+        return QuestionThreshold.from_mapping(self.question_threshold)
 
     @property
     def is_temporal_leakage(self) -> bool:
@@ -204,3 +225,121 @@ def gate_exit_code(results: list[CaseResult], *, allow_leakage: bool = False) ->
         if r.regressions:
             return 1
     return 0
+
+
+# ── quantity vs the question's threshold (retro#683 item 1.6) ────────────────
+#
+# The comparison the extractor demonstrably cannot do in its head, done in code and
+# reported beside the stance the model produced anyway. Per rater by construction: an
+# arm is one model, so an arm's report is that model's row.
+#
+# What the issue asks this to show is a GAP, not a pass: agreement is expected to be
+# high on Haiku and low on Nova Lite. So the report carries both halves separately —
+# whether the code-side comparison got the case right, and whether the model's stance
+# did. On the retro#664 corpus the code is right by construction on all ten, which is
+# the point: the numbers were never the hard part, reading them was.
+#
+# Nothing here gates anything. `unmet_facets` and `gate_exit_code` are untouched.
+
+def _quantity_matches(extracted: Quantity, expected: Mapping[str, Any]) -> bool:
+    """Exact match on (value, unit, comparator) — the retro#683 validator's own test.
+
+    `value_hi` joins them when the expectation names one; `as_of` never does. The
+    validator is defined on the three fields that decide the comparison, and a date
+    the article states loosely is a different measurement with a different bar.
+    """
+    if extracted.comparator != expected["comparator"]:
+        return False
+    if extracted.value != float(expected["value"]):
+        return False
+    if normalise_unit(extracted.unit) != normalise_unit(str(expected["unit"])):
+        return False
+    if expected.get("value_hi") is not None:
+        return extracted.value_hi == float(expected["value_hi"])
+    return True
+
+
+@dataclass(frozen=True)
+class QuantityDiagnostic:
+    """One case's quantity row. Counts are over every prediction of every run."""
+    case_id: str
+    predictions: int
+    filled: int
+    exact: int              # matched expect_quantity (0 when the case declares none)
+    labelled: int           # predictions scoreable against expect_quantity
+    agree: int              # code-side sign == the model's own stance sign
+    disagree: int
+    undecidable: int        # code abstained: straddles, or units did not match
+    code_correct: int       # code-side sign == the case's expected stance_sign
+    stance_correct: int     # the model's stance sign == the case's expected stance_sign
+    # `exact` is per-prediction, so it is diluted by predictions that correctly report a
+    # DIFFERENT number from the same article ("the other party won 24 seats"). Those are
+    # right, not wrong, and on a rater that quotes generously they drag `exact` down far
+    # enough to invert the ranking between two raters. The three counts below are per RUN
+    # and about the one number the case is a test of, which is what the validator means.
+    runs: int = 0
+    target_hit: int = 0             # some prediction matched expect_quantity exactly
+    target_miscomparated: int = 0   # right value+unit, wrong comparator — the retro#664 failure
+
+
+def quantity_diagnostics(
+    cases: list[Case], predictions: dict[str, list[list[PredictionExtraction]]],
+) -> list[QuantityDiagnostic]:
+    """Per-case quantity fill, validator match, and code-vs-stance agreement.
+
+    Only cases carrying a `question_threshold` or an `expect_quantity` are reported —
+    the rest of the corpus has no number for this to be about.
+    """
+    out: list[QuantityDiagnostic] = []
+    for case in cases:
+        if case.question_threshold is None and case.expect_quantity is None:
+            continue
+        threshold = case.threshold
+        truth = case.expect.get("stance_sign")
+        n = filled = exact = labelled = agree = disagree = undecidable = 0
+        code_correct = stance_correct = 0
+        runs = target_hit = target_miscomparated = 0
+        for run in predictions.get(case.id, []):
+            if case.expect_quantity is not None:
+                runs += 1
+                same_number = [
+                    p.quantity for p in run
+                    if p.quantity is not None
+                    and p.quantity.value == float(case.expect_quantity["value"])
+                    and normalise_unit(p.quantity.unit)
+                    == normalise_unit(str(case.expect_quantity["unit"]))
+                ]
+                if any(_quantity_matches(q, case.expect_quantity) for q in same_number):
+                    target_hit += 1
+                elif same_number:
+                    target_miscomparated += 1
+            for p in run:
+                n += 1
+                if truth is not None and _sign(p.stance) == truth:
+                    stance_correct += 1
+                if p.quantity is None:
+                    continue
+                filled += 1
+                if case.expect_quantity is not None:
+                    labelled += 1
+                    if _quantity_matches(p.quantity, case.expect_quantity):
+                        exact += 1
+                if threshold is None:
+                    continue
+                sign = compare(p.quantity, threshold).sign
+                if sign is None:
+                    undecidable += 1
+                    continue
+                if sign == _sign(p.stance):
+                    agree += 1
+                else:
+                    disagree += 1
+                if truth is not None and sign == truth:
+                    code_correct += 1
+        out.append(QuantityDiagnostic(
+            case_id=case.id, predictions=n, filled=filled, exact=exact, labelled=labelled,
+            agree=agree, disagree=disagree, undecidable=undecidable,
+            code_correct=code_correct, stance_correct=stance_correct,
+            runs=runs, target_hit=target_hit, target_miscomparated=target_miscomparated,
+        ))
+    return out

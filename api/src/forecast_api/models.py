@@ -214,6 +214,32 @@ class ReaderConfidence(BaseModel):
     trap: Optional[Literal["negation", "numeric_comparison", "entity_or_event_mismatch", "tone_vs_content", "inference_needed", "conflicting_signals"]] = Field(default=None, description="The one known reading trap that applied to this span, or None when none did. Each name matches a detector that already exists — negation (retro#657), numeric_comparison (the PR#671 A/B cases), tone_vs_content (ab_cases/stance_tone_conflation.json), entity_or_event_mismatch (the dyad facets vs the question's actors) — so the model's self-flag can be scored against an independent judge. A trap does not imply a low level")
 
 
+
+class Quantity(BaseModel):
+    """The number one claim reports about the event, as elicited (retro#683).
+
+    The extractor is asked for the FIGURE and never for the verdict: PR#671
+    measured Nova Lite returning stance +0.00 on every between-bounds numeric
+    case and inverting both tone traps, so whether a reported number clears the
+    question's bar is decided in code (`tm.threshold_compare`) rather than in
+    the model's head. This is the number that comparison reads.
+
+    Carried verbatim from the elicited `tm.models.Quantity`, like
+    `ReaderConfidence` above, so daatan's stored `claims_detail` keeps the shape
+    the model answered in. Distinct from `quantitative_estimate`, which
+    retro#362 narrowed to a cited PROBABILITY of the event: a share, count,
+    rate or tonnage is not a probability and lands here instead.
+
+    EXPERIMENTAL shadow — persisted, read by nothing. A rater's values stay out
+    of every consumer until the field clears its validator for that rater.
+    """
+    value: float = Field(description="The number itself, separators and symbols stripped and the scale multiplied out: \"1.4 million containers\" is 1400000 with unit \"containers\"")
+    unit: str = Field(description="What the number counts, in the article's own terms — percent / seats / containers / USD per barrel. Compared after normalisation (case, plural, the common spellings of percent), and a mismatch makes the comparison abstain rather than contradict")
+    comparator: Literal["=", "<", "<=", ">", ">=", "between"] = Field(description="The relation the ARTICLE asserts about the value, never the question's: '=' for a stated level, an inequality for a bound (\"stayed below 40 million tonnes\" is '<'), 'between' for a range. A bound is still comparable — it decides the question whenever every value it allows falls on one side")
+    value_hi: Optional[float] = Field(default=None, description="The upper bound, and only with comparator 'between'; `value` is then the lower one. None otherwise")
+    as_of: Optional[str] = Field(default=None, description="ISO date the figure describes, resolved against the article's date. None when the article does not date it. Not part of the validator's (value, unit, comparator) match")
+
+
 class ClaimDetail(BaseModel):
     """One extracted claim, as the claim-level layer the article's fused
     scalars are reduced FROM (F1/F15, retro#364).
@@ -289,6 +315,7 @@ class ClaimDetail(BaseModel):
     facet: Optional[Literal["announcement", "denial", "neither"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#354 D2a) — whether this claim's reported fact ANNOUNCES the event, DENIES it, or is NEITHER. Per-claim: SourceSignal.facet is the dominant claim's only")
     reader_confidence: Optional[ReaderConfidence] = Field(default=None, description="EXPERIMENTAL shadow (retro#681) — the extractor's confidence in its OWN reading of this claim, {level, trap}, as elicited. The reader's confidence, as against `claim_strength`, which is the source's; they were one field until retro#680. Verbatim from the extractor, unlike the article-level rollup on SourceSignal. None on a row extracted before the field existed, or when the model omitted it")
     report_kind: Optional[Literal["level", "change"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#686) — does this claim report the standing SITUATION (`level`: \"the rate is 8.75%\") or a MOVEMENT in it (`change`: \"the rate was cut\")? Consumer is Phase 4 E3b: a level report measures the state directly and should reset the recency integrator rather than decay out of it, which is the node retro#589 was missing. Nothing reads it yet. None on a row extracted before the field existed, or when neither kind fits")
+    quantity: Optional[Quantity] = Field(default=None, description="EXPERIMENTAL shadow (retro#683) — the number this claim reports about the event, with its unit and the relation the article asserts, {value, unit, comparator, value_hi, as_of}. The number, NOT whether it satisfies the question: that comparison is arithmetic and is done in code. Consumers are Phase 3 E3-prep (the empirical CDF beside the stance pool) and Phase 4 THRESHOLD_PRICING_ENABLED. Nothing reads it yet. None on a row extracted before the field existed, or when the claim reports no figure")
     # --- Conditional fields (v1.1, Phase 1 capture plan; see conditionals.md §4.4 + conditional-capture-phase1.md §3) ---
     # PRE-RESOLUTION: recorded BEFORE enforce_* chain (asymmetric with other ClaimDetail fields; documented per §3.3)
     is_conditional: Optional[bool] = Field(
@@ -483,7 +510,14 @@ class FetchUrlResponse(BaseModel):
 # and SourceSignal its article-level rollup (`reader_confidence_level` = worst level over the
 # claims, `reader_confidence_traps` = the distinct traps). Additive and shadow — nothing reads
 # either — so again a minor bump; a caller wanting the field gates on >= 1.2.
-PROVENANCE_SCHEMA_VERSION = "1.2"
+# 1.3 (Oracle 1.5 Phase 1, retro#683): ClaimDetail carries `quantity` {value, unit,
+# comparator, value_hi, as_of} — the figure the claim reports about the event, so that
+# whether it clears a threshold can be decided in code rather than by the extractor.
+# Additive and shadow, so a minor bump again; a caller wanting the field gates on >= 1.3.
+# This bump also covers `report_kind` and `consensus_view`, which landed additively under
+# retro#686 without one — a caller on >= 1.3 gets all three, and one on 1.2 may or may not
+# see the other two, which is the cost of the omission and not something to repeat.
+PROVENANCE_SCHEMA_VERSION = "1.3"
 
 
 class ProvenanceOracle(BaseModel):

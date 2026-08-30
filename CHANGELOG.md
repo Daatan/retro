@@ -32,7 +32,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 - Settled-grounding shadow slice (retro#609, #613)
 - Retry-relaxed-search fallback ladder rung 1, shadow-only (retro#621, #648, #661)
 - Deterministic settlement semantic gates: backtest harness, 387 labelled pairs, `facet_missing` gate, shadow wiring, outcome-contradicted-pin scoring, `logs.sh settlement` (retro#691, #693, #694, #696, #698, #699, #701)
-- Oracle 1.5 Phase 1 elicited fields (shadow): `certainty` → `claim_strength` (retro#680, #692), `reader_confidence` (retro#681, #695), `report_kind` + `consensus_view` (retro#686, #719); deterministic confusion flags, log-only (retro#687, #712); `(actor, target, day)` clustering beside the Jaccard key (retro#682, #717)
+- Oracle 1.5 Phase 1 elicited fields (shadow): `certainty` → `claim_strength` (retro#680, #692), `reader_confidence` (retro#681, #695), `report_kind` + `consensus_view` (retro#686, #719), `quantity` + the code-side threshold comparison and its per-rater A/B diagnostic (retro#683); extractor prompt v9; deterministic confusion flags, log-only (retro#687, #712); `(actor, target, day)` clustering beside the Jaccard key (retro#682, #717)
 - Threshold-shaped batch events routed to a second extractor, ships off (retro#688, #702)
 - Metaculus: calibration backtest driver (retro#619, #624); sync service for the daatan-v1 bot (daatan#1554, #723, #733, #736, #738); IAM for `metaculus/*` secrets (retro#725, #735)
 - Periodic check for the resolution-shadow-credibility gate (retro#604, #629)

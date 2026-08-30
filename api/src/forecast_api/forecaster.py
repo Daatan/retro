@@ -86,7 +86,7 @@ EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 # human-readable label only, see docs/PROMPT_VERSIONS.md. The *_HASH is computed from the
 # actual prompt text above, so it stays correct even if a version bump is forgotten.
 GATEKEEPER_PROMPT_VERSION = "v1"
-EXTRACTOR_PROMPT_VERSION = "v8"
+EXTRACTOR_PROMPT_VERSION = "v9"
 GATEKEEPER_PROMPT_HASH = hashlib.sha256(GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
 EXTRACTOR_PROMPT_HASH = hashlib.sha256(EXTRACTOR_PROMPT.encode()).hexdigest()[:16]
 
@@ -340,6 +340,11 @@ def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDe
             # asks, so the wire must carry it or daatan stores nothing and the two-week
             # distribution #689 needs never accrues (the retro#566 failure, noted below).
             report_kind=p.report_kind,
+            # retro#683. Same projection, same reason, and the same `model_dump()` as
+            # reader_confidence above: the wire contract must not gain a pipeline-internal
+            # type. Dropping it here is the retro#566 failure exactly — the prompt asks, the
+            # model answers, and nothing is ever stored to measure.
+            quantity=p.quantity.model_dump() if p.quantity is not None else None,
             # Phase 1 conditional capture (#504) — pre-resolution shadow fields.
             # Omitted here from 2026-08-09 to retro#566: the prompt asked, the
             # model answered, and this projection dropped all nine on the wire.

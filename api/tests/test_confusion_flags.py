@@ -88,16 +88,19 @@ def test_rule_1_is_null_safe_without_reader_confidence():
 
 
 # ── rule 2: stance contradicts the arithmetic ────────────────────────────────
-# `quantity` does not exist on ClaimDetail yet (retro#683). These drive the rule
-# through a stand-in carrying the same attribute, which is exactly what the real
-# field will be — the rule reads it via getattr precisely so it self-activates.
-class _ClaimWithQuantity:
-    def __init__(self, stance, quantity, claim_strength=0.9):
-        self.stance = stance
-        self.quantity = quantity
-        self.claim_strength = claim_strength
-        self.settled = None
-        self.reader_confidence = None
+# `quantity` landed with retro#683 as the `{value, unit, comparator, ...}` object
+# the extractor is asked for, so these now drive the real field on a real
+# ClaimDetail. The rule self-activated exactly as #687 said it would; what #687
+# could not know was the SHAPE, and a rule comparing an object to a float with
+# `>` would have raised the first time Phase 2 passed a threshold.
+
+
+def _with_quantity(stance, value, comparator="=", unit="USD per barrel", **over):
+    return _claim(
+        stance=stance,
+        quantity={"value": value, "unit": unit, "comparator": comparator},
+        **over,
+    )
 
 
 @pytest.mark.parametrize("stance,quantity,comparison", [
@@ -107,7 +110,7 @@ class _ClaimWithQuantity:
     (-0.8, 93.0, "at_most"),
 ])
 def test_a_stance_contradicting_its_own_number_is_flagged(stance, quantity, comparison):
-    claim = _ClaimWithQuantity(stance=stance, quantity=quantity)
+    claim = _with_quantity(stance, quantity)
     assert _flags(claim, question_quantity=100.0, comparison=comparison) == [
         RULE_STANCE_VS_QUANTITY
     ]
@@ -119,34 +122,71 @@ def test_a_stance_contradicting_its_own_number_is_flagged(stance, quantity, comp
     (0.8, 93.0, "at_most"),
 ])
 def test_a_stance_agreeing_with_its_number_is_not_flagged(stance, quantity, comparison):
-    claim = _ClaimWithQuantity(stance=stance, quantity=quantity)
+    claim = _with_quantity(stance, quantity)
     assert _flags(claim, question_quantity=100.0, comparison=comparison) == []
 
 
 def test_a_number_exactly_on_the_threshold_decides_nothing():
-    claim = _ClaimWithQuantity(stance=-0.9, quantity=100.0)
+    """retro#687's carve-out, kept through the rewire. `at_least` includes the
+    bar, so the comparison alone would call 100 satisfied and flag the negative
+    stance; the rule keeps declining to read a claim sitting exactly on it."""
+    claim = _with_quantity(-0.9, 100.0)
     assert _flags(claim, question_quantity=100.0, comparison="at_least") == []
 
 
 def test_a_zero_stance_is_not_a_direction():
     """No sign to contradict — flagging it would report an inconsistency that
     isn't there."""
-    claim = _ClaimWithQuantity(stance=0.0, quantity=93.0)
+    claim = _with_quantity(0.0, 93.0)
     assert _flags(claim, question_quantity=100.0, comparison="at_least") == []
+
+
+# --- what the object shape buys, which a bare float could not (retro#683) ---
+@pytest.mark.parametrize("comparator,value,comparison", [
+    ("<", 100.0, "at_least"),   # "stayed below $100" against "reaches $100"
+    (">", 100.0, "at_most"),    # "has been above $100" against "stays under $100"
+])
+def test_a_bounded_report_with_no_value_of_its_own_still_decides(comparator, value, comparison):
+    """The claim states a BOUND, not a level: there is no number to compare with
+    `>`, and the question is still answered — every price the article allows sits
+    on one side of the bar. The pre-#683 float shape could not express this at
+    all, so a positive stance on it went unflagged."""
+    claim = _with_quantity(0.8, value, comparator=comparator)
+    assert _flags(claim, question_quantity=value, comparison=comparison) == [
+        RULE_STANCE_VS_QUANTITY
+    ]
+
+
+def test_a_report_spanning_both_answers_is_not_flagged():
+    """"Above $93" contains prices that reach $100 and prices that do not. An
+    abstention is not a contradiction, and a rule that flagged here would be
+    reporting an inconsistency the claim does not contain."""
+    claim = _with_quantity(0.8, 93.0, comparator=">")
+    assert _flags(claim, question_quantity=100.0, comparison="at_least") == []
+
+
+def test_a_reported_range_inside_the_bar_agrees():
+    claim = _with_quantity(-0.8, 60.0, comparator="between")
+    claim.quantity.value_hi = 80.0
+    assert _flags(claim, question_quantity=100.0, comparison="at_most") == [
+        RULE_STANCE_VS_QUANTITY
+    ]
 
 
 def test_rule_2_is_inert_without_the_question_threshold():
     """Today's live path: the claim may carry a number, Phase 2's
     `question_quantity` does not exist, so there is nothing to compare against."""
-    claim = _ClaimWithQuantity(stance=0.8, quantity=93.0)
+    claim = _with_quantity(0.8, 93.0)
     assert _flags(claim) == []
     assert _flags(claim, comparison="at_least") == []
 
 
-def test_rule_2_is_inert_without_the_claim_quantity():
-    """The real ClaimDetail today: no `quantity` attribute at all."""
+def test_rule_2_is_inert_when_the_claim_reports_no_figure():
+    """Most claims. `quantity` exists on ClaimDetail now, and is None whenever the
+    quote states no number — which must stay indistinguishable from a pre-#683
+    row for this rule's purposes."""
     claim = _claim(stance=0.8)
-    assert not hasattr(claim, "quantity")
+    assert claim.quantity is None
     assert _flags(claim, question_quantity=100.0, comparison="at_least") == []
 
 

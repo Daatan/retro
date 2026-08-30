@@ -982,7 +982,7 @@ def test_the_provenance_schema_version_is_pinned():
     has to be deliberate — schema_version is what daatan gates on."""
     from forecast_api.models import PROVENANCE_SCHEMA_VERSION
 
-    assert PROVENANCE_SCHEMA_VERSION == "1.2"
+    assert PROVENANCE_SCHEMA_VERSION == "1.3"
 
 
 class TestReportKindAndConsensusViewThreading:
@@ -1110,3 +1110,77 @@ class TestReportKindAndConsensusViewThreading:
         assert "report_kind" not in SourceSignal.model_fields
         assert "consensus_view" in SourceSignal.model_fields
         assert "consensus_view" not in ClaimDetail.model_fields
+
+
+class TestQuantityThreading:
+    """`quantity` through the live path (Oracle 1.5 Phase 1, retro#683).
+
+    Shadow, like every field above it: populated, read by nothing. So it gets an
+    end-to-end test for the reason retro#686's do — a shadow field has no
+    consumer to notice it arriving as None, and the only thing standing between
+    "harvested" and "silently 0% filled for a month" is a test that runs the real
+    pipeline and looks at what comes out the far end. retro#566 is the precedent:
+    nine conditional fields elicited, answered, and dropped by the projection.
+    """
+
+    async def test_it_reaches_the_claim_layer_verbatim(self, monkeypatch):
+        source = await _one_source(monkeypatch, [
+            _claim(claim="Throughput was 1.4 million containers",
+                   quantity={"value": 1400000, "unit": "containers", "comparator": "=",
+                             "as_of": "2026-06-30"}),
+            _claim(claim="Volume stayed below 2 million containers",
+                   quantity={"value": 2000000, "unit": "containers", "comparator": "<"}),
+        ], "[P1-q] Will the event occur?")
+
+        first, second = source.claims_detail
+        assert (first.quantity.value, first.quantity.unit) == (1400000, "containers")
+        assert (first.quantity.comparator, first.quantity.as_of) == ("=", "2026-06-30")
+        assert (second.quantity.comparator, second.quantity.value_hi) == ("<", None)
+
+    async def test_a_range_keeps_both_bounds(self, monkeypatch):
+        """`value_hi` is the one field that is meaningless alone, so a projection
+        carrying `value` and dropping it would look populated and compare wrong."""
+        source = await _one_source(monkeypatch, [
+            _claim(claim="Between 1.8 and 2.2 million containers",
+                   quantity={"value": 1800000, "unit": "containers",
+                             "comparator": "between", "value_hi": 2200000}),
+        ], "[P1-q-range] Will the event occur?")
+
+        q = source.claims_detail[0].quantity
+        assert (q.value, q.value_hi, q.comparator) == (1800000, 2200000, "between")
+
+    async def test_a_claim_without_a_figure_projects_to_none(self, monkeypatch):
+        """Most claims. The prompt asks the model to omit rather than invent a
+        number, so None has to mean "the quote states no figure" — not zero."""
+        source = await _one_source(
+            monkeypatch, [_claim(claim="A")], "[P1-q-null] Will the event occur?"
+        )
+        assert source.claims_detail[0].quantity is None
+
+    async def test_it_does_not_displace_quantitative_estimate(self, monkeypatch):
+        """The two are near neighbours in both models and the prompt spends a
+        paragraph keeping them apart. retro#362's bug was a share written into
+        `quantitative_estimate` and rewritten to stance = 2*qe-1 in code, so a
+        projection that crossed the two would reintroduce it on the wire."""
+        source = await _one_source(monkeypatch, [
+            _claim(claim="A poll-aggregator model gives 22%", quantitative_estimate=0.22),
+            _claim(claim="The party polls at 28% of the vote",
+                   quantity={"value": 28, "unit": "percent", "comparator": "="}),
+        ], "[P1-q-qe] Will the event occur?")
+
+        cited, share = source.claims_detail
+        assert cited.quantitative_estimate == 0.22 and cited.quantity is None
+        assert share.quantitative_estimate is None and share.quantity.value == 28
+
+    async def test_a_malformed_quantity_costs_the_field_and_not_the_article(self, monkeypatch):
+        """The boundary the drop-guard exists for, seen from the far end. The
+        extractor's `_drop_malformed_quantity` nulls a half-answer rather than
+        letting it raise out of ExtractionOutput — and what that buys is this: the
+        claim, its stance and every other field still reach the caller."""
+        source = await _one_source(monkeypatch, [
+            _claim(claim="Thirty six seats", stance=0.7, quantity={"value": 36}),
+        ], "[P1-q-bad] Will the event occur?")
+
+        claim = source.claims_detail[0]
+        assert claim.quantity is None
+        assert claim.stance == 0.7 and claim.claim == "Thirty six seats"

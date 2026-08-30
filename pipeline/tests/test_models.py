@@ -10,6 +10,7 @@ from tm.models import (
     PredictionType,
     MatrixState,
     CellStatus,
+    Quantity,
     ReaderConfidence,
 )
 
@@ -438,8 +439,10 @@ class TestReportKindAndConsensusView:
         fields go at the tail so every existing field keeps its neighbours and
         its position in the text the model reads."""
         props = list(PredictionExtraction.model_json_schema()["properties"])
-        assert props[-1] == "report_kind"
         assert props.index("reader_confidence") < props.index("report_kind")
+        # `quantity` (retro#683) took the tail after these two, by the same rule.
+        assert props.index("report_kind") < props.index("quantity")
+        assert props[-1] == "quantity"
 
     # --- consensus_view ---
 
@@ -515,3 +518,114 @@ class TestReportKindAndConsensusView:
         carry their rationale in `#` comments for exactly this reason."""
         for model in (ExtractionOutput, PredictionExtraction):
             assert model.model_json_schema().get("description", "") == ""
+
+
+class TestQuantity:
+    """`quantity` {value, unit, comparator, value_hi, as_of} — the number the
+    article gives, so that whether it satisfies the question can be decided in
+    code (Oracle 1.5 Phase 1, retro#683).
+
+    Shadow: populated and persisted, read by nothing. What these pin is the
+    boundary between a strict model and a tolerant call site — the field is only
+    worth harvesting if "the model did not answer", "the model answered badly"
+    and "the model answered" stay three distinguishable states, and only worth
+    comparing in code if a half-answer never reaches the comparison.
+    """
+
+    @staticmethod
+    def _pred(**over):
+        base = dict(quote="q", claim="c", stance=0.4, claim_strength=0.65)
+        return PredictionExtraction(**{**base, **over})
+
+    def test_a_stated_level_round_trips(self):
+        pred = self._pred(quantity={"value": 8.75, "unit": "percent", "comparator": "="})
+        assert (pred.quantity.value, pred.quantity.unit) == (8.75, "percent")
+        assert pred.quantity.comparator == "="
+        assert pred.quantity.value_hi is None and pred.quantity.as_of is None
+
+    def test_a_range_carries_both_bounds(self):
+        pred = self._pred(quantity={
+            "value": 1.8, "unit": "million containers", "comparator": "between", "value_hi": 2.2,
+        })
+        assert (pred.quantity.value, pred.quantity.value_hi) == (1.8, 2.2)
+
+    def test_it_defaults_to_none(self):
+        """Every row extracted before v9 has no quantity, and so does every
+        prediction that reports no figure — the two look the same on purpose."""
+        assert self._pred().quantity is None
+
+    @pytest.mark.parametrize("bad", [
+        {"value": 36},                                                   # no unit
+        {"unit": "seats", "comparator": "="},                            # no value
+        {"value": 36, "unit": "seats", "comparator": "at least"},        # not an enum member
+        {"value": 2, "unit": "percent", "comparator": "between"},        # between, no upper bound
+        {"value": 3, "unit": "percent", "comparator": "between", "value_hi": 2},   # inverted
+        {"value": 9, "unit": "percent", "comparator": "<=", "value_hi": 12},       # stray bound
+        "about nine percent",
+        ["9", "percent"],
+    ])
+    def test_a_malformed_answer_is_dropped_and_the_prediction_survives(self, bad, caplog):
+        """Strict model, tolerant boundary — the retro#681/#686 trade, applied to
+        a field with more ways to be wrong than either: five keys, a closed enum
+        and a conditional requirement between two of them. `complete_structured`
+        runs instructor with max_retries=1, so a still-malformed value would raise
+        out of ExtractionOutput and drop the whole ARTICLE from the forecast."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="tm.models"):
+            pred = self._pred(quantity=bad)
+        assert pred.quantity is None
+        assert pred.claim_strength == 0.65, "the rest of the prediction must be untouched"
+        assert "event=quantity_malformed" in caplog.text, (
+            "a silent drop would make 'answered badly' look like 'did not answer', "
+            "which is the one distinction the fill rate exists to draw"
+        )
+
+    def test_a_double_serialized_object_is_parsed(self):
+        """Some models in TOOLS mode emit a nested object as a JSON string
+        (retro#306). `quantity` is the second nested field inside a prediction and
+        needs the same coercion `reader_confidence` gets."""
+        pred = self._pred(quantity='{"value": 214, "unit": "daily departures", "comparator": "="}')
+        assert pred.quantity == Quantity(value=214, unit="daily departures", comparator="=")
+
+    def test_constructing_it_directly_still_raises(self):
+        """Strictness is relaxed at the LLM boundary, not in the type. Code that
+        builds a Quantity is code that is about to compare it, and a comparison
+        against a half-answer produces a confident wrong sign, not an abstention."""
+        with pytest.raises(ValidationError):
+            Quantity(value=36)
+        with pytest.raises(ValueError):
+            Quantity(value=2, unit="percent", comparator="between")
+
+    def test_it_survives_a_dump_validate_round_trip(self):
+        """daatan persists this inside claims_detail verbatim (daatan#1235/#1645)."""
+        pred = self._pred(quantity={
+            "value": 40, "unit": "million tonnes", "comparator": "<", "as_of": "2026-06-30",
+        })
+        assert PredictionExtraction.model_validate(pred.model_dump()).quantity == pred.quantity
+
+    def test_the_llm_schema_offers_exactly_six_comparators(self):
+        """The prompt names six; the schema must accept exactly those six. A
+        drift either way means the model is told to answer something it cannot
+        express, or can express something the code-side comparison cannot read."""
+        schema = PredictionExtraction.model_json_schema()
+        assert "quantity" in schema["properties"]
+        comparator = schema["$defs"]["Quantity"]["properties"]["comparator"]
+        assert set(comparator["enum"]) == {"=", "<", "<=", ">", ">=", "between"}
+
+    def test_it_does_not_pay_for_a_docstring(self):
+        """Pydantic copies a model docstring into the JSON schema description,
+        and that schema IS the tool definition sent on every call (retro#700).
+        `ReaderConfidence`'s first draft shipped 1,283 chars of rationale this
+        way; `Quantity` keeps its own in `#` comments above the class."""
+        assert Quantity.model_json_schema().get("description", "") == ""
+
+    def test_it_is_independent_of_quantitative_estimate(self):
+        """The two are near neighbours and the prompt spends a paragraph keeping
+        them apart, so the schema must let a claim carry one without the other:
+        a seat count is not a probability (retro#362), and a cited probability is
+        not a level."""
+        share = self._pred(quantity={"value": 28, "unit": "percent", "comparator": "="})
+        assert share.quantitative_estimate is None
+        probability = self._pred(quantitative_estimate=0.22)
+        assert probability.quantity is None

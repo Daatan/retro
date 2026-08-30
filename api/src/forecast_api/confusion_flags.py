@@ -26,7 +26,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Literal, Optional, Sequence
+from typing import Literal, Mapping, Optional, Sequence
+
+from tm.models import Quantity
+from tm.threshold_compare import QuestionThreshold, compare
 
 from .models import ClaimDetail
 
@@ -95,17 +98,33 @@ def _stance_vs_quantity(
     nonetheless leans positive is internally inconsistent, and that inconsistency
     is checkable in code with no LLM call.
 
-    **Inert today, by construction.** It needs two inputs that do not exist yet:
-    the claim-side number (``quantity``, retro#683) and the question-side
-    threshold (Phase 2's ``question_quantity``). The claim side is read with
-    ``getattr`` so this rule starts firing the moment #683 adds the field, with
-    no edit here; the question side is a parameter no caller passes yet. Both
-    absent ⇒ no flag, which is the null-safe path the acceptance criteria ask to
-    be tested rather than a placeholder.
+    **Still inert on the live path**, but no longer for both reasons. retro#683
+    landed the claim side, so ``quantity`` now exists — as the ``{value, unit,
+    comparator, ...}`` OBJECT the extractor is asked for, not the bare float this
+    rule was first written against. The question side is still a parameter no
+    caller passes; Phase 2's ``question_quantity`` parse is what supplies it.
+    Both absent ⇒ no flag, which is the null-safe path the acceptance criteria
+    ask to be tested rather than a placeholder.
+
+    The arithmetic is delegated to ``tm.threshold_compare``, which the same issue
+    ships and which the A/B harness already exercises — one comparison, one set
+    of boundary rules, rather than a second inequality chain here free to drift
+    from it. That also makes a BOUNDED claim usable: "exports stayed below 40
+    million tonnes" carries no value to compare with ``>``, and still decides a
+    question about exceeding 40 million tonnes.
+
+    Abstention is not a contradiction. When the reported interval spans both
+    answers ("above 5%" against a bar at 9%), the comparison returns no sign and
+    this rule does not fire — flagging there would report an inconsistency that
+    the claim does not contain.
 
     The comparison direction is a parameter rather than something inferred from
     the question text: guessing "exceeds" vs "falls below" from wording is the
-    kind of judgement this module exists to avoid making.
+    kind of judgement this module exists to avoid making. The parameter is a bare
+    number, so it carries no unit and the unit check in ``compare`` is satisfied
+    from the claim's own — a caller passing 100 for "$100/barrel" against a claim
+    counting seats is a caller error Phase 2's parse has to prevent, not
+    something this rule can detect.
 
     ``ClaimDetail.quantitative_estimate`` is NOT this number and must not be
     substituted for it: it is a probability in [0, 1] the source cited *for the
@@ -117,12 +136,25 @@ def _stance_vs_quantity(
     quantity = getattr(claim, "quantity", None)
     if quantity is None:
         return False
-    # A claim sitting exactly on the threshold decides nothing either way, and a
-    # zero stance is not a direction — neither can contradict anything.
-    if quantity == question_quantity or claim.stance == 0.0:
+    # A zero stance is not a direction, so there is no sign to contradict.
+    if claim.stance == 0.0:
         return False
-    meets = quantity > question_quantity if comparison == "at_least" else quantity < question_quantity
-    return meets != (claim.stance > 0)
+    if isinstance(quantity, Mapping):
+        quantity = Quantity.model_validate(quantity)
+    # A claim sitting exactly ON the threshold decides nothing either way —
+    # retro#687's carve-out, kept deliberately. `at_least`/`at_most` both include
+    # the bar, so the comparison alone would call it satisfied.
+    if quantity.comparator == "=" and quantity.value == question_quantity:
+        return False
+    threshold = QuestionThreshold(
+        comparator=">=" if comparison == "at_least" else "<=",
+        value=question_quantity,
+        unit=quantity.unit,
+    )
+    sign = compare(quantity, threshold).sign
+    if sign is None:
+        return False
+    return (sign > 0) != (claim.stance > 0)
 
 
 def _unsure_settlement(claim: ClaimDetail) -> bool:

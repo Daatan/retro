@@ -1015,3 +1015,41 @@ class TestGrounds:
         schema = PredictionExtraction.model_json_schema()
         assert "grounds" in schema["properties"]
         assert set(schema["$defs"]["Grounds"]["properties"]["kind"]["enum"]) == set(self.KINDS)
+
+
+class TestEvidenceClassGuard:
+    """An out-of-enum `evidence_class` costs the class, not the article (retro#763).
+
+    Measured on v12's first A/B: both raters wrote the GROUNDS kind
+    `official_statement` into `evidence_class` on four corpus cases, 5/5 runs
+    each. `evidence_class` had always been strict, so every one of those runs
+    raised out of ExtractionOutput — on a live forecast that is the article
+    gone, deterministically, for a field confusion the prompt can only lower
+    and never rule out.
+    """
+
+    @staticmethod
+    def _pred(**over):
+        base = dict(quote="q", claim="c", stance=0.4, claim_strength=0.65)
+        return PredictionExtraction(**{**base, **over})
+
+    @pytest.mark.parametrize("value", [
+        "reported_fact", "cited_probability", "cited_share", "reporting", "opinion",
+    ])
+    def test_every_real_class_still_lands(self, value):
+        assert self._pred(evidence_class=value).evidence_class == value
+
+    def test_a_grounds_kind_written_as_the_class_is_dropped_and_the_claim_survives(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="tm.models"):
+            pred = self._pred(evidence_class="official_statement",
+                              grounds={"kind": "official_statement", "basis": "the minister's announcement"})
+        assert pred.evidence_class is None
+        assert pred.grounds.kind == "official_statement", "the right field keeps the answer"
+        assert pred.claim_strength == 0.65
+        assert "event=evidence_class_malformed" in caplog.text
+
+    def test_none_and_absent_are_untouched(self):
+        assert self._pred().evidence_class is None
+        assert self._pred(evidence_class=None).evidence_class is None

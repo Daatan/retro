@@ -304,7 +304,11 @@ claim_strength, and vice versa. If a claim genuinely does not fit one category
 cleanly, OMIT the field entirely rather than guessing — a missing
 evidence_class is fine, a wrong one is worse than none.
 
-Choose exactly one of:
+Choose exactly one of the FIVE below — nothing else is an evidence class. In particular \
+`official_statement`, `observed_milestone` and the other GROUNDS kinds are NOT evidence \
+classes: they answer what a position rests on and go in `grounds.kind`, never here. A \
+minister's announcement reported flat is `reported_fact` here and `official_statement` \
+under GROUNDS — two fields, two answers.
   reported_fact      — a plain declarative statement of something that
                         happened or is currently true (not hedged, not a
                         forecast). Independent of `settled`: a reported_fact
@@ -841,7 +845,10 @@ figure published as fact
 ("the ministry's 12 March statement", "the 41% Ipsos figure", "no incumbent has lost \
 since 1992"). Omit only when the article gives nothing to name.
 `grounds` is not `evidence_class`: class is the ROUTE the information took (reported, \
-cited, opinion); grounds is WHAT WAS SEEN at the end of it. A reporter citing a poll is \
+cited, opinion); grounds is WHAT WAS SEEN at the end of it. The two enums never share a \
+value — `official_statement` is a grounds kind and is never an evidence class, `reported_fact` \
+is an evidence class and is never a grounds kind — so a minister's announcement is \
+evidence_class `reported_fact` with grounds `official_statement`. A reporter citing a poll is \
 `cited_share` by class and `market_or_poll_figure` by grounds; a columnist reasoning \
 from a poll is `opinion` by class and still `market_or_poll_figure` by grounds. Answer \
 for every quote — a bare assertion with nothing behind it IS `authors_judgement`, not an \

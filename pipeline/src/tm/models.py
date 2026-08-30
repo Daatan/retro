@@ -233,6 +233,17 @@ _REPORT_KIND_VALUES = frozenset({"level", "change"})
 # "even-handed". `voice` survives on both (Nova Lite: byline 83%, under the 90% bar; Haiku
 # spreads over all five kinds, max 60%), so it is the half of #684 that is rater-agnostic.
 _TONE_VALUES = frozenset({"approve", "neutral", "alarm"})
+# retro#763. `evidence_class` is LOAD-BEARING and has always been strict: an out-of-enum
+# answer raised out of ExtractionOutput and dropped the article. Measured on v12's first
+# A/B, both raters wrote the GROUNDS kind `official_statement` into `evidence_class` on
+# four corpus cases, 5/5 runs each — deterministic, so a real forecast on such an article
+# would lose the article on every call. The prompt now says the two enums never share a
+# value, and this guard is the floor under the prompt: a leak costs the class (None =
+# unclassified, the documented "omit rather than guess" outcome) and never the claim.
+# Logged as `event=evidence_class_malformed` so the leak rate stays measurable.
+_EVIDENCE_CLASS_VALUES = frozenset({
+    "reported_fact", "cited_probability", "cited_share", "reporting", "opinion",
+})
 _CONSENSUS_VIEW_VALUES = frozenset({"expects_yes", "expects_no", "divided"})
 
 
@@ -776,6 +787,7 @@ class PredictionExtraction(BaseModel):
         data = _drop_malformed_voice(data)
         data = _drop_malformed_grounds(data)
         data = _drop_out_of_enum(data, "tone", _TONE_VALUES)
+        data = _drop_out_of_enum(data, "evidence_class", _EVIDENCE_CLASS_VALUES)
         return _drop_out_of_enum(data, "report_kind", _REPORT_KIND_VALUES)
 
 

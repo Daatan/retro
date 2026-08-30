@@ -490,16 +490,11 @@ fact is dated. Never work the order backwards: finding a date is not evidence th
 found the right event, and a precisely dated adjacent fact is still adjacent, never \
 settled, exactly like an undated one.
 
-REPORT that decomposition — do not keep it to yourself. At the TOP level of your answer, \
-once for the whole article, give `claim_actor` ({name, type}), `claim_predicate` and \
-`claim_scope`. They describe the RELATED EVENT you were given, NOT this article and NOT its \
-claims: two articles about the same event get the same three answers, and an article that \
-CONTRADICTS the event still reports the event's own WHO / WHAT / SCOPE, never the article's. \
-Naming them changes no stance: stance stays signed against the RELATED EVENT exactly as this \
-section requires. Give all three on every call — an event always has a WHO, a WHAT and a \
-scope, even when the article turns out to say nothing about it. `type` is one of person / \
-party / company / country / institution / other; anything else — a sports team, a coalition, \
-a market — is `other`.
+REPORT that decomposition. At the TOP level, once for the article, give `claim_actor` \
+({name, type}), `claim_predicate` and `claim_scope` — the RELATED EVENT's own WHO / WHAT / \
+SCOPE, never the article's, even when the article contradicts it. They change nothing else: \
+each `claim` still says what its quote means FOR that event, and `stance` is still signed \
+against it. `type`: person / party / company / country / institution / other.
 
 ## DATES — resolve first, compare second, never assert a comparison you did not compute
 Deadline claims ("by July 15", "before year-end") are decided by ARITHMETIC, not by tone. \

@@ -58,6 +58,18 @@ class MetaculusClient:
             offset += len(page_results)
         return results[:limit]
 
+    def list_tournaments(self) -> list[dict]:
+        """Every tournament-type project visible to this bot (``/projects/tournaments/``).
+
+        Unpaginated on Metaculus's side (~200 rows, 2026-08). Each row carries
+        ``slug``, ``name``, ``start_date``, ``close_date``, ``forecasting_end_date``
+        and ``is_ongoing`` — what season auto-detection needs (retro#726).
+        """
+        resp = self._client.get("/projects/tournaments/")
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else data.get("results", [])
+
     def get_question(self, post_id: int) -> dict:
         resp = self._client.get(f"/posts/{post_id}/")
         resp.raise_for_status()

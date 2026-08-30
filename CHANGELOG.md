@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Added
+- Extractor prompt **v11** (retro#697, Oracle 1.5 Phase 1): the WHO / WHAT / WITHIN WHAT SCOPE decomposition `PROMPT_PREFIX` § MATCH THE EVENT has required since v1 is now REPORTED instead of discarded — `claim_actor` (`{name, type}`), `claim_predicate` and `claim_scope`, three shadow fields at the `ExtractionOutput` tail. Question-level, not per-claim: they describe the RELATED EVENT, so they ride on `SourceSignal` beside `consensus_view` and deliberately get no `ClaimDetail` copy. `provenance.schema_version` 1.4 → 1.5. Their consumer is `settlement_semantic.claim_subject_from_fields` (new, `proxy=False`), which replaces the regex proxy that makes `gate_predicate_echo`'s 0.68/0.46 a documented lower bound
 - Extractor prompt **v10** (retro#684, Oracle 1.5 Phase 1): two elicited shadow fields at the schema tail — `tone` (`approve`/`neutral`/`alarm`, the quote's own register, so an evaluation stops being read as a direction) and `voice` (`{kind, attributed_to}`, whose assertion the quote is, so a wire carried by thirty outlets counts once). Both thread to `ClaimDetail` per claim and roll up to `SourceSignal` as the dominant claim's; `provenance.schema_version` 1.3 → 1.4. Zero A/B regressions on both raters, `token_usage` +7.9%. **`tone` is Haiku-only** — Nova Lite answers `neutral` on 145/145 and trips the field's kill criterion; `voice` clears it on both
 
 ### Fixed

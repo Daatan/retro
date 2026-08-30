@@ -68,6 +68,7 @@ class TestUndatedArticleIsDropped:
                 specificity=1.0, settled=None,
             )],
             author_lean=None, author_lean_certainty=None, consensus_view=None,
+            claim_actor=None, claim_predicate=None, claim_scope=None,
         ), {}))
         monkeypatch.setattr(forecaster, "check_is_prediction", gk)
         monkeypatch.setattr(forecaster, "extract_predictions", ex)

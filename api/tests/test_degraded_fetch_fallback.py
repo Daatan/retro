@@ -173,6 +173,7 @@ def _extractor_spy():
             author_lean=None,
             author_lean_certainty=None,
             consensus_view=None,
+            claim_actor=None, claim_predicate=None, claim_scope=None,
         ),
         {},
     ))

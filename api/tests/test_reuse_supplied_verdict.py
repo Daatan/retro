@@ -44,10 +44,12 @@ def _extractor_stub():
     async def _extract(**kwargs):
         # author_lean / author_lean_certainty mirror ExtractionOutput's shadow fields
         # (retro #308/#309) so _process_article can surface them per-source;
-        # consensus_view (retro#686) is the third of them and rides the same tuple.
+        # consensus_view (retro#686) is the third of them and rides the same outcome,
+        # and claim_actor/claim_predicate/claim_scope (retro#697) the next three.
         return SimpleNamespace(predictions=[PredictionExtraction(
             quote="q", claim="c", stance=0.6, certainty=0.8, specificity=1.0, settled=None,
-        )], author_lean=0.5, author_lean_certainty=0.4, consensus_view="divided"), {}
+        )], author_lean=0.5, author_lean_certainty=0.4, consensus_view="divided",
+            claim_actor=None, claim_predicate=None, claim_scope=None), {}
     return _extract
 
 
@@ -75,12 +77,14 @@ class TestReuseSuppliedVerdict:
         out = await _process(monkeypatch, _sr(relevance=0.83, is_prediction=True), flag=True, gk=gk)
         gk.assert_not_awaited()                 # the double-judge is gone
         assert out is not None
-        _, relevance, preds, author_lean, author_lean_certainty, consensus_view = out
-        assert relevance == 0.83                 # the supplied verdict, not a re-judge
-        assert preds                             # extractor still ran
-        assert author_lean == 0.5                # the byline author's own forecast, surfaced per-source
-        assert author_lean_certainty == 0.4      # (shadow — never enters the estimate)
-        assert consensus_view == "divided"       # what the article says OTHERS expect (retro#686)
+        # By name, not by position: this unpack read six of the outcome's fields
+        # positionally until retro#697 made it nine, at which point it broke without
+        # anything about the assertions below having changed.
+        assert out.relevance == 0.83             # the supplied verdict, not a re-judge
+        assert out.predictions                   # extractor still ran
+        assert out.author_lean == 0.5            # the byline author's own forecast, surfaced per-source
+        assert out.author_lean_certainty == 0.4  # (shadow — never enters the estimate)
+        assert out.consensus_view == "divided"   # what the article says OTHERS expect (retro#686)
 
     async def test_supplied_reject_drops_without_judging(self, monkeypatch):
         gk = _gk_spy()

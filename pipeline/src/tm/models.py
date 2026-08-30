@@ -391,6 +391,65 @@ def _drop_malformed_quantity(data: Any) -> Any:
     return data
 
 
+#: retro#697. Closed set for the WHO's type, because the adjacency rule the prompt already
+#: states is stated in terms of TYPE ("a member of the organization when the claim is about
+#: the organization itself"). A free-text type would not let code make that comparison, which
+#: is the entire reason the field is being elicited rather than left as internal reasoning.
+_ACTOR_TYPE_VALUES = frozenset({
+    "person", "party", "company", "country", "institution", "other",
+})
+
+
+# The WHO of the RELATED EVENT — the question's subject, never the article's.
+#
+# Both keys are required. Unlike `Quantity`/`Voice` there is no useful half of this object:
+# a name with no type cannot answer the different-subject-type test, and a type with no name
+# cannot answer the named-actor test. `_drop_malformed_claim_actor` nulls the whole thing
+# rather than storing half of it.
+#
+# A `#` comment and not a docstring, deliberately — Pydantic copies a docstring into the JSON
+# schema `description`, which IS the tool definition sent on every call (retro#700). The four
+# paragraphs above cost 378 chars of billed prompt text as a docstring and zero as a comment.
+# `test_no_llm_facing_model_pays_for_a_docstring` pins it.
+class ClaimActor(BaseModel):
+    # Billed on every call (schema ~27% of the prompt, retro#700): say WHICH value, not HOW
+    # to find it. MATCH THE EVENT already carries the rule and its worked examples.
+    name: str = Field(
+        description="The subject of the related event, in the event's own words ('Likud', "
+                    "'Turkey', 'Minister X'). The party the event is ABOUT, not everyone "
+                    "it touches.",
+    )
+    type: Literal["person", "party", "company", "country", "institution", "other"] = Field(
+        description="What kind of subject that is. 'other' only when none of the five fits.",
+    )
+
+
+def _drop_malformed_claim_actor(data: Any) -> Any:
+    """`_drop_malformed_voice` for `claim_actor` (retro#697) — same trade, same reason.
+
+    Two required keys and a closed enum, so the cheap failures are a bare string
+    ("Likud") instead of the object and a `type` outside the set. `complete_structured`
+    runs instructor with `max_retries=1`, so either would raise out of `ExtractionOutput`
+    and drop a real article from a real forecast. That is the wrong price for a field
+    nothing reads yet.
+
+    Logged rather than silent, for the reason all four of these are: a shadow field exists
+    to be counted, and a silent None makes "answered badly" indistinguishable from "did not
+    answer" — the one distinction a fill rate has to draw. Grep `event=claim_actor_malformed`.
+    """
+    if not isinstance(data, dict):
+        return data
+    raw = data.get("claim_actor")
+    if raw is None:
+        return data
+    try:
+        ClaimActor.model_validate(raw)
+    except (_ValidationError, TypeError, ValueError):
+        logger.warning("event=claim_actor_malformed value=%r", raw)
+        return {**data, "claim_actor": None}
+    return data
+
+
 class PredictionExtraction(BaseModel):
     # `claim_strength` was named `certainty` until Oracle 1.5 Phase 1 (retro#680). The
     # elicitation text is unchanged — only the name moved, so the number this field carries
@@ -684,6 +743,37 @@ class ExtractionOutput(BaseModel):
         description="EXPERIMENTAL, shadow (retro#686) — what the ARTICLE says OTHERS expect "
                     "for the event; never your own view, never the byline author's (that is "
                     "author_lean). See CONSENSUS_VIEW; omit when the article does not say.")
+    # retro#697. QUESTION-level, not article-level — these decompose the RELATED EVENT, which
+    # is identical for every claim in the article and every article in the forecast. Hence
+    # once per call here, rather than on PredictionExtraction: N identical copies would be
+    # billed on every claim and would give `settlement_semantic` nothing it does not already
+    # have, since it wants exactly one ClaimSubject per question. Appended at the tail for
+    # retro#680's reason, the same rule quantity/tone/voice follow one level down.
+    #
+    # The prompt has required this decomposition since v1 (§ MATCH THE EVENT) and has never
+    # had a field to put it in, so the reasoning is demanded, discarded and unverifiable.
+    # These three make it observable; they change what the model REPORTS, not what it is
+    # asked to DO.
+    claim_actor: Optional[ClaimActor] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow (retro#697) — the WHO of the RELATED EVENT you "
+                    "were given, as {name, type}. The event's subject, NOT the article's "
+                    "and not this article's claims. See MATCH THE EVENT.",
+    )
+    claim_predicate: Optional[str] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow (retro#697) — the WHAT of the related event: the "
+                    "exact action or outcome it requires, as a short verb phrase "
+                    "('withdraws from the parliamentary race'). The event's action, not "
+                    "the article's.",
+    )
+    claim_scope: Optional[str] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow (retro#697) — the WITHIN WHAT SCOPE of the "
+                    "related event: its threshold, deadline and arena in one short phrase "
+                    "('at least one party, by the general election'). Omit only when the "
+                    "event states none of the three.",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -696,6 +786,8 @@ class ExtractionOutput(BaseModel):
         """
         data = _unwrap_properties_envelope(data)
         data = _drop_out_of_enum(data, "consensus_view", _CONSENSUS_VIEW_VALUES)
+        data = _coerce_nested_json_string(data, "claim_actor")
+        data = _drop_malformed_claim_actor(data)
         if isinstance(data, dict) and "predictions" in data:
             preds = data["predictions"]
             if not isinstance(preds, list):

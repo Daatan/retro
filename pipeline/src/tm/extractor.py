@@ -437,6 +437,14 @@ them is evidence, but it is not the event. Two recurring ways a fact can miss th
 below: a different subject/action/arena, or the right kind of action by the wrong named \
 party.
 
+REPORT that decomposition — do not keep it to yourself. At the TOP level of your answer, \
+once for the whole article, give `claim_actor` ({name, type}), `claim_predicate` and \
+`claim_scope`. They describe the RELATED EVENT you were given, NOT this article and NOT its \
+claims: two articles about the same event get the same three answers. Give all three on \
+every call — an event always has a WHO, a WHAT and a scope, even when the article turns out \
+to say nothing about it. `type` is one of person / party / company / country / institution / \
+other; a fact about a DIFFERENT type is the first miss listed above.
+
 ### A different subject type, action, or arena is ADJACENT evidence
 A fact about:
 - a DIFFERENT SUBJECT TYPE — a member of the organization when the claim is about the \
@@ -850,8 +858,15 @@ to 1) fields — the byline author's OWN forecast, per the AUTHOR_LEAN section. 
 the author takes no position of their own. Also OPTIONAL at top level: "consensus_view" (one \
 of expects_yes / expects_no / divided) — what the article says OTHERS expect, per the \
 CONSENSUS_VIEW section; OMIT it when the article does not say.
+REQUIRED at top level, on every call: "claim_actor" ({{"name": string, "type": one of \
+person / party / company / country / institution / other}}), "claim_predicate" (string) and \
+"claim_scope" (string) — the WHO / WHAT / WITHIN WHAT SCOPE of the RELATED EVENT, per MATCH \
+THE EVENT. These are about the event, not the article, so answer them even when the article \
+says nothing about it.
 Example: {{"predictions": [ {{...}}, {{...}} ], "author_lean": 0.6, "author_lean_certainty": \
-0.5, "consensus_view": "expects_yes"}}
+0.5, "consensus_view": "expects_yes", "claim_actor": {{"name": "Party Y", "type": "party"}}, \
+"claim_predicate": "withdraws from the parliamentary race", "claim_scope": "at least one \
+party, before the election"}}
 
 Each prediction has five core fields, plus several used only when applicable:
   quote (string — original language), claim (string — English), \
@@ -935,7 +950,10 @@ Example — related event: "Assad regime falls in Syria":
       "voice": {{"kind": "byline"}}
     }}
   ],
-  "consensus_view": "expects_yes"
+  "consensus_view": "expects_yes",
+  "claim_actor": {{"name": "the Assad regime", "type": "institution"}},
+  "claim_predicate": "falls from power",
+  "claim_scope": "Syria, by the claim deadline"
 }}
 
 Example — related event: "France wins the 2026 World Cup" (a source citing a named model):
@@ -956,7 +974,10 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
       "voice": {{"kind": "institution", "attributed_to": "Opta"}}
     }}
   ],
-  "consensus_view": "expects_no"
+  "consensus_view": "expects_no",
+  "claim_actor": {{"name": "France", "type": "country"}},
+  "claim_predicate": "wins the tournament",
+  "claim_scope": "the 2026 World Cup"
 }}
 
 Example — related event: "Airline A operates more than 250 daily departures from Hub H by \
@@ -983,7 +1004,10 @@ Example — related event: "Airline A operates more than 250 daily departures fr
       "voice": {{"kind": "byline"}}
     }}
   ],
-  "consensus_view": "divided"
+  "consensus_view": "divided",
+  "claim_actor": {{"name": "Airline A", "type": "company"}},
+  "claim_predicate": "operates daily departures from Hub H",
+  "claim_scope": "more than 250 a day, from Hub H, by the deadline"
 }}
 """
 

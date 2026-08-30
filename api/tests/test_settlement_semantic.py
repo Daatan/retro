@@ -14,6 +14,7 @@ from forecast_api.settlement_semantic import (
     ClaimSubject,
     SettlementCandidate,
     apply_gates,
+    claim_subject_from_fields,
     claim_subject_from_question,
     gate_announcement_facet,
     gate_occurrence_consistency,
@@ -55,6 +56,124 @@ class TestClaimSubjectProxy:
 
     def test_proxy_is_flagged(self):
         assert claim_subject_from_question(WINS_ELECTION).proxy is True
+
+
+class TestClaimSubjectFromFields:
+    """The real subject, built from the extractor's own decomposition (retro#697).
+
+    What the proxy above has been standing in for. These pin the constructor's
+    shape and the ONE property the proxy structurally cannot have — a tight event
+    term set — not the gate's accuracy, which cannot be re-measured until a pool
+    extracted by prompt v11 exists.
+    """
+
+    ACTOR = {"name": "Benjamin Netanyahu", "type": "person"}
+
+    def test_it_is_not_flagged_as_a_proxy(self):
+        """The flag is the whole point: it is what lets a scorer tell a real
+        number from a lower-bound one. Nothing else in the module sets it False."""
+        subject = claim_subject_from_fields(
+            self.ACTOR, "wins the general election", "the 2026 Israeli general election",
+        )
+        assert subject.proxy is False
+
+    def test_the_actor_is_the_elicited_name(self):
+        subject = claim_subject_from_fields(
+            self.ACTOR, "wins the general election", "the 2026 Israeli general election",
+        )
+        assert subject.actors == ("Benjamin Netanyahu",)
+
+    def test_actor_words_are_not_event_terms(self):
+        """Same exclusion the proxy makes, same reason: otherwise an article that
+        merely mentions the actor satisfies "names the event"."""
+        subject = claim_subject_from_fields(
+            self.ACTOR, "Netanyahu wins the general election", "the 2026 election",
+        )
+        assert "netanyahu" not in subject.event_terms
+        assert "election" in subject.event_terms
+
+    def test_the_term_set_is_tighter_than_the_proxys(self):
+        """The measured mechanism behind `gate_predicate_echo`'s 0.46 recall.
+
+        The proxy takes every content word in the question, so a long question
+        yields a wide bag — mean 5.9 terms and up to 25 across the 172 prod
+        questions that have an evidence pool, with 17% over eight. The gate
+        demands only ONE of them echo, so the wider the bag the easier it is to
+        satisfy and the less the gate can ever fire. A decomposition names the
+        action and the scope and nothing else.
+        """
+        question = (
+            "A single large political list will not be formed, including at least four of "
+            "the following six politicians: Benny Gantz, Yoaz Hendel, Zeev Elkin and Gideon "
+            "Saar, before the final deadline for submitting candidate lists for the general "
+            "elections in Israel."
+        )
+        proxy = claim_subject_from_question(question)
+        real = claim_subject_from_fields(
+            {"name": "a single large political list", "type": "party"},
+            "is formed",
+            "at least four of six named politicians, before the candidate-list deadline",
+            question=question,
+        )
+        assert len(proxy.event_terms) > 15          # the whole question, minus one name
+        assert len(real.event_terms) < len(proxy.event_terms) / 2
+
+    def test_outcome_kind_still_comes_from_the_question(self):
+        """Deliberately not a fourth elicited field: the point-in-time test is a
+        lexical property of the question that `_ON_DATE`/`_REMAIN` decide
+        deterministically, and eliciting it would buy an LLM judgement where a
+        regex is already correct."""
+        assert claim_subject_from_fields(
+            self.ACTOR, "is the Prime Minister", "Israel", question=PM_ON_A_DATE,
+        ).outcome_kind == POINT_IN_TIME
+        assert claim_subject_from_fields(
+            self.ACTOR, "wins the election", "Israel", question=WINS_ELECTION,
+        ).outcome_kind == IRREVERSIBLE
+
+    def test_an_omitted_question_defaults_to_irreversible(self):
+        """Same answer an unmatched question gives, so a caller that has no
+        question text is not silently handed a different regime."""
+        assert claim_subject_from_fields(
+            self.ACTOR, "wins the election", "Israel",
+        ).outcome_kind == IRREVERSIBLE
+
+    @pytest.mark.parametrize("actor, predicate, scope", [
+        (None, "wins the election", "Israel"),
+        ("Benjamin Netanyahu", "wins the election", "Israel"),   # a bare string, not the object
+        ({"type": "person"}, "wins the election", "Israel"),     # no name
+        ({"name": "  "}, "wins the election", "Israel"),         # blank name
+        ({"name": "Benjamin Netanyahu", "type": "person"}, None, None),
+        ({"name": "Benjamin Netanyahu", "type": "person"}, "", "  "),
+    ])
+    def test_an_incomplete_decomposition_returns_none(self, actor, predicate, scope):
+        """None, so the caller falls back to the proxy. Building a subject out of
+        two of three fields would produce a `proxy=False` operand that is not
+        actually a decomposition — worse than the lower bound it replaced, and
+        silently so."""
+        assert claim_subject_from_fields(actor, predicate, scope) is None
+
+    def test_a_predicate_of_only_stopwords_returns_none(self):
+        """`_content_terms` drops short and non-discriminating words, so a
+        predicate can survive the emptiness checks and still yield no terms.
+        `gate_predicate_echo` fails open on an empty term set, which would make
+        this indistinguishable from having no decomposition at all."""
+        assert claim_subject_from_fields(self.ACTOR, "will be", "the") is None
+
+    def test_the_real_subject_drives_the_gate(self):
+        """End to end: the constructor's output is a `ClaimSubject`, so it goes
+        into the gate unchanged. "Yair Netanyahu left Florida" echoes the actor
+        stem and no event term — the gate's own worked example, now reachable
+        without the proxy."""
+        subject = claim_subject_from_fields(
+            self.ACTOR, "wins the general election", "the 2026 Israeli general election",
+        )
+        assert gate_predicate_echo(
+            subject, _cand(claim="Yair Netanyahu left Florida", event_actors="Yair Netanyahu"),
+        ) == "settlement_event_mismatch"
+        assert gate_predicate_echo(
+            subject,
+            _cand(claim="Netanyahu wins the general election", event_actors="Benjamin Netanyahu"),
+        ) is None
 
 
 class TestPredicateEcho:

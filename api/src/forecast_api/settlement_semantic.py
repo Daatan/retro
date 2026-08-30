@@ -29,6 +29,15 @@ gates can be measured today. Every number this module produces through that prox
 is a lower bound on what a real classifier-supplied subject would achieve — and
 the proxy's failure modes are the documented ones of ``_extract_named_entities``
 (it cannot tell an actor-shaped span from a topic-shaped one, retro#644).
+
+retro#697 supplies the real operand: the extractor now emits ``claim_actor`` /
+``claim_predicate`` / ``claim_scope``, and :func:`claim_subject_from_fields` builds
+a ``ClaimSubject`` from them with ``proxy=False``. That closes the *source* of the
+lower bound. It does NOT retroactively raise the measured numbers, and nothing here
+should be read as if it had: every settled row in the prod pool was extracted by a
+prompt older than v11 and carries no decomposition, so the 387-pair labelled set can
+only be re-scored against rows extracted after v11 ships. Until that pool exists the
+0.68/0.46 on :func:`gate_predicate_echo` stands as measured, through the proxy.
 """
 from __future__ import annotations
 
@@ -136,6 +145,54 @@ def claim_subject_from_question(question: str) -> ClaimSubject:
     return ClaimSubject(actors=actors, event_terms=terms, outcome_kind=kind, proxy=True)
 
 
+def claim_subject_from_fields(
+    claim_actor: Optional[dict],
+    claim_predicate: Optional[str],
+    claim_scope: Optional[str],
+    *,
+    question: str = "",
+) -> Optional[ClaimSubject]:
+    """The REAL claim subject, from the extractor's own decomposition (retro#697).
+
+    What :func:`claim_subject_from_question` has been standing in for. The extractor
+    is now asked to report the WHO / WHAT / WITHIN WHAT SCOPE that ``PROMPT_PREFIX``
+    § MATCH THE EVENT has always required it to work out internally, so the three
+    values arrive as elicited fields on the extraction rather than being guessed back
+    out of the question string by ``_extract_named_entities``.
+
+    Returns ``None`` when the decomposition is absent — the caller falls back to the
+    proxy, which is strictly better than fabricating a subject out of two of three
+    fields. ``proxy=False`` is what lets a scorer separate real numbers from
+    lower-bound ones; nothing else in this module sets it.
+
+    ``outcome_kind`` still comes from the question text. It is not one of the three
+    elicited fields and deliberately was not added as a fourth: the point-in-time
+    test is a lexical property of the question ("remain", "on December 31") that
+    ``_ON_DATE``/``_REMAIN`` already decide deterministically, and eliciting it would
+    buy an LLM judgement where a regex is correct. Pass ``question`` to keep that
+    working; omitting it defaults to ``IRREVERSIBLE``, exactly as an unmatched
+    question does.
+    """
+    if not isinstance(claim_actor, dict):
+        return None
+    name = (claim_actor.get("name") or "").strip()
+    if not name:
+        return None
+    predicate = (claim_predicate or "").strip()
+    scope = (claim_scope or "").strip()
+    if not predicate and not scope:
+        return None
+    kind = POINT_IN_TIME if (_ON_DATE.search(question) or _REMAIN.search(question)) else IRREVERSIBLE
+    # Same exclusion the proxy makes, and for the same reason: the actor's own words
+    # must not count as event terms, or "an article that mentions Netanyahu" would
+    # satisfy "names the office AND the election".
+    actor_words = {w.lower() for w in re.findall(r"[A-Za-z']+", name)}
+    terms = tuple(t for t in _content_terms(f"{predicate} {scope}") if t not in actor_words)
+    if not terms:
+        return None
+    return ClaimSubject(actors=(name,), event_terms=terms, outcome_kind=kind, proxy=False)
+
+
 # ── gates ────────────────────────────────────────────────────────────────────
 # Each returns a demotion reason, or None to leave the candidate alone. All fail
 # OPEN on absent metadata, matching every sibling in extractor.py.
@@ -184,6 +241,18 @@ def gate_predicate_echo(subject: ClaimSubject, cand: SettlementCandidate,
 
     Fails open when the claim side is empty (nothing to compare) or the candidate
     carries no dyad and no claim text.
+
+    Measured at **0.68 precision / 0.46 recall** on the 387-pair labelled set, and
+    that number is a LOWER BOUND because `subject` came from the regex proxy. What
+    changed with retro#697 and what did not:
+
+    * :func:`claim_subject_from_fields` now exists, so the operand no longer has to
+      be guessed out of the question string. Pass it a `proxy=False` subject and
+      this gate is finally comparing the dyad it was written to compare.
+    * The 0.68/0.46 stands until it is re-measured. Every settled row in the prod
+      pool predates prompt v11 and carries no decomposition, so the re-score needs
+      a pool extracted after v11 ships — not a re-run over the existing one. That
+      is the whole of what retro#697 acceptance criterion 3 is still waiting on.
     """
     if not subject.actors or not subject.event_terms:
         return None

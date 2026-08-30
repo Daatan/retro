@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from tm.models import (
+    ClaimActor,
     GatekeeperOutput,
     PredictionExtraction,
     ExtractionOutput,
@@ -323,20 +324,31 @@ class TestReaderConfidence:
         """Pydantic copies a model's docstring into its JSON schema `description`,
         and that schema IS the tool definition sent on every extraction call — so a
         docstring here is not documentation, it is prompt text billed per request.
-        `PredictionExtraction` and `ExtractionOutput` keep their rationale in `#`
-        comments for this reason; `ReaderConfidence` is held to the same rule.
+        Every model reachable from `ExtractionOutput` keeps its rationale in `#`
+        comments for this reason — the assertion below enumerates them from the
+        schema itself rather than from a list someone has to remember to extend.
 
         Pinned rather than left to review: the first draft of that class used a
         docstring and shipped 1,283 characters of retro#664 rationale to the model
         on every call, 18% of the whole schema and larger than any field in it.
         """
-        for model in (ExtractionOutput, PredictionExtraction, ReaderConfidence):
-            desc = model.model_json_schema().get("description", "")
-            assert desc == "", (
-                f"{model.__name__} has a docstring; it is being sent to the LLM on "
-                f"every call as {len(desc)} chars of schema description. Move it to "
-                f"a `#` comment above the class."
-            )
+        schema = ExtractionOutput.model_json_schema()
+        # Walk the whole reachable schema rather than a hand-kept tuple. The tuple version
+        # of this test passed while `ClaimActor` (retro#697) shipped a 378-char docstring,
+        # because a new nested model is exactly the thing nobody remembers to add to a
+        # list. `$defs` holds every model the extraction schema reaches, so a future field
+        # cannot arrive outside the assertion's scope.
+        offenders = {
+            name: d["description"]
+            for name, d in {"ExtractionOutput": schema, **schema.get("$defs", {})}.items()
+            if d.get("description")
+        }
+        assert not offenders, (
+            "These LLM-facing models have docstrings, sent to the model on every call as "
+            "schema description: "
+            + ", ".join(f"{n} ({len(v)} chars)" for n, v in sorted(offenders.items()))
+            + ". Move each to a `#` comment above the class."
+        )
 
     def test_it_is_independent_of_claim_strength(self):
         """The whole point of retro#680's split. retro#664's Kenya case is a
@@ -509,13 +521,24 @@ class TestReportKindAndConsensusView:
         names = {v for branch in prop["anyOf"] for v in branch.get("enum", [])}
         assert names == {"expects_yes", "expects_no", "divided"}
 
-    def test_consensus_view_is_appended_after_author_lean_certainty(self):
-        """Article-level and next to author_lean because it is the same shape
-        of question — what the AUTHOR thinks vs what the author says EVERYONE
-        ELSE thinks — and at the tail for the retro#680 reason above."""
+    def test_the_article_level_tail_is_in_order(self):
+        """Article-level and next to author_lean because it is the same shape of
+        question — what the AUTHOR thinks vs what the author says EVERYONE ELSE
+        thinks — and at the tail for the retro#680 reason above. retro#697's
+        three follow it under the same rule.
+
+        The whole ordered tail, not `props[-1] == "consensus_view"` plus two
+        index comparisons, which is what this was. That form pins only whichever
+        field happens to have landed last: it fails the moment a new field is
+        appended CORRECTLY, and says nothing about the order of the ones before
+        it. This version fails when something is inserted into the middle, which
+        is the thing retro#680 actually costs us.
+        """
         props = list(ExtractionOutput.model_json_schema()["properties"])
-        assert props[-1] == "consensus_view"
-        assert props.index("author_lean_certainty") < props.index("consensus_view")
+        assert props[props.index("author_lean"):] == [
+            "author_lean", "author_lean_certainty", "consensus_view",
+            "claim_actor", "claim_predicate", "claim_scope",
+        ]
 
     def test_neither_field_pays_for_a_docstring(self):
         """Pydantic copies a model docstring into the JSON schema description,
@@ -524,6 +547,110 @@ class TestReportKindAndConsensusView:
         carry their rationale in `#` comments for exactly this reason."""
         for model in (ExtractionOutput, PredictionExtraction):
             assert model.model_json_schema().get("description", "") == ""
+
+
+class TestClaimDecomposition:
+    """`claim_actor` {name, type}, `claim_predicate`, `claim_scope` — the WHO /
+    WHAT / WITHIN WHAT SCOPE of the RELATED EVENT (Oracle 1.5 Phase 1, retro#697).
+
+    `PROMPT_PREFIX` § MATCH THE EVENT has required this decomposition since v1 and
+    given the model nowhere to put it, so the reasoning was demanded, discarded and
+    unverifiable. These pin the shape of the answer, not its quality — the A/B
+    measures whether the model answers, and `settlement_semantic` measures whether
+    the answer is worth anything.
+    """
+
+    def test_all_three_default_to_none(self):
+        """The prompt asks for all three on every call, so None means "did not
+        answer" and must never be a default masquerading as a value."""
+        out = ExtractionOutput(predictions=[])
+        assert out.claim_actor is None
+        assert out.claim_predicate is None
+        assert out.claim_scope is None
+
+    def test_it_accepts_the_decomposition(self):
+        out = ExtractionOutput.model_validate({
+            "predictions": [],
+            "claim_actor": {"name": "Party Y", "type": "party"},
+            "claim_predicate": "withdraws from the parliamentary race",
+            "claim_scope": "at least one party, before the election",
+        })
+        assert out.claim_actor.name == "Party Y"
+        assert out.claim_actor.type == "party"
+        assert out.claim_predicate == "withdraws from the parliamentary race"
+        assert out.claim_scope == "at least one party, before the election"
+
+    def test_the_actor_type_enum_is_closed(self):
+        """Closed because MATCH THE EVENT's first adjacency rule is stated in terms
+        of TYPE — a member when the event is about the party — so a free-text type
+        would leave that comparison uncodable, which is the reason the field is
+        elicited at all rather than left as internal reasoning."""
+        defs = ExtractionOutput.model_json_schema()["$defs"]["ClaimActor"]
+        assert set(defs["properties"]["type"]["enum"]) == {
+            "person", "party", "company", "country", "institution", "other",
+        }
+
+    def test_both_actor_keys_are_required(self):
+        """Unlike Quantity/Voice there is no useful half of this object: a name
+        with no type cannot answer the different-subject-type test, and a type with
+        no name cannot answer the named-actor one."""
+        with pytest.raises(ValidationError):
+            ClaimActor(name="Party Y")
+        with pytest.raises(ValidationError):
+            ClaimActor(type="party")
+
+    def test_a_bare_string_is_dropped_not_raised(self, caplog):
+        """The cheapest way for a model to fail here, and the one that must not
+        cost an article: `complete_structured` runs instructor with
+        `max_retries=1`, so a raise out of ExtractionOutput drops a real article
+        from a real forecast. Logged rather than silent, because a silent None
+        makes "answered badly" indistinguishable from "did not answer" — the one
+        distinction a shadow field's fill rate exists to draw.
+        """
+        with caplog.at_level("WARNING"):
+            out = ExtractionOutput.model_validate({
+                "predictions": [], "claim_actor": "Party Y",
+            })
+        assert out.claim_actor is None
+        assert "event=claim_actor_malformed" in caplog.text
+
+    def test_an_out_of_enum_type_is_dropped_not_raised(self, caplog):
+        with caplog.at_level("WARNING"):
+            out = ExtractionOutput.model_validate({
+                "predictions": [], "claim_actor": {"name": "Party Y", "type": "coalition"},
+            })
+        assert out.claim_actor is None
+        assert "event=claim_actor_malformed" in caplog.text
+
+    def test_a_malformed_actor_leaves_its_siblings_alone(self):
+        """The guard nulls one field, not the decomposition. Two of three answers
+        is still two more than the regex proxy has."""
+        out = ExtractionOutput.model_validate({
+            "predictions": [],
+            "claim_actor": "Party Y",
+            "claim_predicate": "withdraws from the parliamentary race",
+            "claim_scope": "before the election",
+        })
+        assert out.claim_actor is None
+        assert out.claim_predicate == "withdraws from the parliamentary race"
+        assert out.claim_scope == "before the election"
+
+    def test_a_double_serialized_actor_is_parsed(self):
+        """Some models in TOOLS mode emit a nested object as a JSON string —
+        `_coerce_nested_json_string`, the same treatment reader_confidence,
+        quantity and voice get one level down."""
+        out = ExtractionOutput.model_validate({
+            "predictions": [], "claim_actor": '{"name": "Turkey", "type": "country"}',
+        })
+        assert out.claim_actor.name == "Turkey"
+        assert out.claim_actor.type == "country"
+
+    def test_constructing_the_model_directly_still_raises(self):
+        """Strictness kept where it belongs. The guard buys tolerance on the LLM
+        boundary only; a stored row or a caller building the object gets the
+        validation error."""
+        with pytest.raises(ValidationError):
+            ClaimActor(name="Party Y", type="coalition")
 
 
 class TestQuantity:

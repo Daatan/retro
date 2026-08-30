@@ -33,3 +33,10 @@ os.environ.setdefault("SETTLEMENT_VERIFIER_ENABLED", "false")
 # call-count reason; majority tests raise it explicitly.
 os.environ.setdefault("SETTLEMENT_VERDICT_CACHE_ENABLED", "false")
 os.environ.setdefault("SETTLEMENT_VERIFIER_VOTES", "1")
+
+# The event decomposition store (retro#758) — same reasons as the verdict store
+# above: its default path lives under data_dir, which does not exist on a dev
+# box, and a cross-test cache hit would silently satisfy a call-count assertion.
+# test_event_decomposition_store.py exercises the store directly against a
+# tmp_path, unaffected by this.
+os.environ.setdefault("EVENT_DECOMPOSITION_CACHE_ENABLED", "false")

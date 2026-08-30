@@ -609,6 +609,23 @@ class ApiSettings(BaseSettings):
     settlement_verdict_cache_enabled: bool = True
     settlement_verdict_cache_path: Path = Path("")  # empty = data_dir/settlement_verdict_cache
 
+    # WHO/WHAT/SCOPE decomposition injected into the extractor's event_description
+    # input (retro#758). Measured on the deadline/denial sentinel: Nova Lite
+    # 11/15 -> 15/15, zero prompt/schema change (the decomposition is data
+    # appended to event_description, not PROMPT_PREFIX/PROMPT_SUFFIX). Ships OFF
+    # by default — retro#758's own proposal calls for measuring on the retro#691
+    # 387-pair labelled adjacency set before wider rollout, which the sentinel
+    # alone does not establish. Same knob shape as threshold_extractor_model
+    # (pipeline/src/tm/config.py): exists, off, one line to enable.
+    inject_event_decomposition: bool = False
+    # None = settlement_verifier_model, which already follows the live
+    # extractor (Haiku 4.5 via the oracle-api drop-in) — see that setting's
+    # comment. A decomposition call is the same class of semantic judgment.
+    event_decomposition_model: Optional[str] = None
+    event_decomposition_timeout_seconds: int = 15
+    event_decomposition_cache_enabled: bool = True
+    event_decomposition_cache_path: Path = Path("")  # empty = data_dir/event_decomposition_cache
+
     # The premise verifier (retro#575 slice 1) — shadow/log-only, off by
     # default. Asks whether a question's premise is already dead (resolved
     # or structurally impossible) before pricing it. `enforce` is unread this
@@ -840,6 +857,12 @@ class ApiSettings(BaseSettings):
         if self.settlement_verdict_cache_path != Path(""):
             return self.settlement_verdict_cache_path
         return self.data_dir / "settlement_verdict_cache"
+
+    @property
+    def resolved_event_decomposition_cache_path(self) -> Path:
+        if self.event_decomposition_cache_path != Path(""):
+            return self.event_decomposition_cache_path
+        return self.data_dir / "event_decomposition_cache"
 
 
 settings = ApiSettings()

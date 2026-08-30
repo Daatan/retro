@@ -193,6 +193,12 @@ from .models import (
 from .config import settings
 from .resolution_scorer import archetype_base_rate
 from .settlement_verdict_store import get_verdict, put_verdict, verdict_key
+from .event_decomposition import decompose_event
+from .event_decomposition_store import (
+    decomposition_key,
+    get_decomposition as get_cached_decomposition,
+    put_decomposition,
+)
 from .settlement_semantic import (
     ALL_GATES,
     SettlementCandidate,
@@ -1259,6 +1265,7 @@ async def _process_article_bounded(
     is_single_article: bool = False,
     cache_coordinator: CacheWriteCoordinator | None = None,
     extractor_model: str | None = None,
+    event_decomposition: str | None = None,
 ) -> ArticleOutcome | None:
     """Run _process_article under a per-article wall-clock ceiling.
 
@@ -1283,6 +1290,7 @@ async def _process_article_bounded(
                 is_single_article=is_single_article,
                 cache_coordinator=cache_coordinator,
                 extractor_model=extractor_model,
+                event_decomposition=event_decomposition,
             ),
             timeout=timeout_s,
         )
@@ -1338,6 +1346,7 @@ async def _process_article(
     is_single_article: bool = False,
     cache_coordinator: CacheWriteCoordinator | None = None,
     extractor_model: str | None = None,
+    event_decomposition: str | None = None,
 ) -> ArticleOutcome | None:
     """
     Run gatekeeper + extractor for one article.
@@ -1348,6 +1357,11 @@ async def _process_article(
     tokens were still spent — feeding ForecastResponse.token_usage.
     ``extractor_model`` (retro#652), when given, overrides ``settings.extractor_model``
     for this article's extractor call only; the gatekeeper is never affected.
+    ``event_decomposition`` (retro#758), when given, is a once-per-question
+    WHO/WHAT/SCOPE line appended to the extractor's ``event_description`` input —
+    computed once by the caller and reused across every article in the batch, not
+    per-article. None (the default/off) keeps ``event_description`` byte-identical
+    to today.
     """
     # Short-form sources are judged on content, not length (retro#297). The host list lives in
     # `tm.gatekeeper` — shared with the batch runner, which used to carry its own inline copy and
@@ -1536,6 +1550,17 @@ async def _process_article(
         ))
         return None
 
+    # retro#353: resolution_criteria (when the caller sends it) is the actual
+    # resolution rules — mirrors the batch pipeline's llm_referee_criteria
+    # (orchestrator.py). Falls back to the bare question, today's behavior,
+    # so a caller that hasn't started sending it sees no change at all.
+    event_description = resolution_criteria or question
+    if event_decomposition:
+        # retro#758: appended, not substituted — a caller/model combination that
+        # never populates event_decomposition (the off-by-default common case)
+        # sees byte-identical input to before this existed.
+        event_description = f"{event_description}\n{event_decomposition}"
+
     extract_start = time.perf_counter()
     try:
         extraction, extract_usage = await extract_predictions(
@@ -1543,11 +1568,7 @@ async def _process_article(
             source_name=source_name,
             article_date=article_date,
             event_name=question,
-            # retro#353: resolution_criteria (when the caller sends it) is the actual
-            # resolution rules — mirrors the batch pipeline's llm_referee_criteria
-            # (orchestrator.py). Falls back to the bare question, today's behavior,
-            # so a caller that hasn't started sending it sees no change at all.
-            event_description=resolution_criteria or question,
+            event_description=event_description,
             claim_deadline=claim_deadline,
             short_form=short_form,
             language=language,
@@ -2150,6 +2171,29 @@ async def _run_forecast_inner(
         else None
     )
 
+    # retro#758: once per question (not per article) — the same decomposition is
+    # appended to every article's event_description in this batch. Off by
+    # default (settings.inject_event_decomposition); fails open to None on any
+    # cache/LLM error, which leaves event_description exactly as it was before
+    # this existed.
+    event_decomposition: Optional[str] = None
+    if settings.inject_event_decomposition:
+        decomposition_model = settings.event_decomposition_model or effective_extractor_model
+        decomp_key = decomposition_key(
+            req.question, req.resolution_criteria, model=decomposition_model,
+        )
+        decomp_store_path = settings.resolved_event_decomposition_cache_path
+        if settings.event_decomposition_cache_enabled:
+            event_decomposition = await get_cached_decomposition(decomp_store_path, decomp_key)
+        if event_decomposition is None:
+            event_decomposition = await decompose_event(
+                req.question, req.resolution_criteria,
+                model=decomposition_model,
+                timeout_s=settings.event_decomposition_timeout_seconds,
+            )
+            if event_decomposition and settings.event_decomposition_cache_enabled:
+                await put_decomposition(decomp_store_path, decomp_key, event_decomposition)
+
     # Step 2: gatekeeper + extractor in parallel
     process_start = time.perf_counter()
     timings: list[dict] = []
@@ -2178,6 +2222,7 @@ async def _run_forecast_inner(
                 is_single_article=is_single_article,
                 cache_coordinator=cache_coordinator,
                 extractor_model=effective_extractor_model,
+                event_decomposition=event_decomposition,
             )
             for r in search_results
         ],

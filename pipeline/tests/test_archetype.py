@@ -34,6 +34,53 @@ def test_a_number_that_decides_the_event_is_threshold_shaped(name):
     assert is_threshold_shaped(name) is True
 
 
+# ── retro#748: the shapes the magnitude clauses could not see ────────────────
+# Half the numeric-threshold A/B corpus failed here, and so did four live prod
+# forecasts. Two causes, both about a number the clauses do not recognise as one:
+# a unit NOUN is not a unit symbol, and `between` was not a cue.
+@pytest.mark.parametrize("name,why", [
+    ("Likud will secure more than 33 seats in the next Israeli Knesset election",
+     "the corpus case, and a real prod forecast — 'seats' is a unit noun, so no "
+     "magnitude clause matches; only the cue's adjacency to the number says threshold"),
+    ("In the next Knesset elections, no single party will receive more than 25 seats",
+     "the same shape negated; also live in prod"),
+    ("Airline A operates more than 250 daily departures from Hub H",
+     "a multi-word unit noun"),
+    ("Lionel Messi will score at least 8 goals in the 2026 FIFA World Cup",
+     "a single digit — small numbers are the ones a magnitude clause is least likely "
+     "to catch, and the year is stripped before the test runs"),
+    ("The global fertility rate in 2050 will be less than 2 children per woman",
+     "a bare 2 that decides the question, beside a bare year that does not"),
+    ("The price of WTI crude oil will be lower tomorrow at least 10 per cent than today",
+     "'per cent' spelled out — the percentage clause wants the '%' symbol"),
+    ("Inflation stays between 2% and 3% through the year",
+     "has a magnitude all along; `between` was simply missing from the cue set"),
+    ("Party P wins between 30 and 40 seats",
+     "both gaps in one sentence: the missing cue AND the unit noun"),
+])
+def test_a_cue_with_a_bare_number_behind_it_is_a_threshold(name, why):
+    assert is_threshold_shaped(name) is True, why
+
+
+# ── the adjacency is the safety argument, so pin it ──────────────────────────
+@pytest.mark.parametrize("name,why", [
+    ("Three people said the deal exceeded expectations",
+     "a cue with no number behind it at all"),
+    ("The 3 negotiators failed to reach agreement",
+     "a bare integer, but nowhere near the cue — an unbound bare-integer clause "
+     "would fire here, which is exactly why this one is bound to the cue"),
+    ("Google Gemini Ultra surpasses GPT-4 on benchmarks",
+     "cue then a NAME that contains a digit; the digit does not directly follow the "
+     "cue, and this case already guarded the magnitude-AND-cue structure"),
+    ("UK PM Liz Truss resigns after 45 days",
+     "a duration: stripped before the cue-adjacent test can see it"),
+    ("Sales rose in 2026 after falling in 2024",
+     "cues beside bare years, both stripped first"),
+])
+def test_a_number_not_behind_a_cue_is_still_not_a_threshold(name, why):
+    assert is_threshold_shaped(name) is False, why
+
+
 # ── the near-misses, which are the whole point ───────────────────────────────
 @pytest.mark.parametrize("name,why", [
     ("Wiz rejects Google $23B acquisition offer",

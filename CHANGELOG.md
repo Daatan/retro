@@ -19,6 +19,9 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 
 ## [Unreleased]
 
+### Fixed
+- Threshold archetype: a cue with a bare number behind it now counts as a magnitude ("more than 33 seats", "at least 8 goals"), and `between` joins the cue set (retro#748). The two gaps hid half the numeric-threshold A/B corpus and four live prod forecasts from `is_threshold_shaped`; the bare integer is bound to the cue rather than recognised anywhere, so prod firing moves 4.4% → 6.6% with no false positive among the five newly-caught claims.
+
 ## [1.4.0] — 2026-08-30
 
 First release under the generation scheme (retro#742): `0.4.1` → `1.4.0`, same engine. `pipeline/pyproject.toml` moves `0.1.0` → `1.4.0` too — one product.

@@ -157,18 +157,60 @@ to disagree with:
 
 ```
 Quantity vs question threshold — rater: patched
-  case                                                fill      exact   code=stance   code ok  stance ok
-  threshold-at-or-below-satisfied                    5/5  100%   5/5  100%   5/5  100%      5         5
-  threshold-between-bounds-contradicted              5/6   83%   4/5   80%   1/4   25%      4         1
+  case                                              target       fill      exact   code=stance   code ok  stance ok
+  threshold-at-or-below-satisfied                 5/5  100%    5/5  100%   5/5  100%   5/5  100%      5         5
+  threshold-between-bounds-contradicted           4/5   80%    5/6   83%   4/5   80%   1/4   25%      4         1
   ...
-  TOTAL fill 48/55 (87%), exact 41/48 (85%), code agrees with stance 31/44 (70%), code abstained 4; correct: code 44, stance 33, of 55 prediction(s)
+  TOTAL target 44/50 (88%), of which right-number-wrong-comparator 5; fill 48/55 (87%), exact 41/48 (85%), code agrees with stance 31/44 (70%), code abstained 4; correct: code 44, stance 33, of 55 prediction(s)
 ```
+
+**`target` is the validator's own number; `exact` is not — read `target` first.**
+`target` is per RUN and asks the validator's question: did this rater get THIS
+case's number, unit and comparator right. `exact` is per PREDICTION, so a run
+that extracts the target correctly *and* correctly reports a second figure from
+the same article ("the other party took 24 seats") scores 1/2 on `exact` and 1/1
+on `target`. That is not a rounding difference. On the first two-rater run it
+inverted the ranking outright — Haiku scored `exact` 70% against Nova Lite's
+78% while getting every single case right, purely because Haiku quotes more
+generously. `target_miscomparated` splits the remainder the way the issue cares
+about: right value and unit under the wrong comparator is a different defect
+from not finding the number at all.
 
 Read the last two numbers together. **`code ok` against `stance ok` is the
 finding**, not a pass/fail: the issue expects agreement to be high on Haiku and
 low on Nova Lite, and the gap is the argument for moving the comparison out of
 the model's head. A row where the model extracted the right number and still
 scored the stance the wrong way is retro#664 reproduced in one line.
+
+### What the first two-rater run found (prompt v9, 2026-08-30)
+
+| rater | `target` | comparator wrong | verdict vs the ≥0.9 bar |
+|---|---|---|---|
+| Haiku 4.5 (`us.anthropic.claude-haiku-4-5`) | 50/50 (100%) | 0 | passes |
+| Nova Lite (`us.amazon.nova-lite-v1:0`) | 120/150 (80%) | 27 (18%) | fails |
+
+Every Nova Lite failure is `comparator`, and always the same substitution: a
+verb of movement becomes a bound. "inflation accelerated to 4.1 percent" comes
+back `> 4.1` in 15 runs of 15; "support collapsed to just 35 percent" comes back
+`< 35`. The value and the unit are right in all of them. That is retro#664 one
+level down — tone displacing the number, moved from `stance` into `comparator` —
+and it is worse than a miss, because `< 35` against "at least 30 percent"
+*contradicts* where the stated level satisfies.
+
+Two prompt edits written against exactly this (v9b, v9c — an explicit
+movement-verb rule, using verbs the corpus does not use) moved `target` 80% →
+72% and `fill` 86% → 74%. Both were reverted. Record it before reaching for a
+third: the corpus says this rater is not reachable from the prompt here, and the
+per-rater gate is the answer the issue already prescribed.
+
+Run a second rater with `--model`; an arm is one model, so its report *is* that
+rater's row:
+
+```bash
+AWS_REGION=us-east-1 uv run python scripts/ab_extractor_prompt.py run \
+  scripts/ab_cases/numeric_threshold_blindness.json --runs 15 \
+  --model bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0 --label haiku
+```
 
 `code abstained` is its own column for a reason. The comparison answers by
 interval containment, so a bounded report ("stayed below 5%") is decidable

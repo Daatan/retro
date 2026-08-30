@@ -22,8 +22,35 @@ WHAT IT IS NOT
   here would create a second, unmeasured source of thresholds for Phase 2 to disagree
   with.
 * **Not a consumer.** The result is logged beside ``stance`` as a per-rater diagnostic.
-  Agreement is *expected* to be high on Haiku and low on Nova Lite; the gap is the
-  finding, not a gate. Nothing reads this to move a forecast.
+  Agreement was *expected* to be high on Haiku and low on Nova Lite; the gap is the
+  finding, not a gate. Nothing reads this to move a forecast. The only caller in the
+  tree today is retro#687's confusion flag rule 2, which is log-only.
+
+MEASURED, AND WHY THE RATER GATE IS NOT OPTIONAL
+------------------------------------------------
+The gap the issue predicted is real and larger than the headline suggests
+(numeric corpus, prompt v9, exact (value, unit, comparator) on the case's own number):
+
+    Haiku 4.5   50/50 runs  (100%)   comparator wrong: 0
+    Nova Lite  120/150 runs  (80%)   comparator wrong: 27  (18% of runs)
+
+Every Nova Lite failure is ``comparator``, and always the same one: a verb of movement
+is encoded as a bound. "inflation accelerated to 4.1 percent" comes back ``> 4.1``
+15/15; "support collapsed to just 35 percent" comes back ``< 35``. Value and unit are
+right in every one of them — the model reads the number and then overwrites the relation
+with the direction the sentence travelled. That is retro#664 one level down: the same
+tone-over-number substitution, moved from ``stance`` into ``comparator``.
+
+Two targeted prompt edits against it (a movement-verb rule, v9b and v9c) moved nothing
+— 80% -> 72%, with fill falling 86% -> 74% — and were reverted. This is not reachable
+from the prompt on this rater.
+
+Consequence, and it holds until the validator is re-run: **Nova Lite's ``quantity`` is
+not fit for any consumer.** A ``<`` where the article said ``=`` does not merely lose
+the comparison, it flips it — ``< 35`` against "at least 30 percent" contradicts where
+the stated level satisfies. Phase 2, which wires this to live traffic, must gate on the
+rater and route threshold-archetype questions to Haiku; it must not treat a filled
+``quantity`` as trustworthy because it is filled.
 
 WHAT IT ANSWERS
 ---------------

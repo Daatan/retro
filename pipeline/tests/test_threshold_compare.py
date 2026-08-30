@@ -10,6 +10,7 @@ the threshold at one open endpoint.
 """
 import json
 from pathlib import Path
+from dataclasses import replace
 
 import pytest
 
@@ -184,8 +185,10 @@ class TestTheRetro664Corpus:
         1.5 Phase 2, when `question_quantity` takes this comparison to live traffic
         and a question the detector does not recognise is a question the comparison
         never runs on. Widening the detector is its own change with its own corpus,
-        in a module this lane does not own — so it is recorded here and filed
-        separately, and this test fails the moment the set moves either way.
+        in a module this lane does not own — so it is recorded here and filed as
+        retro#748, and this test fails the moment the set moves either way. The
+        assertion below is that issue's acceptance criterion: fixing it means this
+        set becomes empty.
         """
         from tm.archetype import is_threshold_shaped
 
@@ -260,3 +263,73 @@ class TestTheDiagnostic:
         zeros for every bracket case would bury the ten that matter."""
         cases = load_cases(CORPUS.parent / "multi_stage_brackets.json")
         assert quantity_diagnostics(cases, {c.id: [] for c in cases}) == []
+
+class TestTheTargetCounters:
+    """`target_hit` / `target_miscomparated` — per RUN, about the one number the
+    case is a test of.
+
+    These exist because `exact` measured the wrong thing across raters. Run on the
+    numeric corpus, Haiku 4.5 got every case's number, unit and comparator right in
+    every run, and still scored `exact` 70% against Nova Lite's 78% — because Haiku
+    quotes more generously, and its extra predictions correctly report OTHER figures
+    from the same article ("the other party took 24 seats"). Those are right, not
+    wrong, and enough of them invert the ranking between two raters. The validator
+    asks about the case's own number, so these counters do too.
+    """
+
+    @pytest.fixture(scope="class")
+    def case(self):
+        return next(c for c in load_cases(CORPUS) if c.id == "threshold-at-or-below-satisfied")
+
+    @staticmethod
+    def _pred(stance, quantity=None):
+        return PredictionExtraction(
+            quote="q", claim="c", stance=stance, claim_strength=0.7, quantity=quantity,
+        )
+
+    def test_a_run_that_carries_the_number_hits_once_however_many_predictions(self, case):
+        run = [
+            self._pred(0.8, {"value": 8.75, "unit": "percent", "comparator": "="}),
+            self._pred(0.2, {"value": 2.1, "unit": "percent", "comparator": "="}),
+            self._pred(0.1, None),
+        ]
+        d = quantity_diagnostics([case], {case.id: [run]})[0]
+        assert (d.runs, d.target_hit, d.target_miscomparated) == (1, 1, 0)
+        assert (d.filled, d.exact, d.labelled) == (2, 1, 2), "per-prediction counts unchanged"
+
+    def test_a_second_figure_from_the_article_is_not_a_miss(self, case):
+        """The exact-vs-target divergence, pinned. Two predictions, one of them the
+        target: `exact` reads 1/2, `target_hit` reads 1/1."""
+        run = [
+            self._pred(0.8, {"value": 8.75, "unit": "percent", "comparator": "="}),
+            self._pred(0.3, {"value": 24, "unit": "seats", "comparator": "="}),
+        ]
+        d = quantity_diagnostics([case], {case.id: [run]})[0]
+        assert (d.exact, d.labelled) == (1, 2)
+        assert (d.target_hit, d.target_miscomparated) == (1, 0)
+
+    def test_the_right_number_under_the_wrong_comparator_is_its_own_bucket(self, case):
+        """Nova Lite's whole failure mode on this corpus: it finds 8.75 percent and
+        writes `<` because the sentence moved downward. Not a miss — a miscomparison,
+        and the distinction is the finding."""
+        run = [self._pred(0.8, {"value": 8.75, "unit": "percent", "comparator": "<"})]
+        d = quantity_diagnostics([case], {case.id: [run]})[0]
+        assert (d.target_hit, d.target_miscomparated) == (0, 1)
+
+    def test_finding_nothing_is_neither_a_hit_nor_a_miscomparison(self, case):
+        d = quantity_diagnostics([case], {case.id: [[self._pred(0.8)]]})[0]
+        assert (d.runs, d.target_hit, d.target_miscomparated) == (1, 0, 0)
+
+    def test_a_different_unit_does_not_rescue_the_same_bare_number(self, case):
+        run = [self._pred(0.8, {"value": 8.75, "unit": "seats", "comparator": "="})]
+        d = quantity_diagnostics([case], {case.id: [run]})[0]
+        assert (d.target_hit, d.target_miscomparated) == (0, 0)
+
+    def test_runs_are_only_counted_where_there_is_a_label_to_count_against(self):
+        """A case with a `question_threshold` and no `expect_quantity` still gets a
+        row — the code-vs-stance columns are meaningful — but `runs` stays 0 so it
+        cannot dilute the validator percentage."""
+        case = load_cases(CORPUS)[0]
+        unlabelled = replace(case, expect_quantity=None)
+        d = quantity_diagnostics([unlabelled], {unlabelled.id: [[self._pred(0.8)]]})[0]
+        assert d.runs == 0

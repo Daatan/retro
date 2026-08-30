@@ -221,9 +221,11 @@ def _print_quantity_report(
     if not diags:
         return
     print(f"\nQuantity vs question threshold — rater: {arm}")
-    print(f"  {'case':<45} {'fill':>10} {'exact':>10} {'code=stance':>13} {'code ok':>9} {'stance ok':>10}")
+    print(f"  {'case':<45} {'target':>10} {'fill':>10} {'exact':>10} "
+          f"{'code=stance':>13} {'code ok':>9} {'stance ok':>10}")
     for d in diags:
         print(f"  {d.case_id:<45} "
+              f"{d.target_hit:>3}/{d.runs:<3} {_pct(d.target_hit, d.runs):>3} "
               f"{d.filled:>3}/{d.predictions:<3} {_pct(d.filled, d.predictions):>3} "
               f"{d.exact:>3}/{d.labelled:<3} {_pct(d.exact, d.labelled):>3} "
               f"{d.agree:>3}/{d.agree + d.disagree:<3} {_pct(d.agree, d.agree + d.disagree):>4} "
@@ -232,7 +234,15 @@ def _print_quantity_report(
 
 
 def _quantity_summary(diags: list[QuantityDiagnostic]) -> str:
-    """One line: fill, validator match, and the code-vs-stance gap the issue is after."""
+    """One line: the validator's own number first, then fill and the code-vs-stance gap.
+
+    `target` leads because it is what retro#683's validator asks — did the rater get THIS
+    case's number, unit and comparator right — while `exact` is per-prediction and so is
+    diluted by correct extractions of other figures in the same article.
+    """
+    runs = sum(d.runs for d in diags)
+    hit = sum(d.target_hit for d in diags)
+    miscomp = sum(d.target_miscomparated for d in diags)
     preds = sum(d.predictions for d in diags)
     filled = sum(d.filled for d in diags)
     exact = sum(d.exact for d in diags)
@@ -242,7 +252,9 @@ def _quantity_summary(diags: list[QuantityDiagnostic]) -> str:
     undecidable = sum(d.undecidable for d in diags)
     code_ok = sum(d.code_correct for d in diags)
     stance_ok = sum(d.stance_correct for d in diags)
-    return (f"TOTAL fill {filled}/{preds} ({_pct(filled, preds).strip()}), "
+    return (f"TOTAL target {hit}/{runs} ({_pct(hit, runs).strip()}), "
+            f"of which right-number-wrong-comparator {miscomp}; "
+            f"fill {filled}/{preds} ({_pct(filled, preds).strip()}), "
             f"exact {exact}/{labelled} ({_pct(exact, labelled).strip()}), "
             f"code agrees with stance {agree}/{decided} ({_pct(agree, decided).strip()}), "
             f"code abstained {undecidable}; "

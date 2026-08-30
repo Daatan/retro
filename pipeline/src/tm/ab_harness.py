@@ -272,6 +272,14 @@ class QuantityDiagnostic:
     undecidable: int        # code abstained: straddles, or units did not match
     code_correct: int       # code-side sign == the case's expected stance_sign
     stance_correct: int     # the model's stance sign == the case's expected stance_sign
+    # `exact` is per-prediction, so it is diluted by predictions that correctly report a
+    # DIFFERENT number from the same article ("the other party won 24 seats"). Those are
+    # right, not wrong, and on a rater that quotes generously they drag `exact` down far
+    # enough to invert the ranking between two raters. The three counts below are per RUN
+    # and about the one number the case is a test of, which is what the validator means.
+    runs: int = 0
+    target_hit: int = 0             # some prediction matched expect_quantity exactly
+    target_miscomparated: int = 0   # right value+unit, wrong comparator — the retro#664 failure
 
 
 def quantity_diagnostics(
@@ -290,7 +298,21 @@ def quantity_diagnostics(
         truth = case.expect.get("stance_sign")
         n = filled = exact = labelled = agree = disagree = undecidable = 0
         code_correct = stance_correct = 0
+        runs = target_hit = target_miscomparated = 0
         for run in predictions.get(case.id, []):
+            if case.expect_quantity is not None:
+                runs += 1
+                same_number = [
+                    p.quantity for p in run
+                    if p.quantity is not None
+                    and p.quantity.value == float(case.expect_quantity["value"])
+                    and normalise_unit(p.quantity.unit)
+                    == normalise_unit(str(case.expect_quantity["unit"]))
+                ]
+                if any(_quantity_matches(q, case.expect_quantity) for q in same_number):
+                    target_hit += 1
+                elif same_number:
+                    target_miscomparated += 1
             for p in run:
                 n += 1
                 if truth is not None and _sign(p.stance) == truth:
@@ -318,5 +340,6 @@ def quantity_diagnostics(
             case_id=case.id, predictions=n, filled=filled, exact=exact, labelled=labelled,
             agree=agree, disagree=disagree, undecidable=undecidable,
             code_correct=code_correct, stance_correct=stance_correct,
+            runs=runs, target_hit=target_hit, target_miscomparated=target_miscomparated,
         ))
     return out

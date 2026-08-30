@@ -982,7 +982,7 @@ def test_the_provenance_schema_version_is_pinned():
     has to be deliberate — schema_version is what daatan gates on."""
     from forecast_api.models import PROVENANCE_SCHEMA_VERSION
 
-    assert PROVENANCE_SCHEMA_VERSION == "1.3"
+    assert PROVENANCE_SCHEMA_VERSION == "1.4"
 
 
 class TestReportKindAndConsensusViewThreading:
@@ -1184,3 +1184,112 @@ class TestQuantityThreading:
         claim = source.claims_detail[0]
         assert claim.quantity is None
         assert claim.stance == 0.7 and claim.claim == "Thirty six seats"
+
+
+class TestToneAndVoiceThreading:
+    """`tone` and `voice` through the live path (Oracle 1.5 Phase 1, retro#684).
+
+    Same reason as `quantity` above: shadow fields have no consumer to notice
+    them arriving as None, so the only thing between "harvested" and "silently
+    0% filled for a month" is a test that runs the real pipeline and reads what
+    comes out the far end (retro#566).
+
+    Both roll up to the SourceSignal as the DOMINANT claim's, unlike
+    `report_kind` — the asymmetry is pinned below.
+    """
+
+    async def test_tone_reaches_the_claim_layer_per_claim(self, monkeypatch):
+        source = await _one_source(monkeypatch, [
+            _claim(claim="A catastrophic breach", tone="alarm"),
+            _claim(claim="A welcome recovery", tone="approve"),
+            _claim(claim="The rate stands at 8.75%", tone="neutral"),
+        ], "[P1-tone] Will the event occur?")
+
+        assert [c.tone for c in source.claims_detail] == ["alarm", "approve", "neutral"]
+
+    async def test_voice_reaches_the_claim_layer_with_its_name(self, monkeypatch):
+        """`attributed_to` is the half that makes a wire collapsible — it is the
+        name the reception matrix keys its column on — so a projection carrying
+        `kind` and dropping the name would look populated and count thirty
+        correlated outlets as thirty sources anyway."""
+        source = await _one_source(monkeypatch, [
+            _claim(claim="Reuters reported the review reopened",
+                   voice={"kind": "wire", "attributed_to": "Reuters"}),
+            _claim(claim="The reporter's own read", voice={"kind": "byline"}),
+        ], "[P1-voice] Will the event occur?")
+
+        wire, byline = source.claims_detail
+        assert (wire.voice.kind, wire.voice.attributed_to) == ("wire", "Reuters")
+        assert byline.voice.kind == "byline" and byline.voice.attributed_to is None
+
+    async def test_a_claim_the_model_did_not_answer_projects_to_none(self, monkeypatch):
+        """The prompt asks for `tone` on every prediction, `neutral` included, so
+        None here means the model did not answer — not that the quote was
+        even-handed. That is the distinction the fill rate measures."""
+        source = await _one_source(
+            monkeypatch, [_claim(claim="A")], "[P1-tv-null] Will the event occur?"
+        )
+        assert source.claims_detail[0].tone is None
+        assert source.claims_detail[0].voice is None
+
+    async def test_both_ride_the_dominant_claim_to_the_article_level(self, monkeypatch):
+        """The issue's threading rule: article-level `tone`/`voice` are the
+        dominant claim's — the same claim `facet` and `verified` ride from, picked
+        by max |fact_signal|. Pinned with the dominant claim NOT first in the
+        list, so an implementation that took `claims_detail[0]` would fail here.
+        """
+        source = await _one_source(monkeypatch, [
+            _claim(claim="A minor precursor", stance=0.2, fact_signal=0.2,
+                   tone="neutral", voice={"kind": "byline"}),
+            _claim(claim="The decisive report", stance=0.9, fact_signal=0.9,
+                   tone="alarm", voice={"kind": "wire", "attributed_to": "Reuters"}),
+        ], "[P1-tv-dom] Will the event occur?")
+
+        assert source.tone == "alarm"
+        assert (source.voice.kind, source.voice.attributed_to) == ("wire", "Reuters")
+        assert [c.tone for c in source.claims_detail] == ["neutral", "alarm"], (
+            "the per-claim layer keeps every claim's own answer, not the dominant one's"
+        )
+
+    async def test_the_article_rollup_is_none_when_no_claim_carries_a_fact(self, monkeypatch):
+        """`tone`/`voice` ride the fact lane, so they inherit its emptiness rule:
+        no `fact_signal` anywhere means no dominant claim to ride, exactly as
+        `facet` and `verified` already behave. The per-claim values survive."""
+        source = await _one_source(monkeypatch, [
+            _claim(claim="Pure opinion", tone="alarm", voice={"kind": "byline"},
+                   fact_signal_absent_reason="opinion"),
+        ], "[P1-tv-nofact] Will the event occur?")
+
+        assert source.fact_signal is None
+        assert source.tone is None and source.voice is None
+        assert source.claims_detail[0].tone == "alarm"
+
+    async def test_a_malformed_voice_costs_the_field_and_not_the_article(self, monkeypatch):
+        """The drop-guard boundary from the far end: `_drop_malformed_voice`
+        nulls a half-answer rather than raising out of ExtractionOutput, and what
+        that buys is the claim, its stance and every other field still arriving.
+        """
+        source = await _one_source(monkeypatch, [
+            _claim(claim="Reuters said so", stance=0.7,
+                   voice={"attributed_to": "Reuters"}, tone="bullish"),
+        ], "[P1-tv-bad] Will the event occur?")
+
+        claim = source.claims_detail[0]
+        assert claim.voice is None and claim.tone is None
+        assert claim.stance == 0.7 and claim.claim == "Reuters said so"
+
+    def test_they_roll_up_where_report_kind_does_not(self):
+        """The asymmetry against the test above, made explicit because the obvious
+        review note is "why does THIS one roll up when the last one didn't".
+        `report_kind`'s consumer (E3b's recency integrator) reads per claim, so an
+        article-level summary would have to invent a reduction with nothing asking
+        for it. These two have an article-level consumer already named: Phase 3
+        S2's reception matrix counts sources per ARTICLE, and S4 projects the
+        article's register out at rating time.
+        """
+        from forecast_api.models import SourceSignal
+
+        for field in ("tone", "voice"):
+            assert field in ClaimDetail.model_fields
+            assert field in SourceSignal.model_fields
+        assert "report_kind" not in SourceSignal.model_fields

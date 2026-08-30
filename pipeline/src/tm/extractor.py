@@ -773,6 +773,58 @@ Examples — related event: "Port terminal T handles more than 2 million contain
   "Terminal T reported its busiest quarter on record"
       → omit quantity (a direction, no figure)
 
+## TONE — how the quote FEELS about what it reports (EXPERIMENTAL, shadow)
+"Alarming or critical tone is not stance direction" above tells you not to let a quote's \
+register move `stance`. `tone` is where that register goes instead, on its own axis, so \
+that keeping it out of `stance` no longer means throwing it away.
+  approve   — the quote welcomes, praises or defends what it reports
+  alarm     — the quote warns about, condemns or laments what it reports
+  neutral   — it does neither; a plain report, however grave its subject
+Record the register of the QUOTE, not your own view and not whether the outcome would be \
+good. A death toll reported flatly is `neutral`: the subject is terrible, the quote is not \
+editorialising. The same fact reported as "a scandalous failure that must never be repeated" \
+is `alarm`. `tone` never changes `stance`, `claim_strength` or anything else — a quote can \
+be `alarm` and stance +1.0 at once, and that combination is the whole reason this field \
+exists. Always answer: every quote has a register, and `neutral` IS the answer when it \
+neither welcomes nor warns. Never omit `tone`. But `neutral` is not a shrug and not a \
+default: when the quote's own wording actually welcomes or warns, say so.
+
+Examples — related event: "Regulator R revokes operator O's licence by 31 March 2027":
+  "Inspectors logged 14 safety breaches at the depot last quarter, the regulator said"  \
+  →  tone "neutral" (a grave subject, reported flat)
+  "This is a disgraceful record and the licence should have gone months ago, the committee chair said"  \
+  →  tone "alarm"
+  "The operator's turnaround has been exemplary and the regulator was right to hold off"  \
+  →  tone "approve"
+
+## VOICE — whose assertion the quote is (EXPERIMENTAL, shadow)
+A wire report reprinted in thirty outlets is ONE observation, not thirty. A minister quoted \
+in an opinion column is the minister's claim, not the columnist's. Record whose assertion the \
+quote carries.
+  kind          — byline: the article's own author asserts it in their own voice
+                  quoted_person: a named person is quoted or paraphrased
+                  institution: a body, ministry, company or its spokesman
+                  wire: a news agency's report the outlet is carrying
+                  unattributed: nobody is named — "sources say", "it is understood"
+  attributed_to — the name, in the article's own words. Omit for `byline` and \
+`unattributed`, where there is no separate voice to name.
+The test is whose ASSERTION it is, not who it is ABOUT: a sentence describing what a \
+minister did, written by the reporter, is `byline` — the minister is the subject, not the \
+voice. Answer for every quote; when attribution is genuinely absent that IS `unattributed`, \
+not an omission.
+
+Examples — related event: "Regulator R revokes operator O's licence by 31 March 2027":
+  "The regulator has spent two years avoiding this decision" (the reporter's own line)  \
+  →  {"kind": "byline"}
+  "We will act on the evidence, said Regulator R's chief executive"  \
+  →  {"kind": "institution", "attributed_to": "Regulator R"}
+  "Committee chair P called the record indefensible"  \
+  →  {"kind": "quoted_person", "attributed_to": "Committee chair P"}
+  "Reuters reported that the licence review had been reopened"  \
+  →  {"kind": "wire", "attributed_to": "Reuters"}
+  "Officials familiar with the review say revocation is now likely"  \
+  →  {"kind": "unattributed"}
+
 ## Output
 Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certainty \
 signals if they are the only content available.
@@ -841,7 +893,13 @@ And quantity — {{"value": number, "unit": string, "comparator": one of = / < /
 when the article does not date the figure)}} — the figure the quote reports about the \
 event, per the QUANTITY section. Record the number the article gives and the relation the \
 ARTICLE asserts about it, never whether it satisfies the question; OMIT quantity when the \
-quote states no figure.
+quote states no figure. \
+And tone (one of approve / neutral / alarm — the quote's own register, never your view and \
+never a change to stance; ALWAYS answer, `neutral` included, per the TONE section). \
+And voice — {{"kind": one of byline / quoted_person / institution / wire / unattributed, \
+"attributed_to": string (the name in the article's own words; OMITTED for byline and \
+unattributed)}} — whose assertion the quote is, per the VOICE section. Answer for every \
+prediction.
 
 Example — related event: "Assad regime falls in Syria":
 {{
@@ -854,7 +912,9 @@ Example — related event: "Assad regime falls in Syria":
       "settled": false,
       "evidence_class": "reporting",
       "reader_confidence": {{"level": "medium", "trap": "inference_needed"}},
-      "report_kind": "change"
+      "report_kind": "change",
+      "tone": "neutral",
+      "voice": {{"kind": "byline"}}
     }},
     {{
       "quote": "Rebels seized the capital on Sunday as Assad fled to Moscow",
@@ -870,7 +930,9 @@ Example — related event: "Assad regime falls in Syria":
       "is_occurrence": true,
       "verified": true,
       "reader_confidence": {{"level": "high"}},
-      "report_kind": "change"
+      "report_kind": "change",
+      "tone": "neutral",
+      "voice": {{"kind": "byline"}}
     }}
   ],
   "consensus_view": "expects_yes"
@@ -889,7 +951,9 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
       "evidence_class": "cited_probability",
       "fact_signal_absent_reason": "opinion",
       "reader_confidence": {{"level": "medium", "trap": "numeric_comparison"}},
-      "report_kind": "level"
+      "report_kind": "level",
+      "tone": "neutral",
+      "voice": {{"kind": "institution", "attributed_to": "Opta"}}
     }}
   ],
   "consensus_view": "expects_no"
@@ -914,7 +978,9 @@ Example — related event: "Airline A operates more than 250 daily departures fr
       "verified": true,
       "reader_confidence": {{"level": "medium", "trap": "numeric_comparison"}},
       "report_kind": "level",
-      "quantity": {{"value": 214, "unit": "daily departures", "comparator": "="}}
+      "quantity": {{"value": 214, "unit": "daily departures", "comparator": "="}},
+      "tone": "neutral",
+      "voice": {{"kind": "byline"}}
     }}
   ],
   "consensus_view": "divided"

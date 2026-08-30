@@ -19,8 +19,12 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 
 ## [Unreleased]
 
+### Added
+- Extractor prompt **v10** (retro#684, Oracle 1.5 Phase 1): two elicited shadow fields at the schema tail — `tone` (`approve`/`neutral`/`alarm`, the quote's own register, so an evaluation stops being read as a direction) and `voice` (`{kind, attributed_to}`, whose assertion the quote is, so a wire carried by thirty outlets counts once). Both thread to `ClaimDetail` per claim and roll up to `SourceSignal` as the dominant claim's; `provenance.schema_version` 1.3 → 1.4. Zero A/B regressions on both raters, `token_usage` +7.9%. **`tone` is Haiku-only** — Nova Lite answers `neutral` on 145/145 and trips the field's kill criterion; `voice` clears it on both
+
 ### Fixed
 - Threshold archetype: a cue with a bare number behind it now counts as a magnitude ("more than 33 seats", "at least 8 goals"), and `between` joins the cue set (retro#748). The two gaps hid half the numeric-threshold A/B corpus and four live prod forecasts from `is_threshold_shaped`; the bare integer is bound to the cue rather than recognised anywhere, so prod firing moves 4.4% → 6.6% with no false positive among the five newly-caught claims.
+- `docs/ORACLE_VARIABLES.md`: `quantity` had no row after retro#683 shipped it, and `stance_vs_quantity` was still documented as inert with *both* inputs missing when the claim side had landed
 
 ## [1.4.0] — 2026-08-30
 

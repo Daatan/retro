@@ -12,6 +12,7 @@ from tm.models import (
     CellStatus,
     Quantity,
     ReaderConfidence,
+    Voice,
 )
 
 
@@ -440,9 +441,14 @@ class TestReportKindAndConsensusView:
         its position in the text the model reads."""
         props = list(PredictionExtraction.model_json_schema()["properties"])
         assert props.index("reader_confidence") < props.index("report_kind")
-        # `quantity` (retro#683) took the tail after these two, by the same rule.
-        assert props.index("report_kind") < props.index("quantity")
-        assert props[-1] == "quantity"
+        # Every later field group took the tail after these two, by the same rule:
+        # `quantity` (retro#683), then `tone` + `voice` (retro#684). Pinned as the
+        # whole ordered tail rather than one index each — the rule is about the
+        # ORDER of the block, and an index-per-field assertion goes on passing while
+        # a new field is quietly inserted between two of them.
+        assert props[props.index("reader_confidence"):] == [
+            "reader_confidence", "report_kind", "quantity", "tone", "voice",
+        ]
 
     # --- consensus_view ---
 
@@ -629,3 +635,157 @@ class TestQuantity:
         assert share.quantitative_estimate is None
         probability = self._pred(quantitative_estimate=0.22)
         assert probability.quantity is None
+
+
+class TestTone:
+    """`tone` — approve | neutral | alarm, the quote's own register (Oracle 1.5
+    Phase 1, retro#684).
+
+    The leak retro#326 and retro#657 keep patching by prompt is a PROJECTION
+    problem: an evaluation read as a direction. These pin the separation the
+    field exists to create — a tone value never moves stance, and the two vary
+    independently — because a `tone` that merely echoes the sign of `stance`
+    would pass every fill-rate check while carrying no information at all.
+    """
+
+    @staticmethod
+    def _pred(**over):
+        base = dict(quote="q", claim="c", stance=0.4, claim_strength=0.65)
+        return PredictionExtraction(**{**base, **over})
+
+    @pytest.mark.parametrize("value", ["approve", "neutral", "alarm"])
+    def test_every_member_lands(self, value):
+        assert self._pred(tone=value).tone == value
+
+    def test_it_defaults_to_none(self):
+        """Every row extracted before v10 has none. The prompt asks for `tone` on
+        every prediction, `neutral` included, so on a v10 row None means the model
+        did not answer — not that the quote was even-handed. That distinction is
+        the whole fill-rate measurement, and a default would erase it."""
+        assert self._pred().tone is None
+
+    @pytest.mark.parametrize("bad", ["alarming", "positive", "ALARM", "", 3, {"tone": "alarm"}])
+    def test_an_out_of_enum_answer_is_dropped_and_the_prediction_survives(self, bad, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="tm.models"):
+            pred = self._pred(tone=bad)
+        assert pred.tone is None
+        assert pred.claim_strength == 0.65, "the rest of the prediction must be untouched"
+        assert "event=tone_malformed" in caplog.text
+
+    def test_it_is_independent_of_stance(self):
+        """The field's reason for existing and its acceptance test. A quote can
+        WARN about something while being strong evidence FOR it — "a catastrophic
+        breach that hands them the city" is alarm at stance +1.0 — and the whole
+        point of eliciting the evaluation separately is that rating can then
+        project it out. A schema that could not express that pair would be
+        measuring the same axis twice."""
+        alarmed_but_positive = self._pred(stance=1.0, tone="alarm")
+        assert (alarmed_but_positive.stance, alarmed_but_positive.tone) == (1.0, "alarm")
+        approving_but_negative = self._pred(stance=-0.9, tone="approve")
+        assert (approving_but_negative.stance, approving_but_negative.tone) == (-0.9, "approve")
+
+    def test_the_llm_schema_offers_exactly_three_values(self):
+        """The TONE block names three; the schema must accept exactly those. A
+        drift either way means the model is told to answer something it cannot
+        express, or can express something no consumer was told to expect."""
+        schema = PredictionExtraction.model_json_schema()
+        members = next(
+            b["enum"] for b in schema["properties"]["tone"]["anyOf"] if "enum" in b
+        )
+        assert set(members) == {"approve", "neutral", "alarm"}
+
+
+class TestVoice:
+    """`voice` {kind, attributed_to} — whose assertion the quote is (retro#684).
+
+    A wire carried by thirty outlets is one observation. What these pin is that
+    the informative half survives a partial answer: `kind` alone is already a
+    usable observation, so the guards must never let a stray `attributed_to`
+    take it down with it.
+    """
+
+    @staticmethod
+    def _pred(**over):
+        base = dict(quote="q", claim="c", stance=0.4, claim_strength=0.65)
+        return PredictionExtraction(**{**base, **over})
+
+    @pytest.mark.parametrize("kind", [
+        "byline", "quoted_person", "institution", "wire", "unattributed",
+    ])
+    def test_every_kind_lands(self, kind):
+        assert self._pred(voice={"kind": kind}).voice.kind == kind
+
+    def test_a_named_source_carries_its_name(self):
+        pred = self._pred(voice={"kind": "wire", "attributed_to": "Reuters"})
+        assert (pred.voice.kind, pred.voice.attributed_to) == ("wire", "Reuters")
+
+    def test_it_defaults_to_none(self):
+        assert self._pred().voice is None
+
+    def test_a_name_beside_a_byline_is_kept_not_rejected(self):
+        """Deliberate, and the reason `Voice` has no cross-field validator where
+        `Quantity` does. The prompt tells the model to omit `attributed_to` on a
+        byline; a model that ignores that has still answered the question that
+        matters. Rejecting the pair would hand `_drop_malformed_voice` a raise,
+        and the guard nulls the WHOLE object — trading a stray string for a lost
+        `kind`, which is a lost observation."""
+        pred = self._pred(voice={"kind": "byline", "attributed_to": "the reporter"})
+        assert pred.voice.kind == "byline"
+
+    @pytest.mark.parametrize("bad", [
+        {},                                              # no kind
+        {"attributed_to": "Reuters"},                    # the name without the kind
+        {"kind": "editorial"},                           # not an enum member
+        {"kind": "Wire"},                                # right member, wrong case
+        "Reuters",                                       # the bare string, not the object
+        ["wire", "Reuters"],
+    ])
+    def test_a_malformed_answer_is_dropped_and_the_prediction_survives(self, bad, caplog):
+        """`complete_structured` runs instructor with max_retries=1, so a
+        still-malformed value would raise out of ExtractionOutput and drop the
+        whole ARTICLE from the forecast — far too much to pay for a field that
+        nothing reads yet."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="tm.models"):
+            pred = self._pred(voice=bad)
+        assert pred.voice is None
+        assert pred.claim_strength == 0.65, "the rest of the prediction must be untouched"
+        assert "event=voice_malformed" in caplog.text, (
+            "a silent drop would make 'answered badly' look like 'did not answer'"
+        )
+
+    def test_a_double_serialized_object_is_parsed(self):
+        """Some models in TOOLS mode emit a nested object as a JSON string
+        (retro#306). `voice` is the third nested field inside a prediction and
+        needs the same coercion `reader_confidence` and `quantity` get."""
+        pred = self._pred(voice='{"kind": "institution", "attributed_to": "the Bank of Israel"}')
+        assert pred.voice == Voice(kind="institution", attributed_to="the Bank of Israel")
+
+    def test_constructing_it_directly_still_raises(self):
+        """Strictness is relaxed at the LLM boundary, not in the type."""
+        with pytest.raises(ValidationError):
+            Voice(attributed_to="Reuters")
+        with pytest.raises(ValidationError):
+            Voice(kind="editorial")
+
+    def test_it_survives_a_dump_validate_round_trip(self):
+        """daatan persists this inside claims_detail verbatim (daatan#1235/#1645)."""
+        pred = self._pred(voice={"kind": "quoted_person", "attributed_to": "Minister X"})
+        assert PredictionExtraction.model_validate(pred.model_dump()).voice == pred.voice
+
+    def test_it_does_not_pay_for_a_docstring(self):
+        """Pydantic copies a model docstring into the JSON schema description, and
+        that schema IS the tool definition sent on every call (retro#700).
+        `Voice` keeps its rationale in `#` comments above the class, like
+        `Quantity`."""
+        assert Voice.model_json_schema().get("description", "") == ""
+
+    def test_the_llm_schema_offers_exactly_five_kinds(self):
+        schema = PredictionExtraction.model_json_schema()
+        assert "voice" in schema["properties"]
+        assert set(schema["$defs"]["Voice"]["properties"]["kind"]["enum"]) == {
+            "byline", "quoted_person", "institution", "wire", "unattributed",
+        }

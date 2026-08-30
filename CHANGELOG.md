@@ -19,6 +19,10 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-08-30
+
+First release under the generation scheme (retro#742): `0.4.1` → `1.4.0`, same engine. `pipeline/pyproject.toml` moves `0.1.0` → `1.4.0` too — one product.
+
 ### Added
 - Batch lane: every vault extraction JSON (done and gate_rejected/no_predictions markers) now carries `oracle_version` + `git_sha` of the running pipeline tree (retro#744) (#747)
 - CHANGELOG, `release.yml` (tag → GitHub release) and the changelog-touched PR check (retro#743)
@@ -83,7 +87,8 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [0.1.0] — 2026-04-14
 - feat: Oracle API — FastAPI prediction service skeleton (#25)
 
-[Unreleased]: https://github.com/Daatan/retro/compare/924538f3e...HEAD
+[Unreleased]: https://github.com/Daatan/retro/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/Daatan/retro/compare/924538f3e...v1.4.0
 [0.4.1]: https://github.com/Daatan/retro/compare/302648267...924538f3e
 [0.4.0]: https://github.com/Daatan/retro/compare/c02ff7aca...302648267
 [0.3.2]: https://github.com/Daatan/retro/compare/acfcb26e3...c02ff7aca

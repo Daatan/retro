@@ -39,6 +39,7 @@ from forecast_api.models import (
     ForecastRequest,
     PoolAggregateRequest,
     PoolSourceInput,
+    SourceSignal,
 )
 from tm.models import ExtractionOutput, GatekeeperOutput, PredictionExtraction
 
@@ -982,7 +983,143 @@ def test_the_provenance_schema_version_is_pinned():
     has to be deliberate — schema_version is what daatan gates on."""
     from forecast_api.models import PROVENANCE_SCHEMA_VERSION
 
-    assert PROVENANCE_SCHEMA_VERSION == "1.4"
+    assert PROVENANCE_SCHEMA_VERSION == "1.5"
+
+
+class TestClaimDecompositionThreading:
+    """`claim_actor` / `claim_predicate` / `claim_scope` through the live path
+    (Oracle 1.5 Phase 1, retro#697).
+
+    Unlike every other shadow field on SourceSignal, these are not properties of
+    the source at all — they decompose the QUESTION's event, which `PROMPT_PREFIX`
+    § MATCH THE EVENT has required the model to do since v1 without ever giving it
+    a field to answer in. So the value of an end-to-end test here is the same as
+    for `consensus_view` and larger: nothing reads them, so nothing would notice
+    them arriving None, and the projection is the step that silently drops a field
+    (retro#566).
+    """
+
+    async def _decomposed(self, monkeypatch, question, **fields):
+        async def fake_extract(**kwargs):
+            return (
+                ExtractionOutput(predictions=[_claim(claim="A")], **fields),
+                {"total_tokens": 0},
+            )
+
+        _patch(monkeypatch, [_claim(claim="A")])
+        monkeypatch.setattr(forecaster, "extract_predictions", fake_extract)
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question=question,
+            articles=[ArticleInput(
+                url="https://fixture.example.test/a1",
+                title="Vellum sonata dispatch",
+                snippet="Fixture snippet, long enough to be usable by the pipeline.",
+                source="fixture",
+                published_date="2026-07-28",
+                text=_BODY,
+            )],
+        ))
+        return resp.sources[0]
+
+    async def test_all_three_reach_the_source_signal(self, monkeypatch):
+        source = await self._decomposed(
+            monkeypatch, "[P1-cd] Will the event occur?",
+            claim_actor={"name": "Party Y", "type": "party"},
+            claim_predicate="withdraws from the parliamentary race",
+            claim_scope="at least one party, before the election",
+        )
+        assert source.claim_actor is not None
+        assert source.claim_actor.name == "Party Y"
+        assert source.claim_actor.type == "party"
+        assert source.claim_predicate == "withdraws from the parliamentary race"
+        assert source.claim_scope == "at least one party, before the election"
+
+    async def test_they_do_not_displace_their_neighbours(self, monkeypatch):
+        """Six article/question-level fields now ride the same outcome, adjacent
+        to each other, so a positional slip would still populate every one of them
+        and still look right in review — the failure `consensus_view` was given
+        the same test for. Values that cannot be mistaken for one another are what
+        makes it detectable: the two strings are distinct, and neither is a
+        `consensus_view` member.
+        """
+        source = await self._decomposed(
+            monkeypatch, "[P1-cd-order] Will the event occur?",
+            author_lean=0.8,
+            author_lean_certainty=0.45,
+            consensus_view="expects_no",
+            claim_actor={"name": "Airline A", "type": "company"},
+            claim_predicate="operates daily departures from Hub H",
+            claim_scope="more than 250 a day, by the deadline",
+        )
+        assert source.author_lean == 0.8
+        assert source.author_lean_certainty == 0.45
+        assert source.consensus_view == "expects_no"
+        assert source.claim_actor.name == "Airline A"
+        assert source.claim_predicate == "operates daily departures from Hub H"
+        assert source.claim_scope == "more than 250 a day, by the deadline"
+
+    async def test_an_unanswered_decomposition_rolls_up_to_none(self, monkeypatch):
+        """The prompt asks for all three on every call, so None here means the
+        model did not answer — which is the number the fill rate measures. A
+        default would make the field read as filled on exactly the calls where it
+        was not.
+        """
+        source = await _one_source(
+            monkeypatch, [_claim(claim="A")], "[P1-cd-null] Will the event occur?"
+        )
+        assert source.claim_actor is None
+        assert source.claim_predicate is None
+        assert source.claim_scope is None
+
+    async def test_a_malformed_actor_does_not_drop_the_article(self, monkeypatch):
+        """The drop guard's whole purpose, tested through the live path rather
+        than on the model in isolation: `complete_structured` runs instructor with
+        `max_retries=1`, so a bare string where the object belongs would raise out
+        of ExtractionOutput and cost a real article. The claim must still arrive;
+        only the malformed field is nulled.
+        """
+        async def fake_extract(**kwargs):
+            return (
+                ExtractionOutput.model_validate({
+                    "predictions": [_claim(claim="A").model_dump()],
+                    "claim_actor": "Party Y",
+                    "claim_predicate": "withdraws from the race",
+                }),
+                {"total_tokens": 0},
+            )
+
+        _patch(monkeypatch, [_claim(claim="A")])
+        monkeypatch.setattr(forecaster, "extract_predictions", fake_extract)
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="[P1-cd-malformed] Will the event occur?",
+            articles=[ArticleInput(
+                url="https://fixture.example.test/a1",
+                title="Vellum sonata dispatch",
+                snippet="Fixture snippet, long enough to be usable by the pipeline.",
+                source="fixture",
+                published_date="2026-07-28",
+                text=_BODY,
+            )],
+        ))
+        assert len(resp.sources) == 1                       # the article survived
+        assert resp.sources[0].claims_detail                # and so did its claim
+        assert resp.sources[0].claim_actor is None          # only the bad field went
+        assert resp.sources[0].claim_predicate == "withdraws from the race"
+
+    def test_they_are_question_level_and_get_no_claim_layer_copy(self):
+        """The asymmetry against `tone`/`voice`, pinned so it is not read as an
+        oversight. Those are per-claim with an article-level rollup because they
+        are properties of a quote. These three describe the RELATED EVENT, which
+        is identical for every claim in the article and every article in the
+        forecast — a per-claim copy would be N identical strings billed on every
+        claim, and `settlement_semantic.ClaimSubject`, the consumer, wants exactly
+        one per question.
+        """
+        assert "claim_actor" in SourceSignal.model_fields
+        assert "claim_predicate" in SourceSignal.model_fields
+        assert "claim_scope" in SourceSignal.model_fields
+        for field in ("claim_actor", "claim_predicate", "claim_scope"):
+            assert field not in ClaimDetail.model_fields
 
 
 class TestReportKindAndConsensusViewThreading:

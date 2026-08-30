@@ -259,6 +259,24 @@ class Voice(BaseModel):
     attributed_to: Optional[str] = Field(default=None, description="The person, body or agency named, in the article's own words (\"Reuters\", \"the Bank of Israel\"). None for `byline` and `unattributed`, where there is no separate voice to name — and the extractor is asked to omit it there, so a value alongside those kinds is a model slip, not a signal")
 
 
+class ClaimActor(BaseModel):
+    """The WHO of the question's own event (retro#697).
+
+    Not a property of the article: this and its two siblings on SourceSignal
+    decompose the RELATED EVENT the extractor was given, so two articles about
+    the same question should answer identically. They are carried per-source
+    anyway, because "should" is the thing worth measuring.
+
+    Its consumer is `settlement_semantic.ClaimSubject`, which today derives the
+    same information by regex over the question text and labels every number it
+    produces a lower bound for exactly that reason.
+
+    EXPERIMENTAL shadow — persisted, read by nothing.
+    """
+    name: str = Field(description="The subject of the related event, in the event's own words (\"Likud\", \"Turkey\", \"Minister X\") — the party the event is ABOUT, not everyone it touches")
+    type: Literal["person", "party", "company", "country", "institution", "other"] = Field(description="What kind of subject that is. The discriminating half: MATCH THE EVENT's first adjacency rule is stated in terms of type — a member when the event is about the party, an official when it is about the government — so a free-text type would leave that comparison uncodable, which is the whole reason the field is elicited rather than left as internal reasoning")
+
+
 class ClaimDetail(BaseModel):
     """One extracted claim, as the claim-level layer the article's fused
     scalars are reduced FROM (F1/F15, retro#364).
@@ -398,6 +416,9 @@ class SourceSignal(BaseModel):
     author_lean: Optional[float] = Field(default=None, description="The BYLINE author's OWN directional forecast of the event (retro #308/#309) [-1, 1]: +1 the author expects it to happen, -1 they expect it will NOT, 0 they weigh both sides. None when the author only reports facts or relays others' views. Deliberately SEPARATE from `stance`/the estimate — carried here only so daatan can score author accuracy later; nothing in aggregation reads it.")
     author_lean_certainty: Optional[float] = Field(default=None, description="How firmly the byline author commits to `author_lean` [0, 1] (0 = heavily hedged, 1 = emphatic). None when `author_lean` is None. Scoring lane only — not used in the estimate.")
     consensus_view: Optional[Literal["expects_yes", "expects_no", "divided"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#686) — what THIS ARTICLE reports that most others expect for the event, as elicited. Article-level, which is why it sits here beside `author_lean` rather than on ClaimDetail: `author_lean` is what the byline thinks, this is what the byline says everyone else thinks. Consumer is Phase 3 S2's shared-information detector — the GAP between a source's stated consensus and the pool is the shared component (Palley & Satopää 2023). Nothing reads it yet.")
+    claim_actor: Optional[ClaimActor] = Field(default=None, description="EXPERIMENTAL shadow (retro#697) — the WHO of the QUESTION's event as this extraction decomposed it, {name, type}. Question-level, not article-level: MATCH THE EVENT has required this decomposition since v1 and never had a field to put it in, so the reasoning was demanded, discarded and unverifiable. Carried per-source so that disagreement between two articles about the same question is visible rather than assumed away. None when the extractor did not answer.")
+    claim_predicate: Optional[str] = Field(default=None, description="EXPERIMENTAL shadow (retro#697) — the WHAT: the exact action or outcome the question's event requires, as a short verb phrase. With `claim_actor` and `claim_scope` this is the claim-side dyad that `enforce_winner_entity_consistency` and `settlement_semantic.gate_predicate_echo` currently have to reconstruct by regex. None when the extractor did not answer.")
+    claim_scope: Optional[str] = Field(default=None, description="EXPERIMENTAL shadow (retro#697) — the WITHIN WHAT SCOPE: the question's threshold, deadline and arena in one short phrase. The third of the three tests MATCH THE EVENT requires a reported fact to pass; a near-miss on scope alone (a primary for a general election, a qualifier for a final) is the adjacency class the settlement pins keep falling into. None when the extractor did not answer.")
     fact_signal: Optional[float] = Field(default=None, description="EXPERIMENTAL shadow (Phase 2, author-scoring redesign) — the fact-lane counterpart of `stance`: what the REPORTED FACTS alone imply about the event [-1, 1], un-fused from author assertion/framing. Claim-weighted MEAN over this article's fact-bearing claims — the SAME reduction as `stance` (over the same scored claims), so the offline fact-lane backtest compares mean-to-mean. None when no scored claim carried a fact_signal (e.g. pure opinion). Nothing in aggregation reads it yet — carried only for daatan persistence + the offline backtest.")
     fact_signal_absent_reason: Optional[Literal["no_fact_found", "contrary_below_anchor", "opinion"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#471/#481) — why `fact_signal` is null at the article level: the most common per-claim reason among this article's scored claims (no_fact_found / contrary_below_anchor / opinion), falling back to the single claim's own reason when there's no ambiguity to break. None when `fact_signal` is present.")
     event_actors: Optional[str] = Field(default=None, description="EXPERIMENTAL shadow — WHO acts in the fact behind `fact_signal`, from this article's DOMINANT (max |fact_signal|) claim; for the estimator's actor-pair (dyad) check against the claim's subject. None when `fact_signal` is None.")
@@ -544,7 +565,13 @@ class FetchUrlResponse(BaseModel):
 # {kind, attributed_to}, and SourceSignal the dominant claim's of each. Additive and
 # shadow, so a minor bump; a caller wanting either gates on >= 1.4. Bumped in the same
 # PR that adds the fields, unlike retro#686 — see the note on 1.3 above.
-PROVENANCE_SCHEMA_VERSION = "1.4"
+# 1.5 (Oracle 1.5 Phase 1, retro#697): SourceSignal carries `claim_actor` {name, type},
+# `claim_predicate` and `claim_scope` — the extractor's decomposition of the QUESTION's
+# event, not the article's. The first fields on SourceSignal that are not a property of the
+# source at all, which is why they sit beside `consensus_view` rather than on ClaimDetail:
+# there is nothing per-claim about them. Additive and shadow, so a minor bump; a caller
+# wanting any of the three gates on >= 1.5.
+PROVENANCE_SCHEMA_VERSION = "1.5"
 
 
 class ProvenanceOracle(BaseModel):

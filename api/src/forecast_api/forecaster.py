@@ -15,7 +15,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, Optional, Sequence
+from typing import Callable, NamedTuple, Optional, Sequence
 from urllib.parse import urlparse
 
 import httpx
@@ -58,7 +58,12 @@ from tm.extractor import (
     _SHORT_FORM_OVERRIDE as _EXTRACTOR_SHORT_FORM_BLOCK,
     _LANGUAGE_HINT as _EXTRACTOR_LANGUAGE_HINT_BLOCK,
 )
-from tm.models import ExtractionOutput, GatekeeperOutput, PredictionExtraction
+from tm.models import (
+    ClaimActor as ElicitedClaimActor,
+    ExtractionOutput,
+    GatekeeperOutput,
+    PredictionExtraction,
+)
 from tm.web_search import NEWS_INDEXER_API_KEY, NEWS_INDEXER_URL, SearchResult, search_capturing
 from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once_with_usage, rendered_response_schema
@@ -86,7 +91,7 @@ EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 # human-readable label only, see docs/PROMPT_VERSIONS.md. The *_HASH is computed from the
 # actual prompt text above, so it stays correct even if a version bump is forgotten.
 GATEKEEPER_PROMPT_VERSION = "v1"
-EXTRACTOR_PROMPT_VERSION = "v10"
+EXTRACTOR_PROMPT_VERSION = "v11"
 GATEKEEPER_PROMPT_HASH = hashlib.sha256(GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
 EXTRACTOR_PROMPT_HASH = hashlib.sha256(EXTRACTOR_PROMPT.encode()).hexdigest()[:16]
 
@@ -1214,6 +1219,29 @@ def _truncate_article(text: str, max_chars: int) -> str:
     return text[:max_chars]
 
 
+# What one article contributes to the estimate, plus the article- and question-level fields
+# that ride alongside it without entering aggregation. A NamedTuple rather than a bare tuple
+# since retro#697: this was six positional elements and adding the WHO/WHAT/SCOPE trio would
+# have made it nine, at which point `outcome[6]` stops being reviewable. Unpacking stays
+# positional, so every existing call site reads unchanged.
+class ArticleOutcome(NamedTuple):
+    result: SearchResult
+    relevance: float
+    predictions: list
+    author_lean: float | None
+    author_lean_certainty: float | None
+    consensus_view: str | None
+    # retro#697 — the extractor's decomposition of the RELATED EVENT. Question-level, so
+    # identical across every article in one forecast IF the extractor is consistent; carried
+    # per-source precisely so that "if" is measurable rather than assumed.
+    # The ELICITED object, not the wire one — `SourceSignal.claim_actor` is a separate
+    # class in this module's own models, exactly as `voice` is, and the projection
+    # below dumps across the boundary rather than passing the instance through.
+    claim_actor: ElicitedClaimActor | None
+    claim_predicate: str | None
+    claim_scope: str | None
+
+
 async def _process_article_bounded(
     result: SearchResult,
     question: str,
@@ -1231,7 +1259,7 @@ async def _process_article_bounded(
     is_single_article: bool = False,
     cache_coordinator: CacheWriteCoordinator | None = None,
     extractor_model: str | None = None,
-) -> tuple[SearchResult, float, list, float | None, float | None, str | None] | None:
+) -> ArticleOutcome | None:
     """Run _process_article under a per-article wall-clock ceiling.
 
     Articles are processed in parallel, so one slow LLM call would otherwise
@@ -1310,7 +1338,7 @@ async def _process_article(
     is_single_article: bool = False,
     cache_coordinator: CacheWriteCoordinator | None = None,
     extractor_model: str | None = None,
-) -> tuple[SearchResult, float, list, float | None, float | None, str | None] | None:
+) -> ArticleOutcome | None:
     """
     Run gatekeeper + extractor for one article.
     Fetches full article text via trafilatura; falls back to title+snippet.
@@ -1701,13 +1729,19 @@ async def _process_article(
     # lane, kept entirely OUT of the estimate (never merged into stance/predictions).
     # consensus_view (retro#686) rides here for the same reason and under the same
     # rule: it is article-level, not per-claim, and nothing in aggregation reads it.
-    return (
+    # claim_actor/claim_predicate/claim_scope (retro#697) ride under that rule too, one step
+    # further out — they describe the QUESTION, not this article, and exist so the
+    # decomposition MATCH THE EVENT already demands becomes checkable instead of internal.
+    return ArticleOutcome(
         result,
         gate.relevance_score,
         extraction.predictions,
         extraction.author_lean,
         extraction.author_lean_certainty,
         extraction.consensus_view,
+        extraction.claim_actor,
+        extraction.claim_predicate,
+        extraction.claim_scope,
     )
 
 
@@ -2189,7 +2223,8 @@ async def _run_forecast_inner(
             continue
         if outcome is None:
             continue
-        _, relevance, predictions, author_lean, author_lean_certainty, consensus_view = outcome
+        _, relevance, predictions, author_lean, author_lean_certainty, consensus_view, \
+            claim_actor, claim_predicate, claim_scope = outcome
         for p in predictions:
             if p.evidence_class is not None:
                 evidence_class_counts[p.evidence_class] = evidence_class_counts.get(p.evidence_class, 0) + 1
@@ -2320,6 +2355,9 @@ async def _run_forecast_inner(
             author_lean=author_lean,
             author_lean_certainty=author_lean_certainty,
             consensus_view=consensus_view,
+            claim_actor=claim_actor.model_dump() if claim_actor is not None else None,
+            claim_predicate=claim_predicate,
+            claim_scope=claim_scope,
             fact_signal=round(reduction.fact_signal, 3) if reduction.fact_signal is not None else None,
             event_actors=reduction.event_actors,
             event_target=reduction.event_target,

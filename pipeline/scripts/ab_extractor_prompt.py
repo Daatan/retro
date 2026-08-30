@@ -86,7 +86,21 @@ def _git_commit() -> str:
 # at all about the article-level elicited fields — you could add one, ship it, and have
 # no way to ask this harness whether the model ever filled it. `author_lean` had been
 # invisible here since it landed. Recorded per run, beside the predictions.
-_ARTICLE_FIELDS = ("author_lean", "author_lean_certainty", "consensus_view")
+_ARTICLE_FIELDS = (
+    "author_lean", "author_lean_certainty", "consensus_view",
+    # retro#697. QUESTION-level rather than article-level, which is why they get the
+    # extra consistency line below: `author_lean` may legitimately differ between two
+    # articles, this decomposition may not — it is of the event, and the event is the
+    # same one every run was handed.
+    "claim_actor", "claim_predicate", "claim_scope",
+)
+
+
+def _article_value(out, field):
+    """One article-level field, JSON-safe. `claim_actor` is a nested model, and the
+    results file has to survive `json.dumps` — everything else here is a scalar."""
+    value = getattr(out, field, None)
+    return value.model_dump() if hasattr(value, "model_dump") else value
 
 
 async def _run_case(
@@ -119,7 +133,7 @@ async def _run_case(
             print(f"    [{case.id}] EXCEPTION: {type(exc).__name__}: {exc}")
             continue
         runs_out.append([p.model_dump() for p in out.predictions])
-        article_out.append({f: getattr(out, f, None) for f in _ARTICLE_FIELDS})
+        article_out.append({f: _article_value(out, f) for f in _ARTICLE_FIELDS})
         usage_out.append(dict(usage or {}))
     return runs_out, article_out, usage_out
 
@@ -167,9 +181,18 @@ async def _cmd_run(args: argparse.Namespace) -> None:
         for f in _ARTICLE_FIELDS:
             vals = [a[f] for a in all_article if a[f] is not None]
             share = f"{100 * len(vals) / len(all_article):.0f}%"
-            counts = Counter(v for v in vals if isinstance(v, str))
-            detail = "  " + ", ".join(f"{k}={n}" for k, n in counts.most_common()) if counts else ""
+            # A nested field's distribution lives on its discriminating key, not on the
+            # whole object: `claim_actor` is {name, type} and it is `type` that carries
+            # the kill criterion, exactly as `kind` does for `voice`.
+            flat = [v.get("type") or v.get("kind") if isinstance(v, dict) else v for v in vals]
+            counts = Counter(v for v in flat if isinstance(v, str))
+            # Free text would print one singleton per case and say nothing. Suppress the
+            # roll-call and report the property that actually matters for these two.
+            noisy = len(counts) > len(all_article) / 3
+            detail = "" if noisy or not counts else "  " + ", ".join(
+                f"{k}={n}" for k, n in counts.most_common())
             print(f"  {f:<24} {len(vals):>3}/{len(all_article)} ({share:>4}){detail}")
+        _print_decomposition_consistency(article)
     _print_quantity_report(cases, results, arm=args.label)
 
     total_tokens = sum(u.get("total_tokens", 0) for runs_ in usage.values() for u in runs_)
@@ -272,6 +295,44 @@ def _case_asdict(case: Case) -> dict:
         # question after the fact, which is the same blindness _ARTICLE_FIELDS fixed.
         "question_threshold": case.question_threshold, "expect_quantity": case.expect_quantity,
     }
+
+
+def _print_decomposition_consistency(article: dict) -> None:
+    """How often the SAME question got the SAME decomposition across its runs.
+
+    The fill rate cannot answer this and it is the field's whole premise: WHO/WHAT/
+    SCOPE describe the RELATED EVENT, so every run of one case was handed the same
+    event and must answer the same way. A field that fills at 100% while answering
+    differently on every run is not a decomposition, it is a paraphrase generator —
+    and its consumer (`settlement_semantic.ClaimSubject`) would be comparing the
+    article against a different subject each time.
+
+    Reported as distinct answers per case, lower is better and 1.0 is perfect. Free
+    text is normalised on case and surrounding whitespace only: two genuinely
+    different phrasings SHOULD count as two, since a downstream echo-match would
+    treat them as two.
+    """
+    fields = ("claim_actor", "claim_predicate", "claim_scope")
+    rows = []
+    for f in fields:
+        per_case = []
+        for runs_ in article.values():
+            vals = [a[f] for a in runs_ if a[f] is not None]
+            if not vals:
+                continue
+            norm = {
+                (v.get("name", ""), v.get("type", "")) if isinstance(v, dict)
+                else str(v).strip().lower()
+                for v in vals
+            }
+            per_case.append(len(norm))
+        if per_case:
+            rows.append((f, sum(per_case) / len(per_case), max(per_case), len(per_case)))
+    if not rows:
+        return
+    print("\nDecomposition consistency (distinct answers per case, 1.0 = identical every run):")
+    for f, mean, worst, n in rows:
+        print(f"  {f:<24} mean {mean:.2f}   worst {worst}   over {n} case(s)")
 
 
 def _load_results(path: str) -> tuple[dict, dict[str, list[list[PredictionExtraction]]]]:

@@ -67,6 +67,7 @@ def _install_stubs(monkeypatch, article_to_predictions: dict):
         return SimpleNamespace(
             predictions=preds, author_lean=None, author_lean_certainty=None,
             consensus_view=None,
+            claim_actor=None, claim_predicate=None, claim_scope=None,
         ), {}
 
     monkeypatch.setattr(forecaster, "check_is_prediction", gk)

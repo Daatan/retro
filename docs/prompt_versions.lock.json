@@ -8,10 +8,10 @@
     "schema_chars": 1178
   },
   "extractor": {
-    "version": "v10",
-    "hash": "f4c9cbe799f4c93f",
-    "schema_hash": "630f1496a8a9586d",
-    "schema_chars": 25950
+    "version": "v11",
+    "hash": "0c56ccd03d50132f",
+    "schema_hash": "815be8f0619a7fe3",
+    "schema_chars": 28022
   },
   "tail_blocks": {
     "extractor.conditional": {

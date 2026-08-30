@@ -2476,3 +2476,39 @@ escalation, and the 18.8% collapse rate says they are not needed yet. The date i
 **slice, not parse**: `published_date` is free text that holds non-ISO junk, and an
 exception inside the clusterer would fail a `/forecast` request over a reporting-only
 measurement.
+
+## 2026-08-30 — WHO/WHAT/SCOPE decomposition as extractor input, off by default (retro#758)
+
+retro#697 tried emitting the MATCH THE EVENT step's own WHO/WHAT/SCOPE
+decomposition as an extractor *output* field and it moved no pins
+(`docs/SETTLED_DECISION_AB.md`) — asking the model to narrate its reasoning
+after the fact didn't change the reasoning. retro#758 tried the opposite
+direction: the same decomposition, computed once per question by a
+side-call, appended to the RELATED EVENT description the extractor already
+reads as *input*. On the deadline/denial regression sentinel (Nova Lite, 15
+runs), that moved 11/15 → 15/15 with **zero prompt or schema change** — the
+decomposition is data appended to `event_description`, not an edit to
+`PROMPT_PREFIX`/`PROMPT_SUFFIX`.
+
+**Off by default**, gated by `settings.inject_event_decomposition`
+(`api/src/forecast_api/config.py`) — same knob shape as
+`threshold_extractor_model` (`pipeline/src/tm/config.py`): exists, ships off,
+one line to enable. When on, `_run_forecast_inner` calls
+`event_decomposition.decompose_event` once per `/forecast` request (not per
+article), cached by `hash(question, resolution_criteria, model)` in
+`event_decomposition_store.py` — the same `diskcache` shape as
+`settlement_verdict_store.py` (retro#532), fail-open on every error path so a
+broken cache or an unreachable model degrades to "no decomposition appended",
+byte-identical to before this existed.
+
+**Why it ships off rather than on.** The sentinel result is one case; retro#758's
+own proposal calls for measuring adjacency on the retro#691 387-pair labelled
+set (`docs/SETTLED_DECISION_AB.md`) before wider rollout — that is the number
+retro#697 could not produce, and it is the actual acceptance test for this
+mechanism. The `--candidates`/`--labels` artifacts `scripts/ab_settled_decision.py`
+needs are not checked into the repo (they were generated ad hoc against prod
+data by the session that ran retro#691/#697's measurements and not persisted),
+so regenerating them is a prerequisite for that measurement, not something this
+PR could do from the checkout alone. Enable the flag against a tmp cache path
+and rerun `ab_settled_decision.py` with candidates/labels regenerated before
+considering this shipped.

@@ -207,6 +207,31 @@ def _drop_out_of_enum(data: Any, key: str, allowed: frozenset[str]) -> Any:
 
 
 _REPORT_KIND_VALUES = frozenset({"level", "change"})
+# MEASURED ON v10, BOTH RATERS — READ THIS BEFORE GIVING `tone` A CONSUMER.
+#
+# The two raters split completely, the same way they split on `quantity` (retro#683):
+#
+#   Haiku 4.5 (live Oracle)  fill 315/315. neutral 84%, approve 10%, alarm 6%.
+#                            6.3% of predictions are DISCORDANT (alarm at stance > 0, or
+#                            approve at stance < 0) — the pair the field exists to record,
+#                            and it lands precisely on PR#671's trap class: on
+#                            `threshold-tone-negative-number-satisfies` ("support collapsed
+#                            to just 35 percent ... a humiliating fall", where 35 SATISFIES
+#                            the question) it answers tone=alarm, stance +0.2. Evaluation
+#                            and direction, separated, on the case built to conflate them.
+#
+#   Nova Lite (batch)        fill 145/145 and `neutral` on EVERY ONE, including the three
+#                            deliberately tonal cases. That trips the issue's own kill
+#                            criterion (>90% neutral = no information). It is not a flat
+#                            corpus: on those same cases the register shows up in `stance`
+#                            instead (stance -0.5 on an article whose number satisfies the
+#                            question), so this rater READS the tone and writes it on the
+#                            wrong axis — and being handed the right axis did not move it.
+#
+# So `tone` is a Haiku-only field. Any Phase 3 S4 consumer must gate on the RATER, exactly
+# as retro#683 concluded for `quantity`; a batch row's `neutral` means "Nova Lite", not
+# "even-handed". `voice` survives on both (Nova Lite: byline 83%, under the 90% bar; Haiku
+# spreads over all five kinds, max 60%), so it is the half of #684 that is rater-agnostic.
 _TONE_VALUES = frozenset({"approve", "neutral", "alarm"})
 _CONSENSUS_VIEW_VALUES = frozenset({"expects_yes", "expects_no", "divided"})
 

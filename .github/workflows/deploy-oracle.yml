@@ -12,8 +12,12 @@ on:
     paths:
       - api/**
       - pipeline/**
+      - metaculus/**
       - infra/deploy_oracle.sh
       - infra/oracle-api.service
+      - infra/metaculus-sync.service
+      - infra/metaculus-sync.timer
+      - infra/install_metaculus_timer.sh
       - .github/workflows/deploy-oracle.yml
 
   # Manual trigger — useful for redeploying the current main (e.g. after a

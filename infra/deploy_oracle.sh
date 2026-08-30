@@ -48,6 +48,17 @@ log "uv sync --frozen..."
 cd "$API_DIR/api"
 $AS_UBUNTU $UV sync --frozen --quiet
 
+# ── 2a. Re-install the Metaculus sync timer (retro#754) ─────────────────────
+# The fetch+reset above already updated the unit files in the checkout, but a
+# systemd unit file only takes effect once it's copied to /etc/systemd/system
+# and daemon-reload runs — install_metaculus_timer.sh does both and is
+# idempotent (see its own docstring), so it's safe and cheap to re-run on
+# every real deploy rather than only when these specific files changed.
+if [[ -f "$API_DIR/infra/install_metaculus_timer.sh" ]]; then
+  log "re-installing metaculus-sync timer..."
+  sudo bash "$API_DIR/infra/install_metaculus_timer.sh"
+fi
+
 # ── 2b. Write build provenance (read by /version and /health) ─────────────────
 # Generated, environment-specific — not committed (see .gitignore). The runtime
 # git fallback in _build.py covers dev where this file is absent. The semver is

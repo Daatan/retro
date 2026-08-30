@@ -88,17 +88,32 @@ _MAGNITUDE_RE = re.compile("|".join(_MAGNITUDE_PATTERNS), re.IGNORECASE)
 
 # ── comparison / attainment cue ──────────────────────────────────────────────
 # The event turns on the number being crossed, reached or ranked.
-_CUE_RE = re.compile(
+# `between` is here for the two-sided bound ("inflation between 2% and 3%") — the most
+# explicitly numeric question shape there is, and it was the only one missing (retro#748).
+# Years are stripped before this runs, so "between 2020 and 2026" cannot reach it.
+_CUE_SOURCE = (
     r"\b("
     r"exceed(?:s|ed|ing)?|surpass(?:es|ed|ing)?|top(?:s|ped|ping)?|cross(?:es|ed|ing)?"
-    r"|above|below|under|over|beyond"
+    r"|above|below|under|over|beyond|between"
     r"|at\s+least|at\s+most|more\s+than|less\s+than|fewer\s+than|no\s+more\s+than"
     r"|reach(?:es|ed|ing)?|hit(?:s|ting)?|climb(?:s|ed|ing)?|rise(?:s|n)?|ris(?:es|ing)"
     r"|drop(?:s|ped|ping)?|fall(?:s|en|ing)?|declin(?:e|es|ed|ing)|sink(?:s|ing)?"
     r"|raise(?:s|d)?|cut(?:s|ting)?|lower(?:s|ed|ing)?"
-    r")\b",
-    re.IGNORECASE,
+    r")\b"
 )
+_CUE_RE = re.compile(_CUE_SOURCE, re.IGNORECASE)
+
+# A cue with a bare number right behind it is a threshold even when the number carries
+# no unit the magnitude clauses recognise: "wins more than 33 seats", "above 250 daily
+# departures". retro#748 — half the numeric A/B corpus failed the magnitude test on
+# exactly this shape, because a unit NOUN ("seats", "departures") is not a unit symbol.
+#
+# Bound to the cue deliberately, and this is the whole safety argument: a bare-integer
+# magnitude clause would fire on "3 people said", on every "1 of 2" and on most prose.
+# Adjacency is what makes it a threshold rather than a number. The year, ordinal and
+# duration exclusions are stripped first, so "after 3 months" and "in 2026" cannot reach
+# it either. Measured against 229 live prod claims: see the PR.
+_CUE_ADJACENT_MAGNITUDE_RE = re.compile(_CUE_SOURCE + r"\s+(?:the\s+)?\d", re.IGNORECASE)
 # "top 5", "top-10" — rank cues carry their own magnitude, which is a bare integer and
 # so deliberately not in _MAGNITUDE_PATTERNS.
 _RANK_RE = re.compile(r"\btop[\s-]?\d+\b", re.IGNORECASE)
@@ -131,9 +146,10 @@ def is_threshold_shaped(text: Optional[str]) -> bool:
 
     if _RANK_RE.search(stripped):
         return True
-    if not _MAGNITUDE_RE.search(stripped):
-        return False
-    return bool(_CUE_RE.search(stripped) or _OPEN_ENDED_RE.search(stripped))
+    if _MAGNITUDE_RE.search(stripped):
+        return bool(_CUE_RE.search(stripped) or _OPEN_ENDED_RE.search(stripped))
+    # No recognised magnitude — but a cue with a number right behind it is one anyway.
+    return bool(_CUE_ADJACENT_MAGNITUDE_RE.search(stripped))
 
 
 def select_extractor_model(

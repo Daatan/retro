@@ -164,47 +164,28 @@ class TestTheRetro664Corpus:
                 wrong.append((case.id, got, case.expect["stance_sign"]))
         assert not wrong, f"code-side sign disagrees with the labelled stance sign: {wrong}"
 
-    def test_the_archetype_detector_misses_half_this_corpus(self, cases):
-        """A recall gap in retro#688's detector, pinned rather than fixed here.
+    def test_the_archetype_detector_covers_this_whole_corpus(self, cases):
+        """Every event here is decided by a number, so the detector must say so.
 
-        Item 1.6 is scoped to `claim_archetype = threshold` questions, and
-        `tm.archetype.is_threshold_shaped` is the only code in this repo that
-        answers that. Run over the ten events whose whole reason for existing is
-        that a number decides them, it says no to five. Two distinct causes:
+        It did not, until retro#748. Half this corpus failed it for two reasons that
+        have nothing to do with the threshold and everything to do with how the
+        number is written: a unit NOUN is not a unit symbol ("more than 33 seats"),
+        and `between` was missing from the cue set. #683 pinned the miss-set rather
+        than fixing it, because #688's routing ships OFF so the gap cost nothing then;
+        #748 fixed it, because Phase 2 takes the comparison to live traffic and a
+        question the detector cannot see is one the comparison never runs on.
 
-          * **a bare integer with a unit noun is not a magnitude.** "more than 33
-            seats" has the cue and no recognised magnitude — `_MAGNITUDE_PATTERNS`
-            wants a currency, a percent, a scale suffix or grouped thousands, so
-            "33 seats" and "250 daily departures" both fall out.
-          * **"between X and Y" is not a comparison cue.** `_CUE_RE` has exceeds /
-            above / at least / reaches and a dozen more, but not `between`, so
-            "inflation is between 2% and 3%" fails on the cue instead.
-
-        Not fixed in this PR on purpose. retro#688's routing ships OFF and is
-        settled, so the gap costs nothing today; it will cost something at Oracle
-        1.5 Phase 2, when `question_quantity` takes this comparison to live traffic
-        and a question the detector does not recognise is a question the comparison
-        never runs on. Widening the detector is its own change with its own corpus,
-        in a module this lane does not own — so it is recorded here and filed as
-        retro#748, and this test fails the moment the set moves either way. The
-        assertion below is that issue's acceptance criterion: fixing it means this
-        set becomes empty.
+        Kept as a coverage assertion rather than deleted. This corpus is the
+        definition of the shape, so a future edit to `archetype.py` that loses one of
+        these is a regression, and nothing else in the tree would catch it — the
+        detector's own tests are hand-written examples, not this corpus.
         """
         from tm.archetype import is_threshold_shaped
 
         missed = {c.id for c in cases if not is_threshold_shaped(c.event_name)}
-        assert missed == {
-            # "more than 33 seats" — bare integer + unit noun
-            "threshold-strictly-above-satisfied",
-            "threshold-strictly-above-contradicted",
-            "threshold-tone-positive-number-contradicts",
-            # "between 2% and 3%" — magnitude present, no cue
-            "threshold-between-bounds-satisfied",
-            "threshold-between-bounds-contradicted",
-        }, (
-            "the archetype detector's recall over this corpus changed. If it "
-            "improved, delete this test and assert the empty set; if it got worse, "
-            "something regressed."
+        assert missed == set(), (
+            "the archetype detector stopped recognising part of the numeric corpus; "
+            "these are the events it is FOR"
         )
 
     def test_the_corpus_file_still_round_trips(self, cases):

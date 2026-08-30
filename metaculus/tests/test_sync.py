@@ -29,6 +29,34 @@ class TestNeedsForecast:
         question = {"my_forecasts": {"latest": {}}}
         assert needs_forecast(question, STALE_AFTER, NOW) is True
 
+    # The live API returns start_time as a float epoch in SECONDS, not the ISO
+    # strings every fixture above uses. Verified against post 43327 on
+    # 2026-08-30: {'question_id': 43332, 'start_time': 1788083931.233327, ...}.
+    # Before retro#727 the bot had never forecast anything, so `latest` was
+    # always None and no test ever exercised a real payload.
+
+    def test_recent_forecast_as_float_epoch_is_not_stale(self):
+        recent = (NOW - timedelta(hours=1)).timestamp()
+        question = {"my_forecasts": {"latest": {"start_time": recent}}}
+        assert needs_forecast(question, STALE_AFTER, NOW) is False
+
+    def test_old_forecast_as_float_epoch_is_stale(self):
+        old = (NOW - timedelta(hours=48)).timestamp()
+        question = {"my_forecasts": {"latest": {"start_time": old}}}
+        assert needs_forecast(question, STALE_AFTER, NOW) is True
+
+    def test_int_epoch_is_accepted(self):
+        recent = int((NOW - timedelta(hours=1)).timestamp())
+        question = {"my_forecasts": {"latest": {"start_time": recent}}}
+        assert needs_forecast(question, STALE_AFTER, NOW) is False
+
+    def test_undatable_timestamp_skips_rather_than_duplicating(self):
+        # A forecast is on record but we cannot date it. Under the one-forecast
+        # rule (retro#755) a duplicate submission is worse than a missed
+        # refresh, so this must skip — and must not raise.
+        question = {"my_forecasts": {"latest": {"start_time": "not-a-timestamp"}}}
+        assert needs_forecast(question, STALE_AFTER, NOW) is False
+
 
 class TestQuestionText:
     def test_joins_description_criteria_and_fine_print(self):

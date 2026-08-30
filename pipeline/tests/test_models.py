@@ -11,6 +11,7 @@ from tm.models import (
     PredictionType,
     MatrixState,
     CellStatus,
+    Grounds,
     Quantity,
     ReaderConfidence,
     Voice,
@@ -459,7 +460,7 @@ class TestReportKindAndConsensusView:
         # ORDER of the block, and an index-per-field assertion goes on passing while
         # a new field is quietly inserted between two of them.
         assert props[props.index("reader_confidence"):] == [
-            "reader_confidence", "report_kind", "quantity", "tone", "voice",
+            "reader_confidence", "report_kind", "quantity", "tone", "voice", "grounds",
         ]
 
     # --- consensus_view ---
@@ -916,3 +917,101 @@ class TestVoice:
         assert set(schema["$defs"]["Voice"]["properties"]["kind"]["enum"]) == {
             "byline", "quoted_person", "institution", "wire", "unattributed",
         }
+
+
+class TestGrounds:
+    """`grounds` {kind, basis} — what the position rests on (Oracle 1.5 Phase 1,
+    retro#763, unparked from retro#673 §1).
+
+    The pool counts articles where it means to count reasons. What these pin is
+    the same boundary `Voice` has: the closed pick survives a partial answer, a
+    malformed answer costs the field and never the claim, and the field is a
+    separate axis from `evidence_class` rather than an extension of it.
+    """
+
+    KINDS = (
+        "observed_milestone", "official_statement", "market_or_poll_figure",
+        "analyst_inference", "precedent_or_base_rate", "authors_judgement",
+    )
+
+    @staticmethod
+    def _pred(**over):
+        base = dict(quote="q", claim="c", stance=0.4, claim_strength=0.65)
+        return PredictionExtraction(**{**base, **over})
+
+    @pytest.mark.parametrize("kind", KINDS)
+    def test_every_kind_lands(self, kind):
+        assert self._pred(grounds={"kind": kind}).grounds.kind == kind
+
+    def test_the_basis_rides_with_the_kind(self):
+        pred = self._pred(grounds={"kind": "official_statement",
+                                   "basis": "the ministry's 12 March statement"})
+        assert (pred.grounds.kind, pred.grounds.basis) == (
+            "official_statement", "the ministry's 12 March statement")
+
+    def test_it_defaults_to_none(self):
+        """Every row extracted before v12 has none, and the prompt asks for it on
+        every prediction, so on a v12 row None means the model did not answer."""
+        assert self._pred().grounds is None
+
+    def test_a_kind_without_a_basis_is_kept(self):
+        """`basis` is optional on purpose: the pick is what the n_eff is taken
+        over, and a model that answers it and skips the phrase has answered the
+        question the consumer asks first. Requiring the phrase would hand the drop
+        guard a raise and null the pick with it."""
+        assert self._pred(grounds={"kind": "authors_judgement"}).grounds.basis is None
+
+    def test_it_is_a_separate_axis_from_evidence_class(self):
+        """The issue's own rule: class is the ROUTE the information took, grounds
+        is WHAT WAS SEEN. A columnist reasoning from a poll is `opinion` by class
+        and `market_or_poll_figure` by grounds, and the schema must let the two
+        vary independently — a field that merely re-labelled `evidence_class`
+        would fill at 100% and carry nothing."""
+        pred = self._pred(evidence_class="opinion",
+                          grounds={"kind": "market_or_poll_figure", "basis": "the 41% Ipsos figure"})
+        assert pred.evidence_class == "opinion"
+        assert pred.grounds.kind == "market_or_poll_figure"
+
+    @pytest.mark.parametrize("bad", [
+        {},                                        # no kind
+        {"basis": "the ministry said so"},         # the phrase without the pick
+        {"kind": "rumour"},                        # not an enum member
+        {"kind": "Official_Statement"},            # right member, wrong case
+        "the ministry said so",                    # the bare string, not the object
+        ["official_statement", "the ministry"],
+    ])
+    def test_a_malformed_answer_is_dropped_and_the_prediction_survives(self, bad, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="tm.models"):
+            pred = self._pred(grounds=bad)
+        assert pred.grounds is None
+        assert pred.claim_strength == 0.65, "the rest of the prediction must be untouched"
+        assert "event=grounds_malformed" in caplog.text, (
+            "a silent drop would make 'answered badly' look like 'did not answer'"
+        )
+
+    def test_a_double_serialized_object_is_parsed(self):
+        """retro#306: some models emit a nested object as a JSON string."""
+        pred = self._pred(grounds='{"kind": "precedent_or_base_rate", "basis": "no incumbent has lost since 1992"}')
+        assert pred.grounds == Grounds(kind="precedent_or_base_rate",
+                                       basis="no incumbent has lost since 1992")
+
+    def test_constructing_it_directly_still_raises(self):
+        with pytest.raises(ValidationError):
+            Grounds(basis="the ministry said so")
+        with pytest.raises(ValidationError):
+            Grounds(kind="rumour")
+
+    def test_it_survives_a_dump_validate_round_trip(self):
+        pred = self._pred(grounds={"kind": "observed_milestone", "basis": "the line opened on 3 May"})
+        assert PredictionExtraction.model_validate(pred.model_dump()).grounds == pred.grounds
+
+    def test_it_does_not_pay_for_a_docstring(self):
+        """retro#700: a model docstring lands in the schema billed on every call."""
+        assert Grounds.model_json_schema().get("description", "") == ""
+
+    def test_the_llm_schema_offers_exactly_six_kinds(self):
+        schema = PredictionExtraction.model_json_schema()
+        assert "grounds" in schema["properties"]
+        assert set(schema["$defs"]["Grounds"]["properties"]["kind"]["enum"]) == set(self.KINDS)

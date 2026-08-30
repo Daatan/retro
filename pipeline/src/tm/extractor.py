@@ -825,6 +825,43 @@ Examples — related event: "Regulator R revokes operator O's licence by 31 Marc
   "Officials familiar with the review say revocation is now likely"  \
   →  {"kind": "unattributed"}
 
+## GROUNDS — what the position RESTS ON (EXPERIMENTAL, shadow)
+Two quotes can reach the same stance for the same reason or for different reasons, and the \
+pool needs to know which: three outlets repeating one ministry statement are ONE ground, \
+three outlets citing a milestone, a poll and a precedent are three. Record what the quote \
+bases its position on — not the direction, not the strength, the REASON.
+  kind   — observed_milestone: something that happened — a vote held, a line opened, a \
+figure published as fact
+           official_statement: what a government, court, company or official SAID
+           market_or_poll_figure: a price, odds, forecast-model number or poll result
+           analyst_inference: an expert's or reporter's reasoning from the situation
+           precedent_or_base_rate: how such things have gone before, or usually go
+           authors_judgement: the writer's own view with nothing else behind it
+  basis  — one short phrase naming the fact or reasoning itself, in the article's terms \
+("the ministry's 12 March statement", "the 41% Ipsos figure", "no incumbent has lost \
+since 1992"). Omit only when the article gives nothing to name.
+`grounds` is not `evidence_class`: class is the ROUTE the information took (reported, \
+cited, opinion); grounds is WHAT WAS SEEN at the end of it. A reporter citing a poll is \
+`cited_share` by class and `market_or_poll_figure` by grounds; a columnist reasoning \
+from a poll is `opinion` by class and still `market_or_poll_figure` by grounds. Answer \
+for every quote — a bare assertion with nothing behind it IS `authors_judgement`, not an \
+omission.
+
+Examples — related event: "Regulator R revokes operator O's licence by 31 March 2027":
+  "Inspectors logged 14 safety breaches at the depot last quarter, the regulator said"  \
+  →  {"kind": "observed_milestone", "basis": "14 breaches logged last quarter"}
+  "We will act on the evidence, said Regulator R's chief executive"  \
+  →  {"kind": "official_statement", "basis": "chief executive's pledge to act"}
+  "Markets price a revocation at 70%, according to Exchange E"  \
+  →  {"kind": "market_or_poll_figure", "basis": "Exchange E's 70% price"}
+  "With the review reopened and the chair on record, revocation now looks likely, \
+analyst N said"  \
+  →  {"kind": "analyst_inference", "basis": "reopened review plus chair's stance"}
+  "No regulator has revoked a licence of this size in twenty years"  \
+  →  {"kind": "precedent_or_base_rate", "basis": "no comparable revocation in 20 years"}
+  "The regulator will not dare, whatever it says" (the columnist's own line)  \
+  →  {"kind": "authors_judgement"}
+
 ## Output
 Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certainty \
 signals if they are the only content available.
@@ -906,7 +943,12 @@ never a change to stance; ALWAYS answer, `neutral` included, per the TONE sectio
 And voice — {{"kind": one of byline / quoted_person / institution / wire / unattributed, \
 "attributed_to": string (the name in the article's own words; OMITTED for byline and \
 unattributed)}} — whose assertion the quote is, per the VOICE section. Answer for every \
-prediction.
+prediction. \
+And grounds — {{"kind": one of observed_milestone / official_statement / \
+market_or_poll_figure / analyst_inference / precedent_or_base_rate / authors_judgement, \
+"basis": string (one short phrase naming the fact or reasoning; OMITTED only when nothing \
+can be named)}} — what the quote's position RESTS ON, per the GROUNDS section. Answer for \
+every prediction.
 
 Example — related event: "Assad regime falls in Syria":
 {{
@@ -921,7 +963,8 @@ Example — related event: "Assad regime falls in Syria":
       "reader_confidence": {{"level": "medium", "trap": "inference_needed"}},
       "report_kind": "change",
       "tone": "neutral",
-      "voice": {{"kind": "byline"}}
+      "voice": {{"kind": "byline"}},
+      "grounds": {{"kind": "analyst_inference", "basis": "pace of the rebel advance"}}
     }},
     {{
       "quote": "Rebels seized the capital on Sunday as Assad fled to Moscow",
@@ -939,7 +982,8 @@ Example — related event: "Assad regime falls in Syria":
       "reader_confidence": {{"level": "high"}},
       "report_kind": "change",
       "tone": "neutral",
-      "voice": {{"kind": "byline"}}
+      "voice": {{"kind": "byline"}},
+      "grounds": {{"kind": "observed_milestone", "basis": "capital seized, Assad fled to Moscow"}}
     }}
   ],
   "consensus_view": "expects_yes",
@@ -963,7 +1007,8 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
       "reader_confidence": {{"level": "medium", "trap": "numeric_comparison"}},
       "report_kind": "level",
       "tone": "neutral",
-      "voice": {{"kind": "institution", "attributed_to": "Opta"}}
+      "voice": {{"kind": "institution", "attributed_to": "Opta"}},
+      "grounds": {{"kind": "market_or_poll_figure", "basis": "Opta model's 6% probability"}}
     }}
   ],
   "consensus_view": "expects_no",
@@ -993,7 +1038,8 @@ Example — related event: "Airline A operates more than 250 daily departures fr
       "report_kind": "level",
       "quantity": {{"value": 214, "unit": "daily departures", "comparator": "="}},
       "tone": "neutral",
-      "voice": {{"kind": "byline"}}
+      "voice": {{"kind": "byline"}},
+      "grounds": {{"kind": "observed_milestone", "basis": "214 daily departures reported"}}
     }}
   ],
   "consensus_view": "divided",

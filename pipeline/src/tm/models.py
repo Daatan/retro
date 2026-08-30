@@ -359,6 +359,65 @@ def _drop_malformed_voice(data: Any) -> Any:
     return data
 
 
+# --- Grounds (Oracle 1.5 Phase 1, retro#763, unparked from retro#673 §1) ---
+#
+# What the stance RESTS ON. Three outlets citing the same ministry statement agree on the
+# answer for one reason; three outlets citing a milestone, a poll and a precedent agree for
+# three. The pool cannot tell those apart today, so its n_eff counts articles where it
+# means to count reasons. `kind` is the closed pick the n_eff is taken over; `basis` is the
+# short phrase that lets two `official_statement` rows be recognised as the SAME statement.
+#
+# NOT an `evidence_class` extension — that enum stays flat, permanently. Class is the path
+# the light took (reported / cited / opinion); grounds is what was seen at the far end.
+#
+# No cross-field validator, for `Voice`'s reason: a raise hands the drop guard the whole
+# object and `kind`, the half the n_eff is taken over, goes with it. `basis` is optional
+# for the same reason — a model that answers the pick and skips the phrase has still
+# answered the question the consumer asks first.
+class Grounds(BaseModel):
+    # Billed on every call (schema ~29% of the prompt, retro#700): say WHICH value, not
+    # HOW to find it. The GROUNDS block carries the rule and the worked examples.
+    kind: Literal[
+        "observed_milestone", "official_statement", "market_or_poll_figure",
+        "analyst_inference", "precedent_or_base_rate", "authors_judgement",
+    ] = Field(
+        description="What the quote's position rests on: 'observed_milestone' a thing that "
+                    "happened, 'official_statement' what a body or official said, "
+                    "'market_or_poll_figure' a price, odds or poll number, "
+                    "'analyst_inference' an expert's reasoning, 'precedent_or_base_rate' "
+                    "how such things usually go, 'authors_judgement' the writer's own view.",
+    )
+    basis: Optional[str] = Field(
+        default=None,
+        description="One short phrase naming the fact or reasoning itself, in the "
+                    "article's terms ('the ministry's 12 March statement', 'the Q2 "
+                    "throughput figure'). Omit only when the article gives nothing to name.",
+    )
+
+
+def _drop_malformed_grounds(data: Any) -> Any:
+    """`_drop_malformed_voice` for `grounds` (retro#763) — same trade, same reason.
+
+    `kind` is a closed six-member enum on a required key, so a bare-string answer
+    ("the ministry said so") or an out-of-set kind would raise out of
+    `ExtractionOutput` under instructor's `max_retries=1` and drop a real article
+    from a real forecast. Nulling the field keeps the claim. Logged, not silent,
+    so that "answered badly" stays distinguishable from "did not answer" — the one
+    distinction a fill rate has to draw. Grep `event=grounds_malformed`.
+    """
+    if not isinstance(data, dict):
+        return data
+    raw = data.get("grounds")
+    if raw is None:
+        return data
+    try:
+        Grounds.model_validate(raw)
+    except (_ValidationError, TypeError, ValueError):
+        logger.warning("event=grounds_malformed value=%r", raw)
+        return {**data, "grounds": None}
+    return data
+
+
 def _drop_malformed_quantity(data: Any) -> Any:
     """The nested-object version of `_drop_out_of_enum`, for retro#683.
 
@@ -697,6 +756,13 @@ class PredictionExtraction(BaseModel):
                     "({kind, attributed_to}): the author's own, a named person's, an "
                     "institution's, a wire agency's, or nobody's. See VOICE.",
     )
+    grounds: Optional[Grounds] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow (retro#763) — what this quote's position RESTS "
+                    "ON ({kind, basis}): a milestone, a statement, a figure, an inference, "
+                    "a precedent, or the writer's own judgement, plus the phrase naming "
+                    "it. See GROUNDS. Answer for every prediction.",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -704,9 +770,11 @@ class PredictionExtraction(BaseModel):
         data = _coerce_nested_json_string(_unwrap_properties_envelope(data), "reader_confidence")
         data = _coerce_nested_json_string(data, "quantity")
         data = _coerce_nested_json_string(data, "voice")
+        data = _coerce_nested_json_string(data, "grounds")
         data = _drop_malformed_reader_confidence(data)
         data = _drop_malformed_quantity(data)
         data = _drop_malformed_voice(data)
+        data = _drop_malformed_grounds(data)
         data = _drop_out_of_enum(data, "tone", _TONE_VALUES)
         return _drop_out_of_enum(data, "report_kind", _REPORT_KIND_VALUES)
 

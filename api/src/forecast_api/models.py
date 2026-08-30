@@ -259,6 +259,24 @@ class Voice(BaseModel):
     attributed_to: Optional[str] = Field(default=None, description="The person, body or agency named, in the article's own words (\"Reuters\", \"the Bank of Israel\"). None for `byline` and `unattributed`, where there is no separate voice to name — and the extractor is asked to omit it there, so a value alongside those kinds is a model slip, not a signal")
 
 
+class Grounds(BaseModel):
+    """What one claim's position rests on (retro#763, unparked from retro#673 §1).
+
+    Three outlets repeating one ministry statement agree for ONE reason; three
+    citing a milestone, a poll and a precedent agree for three. The pool's n_eff
+    counts articles where it means to count reasons, and this is the field that
+    lets it count reasons: `kind` is the closed pick the count is taken over,
+    `basis` the phrase that lets two `official_statement` rows be recognised as
+    the same statement. Not an `evidence_class` extension — that enum stays flat.
+
+    Carried verbatim from the elicited `tm.models.Grounds`, like `Voice` above.
+
+    EXPERIMENTAL shadow — persisted, read by nothing.
+    """
+    kind: Literal["observed_milestone", "official_statement", "market_or_poll_figure", "analyst_inference", "precedent_or_base_rate", "authors_judgement"] = Field(description="What the position rests on: observed_milestone (a thing that happened), official_statement (what a body or official said), market_or_poll_figure (a price, odds or poll number), analyst_inference (reasoning from the situation), precedent_or_base_rate (how such things usually go), authors_judgement (the writer's own view with nothing else behind it)")
+    basis: Optional[str] = Field(default=None, description="One short phrase naming the fact or reasoning itself, in the article's terms. None when the model named nothing — the prompt asks for it whenever the article gives anything to name")
+
+
 class ClaimActor(BaseModel):
     """The WHO of the question's own event (retro#697).
 
@@ -355,6 +373,7 @@ class ClaimDetail(BaseModel):
     quantity: Optional[Quantity] = Field(default=None, description="EXPERIMENTAL shadow (retro#683) — the number this claim reports about the event, with its unit and the relation the article asserts, {value, unit, comparator, value_hi, as_of}. The number, NOT whether it satisfies the question: that comparison is arithmetic and is done in code. Consumers are Phase 3 E3-prep (the empirical CDF beside the stance pool) and Phase 4 THRESHOLD_PRICING_ENABLED. Nothing reads it yet. None on a row extracted before the field existed, or when the claim reports no figure")
     tone: Optional[Literal["approve", "neutral", "alarm"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#684) — this claim's own register: does it WELCOME what it reports (`approve`), WARN about it (`alarm`), or neither (`neutral`)? An evaluation, explicitly not a direction: the leak retro#326 and retro#657 keep patching by prompt is alarm being read as stance, and eliciting the evaluation on its own axis is what lets Phase 3 S4 project it out at rating time instead. Never moves `stance`. Nothing reads it yet. None on a row extracted before the field existed, or when the model omitted it — the prompt asks for it on every claim, `neutral` included")
     voice: Optional[Voice] = Field(default=None, description="EXPERIMENTAL shadow (retro#684) — whose assertion this claim is, {kind, attributed_to}, as elicited. Consumer is Phase 3 S2: a wire carried by thirty outlets is one observation and needs one column keyed on its name, which is what `attributed_to` supplies. Nothing reads it yet. None on a row extracted before the field existed, or when the model omitted it")
+    grounds: Optional[Grounds] = Field(default=None, description="EXPERIMENTAL shadow (retro#763) — what this claim's position RESTS ON, {kind, basis}, as elicited. Consumer is the pool's n_eff over REASONS rather than articles (three outlets citing one statement are one ground) and the same-grounds-same-stance dedup of the F2/F16 family. Not `evidence_class`: class is the route the information took, grounds is what was seen. Nothing reads it yet. None on a row extracted before the field existed, or when the model omitted it — the prompt asks for it on every claim")
     # --- Conditional fields (v1.1, Phase 1 capture plan; see conditionals.md §4.4 + conditional-capture-phase1.md §3) ---
     # PRE-RESOLUTION: recorded BEFORE enforce_* chain (asymmetric with other ClaimDetail fields; documented per §3.3)
     is_conditional: Optional[bool] = Field(
@@ -428,6 +447,7 @@ class SourceSignal(BaseModel):
     facet: Optional[Literal["announcement", "denial", "neither"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#354 D2a) — whether the dominant fact-bearing claim behind `fact_signal` ANNOUNCES the event happening/happened, DENIES it will/did happen, or is NEITHER (bears on the event without asserting either polarity, e.g. a precursor). Lets a future magnitude check (D2b/D3) compare |fact_signal| separately for announcement vs denial claims — a symmetric magnitude across the two would leave that refit structurally unable to find the asymmetry it's looking for. From the dominant claim; None when `fact_signal` is None.")
     tone: Optional[Literal["approve", "neutral", "alarm"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#684) — the dominant fact-bearing claim's `tone`, the same dominant claim `facet` and `verified` ride from. The article-level register, for the Phase 3 S4 projection that removes evaluation from rating. From the dominant claim; None when `fact_signal` is None.")
     voice: Optional[Voice] = Field(default=None, description="EXPERIMENTAL shadow (retro#684) — the dominant fact-bearing claim's `voice` {kind, attributed_to}. Article-level because that is the grain Phase 3 S2's reception matrix counts in: one wire report is one observation however many outlets carry it. From the dominant claim; None when `fact_signal` is None.")
+    grounds: Optional[Grounds] = Field(default=None, description="EXPERIMENTAL shadow (retro#763) — the dominant fact-bearing claim's `grounds` {kind, basis}, the same dominant claim `facet`, `verified` and `voice` ride from. Article-level because the n_eff-over-reasons and the same-grounds dedup both count at the grain of the source: the ground an article's decisive claim stands on is the ground the article brings to the pool. From the dominant claim; None when `fact_signal` is None.")
     reader_confidence_level: Optional[Literal["high", "medium", "low"]] = Field(default=None, description="EXPERIMENTAL shadow (retro#681) — the WORST `reader_confidence.level` among this article's claims, not the dominant claim's and not a mean. An article is only as readable as its least readable claim: a `low` claim that the mean would have hidden is exactly the row Phase 4 down-weights and keeps out of the credibility bill. None when no claim reported a level.")
     reader_confidence_traps: Optional[list[str]] = Field(default=None, description="EXPERIMENTAL shadow (retro#681) — the distinct `reader_confidence.trap` values this article's claims reported, in first-seen order; collected rather than voted because two claims tripping two different traps is two facts, and a most-common vote would discard one of them. Plain strings so a new trap class can't fail an existing caller. None when no claim flagged a trap.")
     claims_detail: Optional[list[ClaimDetail]] = Field(default=None, description="This article's claims with their per-claim fields intact (F1/F15, retro#364) — the layer every scalar above is a reduction of. Same order and same count as `claims`, except that `claims` drops claims with an empty summary while this does not: a claim that voted in the article's stance must appear here, or the reduction stops being reproducible. Persist it (daatan#1235); nothing in aggregation reads it.")
@@ -571,7 +591,10 @@ class FetchUrlResponse(BaseModel):
 # source at all, which is why they sit beside `consensus_view` rather than on ClaimDetail:
 # there is nothing per-claim about them. Additive and shadow, so a minor bump; a caller
 # wanting any of the three gates on >= 1.5.
-PROVENANCE_SCHEMA_VERSION = "1.5"
+# 1.6 (Oracle 1.5 Phase 1, retro#763): ClaimDetail carries `grounds` {kind, basis} and
+# SourceSignal the dominant claim's. Additive and shadow, so a minor bump; a caller wanting
+# it gates on >= 1.6.
+PROVENANCE_SCHEMA_VERSION = "1.6"
 
 
 class ProvenanceOracle(BaseModel):

@@ -135,9 +135,11 @@ class ApiSettings(BaseSettings):
     # call (gatekeeper stragglers of 30s+ observed; article-phase p99 ~226s)
     # stalls the whole batch and blows past the caller's timeout. Bounding each
     # article means one straggler is dropped instead of holding up the rest.
-    # Set comfortably above normal article latency (~3-4s) but well under
-    # forecast_timeout_seconds.
-    per_article_timeout_seconds: int = 25
+    # Set above normal extract latency (p50 ~8s, p90 ~13s on Haiku with the v11
+    # extractor, retro#697) so a 5-6 article batch does not lose every article at
+    # once, but well under forecast_timeout_seconds: primary + relaxed retry
+    # (2 x 35s) still fit inside the 90s outer budget.
+    per_article_timeout_seconds: int = 35
 
     # Cap article body fed to LLMs (both the gatekeeper relevance screen and the
     # extractor). The thesis is usually in the lead, but the relevance signal can

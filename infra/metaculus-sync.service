@@ -25,7 +25,7 @@ WorkingDirectory=/home/ubuntu/oracle-api/metaculus
 # access, so the values are placed here directly.
 #   METACULUS_API_KEY=...       the Daatan-v1 bot token
 #   ORACLE_API_KEY=...          the NAMED, CAPPED relay key -- never the primary
-#   METACULUS_TOURNAMENT=bot-testing-area
+#   METACULUS_TOURNAMENT=bot-testing-area   ("auto" = current FutureEval season, retro#726)
 EnvironmentFile=/home/ubuntu/truthmachine/.env.metaculus
 
 # --frozen so a drifted lockfile fails loudly instead of silently resolving a

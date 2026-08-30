@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from sync import build_comment, needs_forecast, question_text
+from sync import build_comment, needs_forecast, question_text, select_season_tournament
 
 NOW = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
 STALE_AFTER = timedelta(hours=24)
@@ -86,3 +86,45 @@ def test_required_env_rejects_unset_and_blank(monkeypatch):
         _required_env("METACULUS_API_KEY")
     monkeypatch.setenv("METACULUS_API_KEY", " tok ")
     assert _required_env("METACULUS_API_KEY") == "tok"
+
+
+class TestSelectSeasonTournament:
+    NOW = datetime(2026, 9, 3, tzinfo=timezone.utc)
+
+    def _t(self, slug, name, start, fc_end, close=None):
+        return {"slug": slug, "name": name, "start_date": start, "forecasting_end_date": fc_end, "close_date": close}
+
+    def test_picks_latest_started_open_season_on_overlap(self):
+        # Real shapes from /api/projects/tournaments/ (2026-08-30): Summer keeps
+        # opening questions until 09-06, Fall opens early September.
+        tournaments = [
+            self._t("spring-aib-2026", "Spring 2026 FutureEval Bot Tournament", "2026-01-05T00:00:00Z", "2026-05-06T00:00:00Z"),
+            self._t("summer-futureeval-2026", "Summer 2026 FutureEval Bot Tournament", "2026-05-18T00:00:00Z", "2026-09-06T00:00:00Z"),
+            self._t("fall-futureeval-2026", "Fall 2026 FutureEval Bot Tournament", "2026-09-01T00:00:00Z", "2027-01-06T00:00:00Z"),
+            self._t("metaculus-cup-2026", "Metaculus Cup", "2026-05-01T00:00:00Z", "2026-12-01T00:00:00Z"),
+        ]
+        assert select_season_tournament(tournaments, self.NOW) == "fall-futureeval-2026"
+
+    def test_falls_back_to_running_season_when_next_not_started(self):
+        tournaments = [
+            self._t("summer-futureeval-2026", "Summer 2026 FutureEval Bot Tournament", "2026-05-18T00:00:00Z", "2026-09-06T00:00:00Z"),
+            self._t("fall-futureeval-2026", "Fall 2026 FutureEval Bot Tournament", "2026-09-10T00:00:00Z", "2027-01-06T00:00:00Z"),
+        ]
+        assert select_season_tournament(tournaments, self.NOW) == "summer-futureeval-2026"
+
+    def test_none_when_every_season_window_is_closed(self):
+        tournaments = [
+            self._t("summer-futureeval-2026", "Summer 2026 FutureEval Bot Tournament", "2026-05-18T00:00:00Z", "2026-09-06T00:00:00Z", "2026-11-05T00:00:00Z"),
+        ]
+        assert select_season_tournament(tournaments, datetime(2026, 9, 7, tzinfo=timezone.utc)) is None
+
+    def test_matches_marker_in_name_when_slug_is_opaque(self):
+        tournaments = [self._t("aibq4", "AI Forecasting Benchmark Tournament - 2024 Q4", "2024-10-08T00:00:00Z", "2025-01-08T00:00:00Z")]
+        assert select_season_tournament(tournaments, datetime(2024, 11, 1, tzinfo=timezone.utc)) == "aibq4"
+
+    def test_ignores_rows_without_slug_or_start(self):
+        tournaments = [
+            {"slug": None, "name": "FutureEval mystery", "start_date": "2026-05-18T00:00:00Z", "forecasting_end_date": None},
+            {"slug": "summer-futureeval-2026", "name": None, "start_date": None, "forecasting_end_date": None},
+        ]
+        assert select_season_tournament(tournaments, self.NOW) is None

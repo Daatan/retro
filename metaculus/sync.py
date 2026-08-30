@@ -12,6 +12,15 @@ Env vars:
     METACULUS_TOURNAMENT      default "bot-testing-area" — deliberately NOT a
                               scored tournament. Point this at a real AIB/MiniBench
                               slug only once a clean run history exists here.
+                              "auto" picks the current FutureEval/AIB season by
+                              itself (retro#726): the latest-started tournament
+                              whose slug or name says futureeval/aib and whose
+                              forecasting window is still open. Seasons start
+                              every September, January and May and there is no
+                              per-season registration, so nobody has to watch
+                              metaculus.com for the new slug. If no season is
+                              open the run logs that and exits without doing
+                              anything.
     MAX_QUESTIONS_PER_RUN     default 5 — caps Oracle calls per run (each one
                               costs real LLM spend and can take minutes).
     STALE_AFTER_HOURS          default 0.75 — re-forecast a question only if our
@@ -36,6 +45,41 @@ from oracle_client import OracleClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("metaculus-sync")
+
+
+AUTO_TOURNAMENT = "auto"
+_SEASON_MARKERS = ("futureeval", "aib")
+
+
+def _parse_ts(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def select_season_tournament(tournaments: list[dict], now: datetime) -> str | None:
+    """Slug of the FutureEval/AIB season to forecast in right now, or None.
+
+    A season counts when its slug or name carries a marker (``futureeval``,
+    ``aib``), it has started, and its ``forecasting_end_date`` (the day questions
+    stop opening — ``close_date`` is months later, after resolution) is still
+    ahead. Summer's window ends ~a week after Fall opens, so on the overlap the
+    **latest-started** season wins; MiniBench is a separate project type and is
+    never matched here.
+    """
+    best: tuple[datetime, str] | None = None
+    for t in tournaments:
+        slug = str(t.get("slug") or "")
+        haystack = f"{slug} {t.get('name') or ''}".lower()
+        if not slug or not any(m in haystack for m in _SEASON_MARKERS):
+            continue
+        start = _parse_ts(t.get("start_date"))
+        end = _parse_ts(t.get("forecasting_end_date")) or _parse_ts(t.get("close_date"))
+        if start is None or start > now or (end is not None and end <= now):
+            continue
+        if best is None or start > best[0]:
+            best = (start, slug)
+    return best[1] if best else None
 
 
 def needs_forecast(question: dict, stale_after: timedelta, now: datetime) -> bool:
@@ -84,6 +128,13 @@ def run(
     processed = 0
     now = datetime.now(timezone.utc)
     with MetaculusClient(metaculus_token) as mc, OracleClient(oracle_api_key, base_url=oracle_base_url) as oc:
+        if tournament == AUTO_TOURNAMENT:
+            resolved = select_season_tournament(mc.list_tournaments(), now)
+            if resolved is None:
+                log.info("METACULUS_TOURNAMENT=auto: no FutureEval/AIB season is open right now, nothing to do")
+                return 0
+            log.info("METACULUS_TOURNAMENT=auto resolved to %s", resolved)
+            tournament = resolved
         candidates = mc.open_binary_questions(tournament, limit=max_questions * 3)
         for post in candidates:
             if processed >= max_questions:

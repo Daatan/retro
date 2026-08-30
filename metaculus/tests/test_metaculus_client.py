@@ -97,3 +97,14 @@ def test_post_comment_payload_shape():
         "is_private": True,
         "on_post": 42,
     }
+
+
+def test_list_tournaments_accepts_bare_list_and_paginated_shape():
+    for payload in ([{"slug": "a"}], {"results": [{"slug": "a"}]}):
+        requests: list[httpx.Request] = []
+        transport = httpx.MockTransport(
+            _handler(requests, {("GET", "/api/projects/tournaments/"): httpx.Response(200, json=payload)})
+        )
+        with MetaculusClient("tok", transport=transport) as client:
+            assert [t["slug"] for t in client.list_tournaments()] == ["a"]
+        assert requests[0].headers["authorization"] == "Token tok"

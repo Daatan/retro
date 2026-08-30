@@ -13,7 +13,8 @@ categorical output shape today.
 
 `sync.py` polls open binary questions in a target tournament
 (`METACULUS_TOURNAMENT`, default `bot-testing-area` — unscored, intended for
-exactly this kind of testing), skips any it has already forecast recently
+exactly this kind of testing; `auto` resolves the current FutureEval/AIB
+season by itself — see "Season auto-detect" below), skips any it has already forecast recently
 (`STALE_AFTER_HOURS`), asks Oracle (`oracle_client.py`, hitting
 `oracle.daatan.com/forecast`) for a probability + rationale, and submits the
 forecast plus a private rationale comment via `metaculus_client.py`.
@@ -114,3 +115,20 @@ run a manual dry run without touching the box.
   `infra/install_metaculus_timer.sh` there once the credentials are placed.
 - Still points at `bot-testing-area` (unscored) — deliberately not pointed at
   a real AIB/MiniBench tournament yet.
+
+## Season auto-detect (retro#726)
+
+There is no per-season registration on Metaculus: a bot account simply
+forecasts on whatever the current season's questions are. Seasons start every
+September, January and May (`spring-aib-2026` → `summer-futureeval-2026` → …)
+and the new slug is not announced anywhere machine-readable ahead of time, so
+`METACULUS_TOURNAMENT=auto` asks `/api/projects/tournaments/` (authenticated —
+the bot token is enough) and picks the latest-started tournament whose slug or
+name says `futureeval`/`aib` and whose `forecasting_end_date` — the day
+questions stop opening; `close_date` is months later, after resolution — is
+still ahead. On the ~week where Summer's window overlaps Fall's start, Fall
+wins. If nothing is open the run logs that and exits 0.
+
+Set the explicit slug instead of `auto` whenever you want to pin a season
+(e.g. `bot-testing-area` for a dry run — `auto` never selects it, it carries
+no season marker).

@@ -493,8 +493,9 @@ settled, exactly like an undated one.
 REPORT that decomposition. At the TOP level, once for the article, give `claim_actor` \
 ({name, type}), `claim_predicate` and `claim_scope` — the RELATED EVENT's own WHO / WHAT / \
 SCOPE, never the article's, even when the article contradicts it. They change nothing else: \
-each `claim` still says what its quote means FOR that event, and `stance` is still signed \
-against it. `type`: person / party / company / country / institution / other.
+each `claim` still says what its quote means FOR that event, and `stance` still measures \
+whether that event becomes MORE likely (positive) or less. `type`: person / party / \
+company / country / institution / other.
 
 ## DATES — resolve first, compare second, never assert a comparison you did not compute
 Deadline claims ("by July 15", "before year-end") are decided by ARITHMETIC, not by tone. \

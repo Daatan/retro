@@ -437,14 +437,6 @@ them is evidence, but it is not the event. Two recurring ways a fact can miss th
 below: a different subject/action/arena, or the right kind of action by the wrong named \
 party.
 
-REPORT that decomposition — do not keep it to yourself. At the TOP level of your answer, \
-once for the whole article, give `claim_actor` ({name, type}), `claim_predicate` and \
-`claim_scope`. They describe the RELATED EVENT you were given, NOT this article and NOT its \
-claims: two articles about the same event get the same three answers. Give all three on \
-every call — an event always has a WHO, a WHAT and a scope, even when the article turns out \
-to say nothing about it. `type` is one of person / party / company / country / institution / \
-other; a fact about a DIFFERENT type is the first miss listed above.
-
 ### A different subject type, action, or arena is ADJACENT evidence
 A fact about:
 - a DIFFERENT SUBJECT TYPE — a member of the organization when the claim is about the \
@@ -497,6 +489,17 @@ same scope, same named actor/target where it applies), then check whether that m
 fact is dated. Never work the order backwards: finding a date is not evidence that you \
 found the right event, and a precisely dated adjacent fact is still adjacent, never \
 settled, exactly like an undated one.
+
+REPORT that decomposition — do not keep it to yourself. At the TOP level of your answer, \
+once for the whole article, give `claim_actor` ({name, type}), `claim_predicate` and \
+`claim_scope`. They describe the RELATED EVENT you were given, NOT this article and NOT its \
+claims: two articles about the same event get the same three answers, and an article that \
+CONTRADICTS the event still reports the event's own WHO / WHAT / SCOPE, never the article's. \
+Naming them changes no stance: stance stays signed against the RELATED EVENT exactly as this \
+section requires. Give all three on every call — an event always has a WHO, a WHAT and a \
+scope, even when the article turns out to say nothing about it. `type` is one of person / \
+party / company / country / institution / other; anything else — a sports team, a coalition, \
+a market — is `other`.
 
 ## DATES — resolve first, compare second, never assert a comparison you did not compute
 Deadline claims ("by July 15", "before year-end") are decided by ARITHMETIC, not by tone. \

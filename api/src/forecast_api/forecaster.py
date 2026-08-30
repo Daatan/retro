@@ -86,7 +86,7 @@ EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 # human-readable label only, see docs/PROMPT_VERSIONS.md. The *_HASH is computed from the
 # actual prompt text above, so it stays correct even if a version bump is forgotten.
 GATEKEEPER_PROMPT_VERSION = "v1"
-EXTRACTOR_PROMPT_VERSION = "v9"
+EXTRACTOR_PROMPT_VERSION = "v10"
 GATEKEEPER_PROMPT_HASH = hashlib.sha256(GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
 EXTRACTOR_PROMPT_HASH = hashlib.sha256(EXTRACTOR_PROMPT.encode()).hexdigest()[:16]
 
@@ -183,6 +183,7 @@ from .models import (
     READER_CONFIDENCE_LEVELS,
     SourceSignal,
     TokenUsage,
+    Voice,
 )
 from .config import settings
 from .resolution_scorer import archetype_base_rate
@@ -345,6 +346,11 @@ def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDe
             # type. Dropping it here is the retro#566 failure exactly — the prompt asks, the
             # model answers, and nothing is ever stored to measure.
             quantity=p.quantity.model_dump() if p.quantity is not None else None,
+            # retro#684. Same projection, same retro#566 reason. `tone` is a bare enum so it
+            # rides as-is; `voice` gets the `model_dump()` every nested shadow field above
+            # gets, so the wire contract stays free of pipeline-internal types.
+            tone=p.tone,
+            voice=p.voice.model_dump() if p.voice is not None else None,
             # Phase 1 conditional capture (#504) — pre-resolution shadow fields.
             # Omitted here from 2026-08-09 to retro#566: the prompt asked, the
             # model answered, and this projection dropped all nine on the wire.
@@ -394,6 +400,8 @@ class ArticleReduction:
     verified: Optional[bool]
     fact_signal_absent_reason: Optional[str]
     facet: Optional[str]
+    tone: Optional[str]
+    voice: Optional[Voice]
     reader_confidence_level: Optional[str]
     reader_confidence_traps: Optional[list[str]]
 
@@ -519,6 +527,9 @@ def reduce_article(
         event_actors, event_target = dominant.event_actors, dominant.event_target
         is_occurrence, verified = dominant.is_occurrence, dominant.verified
         facet = dominant.facet
+        # retro#684 — same dominant claim, same reason as `facet` and `verified`: the
+        # article-level grain Phase 3 S2 counts in is the source, not the outlet.
+        tone, voice = dominant.tone, dominant.voice
         # fact_signal is present on the dominant claim, so by
         # fact_signal_absent_reason's own contract (retro#471) it has none.
         fact_signal_absent_reason = None
@@ -527,6 +538,7 @@ def reduce_article(
         event_actors = event_target = None
         is_occurrence = verified = None
         facet = None
+        tone = voice = None
         # No claim in `scored` carried a fact_signal here, so every one of
         # them should carry the reason why (retro#471's extractor contract).
         # Most-common vote across the subset, same tie-break as
@@ -557,6 +569,8 @@ def reduce_article(
         verified=verified,
         fact_signal_absent_reason=fact_signal_absent_reason,
         facet=facet,
+        tone=tone,
+        voice=voice,
         reader_confidence_level=reader_confidence_level,
         reader_confidence_traps=reader_confidence_traps,
     )
@@ -2313,6 +2327,8 @@ async def _run_forecast_inner(
             verified=reduction.verified,
             fact_signal_absent_reason=reduction.fact_signal_absent_reason,
             facet=reduction.facet,
+            tone=reduction.tone,
+            voice=reduction.voice,
             reader_confidence_level=reduction.reader_confidence_level,
             reader_confidence_traps=reduction.reader_confidence_traps,
             # F1/F15 (retro#364): the claims every scalar above was reduced

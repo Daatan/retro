@@ -207,6 +207,7 @@ def _drop_out_of_enum(data: Any, key: str, allowed: frozenset[str]) -> Any:
 
 
 _REPORT_KIND_VALUES = frozenset({"level", "change"})
+_TONE_VALUES = frozenset({"approve", "neutral", "alarm"})
 _CONSENSUS_VIEW_VALUES = frozenset({"expects_yes", "expects_no", "divided"})
 
 
@@ -274,6 +275,63 @@ class Quantity(BaseModel):
         elif self.value_hi is not None:
             raise ValueError("value_hi is only meaningful with comparator 'between'")
         return self
+
+
+# --- Voice (Oracle 1.5 Phase 1, retro#684) ---
+#
+# A wire report reprinted in thirty outlets is ONE observation; a minister quoted in an
+# op-ed is the minister's claim, not the columnist's. Without this the reception matrix
+# has the wrong columns — thirty correlated rows read as thirty independent sources, and
+# an interested party's assertion reads as the outlet's.
+#
+# `attributed_to` is what makes a wire collapsible: it is the name the column keys on.
+#
+# Deliberately NO cross-field validator, unlike `Quantity`. The obvious one — reject
+# `attributed_to` on a `byline` — would hand the drop guard a raise, and the guard nulls
+# the WHOLE object, taking `kind` (the informative half) with it. A stray name beside a
+# byline is noise; a lost `kind` is a missing observation. The rule lives in the VOICE
+# prose block instead, where being wrong costs nothing.
+class Voice(BaseModel):
+    # Billed on every call (schema ~27% of the prompt, retro#700): say WHICH value, not
+    # HOW to find it. The VOICE block carries the rule and the worked examples.
+    kind: Literal["byline", "quoted_person", "institution", "wire", "unattributed"] = Field(
+        description="Whose assertion this quote is: 'byline' the article's own author, "
+                    "'quoted_person' a named person quoted, 'institution' a body or its "
+                    "spokesman, 'wire' a news agency's report, 'unattributed' nobody named.",
+    )
+    attributed_to: Optional[str] = Field(
+        default=None,
+        description="The person, body or agency named, in the article's own words "
+                    "('Reuters', 'the Bank of Israel', 'Minister X'). Omit for 'byline' "
+                    "and 'unattributed', where there is no separate voice to name.",
+    )
+
+
+def _drop_malformed_voice(data: Any) -> Any:
+    """`_drop_malformed_quantity` for `voice` (retro#684) — same trade, same reason.
+
+    `kind` is a closed enum on a required field, so the cheapest way for a model to
+    fail here is to answer with a bare string ("Reuters") instead of the object, or
+    with a `kind` outside the set. `complete_structured` runs instructor with
+    `max_retries=1`, so either would raise out of `ExtractionOutput` and drop a real
+    article from a real forecast — too much to pay for a field nothing reads yet.
+
+    Logged rather than silent, for the reason all three of these are: a shadow field
+    exists to be counted, and a silent None makes "answered badly" indistinguishable
+    from "did not answer", which is the one distinction the fill rate must draw.
+    Grep `event=voice_malformed`.
+    """
+    if not isinstance(data, dict):
+        return data
+    raw = data.get("voice")
+    if raw is None:
+        return data
+    try:
+        Voice.model_validate(raw)
+    except (_ValidationError, TypeError, ValueError):
+        logger.warning("event=voice_malformed value=%r", raw)
+        return {**data, "voice": None}
+    return data
 
 
 def _drop_malformed_quantity(data: Any) -> Any:
@@ -542,14 +600,30 @@ class PredictionExtraction(BaseModel):
                     "it satisfies the question: code does that comparison. See QUANTITY; "
                     "omit when the quote reports no figure about the event.",
     )
+    tone: Optional[Literal["approve", "neutral", "alarm"]] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow (retro#684) — how the quote FEELS about what it "
+                    "reports: 'approve' welcomes it, 'alarm' warns about it, 'neutral' "
+                    "does neither. An evaluation, never a direction: see TONE. Not whether "
+                    "the outcome is good, and never a substitute for `stance`.",
+    )
+    voice: Optional[Voice] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow (retro#684) — WHOSE assertion this quote is "
+                    "({kind, attributed_to}): the author's own, a named person's, an "
+                    "institution's, a wire agency's, or nobody's. See VOICE.",
+    )
 
     @model_validator(mode="before")
     @classmethod
     def _unwrap_envelope(cls, data: Any) -> Any:
         data = _coerce_nested_json_string(_unwrap_properties_envelope(data), "reader_confidence")
         data = _coerce_nested_json_string(data, "quantity")
+        data = _coerce_nested_json_string(data, "voice")
         data = _drop_malformed_reader_confidence(data)
         data = _drop_malformed_quantity(data)
+        data = _drop_malformed_voice(data)
+        data = _drop_out_of_enum(data, "tone", _TONE_VALUES)
         return _drop_out_of_enum(data, "report_kind", _REPORT_KIND_VALUES)
 
 

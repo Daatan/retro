@@ -1,6 +1,6 @@
 # Outlier scan — Stage A (retro#526)
 
-Offline measurement of stored Oracle estimates against **the evidence each one
+Offline measurement of stored Oracul estimates against **the evidence each one
 was actually computed from**. It answers "does this published number follow from
 its own pool, under today's rules?" — not "was it right"; nothing here reads an
 outcome.
@@ -32,7 +32,7 @@ cd api
 uv run python scripts/scan_outlier_estimates.py sql
 
 # 2. run that on the daatan PROD box (i-04ea44d4243d35624) — the DB is there,
-#    NOT on the Oracle box — and bring the file back (see "The dump" below)
+#    NOT on the Oracul box — and bring the file back (see "The dump" below)
 
 # 3. score it, gated on the deployed commit
 uv run python scripts/scan_outlier_estimates.py score stage_a.jsonl \

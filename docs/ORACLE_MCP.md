@@ -1,12 +1,12 @@
-# Oracle MCP Server
+# Oracul MCP Server
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server that exposes
-the Oracle's capabilities to AI agents (Claude Desktop/Code, custom agents) as
+the Oracul's capabilities to AI agents (Claude Desktop/Code, custom agents) as
 native tools. It is **mounted on the FastAPI app** (`api/`), so it ships with the
-Oracle on the same host, nginx, and auto-deploy — it is not a separate service.
+Oracul on the same host, nginx, and auto-deploy — it is not a separate service.
 
 - **Endpoint:** `https://oracle.daatan.com/mcp` (Streamable HTTP, stateless)
-- **Auth:** OAuth 2.1 — the Oracle is a Resource Server verifying AWS Cognito
+- **Auth:** OAuth 2.1 — the Oracul is a Resource Server verifying AWS Cognito
   access tokens (see [Auth](#auth))
 - **Code:** `api/src/forecast_api/mcp_server.py` (tools), `mcp_auth.py` (token
   verification), mounted in `main.py`
@@ -34,7 +34,7 @@ seconds, occasionally past the 120s proxy timeout) and cost LLM + search credits
 which is why they sit behind the `oracle-mcp/forecast` scope.
 
 **Rate limiting** (`mcp_limiter.py`) is enforced per tool call, independently of
-the REST API's `@limiter.limit(...)` (slowapi) — MCP tools call the Oracle's
+the REST API's `@limiter.limit(...)` (slowapi) — MCP tools call the Oracul's
 service functions in-process and never pass through those decorated REST
 routes, so they need their own gate (retro#431). It mirrors each tool's REST
 equivalent (see table above) but keys on the caller's Cognito identity
@@ -75,10 +75,10 @@ dynamic client registration") when there is no `registration_endpoint` — it wi
 not fall back to a static `client_id`. Cognito publishes no such endpoint.
 
 So when `COGNITO_HOSTED_UI_DOMAIN` + `COGNITO_CLAUDE_CLIENT_ID` are set
-(`config.dcr_enabled`), the Oracle origin advertises **itself** as the
+(`config.dcr_enabled`), the Oracul origin advertises **itself** as the
 authorization server (`api/src/forecast_api/mcp_dcr.py`):
 
-- the protected-resource metadata points `authorization_servers` at the Oracle
+- the protected-resource metadata points `authorization_servers` at the Oracul
   origin instead of the Cognito issuer;
 - the origin serves `/.well-known/oauth-authorization-server` (and
   `/.well-known/openid-configuration`) that carry the pool's `jwks_uri`, inject
@@ -164,7 +164,7 @@ The Cognito user pool itself is provisioned in `terraform/cognito.tf`.
 ## Provisioning runbook (first-time enablement)
 
 End-to-end steps to flip `/mcp` from inert 404 to live. All AWS work is
-`eu-central-1`, account `272007598366`; the Oracle box (`i-00ac444b94c5ff9b2`) is
+`eu-central-1`, account `272007598366`; the Oracul box (`i-00ac444b94c5ff9b2`) is
 **SSM-only, no SSH**.
 
 ### 1. Google federation (self-service trader sign-in)
@@ -235,7 +235,7 @@ CMD_ID=$(aws ssm send-command \
   --region eu-central-1 \
   --instance-ids i-00ac444b94c5ff9b2 \
   --document-name AWS-RunShellScript \
-  --comment "enable Oracle MCP: Cognito env + restart" \
+  --comment "enable Oracul MCP: Cognito env + restart" \
   --parameters "{\"commands\":[
     \"sed -i '/^COGNITO_USER_POOL_ID=/d;/^COGNITO_ALLOWED_CLIENT_IDS=/d;/^MCP_RESOURCE_URL=/d;/^COGNITO_HOSTED_UI_DOMAIN=/d;/^COGNITO_CLAUDE_CLIENT_ID=/d' /home/ubuntu/truthmachine/.env\",
     \"echo COGNITO_USER_POOL_ID=$POOL_ID >> /home/ubuntu/truthmachine/.env\",
@@ -263,7 +263,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST https://oracle.daatan.com/mcp \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 
-# Discovery metadata — with the DCR façade on, authorization_servers is the Oracle
+# Discovery metadata — with the DCR façade on, authorization_servers is the Oracul
 # origin, and the AS metadata then advertises our registration_endpoint:
 curl -s https://oracle.daatan.com/.well-known/oauth-protected-resource/mcp
 curl -s https://oracle.daatan.com/.well-known/oauth-authorization-server
@@ -303,5 +303,5 @@ false, and `/mcp` reverts to inert 404 with the REST API untouched.
 - **Slow forecasts** inherit the 120s nginx/gunicorn cap; long tails can 504. A
   dedicated `location /mcp` with a longer `proxy_read_timeout` is a possible
   follow-up.
-- Tools call the Oracle's internal functions **in-process** (`run_forecast`,
+- Tools call the Oracul's internal functions **in-process** (`run_forecast`,
   `run_search`, `compute_nodes`, …) — no self-HTTP.

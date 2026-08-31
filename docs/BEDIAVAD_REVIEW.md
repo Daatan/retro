@@ -1,7 +1,7 @@
 # Bediavad (Retro Analysis) — Deep Review
 
 > Reviewer pass over the בדיעבד retroactive-audit engine: data analysis, engine
-> bugs, and an Oracle-driven plan. Date: 2026-06-07.
+> bugs, and an Oracul-driven plan. Date: 2026-06-07.
 > Scope reviewed: `pipeline/src/tm/backtest.py`, `pipeline/BACKTEST.md`,
 > `data/events/`, `data/atlas/`, `data/sources/`, `data/leaderboard.json`,
 > `docs/ORACLE_API.md`, and cross-checked against the **Duel** project
@@ -128,14 +128,14 @@ Not blocking, but they made the "who was right" mechanism partly inert.
 
 ---
 
-## 3. Using the Oracle to fill the gap (ordered by leverage)
+## 3. Using the Oracul to fill the gap (ordered by leverage)
 
 ### 3.1 (Required for validity, both projects) Source NO-outcome events
 
 Until the event set has a realistic share of negatives, nothing else matters —
 for Bediavad's leaderboard *or* the Duel. Target ~25–35 events that **resolved
 NO**: predicted escalations that fizzled, ceasefires/deals announced-then-
-collapsed, downgrades/operations that never came. The Oracle `/search` endpoint
+collapsed, downgrades/operations that never came. The Oracul `/search` endpoint
 (GDELT-backed, native `date_from`/`date_to`) surfaces the *pre-event* coverage
 that confidently expected the thing that didn't happen — the high-signal rows
 both projects need to demonstrate discrimination. Aim for ~40/60 NO/YES.
@@ -143,14 +143,14 @@ both projects need to demonstrate discrimination. Aim for ~40/60 NO/YES.
 > Note: the Duel cannot grow the NO set freely — its memo records the Polymarket
 > CLOB ceiling is exhausted at 12 events (pre-2023 markets aren't in CLOB).
 > Bediavad has no such ceiling: it only needs articles, not a matching market, so
-> **Bediavad can balance its event set via Oracle search even where the Duel
+> **Bediavad can balance its event set via Oracul search even where the Duel
 > can't.** This is an argument for scoring sources on a broader, balanced event
 > set than the Duel's 12.
 
 ### 3.2 (High) Backfill the 78.5% empty Atlas cells
 
 301/1400 cells populated; the median usable event has only ~7 in-window entries.
-Loop `(event × source × keyword)` through Oracle `/search` with
+Loop `(event × source × keyword)` through Oracul `/search` with
 `date_from = outcome_date−30d`, `date_to = outcome_date−3d`,
 `enrich_snippets: true`, pacing ≥12s/request for GDELT's rate limit (loop already
 sketched in `BACKTEST.md`). Directly improves source-score reliability.
@@ -159,7 +159,7 @@ sketched in `BACKTEST.md`). Directly improves source-score reliability.
 
 This is a **Duel** task, not Bediavad's, and is largely complete: `data/
 duel_oracle/` holds the per-event/per-horizon caches and the Duel already runs.
-Remaining work there is bounded by CLOB availability, not by Oracle search.
+Remaining work there is bounded by CLOB availability, not by Oracul search.
 Listed only to close the loop from the first-pass review, which wrongly put this
 under Bediavad.
 
@@ -187,7 +187,7 @@ under Bediavad.
 
 ## 5. Recommended order of operations
 
-1. Add NO-outcome events via Oracle search (3.1) → restore class balance.
+1. Add NO-outcome events via Oracul search (3.1) → restore class balance.
    *Validity gate for both projects.*
 2. Fix Bediavad bugs: wire `source_brier`, fix `domain`, remove legacy Polymarket
    code (§2).

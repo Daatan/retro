@@ -302,7 +302,7 @@ either way (it passes its own `model=` per request and is already on Haiku 4.5).
 
 The issue asked to route `claim_archetype = threshold` questions. **The batch lane has no
 `claim_archetype`, and retro has no code that derives one.** The field belongs to the live
-Oracle's `ForecastRequest`, and its own description says so: *"Temporal archetype from the
+Oracul's `ForecastRequest`, and its own description says so: *"Temporal archetype from the
 caller's claim classifier"* — daatan classifies its claims and sends the label over the wire.
 Batch has no caller: `orchestrator.process_article` builds an `(event, source, article)` triple
 from `data/events/*.json`, whose schema carries id / name / outcome / outcome_date /
@@ -360,7 +360,7 @@ already model-agnostic before this change.
 
 ### Turning it on
 
-Batch config comes from `~/truthmachine/.env` on the Oracle box, which `infra/ec2_run.sh` sources
+Batch config comes from `~/truthmachine/.env` on the Oracul box, which `infra/ec2_run.sh` sources
 into the environment. One line, then let the loop pick it up (it re-execs on change):
 
 ```

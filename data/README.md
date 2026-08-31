@@ -33,7 +33,7 @@ One file per event. The pipeline ingests articles and extracts predictions for e
 | `tags` | ✓ | Free-form string tags |
 | `polymarket` | ✓ (nullable) | `null`, or `{question, url, match_quality}` with optional `invert`. `match_quality` ∈ `exact` \| `close` \| `indirect`. The key is always present — an explicit `null` means "no market", a missing key is a malformed file. |
 | `predictive_window_days` | optional | How many days before `outcome_date` to search. **The fallback differs by ingest path** — 14 in `gnews_ingest`/`site_search`/`crawler`/`orchestrator`, 30 in `gdelt_ingest`/`web_search_ingest` — so every committed event sets it explicitly (all currently 30). |
-| `oracle_question` | optional | Binary question text when the event is also posed to the Oracle |
+| `oracle_question` | optional | Binary question text when the event is also posed to the Oracul |
 | `duel_keywords` | optional | Extra keywords used by the Polymarket duel |
 | `scope` | optional | e.g. `global` |
 

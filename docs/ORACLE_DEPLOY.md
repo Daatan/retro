@@ -1,6 +1,6 @@
-# Oracle API — Deploy
+# Oracul API — Deploy
 
-Zero-downtime deploy flow for the Oracle API on the retro EC2 box.
+Zero-downtime deploy flow for the Oracul API on the retro EC2 box.
 
 ## Topology
 
@@ -47,7 +47,7 @@ There are three supported ways to deploy. **Normal operation is path 1 — do no
 
 `.github/workflows/deploy-oracle.yml` runs on every push to `main` that touches `api/**`, `pipeline/**`, `infra/deploy_oracle.sh`, `infra/oracle-api.service`, or the workflow file itself. It authenticates to AWS via OIDC, calls `aws ssm send-command` against the box, waits for completion, and prints the deploy script's stdout/stderr into the Actions log. A `no-op` fast-path in `deploy_oracle.sh` makes the workflow cheap when the resolved HEAD already matches what's on the box.
 
-Manual trigger (for rollbacks or redeploying the same SHA): **Actions → Deploy Oracle API → Run workflow**, optionally pinning `ref` to a prior commit.
+Manual trigger (for rollbacks or redeploying the same SHA): **Actions → Deploy Oracul API → Run workflow**, optionally pinning `ref` to a prior commit.
 
 #### 2. Ad-hoc via SSM (no SSH needed)
 
@@ -115,7 +115,7 @@ aws ssm send-command --region eu-central-1 --instance-ids i-00ac444b94c5ff9b2 \
 
 Three options, in order of preference:
 
-1. **Via GH Actions**: Actions → Deploy Oracle API → Run workflow → set `ref` to the last known-good SHA. Deploys it via the same path as a normal deploy.
+1. **Via GH Actions**: Actions → Deploy Oracul API → Run workflow → set `ref` to the last known-good SHA. Deploys it via the same path as a normal deploy.
 2. **Via SSM from a laptop**: `aws ssm send-command ... "commands=[\"sudo -u ubuntu bash /home/ubuntu/oracle-api/infra/deploy_oracle.sh <prev-sha>\"]"`
 3. **Hard-reset on the box**: `sudo systemctl restart oracle-api` (2-5s 502 window) — the escape hatch when the service is wedged. Note the deploy script already auto-escalates to a full restart when a reload isn't durably healthy (see the health gate above), so this is rarely needed by hand.
 

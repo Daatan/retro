@@ -64,7 +64,7 @@ sudo systemctl restart truthmachine
 ## 4. TruthMachine EC2 → Bedrock (LLM invocation, `truthmachine-pipeline-policy`)
 
 Inline policy for the existing `truthmachine-ec2-role` — the live source of truth for
-which Bedrock models the Oracle/pipeline may invoke. Nova (gatekeeper/extractor default)
+which Bedrock models the Oracul/pipeline may invoke. Nova (gatekeeper/extractor default)
 plus Claude Haiku 4.5 (extractor override; both the cross-region inference profiles and
 the underlying foundation-model ARN, which cross-region routing requires in every member
 region — hence the `*` region). Adding a new extractor model = add its ARNs here and

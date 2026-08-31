@@ -240,10 +240,10 @@ The influence/strength of a specific prediction in scoring/visibility calculatio
 
 ## Related Documentation
 
-> **Note:** `PRODUCT.md`, `DAATAN_CORE.md`, `GLOSSARY.md`, and `TECH.md` describe the **daatan web app** (a separate Next.js product). They are kept here for cross-project context. The retro pipeline and Oracle API are documented in `ARCHITECTURE.md` and `docs/ORACLE_API.md`.
+> **Note:** `PRODUCT.md`, `DAATAN_CORE.md`, `GLOSSARY.md`, and `TECH.md` describe the **daatan web app** (a separate Next.js product). They are kept here for cross-project context. The retro pipeline and Oracul API are documented in `ARCHITECTURE.md` and `docs/ORACLE_API.md`.
 
 - [DAATAN_CORE.md](./DAATAN_CORE.md) — Source of Truth (vision and principles)
 - [GLOSSARY.md](../GLOSSARY.md) — Terminology definitions
 - [GitHub Issues](https://github.com/Daatan/retro/issues) — Development tasks and priorities (`P1`/`P2`/`P3`/`icebox` labels)
-- [ARCHITECTURE.md](../ARCHITECTURE.md) — Retro pipeline and Oracle API architecture
-- [docs/ORACLE_API.md](../ORACLE_API.md) — Oracle forecast service documentation
+- [ARCHITECTURE.md](../ARCHITECTURE.md) — Retro pipeline and Oracul API architecture
+- [docs/ORACLE_API.md](../ORACLE_API.md) — Oracul forecast service documentation

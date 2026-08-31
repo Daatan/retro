@@ -1,6 +1,6 @@
 # retro/terraform
 
-Infrastructure-as-code for the **Oracle / TruthMachine box** (`i-00ac444b94c5ff9b2`)
+Infrastructure-as-code for the **Oracul / TruthMachine box** (`i-00ac444b94c5ff9b2`)
 — the EC2 instance that serves `oracle.daatan.com` (Oracle FastAPI), `bayes.daatan.com`
 (BayesOracle), and runs the `truthmachine.service` batch pipeline.
 

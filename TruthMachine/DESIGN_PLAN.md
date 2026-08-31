@@ -8,7 +8,7 @@
 
 TruthMachine is a **B2B oracle SaaS** built on a retroactive media accuracy audit. It has two distinct outputs:
 
-1. **Oracle API** — probability estimates for future events (e.g., `"Chances of Netanyahu winning elections: 0.76"`), sold via API to corporate clients, hedge funds, Polymarket traders, and government agencies.
+1. **Oracul API** — probability estimates for future events (e.g., `"Chances of Netanyahu winning elections: 0.76"`), sold via API to corporate clients, hedge funds, Polymarket traders, and government agencies.
 2. **Media Reputation Rankings** — journalist and outlet accuracy scores (Brier Score, custom ELO variant). Free tier shows public leaderboard; paid tier gives raw data and full API access.
 
 ### The Factum Atlas
@@ -122,7 +122,7 @@ Multiple extractions for the same article (different models or refined prompts) 
 
 ---
 
-## 9. Oracle Model
+## 9. Oracul Model
 
 Generates calibrated probability estimates from the full forensic feature vector.
 
@@ -152,7 +152,7 @@ TruthMachine is designed to run within the broader **Daatan Infrastructure** (se
 ### Inference Layer
 - **Current:** All LLM calls go directly to **AWS Bedrock** (Nova Micro for gatekeeper, Nova Lite for extractor) via `litellm` with `instructor` for structured output. OpenRouter quota was exhausted in early testing; Bedrock is the live backend.
 - **Models in use:** `bedrock/amazon.nova-micro-v1:0` (gatekeeper), `bedrock/amazon.nova-lite-v1:0` (extractor + aggregator)
-- **Oracle API:** Calls the same pipeline modules directly — no separate proxy layer needed.
+- **Oracul API:** Calls the same pipeline modules directly — no separate proxy layer needed.
 
 ---
 

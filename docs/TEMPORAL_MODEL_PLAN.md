@@ -1,4 +1,4 @@
-# Oracle temporal-model plan ("formula") — v2.1
+# Oracul temporal-model plan ("formula") — v2.1
 
 v2 incorporates the 45-agent adversarial review of v1 (48 findings raised, 47 confirmed,
 1 refuted, 4 gaps; full record in `temporal-plan/review_result.json`). Every change below is traceable
@@ -14,13 +14,13 @@ forward-only availability (§4 Stage B).
 
 ## 1. Problem (unchanged from v1)
 
-The Oracle (retro, `api/src/forecast_api/`) estimates forecast probabilities by having
+The Oracul (retro, `api/src/forecast_api/`) estimates forecast probabilities by having
 news articles vote on P directly: per-article stance extraction (LLM), then logit-pooling
 weighted by credibility × certainty × recency × relevance². Diagnosed production failures:
 
 - **Frozen estimates**: Knicks forecast sat at 82% for two weeks after the title was
   decided; 77 of 102 open forecasts had no update in 7+ days. Updates are 100%
-  push-driven (news-indexer match → daatan POST → Oracle). Nothing recomputes on a quiet
+  push-driven (news-indexer match → daatan POST → Oracul). Nothing recomputes on a quiet
   day.
 - **No deadline awareness**: "X by Dec 31" holds its stale number regardless of time
   remaining.
@@ -215,7 +215,7 @@ The actual MVP. Deliverables:
 1. **Daily requote cron**: `src/app/api/cron/requote/route.ts` + GitHub Actions schedule
    (pattern: external-market-sync.yml). Iterates ACTIVE forecasts with temporal
    metadata; prices P(t) **locally in daatan from the last snapshot + metadata** (pure
-   arithmetic, no Oracle call, no search, no LLM — cost ≈ zero). The retro round-trip
+   arithmetic, no Oracul call, no search, no LLM — cost ≈ zero). The retro round-trip
    and its 1h forecast cache are simply not on this path (cache staleness across a
    boundary is thereby moot; the push path still hits retro as today).
 2. **Prisma migration** (§3.4 fields) + creation-hook classifier + one-shot backfill +
@@ -339,8 +339,8 @@ shipped settlement pin, and generates the residual data every escalation decisio
 
 ## 5. Open questions (carried, updated)
 
-- Market/API data as first-class Oracle measurements (Brent spot, FIDE, polls) — still
-  open; changes the Oracle's identity.
+- Market/API data as first-class Oracul measurements (Brent spot, FIDE, polls) — still
+  open; changes the Oracul's identity.
 - UI explainability of clock drift: Stage 0 ships the minimal version (snapshot kind,
   gauge annotation "includes time-remaining adjustment — deadline in N days"); a richer
   drift visualization is open.

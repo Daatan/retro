@@ -266,14 +266,14 @@ class Grounds(BaseModel):
     citing a milestone, a poll and a precedent agree for three. The pool's n_eff
     counts articles where it means to count reasons, and this is the field that
     lets it count reasons: `kind` is the closed pick the count is taken over,
-    `basis` the phrase that lets two `official_statement` rows be recognised as
+    `basis` the phrase that lets two `authority_asserted` rows be recognised as
     the same statement. Not an `evidence_class` extension — that enum stays flat.
 
     Carried verbatim from the elicited `tm.models.Grounds`, like `Voice` above.
 
     EXPERIMENTAL shadow — persisted, read by nothing.
     """
-    kind: Literal["observed_milestone", "official_statement", "market_or_poll_figure", "analyst_inference", "precedent_or_base_rate", "authors_judgement"] = Field(description="What the position rests on: observed_milestone (a thing that happened), official_statement (what a body or official said), market_or_poll_figure (a price, odds or poll number), analyst_inference (reasoning from the situation), precedent_or_base_rate (how such things usually go), authors_judgement (the writer's own view with nothing else behind it)")
+    kind: Literal["event_observed", "authority_asserted", "market_or_poll_number", "expert_inference", "historical_base_rate", "writer_assertion"] = Field(description="What the position rests on: event_observed (a thing that happened), authority_asserted (what a body or official said), market_or_poll_number (a price, odds or poll number), expert_inference (reasoning from the situation), historical_base_rate (how such things usually go), writer_assertion (the writer's own view with nothing else behind it)")
     basis: Optional[str] = Field(default=None, description="One short phrase naming the fact or reasoning itself, in the article's terms. None when the model named nothing — the prompt asks for it whenever the article gives anything to name")
 
 

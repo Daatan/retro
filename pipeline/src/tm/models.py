@@ -235,12 +235,21 @@ _REPORT_KIND_VALUES = frozenset({"level", "change"})
 _TONE_VALUES = frozenset({"approve", "neutral", "alarm"})
 # retro#763. `evidence_class` is LOAD-BEARING and has always been strict: an out-of-enum
 # answer raised out of ExtractionOutput and dropped the article. Measured on v12's first
-# A/B, both raters wrote the GROUNDS kind `official_statement` into `evidence_class` on
-# four corpus cases, 5/5 runs each — deterministic, so a real forecast on such an article
-# would lose the article on every call. The prompt now says the two enums never share a
-# value, and this guard is the floor under the prompt: a leak costs the class (None =
-# unclassified, the documented "omit rather than guess" outcome) and never the claim.
-# Logged as `event=evidence_class_malformed` so the leak rate stays measurable.
+# A/B, both raters wrote the GROUNDS kind then spelled `official_statement` into
+# `evidence_class` on four corpus cases, 5/5 runs each — deterministic, so a real forecast
+# on such an article would lose the article on every call.
+#
+# Two independent fixes, because the first one was not enough. (1) This guard: a leak costs
+# the class (None = unclassified, the documented "omit rather than guess" outcome) and never
+# the claim, logged as `event=evidence_class_malformed` so the rate stays measurable. (2) The
+# GROUNDS vocabulary was RENAMED to share no lexical stem with the five classes —
+# `official_statement` → `authority_asserted`, and likewise for the rest. Saying "the two
+# enums never share a value" in both prompt sections did NOT stop it: across v12a/b/c the
+# leak held at 21 occurrences, and the guard converted a hard article drop into a silent
+# down-weight (`evidence_class is None` falls back to certainty capped at
+# `evidence_class_weight_unclassified_cap`, 0.25 — 4x below `reported_fact`). A field that is
+# read by nothing must not pay for itself in live weighting quality, so the names had to stop
+# colliding; the wording never could.
 _EVIDENCE_CLASS_VALUES = frozenset({
     "reported_fact", "cited_probability", "cited_share", "reporting", "opinion",
 })
@@ -376,7 +385,7 @@ def _drop_malformed_voice(data: Any) -> Any:
 # answer for one reason; three outlets citing a milestone, a poll and a precedent agree for
 # three. The pool cannot tell those apart today, so its n_eff counts articles where it
 # means to count reasons. `kind` is the closed pick the n_eff is taken over; `basis` is the
-# short phrase that lets two `official_statement` rows be recognised as the SAME statement.
+# short phrase that lets two `authority_asserted` rows be recognised as the SAME statement.
 #
 # NOT an `evidence_class` extension — that enum stays flat, permanently. Class is the path
 # the light took (reported / cited / opinion); grounds is what was seen at the far end.
@@ -389,14 +398,14 @@ class Grounds(BaseModel):
     # Billed on every call (schema ~29% of the prompt, retro#700): say WHICH value, not
     # HOW to find it. The GROUNDS block carries the rule and the worked examples.
     kind: Literal[
-        "observed_milestone", "official_statement", "market_or_poll_figure",
-        "analyst_inference", "precedent_or_base_rate", "authors_judgement",
+        "event_observed", "authority_asserted", "market_or_poll_number",
+        "expert_inference", "historical_base_rate", "writer_assertion",
     ] = Field(
-        description="What the quote's position rests on: 'observed_milestone' a thing that "
-                    "happened, 'official_statement' what a body or official said, "
-                    "'market_or_poll_figure' a price, odds or poll number, "
-                    "'analyst_inference' an expert's reasoning, 'precedent_or_base_rate' "
-                    "how such things usually go, 'authors_judgement' the writer's own view.",
+        description="What the quote's position rests on: 'event_observed' a thing that "
+                    "happened, 'authority_asserted' what a body or official said, "
+                    "'market_or_poll_number' a price, odds or poll number, "
+                    "'expert_inference' an expert's reasoning, 'historical_base_rate' "
+                    "how such things usually go, 'writer_assertion' the writer's own view.",
     )
     basis: Optional[str] = Field(
         default=None,

@@ -304,9 +304,10 @@ claim_strength, and vice versa. If a claim genuinely does not fit one category
 cleanly, OMIT the field entirely rather than guessing — a missing
 evidence_class is fine, a wrong one is worse than none.
 
-Choose exactly one of the FIVE below — nothing else is an evidence class. In particular \
-`official_statement`, `observed_milestone` and the other GROUNDS kinds are NOT evidence \
-classes: they answer what a position rests on and belong in `grounds.kind`, never here.
+Choose exactly one of the FIVE below — nothing else is an evidence class. The GROUNDS \
+kinds (`authority_asserted`, `event_observed`, and the rest) are a SEPARATE vocabulary \
+answering a different question, and no value belongs to both lists: what a position rests \
+on goes in `grounds.kind`, never here.
   reported_fact      — a plain declarative statement of something that
                         happened or is currently true (not hedged, not a
                         forecast). Independent of `settled`: a reported_fact
@@ -832,30 +833,30 @@ Two quotes can reach the same stance for the same reason or for different reason
 pool needs to know which: three outlets repeating one ministry statement are ONE ground, \
 three outlets citing a milestone, a poll and a precedent are three. Record what the quote \
 bases its position on — not the direction, not the strength, the REASON.
-  kind   — observed_milestone: something that happened — a vote held, a line opened, a \
+  kind   — event_observed: something that happened — a vote held, a line opened, a \
 figure published as fact
-           official_statement: what a government, court, company or official SAID
-           market_or_poll_figure: a price, odds, forecast-model number or poll result
-           analyst_inference: an expert's or reporter's reasoning from the situation
-           precedent_or_base_rate: how such things have gone before, or usually go
-           authors_judgement: the writer's own view with nothing else behind it
+           authority_asserted: what a government, court, company or official SAID
+           market_or_poll_number: a price, odds, forecast-model number or poll result
+           expert_inference: an expert's or reporter's reasoning from the situation
+           historical_base_rate: how such things have gone before, or usually go
+           writer_assertion: the writer's own view with nothing else behind it
   basis  — one short phrase naming the fact or reasoning itself, in the article's terms \
 ("the ministry's 12 March statement", "the 41% Ipsos figure", "no incumbent has lost \
 since 1992"). Omit only when the article gives nothing to name.
 `grounds` is not `evidence_class` and the two enums never share a value: class is the \
 ROUTE the information took (reported, cited, opinion); grounds is WHAT WAS SEEN at the \
-end of it. A quote can be `opinion` by class and still `market_or_poll_figure` by grounds \
+end of it. A quote can be `opinion` by class and still `market_or_poll_number` by grounds \
 when the columnist reasons from a poll. Answer for every quote — a bare assertion with \
-nothing behind it IS `authors_judgement`, not an omission. `grounds` never changes stance, \
+nothing behind it IS `writer_assertion`, not an omission. `grounds` never changes stance, \
 facet, evidence_class or any other field.
 
 Examples — related event: "Regulator R revokes operator O's licence by 31 March 2027":
   "Fourteen breaches were logged at the depot last quarter, the safety authority said"  \
-  →  {"kind": "official_statement", "basis": "the safety authority's Q3 breach figure"}
+  →  {"kind": "authority_asserted", "basis": "the safety authority's Q3 breach figure"}
   "Markets price a revocation at 70%, according to Exchange E"  \
-  →  {"kind": "market_or_poll_figure", "basis": "Exchange E's 70% price"}
+  →  {"kind": "market_or_poll_number", "basis": "Exchange E's 70% price"}
   "The regulator will not dare, whatever it says" (the columnist's own line)  \
-  →  {"kind": "authors_judgement"}
+  →  {"kind": "writer_assertion"}
 
 ## Output
 Extract up to 5 signals. Prefer higher-certainty ones but do not omit low-certainty \
@@ -939,8 +940,8 @@ And voice — {{"kind": one of byline / quoted_person / institution / wire / una
 "attributed_to": string (the name in the article's own words; OMITTED for byline and \
 unattributed)}} — whose assertion the quote is, per the VOICE section. Answer for every \
 prediction. \
-And grounds — {{"kind": one of observed_milestone / official_statement / \
-market_or_poll_figure / analyst_inference / precedent_or_base_rate / authors_judgement, \
+And grounds — {{"kind": one of event_observed / authority_asserted / \
+market_or_poll_number / expert_inference / historical_base_rate / writer_assertion, \
 "basis": string (one short phrase naming the fact or reasoning; OMITTED only when nothing \
 can be named)}} — what the quote's position RESTS ON, per the GROUNDS section. Answer for \
 every prediction.
@@ -959,7 +960,7 @@ Example — related event: "Assad regime falls in Syria":
       "report_kind": "change",
       "tone": "neutral",
       "voice": {{"kind": "byline"}},
-      "grounds": {{"kind": "analyst_inference", "basis": "pace of the rebel advance"}}
+      "grounds": {{"kind": "expert_inference", "basis": "pace of the rebel advance"}}
     }},
     {{
       "quote": "Rebels seized the capital on Sunday as Assad fled to Moscow",
@@ -978,7 +979,7 @@ Example — related event: "Assad regime falls in Syria":
       "report_kind": "change",
       "tone": "neutral",
       "voice": {{"kind": "byline"}},
-      "grounds": {{"kind": "observed_milestone", "basis": "capital seized, Assad fled to Moscow"}}
+      "grounds": {{"kind": "event_observed", "basis": "capital seized, Assad fled to Moscow"}}
     }}
   ],
   "consensus_view": "expects_yes",
@@ -1003,7 +1004,7 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
       "report_kind": "level",
       "tone": "neutral",
       "voice": {{"kind": "institution", "attributed_to": "Opta"}},
-      "grounds": {{"kind": "market_or_poll_figure", "basis": "Opta model's 6% probability"}}
+      "grounds": {{"kind": "market_or_poll_number", "basis": "Opta model's 6% probability"}}
     }}
   ],
   "consensus_view": "expects_no",
@@ -1034,7 +1035,7 @@ Example — related event: "Airline A operates more than 250 daily departures fr
       "quantity": {{"value": 214, "unit": "daily departures", "comparator": "="}},
       "tone": "neutral",
       "voice": {{"kind": "byline"}},
-      "grounds": {{"kind": "observed_milestone", "basis": "214 daily departures reported"}}
+      "grounds": {{"kind": "event_observed", "basis": "214 daily departures reported"}}
     }}
   ],
   "consensus_view": "divided",

@@ -930,8 +930,8 @@ class TestGrounds:
     """
 
     KINDS = (
-        "observed_milestone", "official_statement", "market_or_poll_figure",
-        "analyst_inference", "precedent_or_base_rate", "authors_judgement",
+        "event_observed", "authority_asserted", "market_or_poll_number",
+        "expert_inference", "historical_base_rate", "writer_assertion",
     )
 
     @staticmethod
@@ -944,10 +944,10 @@ class TestGrounds:
         assert self._pred(grounds={"kind": kind}).grounds.kind == kind
 
     def test_the_basis_rides_with_the_kind(self):
-        pred = self._pred(grounds={"kind": "official_statement",
+        pred = self._pred(grounds={"kind": "authority_asserted",
                                    "basis": "the ministry's 12 March statement"})
         assert (pred.grounds.kind, pred.grounds.basis) == (
-            "official_statement", "the ministry's 12 March statement")
+            "authority_asserted", "the ministry's 12 March statement")
 
     def test_it_defaults_to_none(self):
         """Every row extracted before v12 has none, and the prompt asks for it on
@@ -959,18 +959,18 @@ class TestGrounds:
         over, and a model that answers it and skips the phrase has answered the
         question the consumer asks first. Requiring the phrase would hand the drop
         guard a raise and null the pick with it."""
-        assert self._pred(grounds={"kind": "authors_judgement"}).grounds.basis is None
+        assert self._pred(grounds={"kind": "writer_assertion"}).grounds.basis is None
 
     def test_it_is_a_separate_axis_from_evidence_class(self):
         """The issue's own rule: class is the ROUTE the information took, grounds
         is WHAT WAS SEEN. A columnist reasoning from a poll is `opinion` by class
-        and `market_or_poll_figure` by grounds, and the schema must let the two
+        and `market_or_poll_number` by grounds, and the schema must let the two
         vary independently — a field that merely re-labelled `evidence_class`
         would fill at 100% and carry nothing."""
         pred = self._pred(evidence_class="opinion",
-                          grounds={"kind": "market_or_poll_figure", "basis": "the 41% Ipsos figure"})
+                          grounds={"kind": "market_or_poll_number", "basis": "the 41% Ipsos figure"})
         assert pred.evidence_class == "opinion"
-        assert pred.grounds.kind == "market_or_poll_figure"
+        assert pred.grounds.kind == "market_or_poll_number"
 
     @pytest.mark.parametrize("bad", [
         {},                                        # no kind
@@ -978,7 +978,7 @@ class TestGrounds:
         {"kind": "rumour"},                        # not an enum member
         {"kind": "Official_Statement"},            # right member, wrong case
         "the ministry said so",                    # the bare string, not the object
-        ["official_statement", "the ministry"],
+        ["authority_asserted", "the ministry"],
     ])
     def test_a_malformed_answer_is_dropped_and_the_prediction_survives(self, bad, caplog):
         import logging
@@ -993,8 +993,8 @@ class TestGrounds:
 
     def test_a_double_serialized_object_is_parsed(self):
         """retro#306: some models emit a nested object as a JSON string."""
-        pred = self._pred(grounds='{"kind": "precedent_or_base_rate", "basis": "no incumbent has lost since 1992"}')
-        assert pred.grounds == Grounds(kind="precedent_or_base_rate",
+        pred = self._pred(grounds='{"kind": "historical_base_rate", "basis": "no incumbent has lost since 1992"}')
+        assert pred.grounds == Grounds(kind="historical_base_rate",
                                        basis="no incumbent has lost since 1992")
 
     def test_constructing_it_directly_still_raises(self):
@@ -1004,7 +1004,7 @@ class TestGrounds:
             Grounds(kind="rumour")
 
     def test_it_survives_a_dump_validate_round_trip(self):
-        pred = self._pred(grounds={"kind": "observed_milestone", "basis": "the line opened on 3 May"})
+        pred = self._pred(grounds={"kind": "event_observed", "basis": "the line opened on 3 May"})
         assert PredictionExtraction.model_validate(pred.model_dump()).grounds == pred.grounds
 
     def test_it_does_not_pay_for_a_docstring(self):
@@ -1020,9 +1020,10 @@ class TestGrounds:
 class TestEvidenceClassGuard:
     """An out-of-enum `evidence_class` costs the class, not the article (retro#763).
 
-    Measured on v12's first A/B: both raters wrote the GROUNDS kind
-    `official_statement` into `evidence_class` on four corpus cases, 5/5 runs
-    each. `evidence_class` had always been strict, so every one of those runs
+    Measured on v12's first A/B: both raters wrote the GROUNDS kind then
+    spelled `official_statement` into `evidence_class` on four corpus cases,
+    5/5 runs each (the kinds were later renamed to stop the collision at the
+    source; this guard stays as the floor under that rename). `evidence_class` had always been strict, so every one of those runs
     raised out of ExtractionOutput — on a live forecast that is the article
     gone, deterministically, for a field confusion the prompt can only lower
     and never rule out.
@@ -1043,10 +1044,10 @@ class TestEvidenceClassGuard:
         import logging
 
         with caplog.at_level(logging.WARNING, logger="tm.models"):
-            pred = self._pred(evidence_class="official_statement",
-                              grounds={"kind": "official_statement", "basis": "the minister's announcement"})
+            pred = self._pred(evidence_class="authority_asserted",
+                              grounds={"kind": "authority_asserted", "basis": "the minister's announcement"})
         assert pred.evidence_class is None
-        assert pred.grounds.kind == "official_statement", "the right field keeps the answer"
+        assert pred.grounds.kind == "authority_asserted", "the right field keeps the answer"
         assert pred.claim_strength == 0.65
         assert "event=evidence_class_malformed" in caplog.text
 

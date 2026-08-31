@@ -9,7 +9,6 @@ shadow-only property this file locked in before the cutover.
 """
 
 import pytest
-from pydantic import ValidationError
 
 from forecast_api import forecaster
 from forecast_api.config import settings as api_settings
@@ -75,9 +74,16 @@ class TestPydanticContract:
     def test_defaults_to_none(self):
         assert PredictionExtraction(quote="q", claim="c", stance=0.0, certainty=0.5).evidence_class is None
 
-    def test_rejects_a_value_outside_the_five(self):
-        with pytest.raises(ValidationError):
-            _prediction(evidence_class="strong_opinion")
+    def test_a_value_outside_the_five_is_dropped_not_raised(self, caplog):
+        """retro#763: `_drop_out_of_enum` replaced the old raise (v12a lost the
+        whole article to a GROUNDS-kind leak, 5/5 runs on four corpus cases) —
+        an out-of-enum answer now costs the class, never the claim."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="tm.models"):
+            p = _prediction(evidence_class="strong_opinion")
+        assert p.evidence_class is None
+        assert "event=evidence_class_malformed" in caplog.text
 
 
 class TestWeightCutover:

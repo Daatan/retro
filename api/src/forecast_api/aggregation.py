@@ -736,7 +736,7 @@ def widen_ci_for_thin_evidence(
     # F16(c): one endpoint convention for the module. ``[0.0, 1.0]`` was a type
     # constraint standing where a policy bound belongs — it made the widening
     # term, whose whole purpose is to express LESS confidence, the only path by
-    # which the Oracle could publish "0%–100%": endpoints its own clamp declares
+    # which the Oracul could publish "0%–100%": endpoints its own clamp declares
     # unreachable. pool_sources cannot relax to match; its clamp is logit()'s
     # domain requirement.
     lo_p = clamp(min(stance_to_prob(ci_low), p) - extra_p, clamp_eps, 1.0 - clamp_eps)

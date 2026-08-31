@@ -1,6 +1,6 @@
 """retro#417 — short-form/Telegram evidence on /forecast's article path.
 
-Three Oracle-side losses for Telegram-sourced evidence, three pins:
+Three Oracul-side losses for Telegram-sourced evidence, three pins:
 
 1. t.me URLs are never origin-fetched. t.me serves a web preview that trafilatura
    extracts to near-nothing, so the fetch always lost the

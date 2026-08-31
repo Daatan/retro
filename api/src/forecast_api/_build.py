@@ -1,5 +1,5 @@
 """
-Version & build provenance for the Oracle API.
+Version & build provenance for the Oracul API.
 
 Resolves *what code is running* once at import (no per-request shelling), in this
 order — first hit wins for the commit fields:

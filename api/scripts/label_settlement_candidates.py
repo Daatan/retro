@@ -12,7 +12,7 @@ Three widening paths were considered; two are dead:
     the eventual resolution" — tops out at SEVEN examples. Prod has 59 resolved
     predictions and 12 that were ever pinned, and the intersection is 7 (4 of
     which still have their pool rows). `settlement_pin_ledger.jsonl` on the
-    Oracle box holds 12 entries, 5 contradicted. Not a label set.
+    Oracul box holds 12 entries, 5 contradicted. Not a label set.
   * **Replaying the verifier over more questions.** Generates more verdicts, but
     the verifier is the thing under test — its own output cannot grade it.
 

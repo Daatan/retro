@@ -18,17 +18,17 @@ Three modes:
     uv run python scripts/metaculus_backtest.py run-oracle questions.json \\
         --out results.json [--deployed-commit SHA] [--limit N]
         For each question, temporally slice the news corpus (search via the
-        Oracle's provider chain with date_to = the day before the question's
-        close) and run the real Oracle pipeline **in-process** against
+        Oracul's provider chain with date_to = the day before the question's
+        close) and run the real Oracul pipeline **in-process** against
         exactly that slice, via `/forecast`'s existing `articles` field —
-        no Oracle API change needed, this is retro#619's "Option 2".
+        no Oracul API change needed, this is retro#619's "Option 2".
         Verifies no returned article's `published_date` postdates the
         cutoff (retro#619's explicit ask); a question with a leaked article
         is recorded with `error: "leak"` rather than silently scored on
         hindsight.
 
     uv run python scripts/metaculus_backtest.py score results.json questions.json
-        Join Oracle's sliced probability against resolution + community
+        Join Oracul's sliced probability against resolution + community
         prediction and print calibration buckets, log score, and Brier
         score. A question without a resolution/CP value is reported as
         unscored, never silently dropped or treated as a pass (retro#395's
@@ -344,7 +344,7 @@ def cmd_score(args: argparse.Namespace) -> int:
         # until we have per-forecaster data, which the API does not expose.
         peer_log = mean_log - cp_log
         print(f"Community: mean Brier {cp_brier:.4f}, mean log score {cp_log:.4f} (n={cn})")
-        print(f"Oracle vs community (log score delta, our simplified 'peer score'): {peer_log:+.4f}")
+        print(f"Oracul vs community (log score delta, our simplified 'peer score'): {peer_log:+.4f}")
 
     for label, subset in (("hard-threshold", [r for r in rows if r["hard_threshold"]]), ("loose-worded", [r for r in rows if not r["hard_threshold"]])):
         if subset:

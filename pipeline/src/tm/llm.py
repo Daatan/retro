@@ -86,7 +86,7 @@ def rendered_response_schema(response_model) -> str:
 # Retry schedule (seconds) for transient rate-limit / throttling errors.
 RATE_LIMIT_BACKOFF = [30, 60, 120]
 
-# retro#600: under memory pressure on the Oracle box, an async coroutine's
+# retro#600: under memory pressure on the Oracul box, an async coroutine's
 # deadline can expire while the event loop is stalled (GC pause, swap I/O) and
 # then fire the instant the loop resumes — logging near-zero elapsed time
 # despite a much longer real wall-clock stall. A genuine network timeout takes
@@ -269,7 +269,7 @@ async def complete_text_once_with_usage(
 
     Same call as :func:`complete_text_once`, but also returns the token usage
     (:func:`extract_usage`; ``{}`` when the backend reports none) — for callers
-    that surface spend, e.g. the Oracle API's ``token_usage`` response field
+    that surface spend, e.g. the Oracul API's ``token_usage`` response field
     (docs#57 item 3).
     """
     if messages is None:

@@ -1,7 +1,7 @@
 """Per-key API clients and the max_articles cap (docs#57 item 1).
 
 Staging shared the prod ``ORACLE_API_KEY`` and drove ~64 unmetered ``/forecast``
-calls/day into the prod Oracle; stopping the caller fixed the traffic but not
+calls/day into the prod Oracul; stopping the caller fixed the traffic but not
 the structure. These tests lock the structural half: named keys resolve to a
 capped ``ApiKeyClient``, the cap clamps both the search limit and the
 caller-supplied ``articles`` list (which used to bypass every cap), and a

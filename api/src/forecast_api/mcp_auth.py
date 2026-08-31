@@ -1,6 +1,6 @@
 """OAuth 2.1 Resource-Server auth for the MCP endpoint.
 
-The Oracle is a Resource Server: it does not log anyone in, it only verifies the
+The Oracul is a Resource Server: it does not log anyone in, it only verifies the
 Bearer JWT access tokens minted by the Cognito user pool (the Authorization
 Server) and maps their scopes to allowed tools.
 

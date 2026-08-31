@@ -20,7 +20,7 @@ recurring shape), not to settle the question today.
 
 ## Inputs
 
-``--ledger`` — ``settlement_pin_ledger.jsonl`` off the Oracle box
+``--ledger`` — ``settlement_pin_ledger.jsonl`` off the Oracul box
 (``data/settlement_pin_ledger.jsonl``; ``GET /leaderboard/settlement-pin-report``
 serves the same rows).
 

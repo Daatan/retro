@@ -1310,7 +1310,7 @@ async def _process_article_bounded(
 
 
 def _may_supply_verdict(client: Optional[ApiKeyClient]) -> bool:
-    """True when ``client`` is allowlisted to hand the Oracle its own gatekeeper verdict
+    """True when ``client`` is allowlisted to hand the Oracul its own gatekeeper verdict
     (retro#536).
 
     ``reuse_supplied_relevance`` alone only said "reuse is on"; it never asked WHOSE verdict
@@ -1469,7 +1469,7 @@ async def _process_article(
         # Reuse the caller's gatekeeper verdict instead of re-judging. The SAME claim-aware
         # judge (tm.gatekeeper) already ran once upstream — in news-indexer's POST /relevance —
         # before this article was pushed. Only the duplicate RELEVANCE call is skipped; the
-        # extractor below still runs (the Oracle is the only place stance/predictions are
+        # extractor below still runs (the Oracul is the only place stance/predictions are
         # produced). Design: news-indexer docs/MATCHING_ARCHITECTURE.md §3.
         is_pred, relevance_score = supplied
         gate = GatekeeperOutput(
@@ -1827,7 +1827,7 @@ async def run_forecast(
             )
             req.articles = req.articles[:cap]
     # Caller allowlist for supplied gatekeeper verdicts (retro#536). `ArticleInput.relevance`
-    # / `.is_prediction` let a caller hand the Oracle a verdict and skip the real judge
+    # / `.is_prediction` let a caller hand the Oracul a verdict and skip the real judge
     # entirely; strip them here, at the trust boundary where the request meets the caller's
     # identity, so `_supplied_verdict` downstream can only ever see a verdict we accepted.
     # Fail-safe: a dropped verdict costs one gatekeeper call and lands on the pre-existing

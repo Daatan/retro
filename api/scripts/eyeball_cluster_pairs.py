@@ -9,7 +9,7 @@ number -- `event=evidence_clusters` never logs pair-level text, only aggregate
 stats, so there was no way to tell real echo from coincidence before this.
 
 Input: a JSON dump of per-prediction pool rows from the daatan prod DB (the DB
-lives on the daatan prod box, not the Oracle box). Print the ready-to-run dump
+lives on the daatan prod box, not the Oracul box). Print the ready-to-run dump
 command with:
 
     python api/scripts/eyeball_cluster_pairs.py --sql

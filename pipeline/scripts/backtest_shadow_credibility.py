@@ -18,7 +18,7 @@ script makes no API calls:
   cd api && ORACLE_API_KEY=unused uv run python \\
       ../pipeline/scripts/backtest_shadow_credibility.py ../data/resolution_feedback.jsonl
 
-Pull the live file off the Oracle box first — it is not in git:
+Pull the live file off the Oracul box first — it is not in git:
 
   ~/.claude/skills/ssm-exec/ssm-run.sh oracle \\
       'cat /home/ubuntu/truthmachine/data/resolution_feedback.jsonl'

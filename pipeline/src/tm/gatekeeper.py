@@ -203,7 +203,7 @@ def carries_proposition(article_text: str) -> bool:
     was `https://www.c14.co.il/article/1641278` (37 chars) was judged against 127 open forecasts and
     endorsed for 76 of them at relevance 0.7–1.0, with invented justifications — "provides a direct
     statement about Elon Musk tweeting about Daatan by December 31, 2028" for an article that is one
-    URL. Five such articles have cost 644 judgments and 247 downstream Oracle runs.
+    URL. Five such articles have cost 644 judgments and 247 downstream Oracul runs.
 
     So the prompt rule above teaches it, and this enforces it: prompt rules are advisory, and this
     verdict gets PERSISTED by news-indexer and can be reused downstream in place of a fresh judgment

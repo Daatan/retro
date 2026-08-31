@@ -7,7 +7,7 @@ computes temporally-valid Brier scores for both sides and renders duel.html.
 Comparison protocol:
   T = 7 days before outcome_date
   PM probability  : last available price on or before T (inverted if ev["polymarket"]["invert"])
-  TM probability  : Oracle API forecast using articles published <= T, converted (stance+1)/2
+  TM probability  : Oracul API forecast using articles published <= T, converted (stance+1)/2
 
 TM predictions are fetched live from oracle.daatan.com (or ORACLE_URL) and
 cached in data/duel_oracle/{event_id}.json.  Set ORACLE_API_KEY, or rely on
@@ -106,7 +106,7 @@ def pm_probability(ev: dict, t_days: int) -> Optional[float]:
 def _load_vault2_articles(data_dir: Path, eid: str, cutoff_str: str) -> list[dict]:
     """
     Return vault2 articles for event ``eid`` published on or before ``cutoff_str``.
-    Each dict has url, title, text, published_date — ready for Oracle ArticleInput.
+    Each dict has url, title, text, published_date — ready for Oracul ArticleInput.
     """
     from urllib.parse import urlparse
 
@@ -123,7 +123,7 @@ def _load_vault2_articles(data_dir: Path, eid: str, cutoff_str: str) -> list[dic
         if article_hash in seen_hashes:
             continue
         # Negative markers (docs#57 item 2) record gate-rejected / no-prediction
-        # articles — those must not be fed to the Oracle as forecast input.
+        # articles — those must not be fed to the Oracul as forecast input.
         try:
             if is_negative_marker(json.loads(path.read_text())):
                 continue
@@ -164,7 +164,7 @@ def _load_vault2_articles(data_dir: Path, eid: str, cutoff_str: str) -> list[dic
 
 def fetch_tm_probabilities_oracle(data_dir: Path, events: list[dict], t_days: int) -> dict[str, dict]:
     """
-    For each event with oracle_question, run Oracle's full pipeline on vault2 articles.
+    For each event with oracle_question, run Oracul's full pipeline on vault2 articles.
 
     Flow per event:
       1. Gather vault2 articles published on or before outcome_date - t_days
@@ -182,7 +182,7 @@ def fetch_tm_probabilities_oracle(data_dir: Path, events: list[dict], t_days: in
             api_key = ssm.get_parameter(
                 Name="/daatan/shared/secrets/ORACLE_API_KEY", WithDecryption=True
             )["Parameter"]["Value"].strip()
-            console.print("[dim]Oracle API key loaded from SSM Parameter Store[/dim]")
+            console.print("[dim]Oracul API key loaded from SSM Parameter Store[/dim]")
         except Exception as e:
             console.print(f"[red]ORACLE_API_KEY not set and SSM fetch failed: {e}[/red]")
 
@@ -259,7 +259,7 @@ def fetch_tm_probabilities_oracle(data_dir: Path, events: list[dict], t_days: in
         for attempt in range(3):
             if attempt > 0:
                 backoff = 15 * (2 ** (attempt - 1))
-                console.print(f"  [dim]Oracle retry {attempt}/2 — backoff {backoff}s[/dim]")
+                console.print(f"  [dim]Oracul retry {attempt}/2 — backoff {backoff}s[/dim]")
                 time.sleep(backoff)
             try:
                 fr = httpx.post(
@@ -284,7 +284,7 @@ def fetch_tm_probabilities_oracle(data_dir: Path, events: list[dict], t_days: in
 
         is_placeholder = bool(forecast.get("placeholder"))
         if is_placeholder:
-            console.print(f"  [yellow]{eid}: Oracle returned placeholder (gatekeeper rejected all articles)[/yellow]")
+            console.print(f"  [yellow]{eid}: Oracul returned placeholder (gatekeeper rejected all articles)[/yellow]")
 
         mean = forecast.get("mean", 0.0) if not is_placeholder else None
         articles_used = forecast.get("articles_used", 0)
@@ -303,7 +303,7 @@ def fetch_tm_probabilities_oracle(data_dir: Path, events: list[dict], t_days: in
         write_path = cache_dir / f"{eid}_T{t_days}.json"
         write_path.write_text(json.dumps(entry, indent=2))
         result[eid] = entry
-        console.print(f"  [green]{eid}: p={probability} (n={articles_used} Oracle articles)[/green]")
+        console.print(f"  [green]{eid}: p={probability} (n={articles_used} Oracul articles)[/green]")
 
     return result
 
@@ -1161,7 +1161,7 @@ def render_html(
   <strong>Methodology:</strong>
   PM probability = last CLOB price on or before <em>outcome_date − {t_days} days</em>
   (inverted where PM question is framed as "will X survive?" vs our event "X was killed").<br>
-  TM probability = Oracle API forecast (gatekeeper+extractor+credibility weighting) on vault2 articles published ≤ T, converted (stance+1)/2.<br>
+  TM probability = Oracul API forecast (gatekeeper+extractor+credibility weighting) on vault2 articles published ≤ T, converted (stance+1)/2.<br>
   All {n_compared} events resolved YES (our dataset captures things that happened).
   Brier score: lower = better. Range [0, 1].
 </div>
@@ -1236,7 +1236,7 @@ def render_html(
     <tr>
       <th>ID</th><th>TM Event</th><th>Out</th><th>PM Question</th>
       <th>PM@T-{t_days}d</th><th title="days before event that PM price was recorded">T_PM</th>
-      <th>TM prob</th><th title="Oracle articles used">n</th>
+      <th>TM prob</th><th title="Oracul articles used">n</th>
       <th>PM Brier</th><th>TM Brier</th><th>Winner</th>
     </tr>
   </thead>
@@ -1363,7 +1363,7 @@ def main():
         removed = list(cache_dir.glob("*.json"))
         for f in removed:
             f.unlink()
-        console.print(f"[yellow]Cleared {len(removed)} cached Oracle results[/yellow]")
+        console.print(f"[yellow]Cleared {len(removed)} cached Oracul results[/yellow]")
 
     events = load_events_with_pm(data_dir)
     console.print(f"Events with PM price data: {len(events)}")
@@ -1384,9 +1384,9 @@ def main():
                     tm_probs[eid] = cached
         console.print(f"Events loaded from cache (--html-only): {len(tm_probs)}")
     else:
-        console.print(f"Fetching TM predictions from Oracle API (T-{args.t_days}d cutoff)...")
+        console.print(f"Fetching TM predictions from Oracul API (T-{args.t_days}d cutoff)...")
         tm_probs = fetch_tm_probabilities_oracle(data_dir, events, args.t_days)
-        console.print(f"Events with Oracle predictions: {len(tm_probs)}")
+        console.print(f"Events with Oracul predictions: {len(tm_probs)}")
 
     rows = build_rows(events, tm_probs, args.t_days)
 

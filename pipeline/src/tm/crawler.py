@@ -1,7 +1,7 @@
 """
 Sitemap-based news crawler for Atlas pipeline coverage.
 
-Replaces expensive SERP calls for cells where Oracle /search returns 0
+Replaces expensive SERP calls for cells where Oracul /search returns 0
 domain-matched results. Discovers article URLs via sitemaps (free, dated,
 no API key), extracts full text with trafilatura + BeautifulSoup fallback,
 and saves to data/raw_ingest/{source_id}/{event_id}/ — the exact format that

@@ -275,7 +275,7 @@ class TestCompleteText:
         llm.asyncio.sleep.assert_not_awaited()
 
     async def test_with_usage_returns_text_and_usage(self, monkeypatch):
-        # The Oracle API's token_usage response field (docs#57 item 3) rides on
+        # The Oracul API's token_usage response field (docs#57 item 3) rides on
         # this sibling: same call, but the usage is returned instead of dropped.
         resp = self._resp("hello")
         resp.usage = SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15)

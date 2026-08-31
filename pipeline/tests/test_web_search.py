@@ -535,7 +535,7 @@ class TestNewsIndexerProvider:
     #
     # `SearchResult(**h)` turned news-indexer's response into a strict schema enforced by
     # TypeError, inside a bare `except Exception`. One added key upstream would take the
-    # free first-in-chain provider offline for every retro caller, move the Oracle onto
+    # free first-in-chain provider offline for every retro caller, move the Oracul onto
     # paid SERP, and swap the local semantic index for GDELT keyword matching — with no
     # counter moving and only a WARNING line to show for it. news-indexer has already
     # widened the sibling `/context` payload twice (relevance/isPrediction, then

@@ -218,7 +218,7 @@ class Orchestrator:
                 if domain in r.get("url", "")
             ]
             if len(raw) > 0 and len(domain_matched) == 0:
-                console.print(f"    [dim]Oracle returned {len(raw)} results but none from {domain} — skipping[/dim]")
+                console.print(f"    [dim]Oracul returned {len(raw)} results but none from {domain} — skipping[/dim]")
 
             articles = []
             for res in domain_matched[:5]:
@@ -255,7 +255,7 @@ class Orchestrator:
                 r.raise_for_status()
                 data = r.json()
         except Exception as e:
-            console.print(f"    [dim red]Oracle /search failed: {e}[/dim red]")
+            console.print(f"    [dim red]Oracul /search failed: {e}[/dim red]")
             return []
 
         results = []
@@ -268,7 +268,7 @@ class Orchestrator:
                 "author": "Unknown",
                 "url": item.get("url", ""),
             })
-        console.print(f"    [dim]Oracle /search: {len(results)} results[/dim]")
+        console.print(f"    [dim]Oracul /search: {len(results)} results[/dim]")
         return results
 
     def local_file_search(
@@ -544,7 +544,7 @@ async def main():
                         help="Ignore vault cache and re-run LLM extraction for all articles. "
                              "Use after updating the extractor prompt.")
     parser.add_argument("--retry-empty", action="store_true",
-                        help="Re-run Oracle search for cells marked no_predictions. "
+                        help="Re-run Oracul search for cells marked no_predictions. "
                              "Vault LLM cache is preserved (unlike --force-reextract).")
     parser.add_argument("--events", nargs="+", default=None,
                         help="Specific event IDs to process (default: all in data/events/)")

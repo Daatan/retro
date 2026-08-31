@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Submit Daatan Oracle forecasts into a Metaculus tournament.
+"""Submit Daatan Oracul forecasts into a Metaculus tournament.
 
 Usage:
     cd /home/mark/projects/retro
@@ -21,7 +21,7 @@ Env vars:
                               metaculus.com for the new slug. If no season is
                               open the run logs that and exits without doing
                               anything.
-    MAX_QUESTIONS_PER_RUN     default 5 — caps Oracle calls per run (each one
+    MAX_QUESTIONS_PER_RUN     default 5 — caps Oracul calls per run (each one
                               costs real LLM spend and can take minutes).
     STALE_AFTER_HOURS          default 4 — re-forecast a question only if our
                               last submission is older than this, or missing.
@@ -148,7 +148,7 @@ def question_text(post: dict, question: dict) -> tuple[str, str | None]:
 
 
 def build_comment(result: dict, probability: float) -> str:
-    rationale = result.get("reason") or "Forecast from Daatan Oracle."
+    rationale = result.get("reason") or "Forecast from Daatan Oracul."
     comment = (
         f"{rationale}\n\nOracle p={probability:.2f} "
         f"(mean stance {result.get('mean', 0):.3f}, {result.get('articles_used', 0)} articles)."
@@ -194,11 +194,11 @@ def run(
             try:
                 result = oc.forecast(title, resolution_criteria=criteria)
             except Exception:
-                log.exception("Oracle forecast failed for post %d, skipping", post_id)
+                log.exception("Oracul forecast failed for post %d, skipping", post_id)
                 continue
 
             if result.get("insufficient_data") or result.get("mean") is None:
-                log.info("Oracle returned insufficient_data for post %d, skipping", post_id)
+                log.info("Oracul returned insufficient_data for post %d, skipping", post_id)
                 continue
 
             probability = (result["mean"] + 1) / 2

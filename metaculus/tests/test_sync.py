@@ -99,7 +99,7 @@ class TestBuildComment:
 
     def test_missing_reason_falls_back(self):
         comment = build_comment({}, probability=0.5)
-        assert "Forecast from Daatan Oracle." in comment
+        assert "Forecast from Daatan Oracul." in comment
 
 
 def test_required_env_rejects_unset_and_blank(monkeypatch):

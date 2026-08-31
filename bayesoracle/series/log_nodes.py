@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Daily Oracle series for the bayesoracle graph node questions (retro#577).
+"""Daily Oracul series for the bayesoracle graph node questions (retro#577).
 
-Asks the (v1) Oracle ``POST /forecast`` every node question in ``questions.json``
+Asks the (v1) Oracul ``POST /forecast`` every node question in ``questions.json``
 and appends one JSON line per node per UTC day to a JSONL file, so that v2 can
 later be scored *paired* against v1 (design note §8) and first-difference
 co-movement between nodes can be measured.
@@ -27,7 +27,7 @@ from typing import Callable
 HERE = Path(__file__).resolve().parent
 QUESTIONS_FILE = HERE / "questions.json"
 DEFAULT_ENV_FILES = (
-    HERE.parent.parent / ".env",                 # repo root (Oracle box batch tree)
+    HERE.parent.parent / ".env",                 # repo root (Oracul box batch tree)
     HERE.parent.parent / "pipeline" / ".env",
 )
 DEFAULT_API = "http://127.0.0.1:8001"
@@ -109,7 +109,7 @@ def logged_today(out: Path, date: str) -> set[str]:
 
 
 def _to_prob(x):
-    """Oracle stance mean/ci are on [-1, 1]; probability = (mean + 1) / 2."""
+    """Oracul stance mean/ci are on [-1, 1]; probability = (mean + 1) / 2."""
     return None if x is None else round((float(x) + 1) / 2, 4)
 
 

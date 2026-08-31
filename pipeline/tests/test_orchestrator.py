@@ -8,7 +8,7 @@ Previously had zero coverage. These tests exercise:
     reuse, force-reextract, article-level aggregation (and its failure
     path), vault writing.
   - search_articles()/local_file_search()/_oracle_search(): mode dispatch,
-    date-window/liveblog/stub filtering, Oracle API-key gating, domain
+    date-window/liveblog/stub filtering, Oracul API-key gating, domain
     matching, and network-error handling.
   - _write_cell_signal() and create_atlas_link(): the atlas-writing helpers.
 

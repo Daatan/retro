@@ -4,7 +4,7 @@ WHY THIS EXISTS AND WHAT IT IS NOT
 ----------------------------------
 retro#688 asks to route ``claim_archetype = threshold`` questions to Haiku 4.5 in the
 batch lane. **The batch lane has no ``claim_archetype``.** That field lives on the live
-Oracle's ``ForecastRequest`` and its own description says where it comes from:
+Oracul's ``ForecastRequest`` and its own description says where it comes from:
 
     "Temporal archetype from the caller's claim classifier."
 

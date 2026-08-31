@@ -5,7 +5,7 @@ reference — a polymarket.com URL, an event/market slug, or a numeric Gamma mar
 id — to a live Gamma market dict, and pulls the current YES-outcome price from it.
 
 Keeps Gamma/CLOB specifics out of the tool layer. NB: the local dev network is
-firewalled off polymarket.com/gamma, so these run only on the Oracle host / prod
+firewalled off polymarket.com/gamma, so these run only on the Oracul host / prod
 (see the "Polymarket search quirks" runbook).
 """
 

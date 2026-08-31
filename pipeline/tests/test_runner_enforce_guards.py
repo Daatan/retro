@@ -1,6 +1,6 @@
 """retro#428: the batch pipeline (runner.run_article, which orchestrator.py calls
 for every article) must apply the same enforce_*/flag_* safety chain
-forecast_api/forecaster.py already runs on the live Oracle path. Without it, bugs
+forecast_api/forecaster.py already runs on the live Oracul path. Without it, bugs
 already found and fixed for the live path (24.4% of precursor rows, 30.3% of
 interested-party rows over-cap) reproduce silently in the batch/atlas path and get
 cached indefinitely by (article_hash, event_id, prompt_version)."""
@@ -107,7 +107,7 @@ async def test_well_formed_prediction_is_left_untouched():
 
 async def test_winner_entity_conflict_is_neutralised_using_article_event_name():
     """retro#401: the batch path must run enforce_winner_entity_consistency
-    exactly like the live Oracle path, keyed on article.event_name (runner.py
+    exactly like the live Oracul path, keyed on article.event_name (runner.py
     has no separate `question` field — event_name IS the question here)."""
     gate = GatekeeperOutput(is_prediction=True, reason="looks predictive")
     preds = [PredictionExtraction(
@@ -137,7 +137,7 @@ async def test_settlement_contradicting_its_own_fact_lane_is_neutralised():
     """retro#545: a `settled` claim whose `fact_signal` opposes its own stance is
     self-contradictory — the live 41-row Burnham cluster, `stance=-1.00 settled`
     off articles reporting he took office. Neutralised, not inverted, and the
-    batch path must run it like the live Oracle path (the batch feeds the atlas
+    batch path must run it like the live Oracul path (the batch feeds the atlas
     and Brier/ELO scoring, and caches its extraction indefinitely)."""
     preds = [PredictionExtraction(
         quote="q", claim="Burnham will remain PM", stance=-1.0, certainty=0.95,

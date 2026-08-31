@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Stage A driver for retro#526 — score stored Oracle estimates for outlier-ness.
+"""Stage A driver for retro#526 — score stored Oracul estimates for outlier-ness.
 
 Two modes:
 
     uv run python scripts/scan_outlier_estimates.py sql
         Print the ready-to-run prod dump command. The evidence lives in daatan's
-        Postgres on the daatan prod box, not on the Oracle box.
+        Postgres on the daatan prod box, not on the Oracul box.
 
     uv run python scripts/scan_outlier_estimates.py score dump.json [--out scan_a.json]
         Recompute every dumped snapshot against its own frozen roster and print
@@ -65,7 +65,7 @@ from forecast_api.outlier_scan import (  # noqa: E402
 
 # Runs inside `docker exec -i daatan-postgres psql -U daatan -d daatan -X -A -t`
 # on the daatan PROD box (i-04ea44d4243d35624) — the DB is there, not on the
-# Oracle box. Emits one JSON object per line (not one giant json_agg): a
+# Oracul box. Emits one JSON object per line (not one giant json_agg): a
 # truncated dump then fails to parse at the truncation point instead of
 # silently yielding a shorter array, which matters because SSM caps output at
 # ~24KB and this dump is megabytes — write it to a file on the box and pull it

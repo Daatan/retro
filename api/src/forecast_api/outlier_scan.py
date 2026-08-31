@@ -1,4 +1,4 @@
-"""Stage A of retro#526: measure stored Oracle estimates for outlier-ness
+"""Stage A of retro#526: measure stored Oracul estimates for outlier-ness
 against **the evidence they were actually computed from**.
 
 The question this answers is not "is this forecast right" — nothing here reads
@@ -227,7 +227,7 @@ class SnapshotRecord:
 
 
 def _lower_direction(value: Optional[str]) -> Optional[str]:
-    """daatan stores ``ARRIVAL``/``SURVIVAL``; the Oracle accepts only the
+    """daatan stores ``ARRIVAL``/``SURVIVAL``; the Oracul accepts only the
     lowercase pair and treats anything else as absent."""
     v = (value or "").lower() or None
     return v if v in ("arrival", "survival") else None

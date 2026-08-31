@@ -1,4 +1,4 @@
-"""Oracle build stamp on vault extraction records — retro#744.
+"""Oracul build stamp on vault extraction records — retro#744.
 
 Every vault JSON (positive extraction AND negative marker) carries
 ``oracle_version`` + ``git_sha`` so a record can be attributed to the code that

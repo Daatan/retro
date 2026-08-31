@@ -161,7 +161,7 @@ class TestThinEvidenceWidensCI:
     async def test_thin_pool_widens_ci_instead_of_deferring(self, monkeypatch):
         # On-subject articles (relevance 0.6, so NOT off-topic) but modest certainty
         # 0.3 → evidence mass = 2 × (1.0·0.3·1.0·0.6²) = 0.216 < 0.5 floor. The pool
-        # is thin, but it IS on-topic, so the Oracle no longer abstains — it emits an
+        # is thin, but it IS on-topic, so the Oracul no longer abstains — it emits an
         # estimate with a CI widened toward maximal uncertainty (a wide band reads as
         # "low confidence" honestly, instead of a deceptively tight one or a "no AI
         # estimate" hole). This is the Mythos case.

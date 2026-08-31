@@ -4,7 +4,7 @@ Handed a bare URL, a language model does not answer "there is nothing here"; it 
 prod on 2026-07-31 a t.me post whose entire text was `https://www.c14.co.il/article/1641278` was
 judged against 127 open forecasts and endorsed for 76 of them at relevance 0.7-1.0, with invented
 justifications ("provides a direct statement about Elon Musk tweeting about Daatan by December 31,
-2028"). Five articles of that shape have cost 644 judgments and 247 downstream Oracle runs.
+2028"). Five articles of that shape have cost 644 judgments and 247 downstream Oracul runs.
 
 Two layers, per the system-model principle that the prompt teaches and the code enforces. These
 tests pin the code layer, plus the two things that make it safe: it must not reject terse-but-real

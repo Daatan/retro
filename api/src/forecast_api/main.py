@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
     # Startup
     path = settings.resolved_leaderboard_path
     await refresh_cache(path)
-    logger.info("Oracle API starting — leaderboard: %d sources, port: %d", leaderboard_size(), settings.port)
+    logger.info("Oracul API starting — leaderboard: %d sources, port: %d", leaderboard_size(), settings.port)
     # The resolution-shadow board only feeds credibility when the cutover flag
     # is on, so skip the extra disk reads entirely when it isn't.
     shadow_board = shadow_feedback = None
@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
             await refresh_task
         except asyncio.CancelledError:
             pass
-        logger.info("Oracle API shut down")
+        logger.info("Oracul API shut down")
 
 
 _CORS_ORIGIN = "https://daatan.github.io"
@@ -377,7 +377,7 @@ async def relevance(
 
     Why it exists: news-indexer gates forecast↔article matching on embedding
     cosine, which *misranks* — a tangential article can outscore an on-topic one,
-    so genuinely relevant coverage never reaches the Oracle at all. news-indexer
+    so genuinely relevant coverage never reaches the Oracul at all. news-indexer
     calls this to give poorly-ranked candidates a second, claim-aware opinion.
 
     Stateless, and no search — one LLM call. It does not aggregate, does not
@@ -549,7 +549,7 @@ if _mcp is not None:
 
     # Which authorization server the protected-resource metadata points clients
     # at. With the DCR façade configured (human Claude-connector login), the
-    # Oracle origin advertises itself as the AS so it can inject a
+    # Oracul origin advertises itself as the AS so it can inject a
     # registration_endpoint Cognito lacks (see mcp_dcr.py); otherwise the metadata
     # points straight at the Cognito issuer (the M2M path needs no registration).
     if settings.dcr_enabled:

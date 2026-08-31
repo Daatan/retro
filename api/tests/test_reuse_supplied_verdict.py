@@ -1,4 +1,4 @@
-"""Phase 1.1 — the Oracle reuses a caller-supplied gatekeeper verdict instead of
+"""Phase 1.1 — the Oracul reuses a caller-supplied gatekeeper verdict instead of
 re-judging (kills the double-judge: the SAME judge already ran once in news-indexer's
 POST /relevance). Only the relevance call is skipped; the extractor still runs.
 

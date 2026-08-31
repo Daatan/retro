@@ -2,7 +2,7 @@
 
 The product's core claim is that it scores only predictions published *before*
 an event's outcome. A post-outcome article that reaches the atlas must never
-contribute to a source's leaderboard score (which the live Oracle reads as a
+contribute to a source's leaderboard score (which the live Oracul reads as a
 credibility weight). These tests lock that invariant at two layers:
 
 1. ``predates_outcome`` — the shared date guard.

@@ -85,7 +85,7 @@ class ArticleInput(BaseModel):
     )
     # Caller-supplied gatekeeper verdict (news-indexer's POST /relevance, threaded through
     # daatan). When BOTH are set, settings.reuse_supplied_relevance is on AND the calling API
-    # key is on settings.relevance_reuse_allowed_clients (retro#536), the Oracle reuses them
+    # key is on settings.relevance_reuse_allowed_clients (retro#536), the Oracul reuses them
     # instead of re-running check_is_prediction — the SAME judge already ran once upstream.
     # Additive and fail-open: omit them and today's behavior (re-judge) is unchanged.
     # The extractor still runs regardless; only the duplicate relevance judgment is skipped.
@@ -562,7 +562,7 @@ class FetchUrlResponse(BaseModel):
 # version on /health, relevance_bar on the response) and there is no
 # schema_version at all — daatan's oracle.ts prefix-matches
 # EXPECTED_API_VERSION = '0.1' against /version, so any base-version bump
-# silently disables the Oracle (LLM fallback). One `provenance` block, same
+# silently disables the Oracul (LLM fallback). One `provenance` block, same
 # shape whether it's v1 (this repo) or a future v2 engine, fixes both: a
 # real schema_version a caller can gate on, and the scattered fields
 # consolidated into one place instead of three.

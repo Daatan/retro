@@ -371,7 +371,7 @@ def test_quantitative_estimate_share_exclusion_present():
     is the enforcement; these strings keep the prompt teaching the same rule
     so the model's own stance/qe emissions stop encoding the category error.
 
-    A/B'd 2026-08-01 on live Haiku (Oracle box, 3 runs/side, 5 cases): the two
+    A/B'd 2026-08-01 on live Haiku (Oracul box, 3 runs/side, 5 cases): the two
     real Likud poll articles (the Kantar flash behind the bit-exact prod row +
     a Channel 13 jpost piece) emitted qe for a seat count in 3/6 baseline runs
     and 0/6 patched runs while keeping cited_share classification; the

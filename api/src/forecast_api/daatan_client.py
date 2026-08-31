@@ -1,6 +1,6 @@
 """Thin client for Daatan's public similar-forecasts lookup.
 
-Reused by the Oracle's precursor candidate-match step (retro#608) to check whether a
+Reused by the Oracul's precursor candidate-match step (retro#608) to check whether a
 decompose precursor already matches an open forecast in Daatan's own bank before pricing
 it fresh. ``GET /api/forecasts/similar`` is public and unauthenticated (Daatan's
 ``docs/API.md``), so no new secret or auth wiring is needed.

@@ -1,4 +1,4 @@
-"""Which Oracle build the batch lane is running (retro#744).
+"""Which Oracul build the batch lane is running (retro#744).
 
 Vault extraction JSONs record ``prompt_version`` and the two model ids, but
 until now not the *code* that produced them. The API tree stamps this on every

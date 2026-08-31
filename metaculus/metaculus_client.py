@@ -3,7 +3,7 @@
 Auth is a per-bot ``Authorization: Token`` header. Each Daatan bot identity
 (``daatan-v1``, and later ``daatan-v2``) has its own token — see README.md for
 where those live in Secrets Manager. Only binary questions are supported: the
-Oracle's ``mean`` stance in [-1, 1] maps cleanly to a binary probability, but
+Oracul's ``mean`` stance in [-1, 1] maps cleanly to a binary probability, but
 it has no numeric/date/categorical output shape today.
 """
 

@@ -1,6 +1,6 @@
 """
 Multi-provider news search with fallback chain.
-Used by the Oracle API (retro/api) and the pipeline (retro/pipeline).
+Used by the Oracul API (retro/api) and the pipeline (retro/pipeline).
 
 Fallback order:
   1. GDELT Doc API                  (free, no key — primary; news-only, reliable dates)
@@ -521,7 +521,7 @@ def _search_result_from_payload(h: dict) -> tuple["SearchResult", set[str]]:
 
     retro#459. The naive `SearchResult(**h)` makes every remote response a strict schema
     contract enforced by `TypeError` — so one added key on news-indexer's `/search` would
-    take the whole free first-in-chain provider offline, push the Oracle onto paid SERP,
+    take the whole free first-in-chain provider offline, push the Oracul onto paid SERP,
     and say so only in a WARNING line. news-indexer has already widened a *different*
     payload (`/context`) twice this way; daatan survived both because Zod strips unknown
     keys. This gives the search path the same tolerance.
@@ -1303,14 +1303,14 @@ def _search_gdelt_bq(
     Article titles are synthesized from the URL slug since GKG stores no titles.
 
     ``domains`` (optional): restrict to these outlets via ``SourceCommonName IN (...)``.
-    This is what makes per-source retro cells possible (the live Oracle chain leaves it
+    This is what makes per-source retro cells possible (the live Oracul chain leaves it
     None). It is *free*: the predicate adds no scanned columns, so a domain-filtered query
     costs the same bytes as an unfiltered one over the same window.
 
     ``max_rows`` (optional): override the SQL row cap (default ``min(limit*4, 100)``).
     ``LIMIT`` does not change bytes scanned in BigQuery, so a retro backfill can raise this
     to pull many outlets' URLs from a single per-event scan instead of paying for one scan
-    per source. The live Oracle path leaves it None and keeps the original cap.
+    per source. The live Oracul path leaves it None and keeps the original cap.
     """
     client = _get_bq_client()  # raises if not configured
 
@@ -1675,7 +1675,7 @@ def _warm_news_indexer(results: List[SearchResult]) -> None:
     (`POST /enqueue`) so a future identical query is served locally with no SERP cost. No-op
     when the result came from news_indexer itself (already indexed), nothing was found, or the
     indexer isn't configured. Runs in a daemon thread and never raises — /search is on the
-    Oracle latency path, so warming must not add latency or fail the search."""
+    Oracul latency path, so warming must not add latency or fail the search."""
     try:
         if not (NEWS_INDEXER_URL and NEWS_INDEXER_API_KEY):
             return

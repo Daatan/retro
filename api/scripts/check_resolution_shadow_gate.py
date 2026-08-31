@@ -3,7 +3,7 @@
 The gate (``settings.resolution_shadow_credibility_enabled``) stays off until
 ``count_resolutions()`` clears ``settings.resolution_shadow_min_global_predictions``
 scoreable resolutions. Before this script, checking that meant SSM-ing onto the
-Oracle box and re-deriving the count by hand each time. This just prints where
+Oracul box and re-deriving the count by hand each time. This just prints where
 things stand.
 
     uv run python scripts/check_resolution_shadow_gate.py [--path FILE]

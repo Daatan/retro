@@ -6,7 +6,7 @@ authorization server from our protected-resource metadata, fetches that AS's
 there (RFC 7591) — it hard-fails discovery with "does not support dynamic client
 registration" otherwise. Cognito publishes no such endpoint and can't be made to.
 
-So the Oracle origin advertises *itself* as the authorization server in metadata
+So the Oracul origin advertises *itself* as the authorization server in metadata
 only, and proxies the OAuth endpoints:
 
 - `/register` (RFC 7591 façade) returns the one pre-provisioned Cognito public
@@ -61,7 +61,7 @@ def _clean_scope(scope: str | None) -> str | None:
 
 
 def authorization_server_metadata(settings: ApiSettings) -> dict:
-    """RFC 8414 authorization-server metadata served at the Oracle origin.
+    """RFC 8414 authorization-server metadata served at the Oracul origin.
 
     `issuer` is our own origin (the URL clients fetched this document from, as
     RFC 8414 requires). authorization/token point at our own proxy endpoints

@@ -14,7 +14,7 @@ Two modes, automatic per prediction:
 fact_signal-era predictions resolve; re-run then.
 
 Input is a JSON dump of per-prediction pool rows from the daatan prod DB. The DB lives
-on the daatan prod box (not the Oracle box); print the ready-to-run dump command with:
+on the daatan prod box (not the Oracul box); print the ready-to-run dump command with:
 
   python pipeline/scripts/backtest_fact_signal_gate.py --sql
 
@@ -24,7 +24,7 @@ SSM output cap when pulling the dump back), then:
   ORACLE_URL=https://oracle.daatan.com ORACLE_API_KEY=... \\
       python pipeline/scripts/backtest_fact_signal_gate.py gate_data.json [gate_report.json]
 
-Stdlib-only; runs anywhere that can reach the Oracle -- including the prod box itself,
+Stdlib-only; runs anywhere that can reach the Oracul -- including the prod box itself,
 where the first run happened (/home/ubuntu/factsig_gate/, 2026-07-24; this file is that
 box script committed, unchanged in behavior). Throttled to /pool/aggregate's 60/min
 rate limit (THROTTLE env, seconds between calls).
@@ -114,7 +114,7 @@ def aggregate(oracle, key, rows, signal, cdir, cdl, drop_opinion=False):
 
 def main(argv):
     if "--sql" in argv:
-        print("# run on the daatan prod box (the DB is there, not on the Oracle box):")
+        print("# run on the daatan prod box (the DB is there, not on the Oracul box):")
         print("docker exec -i daatan-postgres psql -U daatan -d daatan -X -A -t <<'SQL'")
         print(DUMP_SQL + "SQL")
         return 0
@@ -131,7 +131,7 @@ def main(argv):
         rr = d.get("rows") or []
         if len(rr) < 3:
             continue
-        cdir = (d.get("claim_direction") or "").lower() or None  # daatan stores ARRIVAL/SURVIVAL; Oracle wants lowercase
+        cdir = (d.get("claim_direction") or "").lower() or None  # daatan stores ARRIVAL/SURVIVAL; Oracul wants lowercase
         if cdir not in ("arrival", "survival"):
             cdir = None
         cdl = (d.get("claim_deadline") or "")[:10] or None  # date only

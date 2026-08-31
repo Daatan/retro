@@ -211,7 +211,7 @@ _REPORT_KIND_VALUES = frozenset({"level", "change"})
 #
 # The two raters split completely, the same way they split on `quantity` (retro#683):
 #
-#   Haiku 4.5 (live Oracle)  fill 315/315. neutral 84%, approve 10%, alarm 6%.
+#   Haiku 4.5 (live Oracul)  fill 315/315. neutral 84%, approve 10%, alarm 6%.
 #                            6.3% of predictions are DISCORDANT (alarm at stance > 0, or
 #                            approve at stance < 0) — the pair the field exists to record,
 #                            and it lands precisely on PR#671's trap class: on

@@ -115,7 +115,7 @@ async def run_article(
             model=extractor_model,
         )
 
-        # Same enforce_*/flag_* chain forecaster.py runs on the live Oracle path
+        # Same enforce_*/flag_* chain forecaster.py runs on the live Oracul path
         # (retro#428) — batch feeds calibration, Brier/ELO scoring, and the
         # public atlas, and a bad extraction is cached indefinitely by
         # (article_hash, event_id, prompt_version), so skipping these here let

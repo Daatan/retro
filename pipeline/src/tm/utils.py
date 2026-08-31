@@ -65,7 +65,7 @@ def predates_outcome(article_date: str, outcome_date: str) -> bool:
 
     Scoring must only count predictions published on/before the event's
     outcome date — otherwise a post-event "prediction" leaks future knowledge
-    into the source's Brier/credibility score (which the live Oracle reads).
+    into the source's Brier/credibility score (which the live Oracul reads).
 
     Returns False *only* when the article date parses and is strictly after the
     outcome date. Missing/unparseable dates return True (conservative — don't

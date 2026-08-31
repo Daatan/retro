@@ -292,11 +292,11 @@ class ApiSettings(BaseSettings):
     # only effect is to let the push decision and the aggregation weight disagree by
     # nondeterministic noise. On by default; the flag remains as a kill switch —
     # setting REUSE_SUPPLIED_RELEVANCE=false restores re-judging without a code change.
-    # Oracle-discovered (SERP/GDELT) articles carry no verdict and are always judged.
+    # Oracul-discovered (SERP/GDELT) articles carry no verdict and are always judged.
     # Design: news-indexer docs/MATCHING_ARCHITECTURE.md §3.
     reuse_supplied_relevance: bool = True
     # Caller allowlist for the reuse path above (retro#536). Comma-separated ApiKeyClient
-    # names (auth.py) permitted to hand the Oracle a gatekeeper verdict. The flag above
+    # names (auth.py) permitted to hand the Oracul a gatekeeper verdict. The flag above
     # says "reuse is on"; this says WHOSE verdict may be reused — without it any holder of
     # any valid API key could skip claim-aware judging for its own requests just by
     # setting relevance/is_prediction on the request body. Defaults to the primary key
@@ -509,7 +509,7 @@ class ApiSettings(BaseSettings):
     #     2.292, 12.245 — France WC, England-Argentina, and a NO pin on "will
     #     the USA bomb Iran in 2025" whose ground truth was YES). Note that is
     #     not the same set as "predictions that resolved WRONG": a NO pin on a
-    #     claim that resolved wrong was a pin the Oracle got RIGHT. Mass was
+    #     claim that resolved wrong was a pin the Oracul got RIGHT. Mass was
     #     not what was wrong with any of the three — sign, subject and
     #     timeframe were (retro#360, #388). A quality floor is a floor on
     #     evidence, not on relevance-of-evidence.
@@ -537,7 +537,7 @@ class ApiSettings(BaseSettings):
     #
     # `enforce` is ON as of 2026-08-03. The replay (scripts/replay_settlement_
     # verifier.py, all 33 pins production has ever published, 0 errors) reproduced
-    # 5/5 on every pin with a known outcome — vetoing all three the Oracle got
+    # 5/5 on every pin with a known outcome — vetoing all three the Oracul got
     # WRONG and keeping both it got right — and every one of the 11 vetoes it
     # casts on the 27 still-active pins was reviewed individually and is
     # defensible: settled on 2021 articles, on a 2022 election, on an earthquake
@@ -690,8 +690,8 @@ class ApiSettings(BaseSettings):
 
     # ── MCP server / OAuth 2.1 (Cognito) ───────────────────────────────────
     # The /mcp endpoint (docs/ORACLE_MCP.md) is a Model Context Protocol server
-    # exposing the Oracle's tools to AI agents. Auth is MCP-native OAuth 2.1:
-    # the Oracle is a Resource Server that verifies Cognito-issued JWT access
+    # exposing the Oracul's tools to AI agents. Auth is MCP-native OAuth 2.1:
+    # the Oracul is a Resource Server that verifies Cognito-issued JWT access
     # tokens. The whole mount is CONDITIONAL on cognito_user_pool_id being set —
     # a deploy without these vars simply omits /mcp rather than failing startup,
     # so the REST API is never held hostage to Cognito config. (Unset here rather
@@ -710,7 +710,7 @@ class ApiSettings(BaseSettings):
     # Cognito has no Dynamic Client Registration, which Claude's MCP connector
     # requires (it refuses a static client_id and hard-fails discovery without a
     # registration_endpoint in the AS metadata). When BOTH of these are set, the
-    # Oracle origin advertises ITSELF as the authorization server (mcp_dcr.py) so
+    # Oracul origin advertises ITSELF as the authorization server (mcp_dcr.py) so
     # it can inject a registration_endpoint that hands back the one pre-provisioned
     # public client. Unset = the protected-resource metadata points straight at
     # Cognito (M2M client_credentials path only, no human login). See ORACLE_MCP.md.
@@ -790,7 +790,7 @@ class ApiSettings(BaseSettings):
 
     @property
     def mcp_as_issuer(self) -> Optional[str]:
-        """The authorization-server issuer the Oracle advertises for the DCR
+        """The authorization-server issuer the Oracul advertises for the DCR
         façade — its own origin (scheme://host of mcp_resource_url). This is the
         value clients fetch the AS metadata from, so it must equal metadata.issuer."""
         from urllib.parse import urlparse

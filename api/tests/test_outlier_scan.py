@@ -160,7 +160,7 @@ def test_unscorable_records_report_a_reason(raw, reason):
 
 
 def test_claim_direction_is_lowercased_and_anything_else_becomes_none():
-    """daatan stores ARRIVAL/SURVIVAL; the Oracle accepts only the lowercase
+    """daatan stores ARRIVAL/SURVIVAL; the Oracul accepts only the lowercase
     pair and treats anything else as absent (backtest_fact_signal_gate:127)."""
     assert parse_record(record([enriched()], claim_direction="ARRIVAL"))[0].claim_direction == "arrival"
     assert parse_record(record([enriched()], claim_direction="SIDEWAYS"))[0].claim_direction is None

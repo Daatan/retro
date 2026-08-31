@@ -1,0 +1,85 @@
+[
+  {
+    "id": "honorific-real-magal-teaser",
+    "event_name": "Benjamin Netanyahu will be the Prime Minister of Israel on December 31, 2026.",
+    "event_description": "Resolved based on official statements from the Israeli government or reputable international news sources (e.g., Reuters, AP) confirming Benjamin Netanyahu's position as Prime Minister of Israel on December 31, 2026.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-08-30",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "הערב בפטריוטים:\nראש הממשלה\nבנימין נתניהו\nתשע🔥",
+    "expect": {
+      "settled": false,
+      "is_occurrence": false,
+      "stance_band": "none"
+    },
+    "tags": [
+      "retro-770",
+      "honorific",
+      "real-row",
+      "defect"
+    ]
+  },
+  {
+    "id": "honorific-real-segal-lead-in",
+    "event_name": "Benjamin Netanyahu will be the Prime Minister of Israel on December 31, 2026.",
+    "event_description": "Resolved based on official statements from the Israeli government or reputable international news sources (e.g., Reuters, AP) confirming Benjamin Netanyahu's position as Prime Minister of Israel on December 31, 2026.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-08-30",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "חובב דמרי, בעלה של השרה גילה גמליאל:",
+    "expect": {
+      "settled": false,
+      "is_occurrence": false,
+      "stance_band": "none"
+    },
+    "tags": [
+      "retro-770",
+      "honorific",
+      "real-row",
+      "defect"
+    ]
+  },
+  {
+    "id": "honorific-real-english-passing-title",
+    "event_name": "Benjamin Netanyahu will be the Prime Minister of Israel on December 31, 2026.",
+    "event_description": "Resolved based on official statements from the Israeli government or reputable international news sources (e.g., Reuters, AP) confirming Benjamin Netanyahu's position as Prime Minister of Israel on December 31, 2026.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-08-30",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Prime Minister Benjamin Netanyahu toured the northern border on Thursday and told reservists that the winter training cycle would go ahead as planned. The defence ministry said the exercise involves three brigades.",
+    "expect": {
+      "settled": false,
+      "is_occurrence": false,
+      "stance_band": "none"
+    },
+    "tags": [
+      "retro-770",
+      "honorific",
+      "real-row",
+      "defect"
+    ]
+  },
+  {
+    "id": "honorific-real-tenure-control",
+    "event_name": "Benjamin Netanyahu will be the Prime Minister of Israel on December 31, 2026.",
+    "event_description": "Resolved based on official statements from the Israeli government or reputable international news sources (e.g., Reuters, AP) confirming Benjamin Netanyahu's position as Prime Minister of Israel on December 31, 2026.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-08-30",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Netanyahu's coalition lost its majority on Tuesday after two partners quit the government, and the Knesset scheduled a dissolution vote for next month. Commentators said he is unlikely to remain in office through the end of the year.",
+    "expect": {
+      "stance_sign": -1,
+      "settled": false
+    },
+    "tags": [
+      "retro-770",
+      "honorific",
+      "real-row",
+      "control"
+    ]
+  }
+]

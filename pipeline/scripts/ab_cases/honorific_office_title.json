@@ -1,0 +1,118 @@
+[
+  {
+    "id": "honorific-teaser-fragment",
+    "event_name": "Leader L will be head of government of country C on 2026-12-31",
+    "event_description": "Only reporting that bears on whether L still holds the post on the target date counts: a swearing-in, a resignation, a no-confidence vote, a coalition collapse, an election result, or polling on whether L will stay. Coverage that merely refers to L by their office title while reporting something else does not.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-08-30",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Tonight on the programme: Prime Minister L, the opposition's new campaign chief, and the panel on the week in politics.",
+    "expect": {
+      "settled": false,
+      "is_occurrence": false,
+      "stance_band": "none"
+    },
+    "tags": [
+      "retro-770",
+      "honorific",
+      "defect"
+    ]
+  },
+  {
+    "id": "honorific-passing-mention-other-topic",
+    "event_name": "Leader L will be head of government of country C on 2026-12-31",
+    "event_description": "Only reporting that bears on whether L still holds the post on the target date counts: a swearing-in, a resignation, a no-confidence vote, a coalition collapse, an election result, or polling on whether L will stay. Coverage that merely refers to L by their office title while reporting something else does not.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-08-30",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Prime Minister L said on Thursday that the new transport budget would clear its second reading this month, adding that the rail extension to the northern districts remained fully funded. The finance ministry published revised cost figures alongside the statement.",
+    "expect": {
+      "settled": false,
+      "is_occurrence": false
+    },
+    "tags": [
+      "retro-770",
+      "honorific",
+      "defect"
+    ]
+  },
+  {
+    "id": "honorific-title-in-caption-only",
+    "event_name": "Leader L will be head of government of country C on 2026-12-31",
+    "event_description": "Only reporting that bears on whether L still holds the post on the target date counts: a swearing-in, a resignation, a no-confidence vote, a coalition collapse, an election result, or polling on whether L will stay. Coverage that merely refers to L by their office title while reporting something else does not.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-08-30",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "The delegation toured the earthquake-damaged district for two hours before returning to the capital. Pictured: Prime Minister L speaking with rescue workers at the site.",
+    "expect": {
+      "settled": false,
+      "is_occurrence": false,
+      "stance_band": "none"
+    },
+    "tags": [
+      "retro-770",
+      "honorific",
+      "defect"
+    ]
+  },
+  {
+    "id": "tenure-survived-no-confidence-control",
+    "event_name": "Leader L will be head of government of country C on 2026-12-31",
+    "event_description": "Only reporting that bears on whether L still holds the post on the target date counts: a swearing-in, a resignation, a no-confidence vote, a coalition collapse, an election result, or polling on whether L will stay. Coverage that merely refers to L by their office title while reporting something else does not.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-08-30",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "L survived a no-confidence motion on Wednesday by 61 votes to 59, after two independents who had threatened to defect ultimately backed the government. Coalition managers said the result ends speculation about an early election this year.",
+    "expect": {
+      "stance_sign": 1,
+      "settled": false
+    },
+    "tags": [
+      "retro-770",
+      "honorific",
+      "control"
+    ]
+  },
+  {
+    "id": "tenure-resignation-control",
+    "event_name": "Leader L will be head of government of country C on 2026-12-31",
+    "event_description": "Only reporting that bears on whether L still holds the post on the target date counts: a swearing-in, a resignation, a no-confidence vote, a coalition collapse, an election result, or polling on whether L will stay. Coverage that merely refers to L by their office title while reporting something else does not.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-11-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "L resigned on Thursday and handed the seals of office to a successor sworn in the same afternoon, ending a six-year premiership. The handover was completed at the presidential residence on 19 November 2026.",
+    "expect": {
+      "stance_sign": -1,
+      "settled": true
+    },
+    "tags": [
+      "retro-770",
+      "honorific",
+      "control"
+    ]
+  },
+  {
+    "id": "tenure-coalition-collapse-control",
+    "event_name": "Leader L will be head of government of country C on 2026-12-31",
+    "event_description": "Only reporting that bears on whether L still holds the post on the target date counts: a swearing-in, a resignation, a no-confidence vote, a coalition collapse, an election result, or polling on whether L will stay. Coverage that merely refers to L by their office title while reporting something else does not.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-09-15",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Two coalition partners withdrew their ministers on Monday, stripping L of a working majority and forcing the government into caretaker status pending a confidence vote next month. Analysts said L is unlikely to assemble a replacement coalition before the winter recess.",
+    "expect": {
+      "stance_sign": -1,
+      "settled": false
+    },
+    "tags": [
+      "retro-770",
+      "honorific",
+      "control"
+    ]
+  }
+]

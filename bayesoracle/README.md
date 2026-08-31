@@ -4,7 +4,7 @@ Static calibration layer that applies the **law of total probability** to a DAG 
 
 > ## ⚠️ Experimental — not in the production forecast
 >
-> The live Oracle (`POST /forecast`) does **not** use this DAG. It forecasts purely
+> The live Oracul (`POST /forecast`) does **not** use this DAG. It forecasts purely
 > via credibility-weighted aggregation in `api/src/forecast_api/forecaster.py`;
 > there is no BayesOracle code path in `/forecast`.
 >
@@ -220,16 +220,16 @@ See `DESIGN.md` for the full target architecture. Items not yet built:
 - **P(A|B) via LLM on event articles** — `calibrate_edges.py` uses news search; DESIGN calls for using the existing Atlas article corpus
 - **p1/p2 fusion** — blending DAG-derived P(A) with TruthMachine's credibility-weighted direct forecast
 - **Reactive DAG propagation** — updating child nodes when new articles arrive for a parent
-- **Oracle API integration** — `/forecast` returning both `base_forecast` and `bayes_forecast`
+- **Oracul API integration** — `/forecast` returning both `base_forecast` and `bayes_forecast`
 - **Correlated parents / Gaussian copula** — multi-parent joint distributions
 - **`bayes_graph.html`** drilldown per DESIGN spec (current `graph.html` is a working prototype)
 
-## Daily Oracle node series (retro#577)
+## Daily Oracul node series (retro#577)
 
-`series/log_nodes.py` asks the v1 Oracle (`POST /forecast`) every node question in
+`series/log_nodes.py` asks the v1 Oracul (`POST /forecast`) every node question in
 `series/questions.json` once per UTC day and appends one JSON line per node to a JSONL
 file (`{date,node_id,question,probability,ci,articles_used,confidence,insufficient_data,sources}`).
-Idempotent per day, sequential with a sleep. Runs from cron on the Oracle box
+Idempotent per day, sequential with a sleep. Runs from cron on the Oracul box
 (`06:30 UTC`, output `/home/ubuntu/oracle-series/nodes.jsonl`). API key from
 `ORACLE_API_KEY` (env or repo `.env`).
 

@@ -199,7 +199,7 @@ entered the atlas:
 - **Anti-lookahead** — a prediction is scored only if its `article_date` is on or
   before the event's `outcome_date` (`utils.predates_outcome`). Post-outcome
   entries are dropped, never scored — they would leak future knowledge into
-  `leaderboard.json` (and thus the live Oracle's credibility weights).
+  `leaderboard.json` (and thus the live Oracul's credibility weights).
 - **Loud field validation** — `stance` and `certainty` are required. A prediction
   missing either (corruption / schema regression) is **skipped with a warning**,
   never silently defaulted to neutral (`utils.split_scored_predictions`). A

@@ -7,7 +7,7 @@
 > project: the Duel** (`pipeline/src/tm/duel_report.py` → `duel.html`,
 > caches in `data/duel_oracle/`). The Duel is the headline external-validation
 > metric ("is TruthMachine better than a price-discovered market?") and uses the
-> live **Oracle API** with a strict T-day temporal protocol and real Polymarket
+> live **Oracul API** with a strict T-day temporal protocol and real Polymarket
 > CLOB price history. **Bediavad does not own the Polymarket comparison.** The
 > legacy `fetch_polymarket_price` copy that used to be wired into `backtest.py`
 > (it duplicated the Duel and returned `null` for every event) has been removed.
@@ -113,9 +113,9 @@ The summary includes: run timestamp, model type used, window settings, full resu
 
 ---
 
-## Historical Article Search (Oracle `/search`)
+## Historical Article Search (Oracul `/search`)
 
-Bediavad needs articles published **before** a specific date, not current news. The Oracle's `/search` endpoint supports this directly.
+Bediavad needs articles published **before** a specific date, not current news. The Oracul's `/search` endpoint supports this directly.
 
 ```bash
 # Example: find articles about Bitcoin published before 2025-01-01
@@ -158,7 +158,7 @@ def oracle_search_historical(query, date_from, date_to, limit=15):
 
 ## Free, deterministic backfill via GDELT-BigQuery (`tm.gdelt_bq_ingest`)
 
-The Oracle `/search` loop above works but pays for SERP fallback and drifts
+The Oracul `/search` loop above works but pays for SERP fallback and drifts
 run-to-run. For retro backfill prefer **`tm.gdelt_bq_ingest`** — a batch ingestor
 that queries GDELT's GKG table in **BigQuery** directly:
 

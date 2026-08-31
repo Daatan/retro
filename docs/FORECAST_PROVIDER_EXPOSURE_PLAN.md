@@ -10,7 +10,7 @@
 
 ## Context
 
-Daatan (the Oracle's main client) now logs every Oracle call with the search engine
+Daatan (the Oracul's main client) now logs every Oracul call with the search engine
 used (daatan PR #831, issue Daatan/daatan#832). For `/search` calls it reads the
 response's `provider` field. For **`/forecast`** calls the engine is not in the
 response body, so those rows log `searchEngine = null`.
@@ -88,8 +88,8 @@ The consistency win of the recommended option outweighs the one-line daatan edit
    test) pass.
 2. Manual: `POST /forecast` (without `debug`) returns top-level `provider` +
    `provider_chain` matching what `debug.search_provider` would show.
-3. End-to-end after both sides ship: trigger a forecast-path Oracle call from daatan
-   (e.g. a forecast context update), then Admin → Oracle shows a `FORECAST` row with a
+3. End-to-end after both sides ship: trigger a forecast-path Oracul call from daatan
+   (e.g. a forecast context update), then Admin → Oracul shows a `FORECAST` row with a
    non-null search engine instead of `—`.
 
 ## Rollout

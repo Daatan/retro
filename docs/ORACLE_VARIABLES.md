@@ -1,10 +1,10 @@
-# Oracle math — variable audit and simplification plan
+# Oracul math — variable audit and simplification plan
 
 Audited 2026-07-08/09 against retro `1fb87ce3b` and daatan `d742ce90`. Written
 as a read-only audit; §8 tracks what has shipped since. Companion to `TEMPORAL_MODEL_PLAN.md`
 (the glide this document references is that plan's Stage 0, live in daatan since
 2026-07-05). Production evidence cited below is from the 2026-07-08
-investigation (Oracle host log + prod requote runs + public page JSON).
+investigation (Oracul host log + prod requote runs + public page JSON).
 
 ## 1. Why this document
 
@@ -425,7 +425,7 @@ snapshot's own timestamp:
 0.20 suppresses **3 of the 27 measurable pins**, and the cut lands in a real gap (next pin up:
 0.22). Each suppressed pin is indefensible on its face: one settled on articles published in
 **2021**, one on a single settled vote in a one-row pool, one at 0.171. What it does **not**
-buy, stated so the number isn't oversold: it suppresses none of the three pins the **Oracle**
+buy, stated so the number isn't oversold: it suppresses none of the three pins the **Oracul**
 got wrong (0.432, 2.292, 12.245) — mass was not what was wrong with them; sign, subject and
 timeframe were (retro#360, #388) — and it suppresses retro#388's live pin at the snapshot where it fired
 (0.134) but not permanently, since that pool's settled mass had grown to 0.297 by the latest
@@ -510,9 +510,9 @@ time, 0 errored):
 | known outcome | 5 | 2 | 3 |
 | still active | 27 | 16 | 11 |
 
-On the five with ground truth it is **5 for 5**, scoring against whether the *Oracle's pin* was
+On the five with ground truth it is **5 for 5**, scoring against whether the *Oracul's pin* was
 right rather than whether the prediction resolved true — a NO pin on a claim that resolved wrong
-is a pin the Oracle got right. It vetoes all three the Oracle got wrong (France winning the World
+is a pin the Oracul got right. It vetoes all three the Oracul got wrong (France winning the World
 Cup and England winning their semi-final, both settled by reports of the **loss**; "Will USA bomb
 Iran in 2025?", settled by bombing in **2026**) and keeps both it got right (Messi, the Knesset
 dissolution).
@@ -595,7 +595,7 @@ one gatekeeper rule enforced in code rather than taught by the prompt, because t
 failure it prevents is the model *inventing* content: measured 2026-07-31, a t.me post
 whose entire text was `https://www.c14.co.il/article/1641278` was endorsed for 76 of 127
 open forecasts at relevance 0.7–1.0 with fabricated justifications. Five articles of that
-shape cost 644 judgments and 247 downstream Oracle runs. The guard sits inside
+shape cost 644 judgments and 247 downstream Oracul runs. The guard sits inside
 `check_is_prediction`, so it covers `/forecast` and `POST /relevance` alike — the latter
 matters because news-indexer persists that verdict and it can be reused in place of a
 fresh judgment (`reuse_supplied_relevance`), so a confabulated 1.0 does not stay
@@ -628,7 +628,7 @@ separately: one source, two computations, free to drift.
 | **`weight`** | `credibility × avg_certainty × rweight × relevance_weight(relevance) × quant_mult` | pool weight. **`relevance_weight` is a lookup table, not an exponent (retro#394).** The gatekeeper does not emit a graded score — across 84,254 judgments it emits the edge labels of the prompt's own bands, with **exactly zero mass in (0.60, 0.70)**, so `relevance²` was arithmetic on a categorical value. In the live daatan pool 51.9% of voting rows sit at exactly 0.70 and 25.2% at 0.80, making this a **three-position switch, not a continuous dial** — and the 1.31× ratio between them was whatever squaring produced, not a choice. `RELEVANCE_BAND_WEIGHTS` (`aggregation.py`) is initialised to exactly `band²`, so nothing has moved yet; it exists so the numbers can be *chosen* once there is outcome data to choose them with (as of 2026-08-04 only 6 resolved BINARY forecasts have a usable pool — see retro#393). Off-band values still fall back to squaring. |
 | `fact_signal` (shadow) | claim-weighted **mean** of per-claim `fact_signal` over the **same** scored claims as `avg_stance`; `None` if none carried one | Phase 2 fact-lane counterpart of `avg_stance`, un-fused from author assertion; **read by nothing in aggregation** — surfaced on `SourceSignal`/`sources[]` only for daatan persistence + the offline fact-lane gate harness (`pipeline/scripts/backtest_fact_signal_gate.py`: stance-vs-fact_signal paired Brier through the real `/pool/aggregate`). **Status honestly stated (retro#533, decided 2026-08-15): this is a diagnostic/guardrail lane, not a pricing lane in waiting.** The lanes are not independent in practice — corr(stance, fact_signal) 0.905 on `is_occurrence=false` rows (n=2,645), 0.73 whole-pool, with exactly one resolved prediction showing >0.1 divergence — so the paired-Brier gate structurally cannot accumulate discriminating data and the estimator-cutover framing is retired (`Daatan/docs/decisions.md` 2026-08-15). What the lane actually does, and keeps doing: precursor cap (retro#367), the decider-intent stance cap's key (retro#518), settlement gating, and the per-claim audit surface. Re-opening bar: ≥30 resolved predictions with lane divergence >0.1, arising organically from a future extractor change — then re-run the harness. Extraction-side, the FACT_SIGNAL prompt carries a **decider-statement exception** (2026-07-29, A/B-gated): an on-record statement by the actor/authority whose own act would resolve the claim — announcement or denial alike — enters the fact lane as a capped precursor instead of being nulled as opinion; assertions *about* the decider's intent by opponents or analysts stay claimed-and-unverified. A companion **negative-precursor ladder** (2026-07-29, WS5b, A/B-gated) generalizes the negative side beyond decider statements: any contrary reported fact — an obstacle emerging, a preparation reversed, an opposing development, a measured indicator moving against the event — enters the fact lane as a graded negative precursor instead of null, with the extreme negative reserved for established impossibility; this closes the measured null asymmetry (negative-stance rows nulled 33.0% vs 22.6% for positive, fact-era pool) while the mobilization regression keeps deflating (see `test_extractor_prompt.py::test_negative_precursor_ladder_present` for the A/B record). Wording is numeral-free by design (magnitude policy belongs in estimator config); see `test_extractor_prompt.py::test_decider_statements_exception_present` for the A/B evidence and re-run bar. Its facets `event_actors`/`event_target`/`is_occurrence`/`verified` ride from the **dominant** (max \|fact_signal\|) claim so they stay internally coherent. Magnitude for a **precursor** is enforced in code, not by the prompt (retro#367): `enforce_precursor_cap` clamps per-claim \|`fact_signal`\| to `fact_signal_precursor_cap` (`tm/config.py`, **0.3**) whenever the extractor set `is_occurrence=false`, in the `enforce_*` chain immediately before this fusion — so both the mean and the dominant-claim selection see the capped value. |
 | `author_lean`, `author_lean_certainty` (shadow) | passed through from `ExtractionOutput` (retro #308/#309) — the byline author's OWN forecast | author-accuracy scoring lane; **not read by aggregation** |
-| `consensus_view` (shadow) | passed through from `ExtractionOutput` (retro#686) — `expects_yes` \| `expects_no` \| `divided`, what the **article says OTHERS expect** | **EXPERIMENTAL, shadow**: populated and on the wire, read by nothing — and, unlike `report_kind`, **not yet stored**. `claims_detail` is a `Json` column in daatan, so a new per-claim field is persisted the moment the Oracle emits it; a per-source field needs its own column (`EvidencePoolArticle.authorLean` is the precedent) and that column does not exist yet. Until it does, the only place this field can be observed is a live `/forecast` response and the A/B harness's article-level fill. Sits beside `author_lean` because it is the same shape of question one step out — `author_lean` is what the byline thinks, this is what the byline says everyone else thinks — and the two must be able to disagree (*"analysts expect a cut, but this is wishful thinking"* is `expects_yes` with a negative `author_lean`). Its kill criterion is exactly that confusion: >20% of non-null rows carrying the model's own view rather than the article's. Phase 3 S2's shared-information detector is the consumer — the **gap** between a source's stated consensus and the pool is the shared component (Palley & Satopää 2023), and a pool of sources all reciting the same consensus is one observation, not N |
+| `consensus_view` (shadow) | passed through from `ExtractionOutput` (retro#686) — `expects_yes` \| `expects_no` \| `divided`, what the **article says OTHERS expect** | **EXPERIMENTAL, shadow**: populated and on the wire, read by nothing — and, unlike `report_kind`, **not yet stored**. `claims_detail` is a `Json` column in daatan, so a new per-claim field is persisted the moment the Oracul emits it; a per-source field needs its own column (`EvidencePoolArticle.authorLean` is the precedent) and that column does not exist yet. Until it does, the only place this field can be observed is a live `/forecast` response and the A/B harness's article-level fill. Sits beside `author_lean` because it is the same shape of question one step out — `author_lean` is what the byline thinks, this is what the byline says everyone else thinks — and the two must be able to disagree (*"analysts expect a cut, but this is wishful thinking"* is `expects_yes` with a negative `author_lean`). Its kill criterion is exactly that confusion: >20% of non-null rows carrying the model's own view rather than the article's. Phase 3 S2's shared-information detector is the consumer — the **gap** between a source's stated consensus and the pool is the shared component (Palley & Satopää 2023), and a pool of sources all reciting the same consensus is one observation, not N |
 | `claim_actor`, `claim_predicate`, `claim_scope` (shadow) | passed through from `ExtractionOutput` (retro#697) — `{name, type}` plus two short phrases: the WHO / WHAT / WITHIN WHAT SCOPE of the **question's** event | **EXPERIMENTAL, shadow**: populated, on the wire, read by nothing, and — like `consensus_view` — **not yet stored**, for the same reason (a per-source field needs its own daatan column and `claims_detail`'s Json column only covers per-claim fields). The **only fields on `SourceSignal` that are not properties of the source at all**: they decompose the RELATED EVENT, so two articles about the same question should answer identically, and they are carried per-source precisely so that "should" is measurable. `PROMPT_PREFIX` § MATCH THE EVENT has required this decomposition since v1 and never gave the model a field to answer in, so the reasoning was demanded, discarded and unverifiable. Its consumer is `settlement_semantic`: `claim_subject_from_question` derives the same information by regex off the question text and labels every number it produces a lower bound for exactly that reason — `gate_predicate_echo` is 0.68 precision / **0.46 recall** through it. The mechanism behind that recall, measured on the 172 prod questions that have an evidence pool: the proxy's `event_terms` is the question's whole content-word bag (mean 5.9 terms, max **25**, 17% over eight) and the gate demands only ONE of them echo, so a wide bag makes it structurally unable to fire. `claim_subject_from_fields` (`proxy=False`) is the real constructor. **The 0.68/0.46 does not move retroactively**: every settled row in the pool predates v11 and carries no decomposition, so the re-score needs a pool extracted *after* v11 ships. **Rater caveat, measured (5 files × 5 runs):** Haiku 4.5 fills all three 130/130 and answers identically on every run of a case (consistency 1.00); Nova Lite fills `claim_predicate`/`claim_scope` 130/130 but `claim_actor` 117/130 — it writes `type: "team"` for sports subjects and the drop guard nulls the whole object — and its `claim_scope` wanders (1.45 distinct answers per case, sometimes the entire question text). Gate `claim_scope` on the rater; `claim_actor.name` and `claim_predicate` are usable from both. No prose section exists for these fields on purpose: five measured variants of one showed it never carried the fill and only cost Nova stance accuracy (see PROMPT_VERSIONS v11) |
 | `claims_detail` | no reduction — the article's claims themselves, projected onto `ClaimDetail` (`build_claims_detail()`) | **F1/F15, retro#364.** Every other row in this table is a reduction; this is the layer they reduce *from* — literally: `build_claims_detail()` runs first and `reduce_article()` takes its output as input, so the persisted claims are the reduction's argument rather than a copy taken alongside it. Until this layer existed the inputs were discarded at the wire, so no reduction here was checkable and no history was re-scorable. Recorded POST-resolution — after the `enforce_*` chain and `resolve_stance_certainty()` — i.e. the values the fusion actually consumed. `test_claims_detail.py` pins each derivation individually *and* replays `reduce_article()` over the persisted claims alone, asserting it reproduces every scalar of the signal it produced (ordinary, settlement, and demoted-settlement paths). Per claim: `claim`, `quote`, `stance`, `certainty`, `specificity`, `prediction_type`, `evidence_class`, `quantitative_estimate`, `settled`, `event_date`, `fact_signal` + its four facets. Two collapses become visible only here: `evidence_class` is per-claim (the article carries only the most common one) and the fact facets are per-claim (the article carries only the **dominant** claim's), which is why an over-cap interested-party claim diluted by in-contract siblings is invisible above this layer (retro#378). Unlike `claims`, nothing is filtered — a claim with an empty summary still voted, so it is still kept. **Read by nothing in aggregation**; persistence surface only (daatan#1235), same shadow-field rollout as `author_lean` and `fact_signal`. |
 
@@ -773,7 +773,7 @@ lives on as `evidence_class_weight["cited_probability"]`.)
 | `ContextSnapshot.kind`, `meta` | — | `'evidence'`/`'clock'` + glide provenance `{pLast,tLast,tEff,c,direction,cause}` |
 | `Prediction.confidence` | 0–100 | schema-documented as *bot metadata*, in practice the denormalized current AI estimate (glide writes it) |
 | `Prediction.aiCiLow/aiCiHigh` | 0–100 | denormalized CI; glide push-forwards both bounds through its power map (`temporal-clock.ts:274-275`) |
-| `Prediction.settled/settledAt` | bool | **one-way latch** — set on any Oracle `settled=true`, never cleared (`context.ts:159,257,355`) |
+| `Prediction.settled/settledAt` | bool | **one-way latch** — set on any Oracul `settled=true`, never cleared (`context.ts:159,257,355`) |
 | `Prediction.sentiment/consensusLine/sourceSummary` | — | bot-creation-time duplicates of stance/estimate/summary |
 | `ContextSnapshot.summary`, `externalReasoning` | text | two parallel free-text explanations |
 | `Commitment.aiProbabilityAtCommit` | 0–100 | frozen history — legitimate, keep |
@@ -808,7 +808,7 @@ tolerance 72h.
 5. **Two boundary-pin conventions defined independently**: retro
    `settlement_stance=0.94` (⇒ 97/3) and daatan `PIN_LOW/HIGH=3/97`. They
    coincide today by arithmetic luck.
-6. **Bot-era leftovers duplicating Oracle fields**: `sentiment` ≈ sign(stance);
+6. **Bot-era leftovers duplicating Oracul fields**: `sentiment` ≈ sign(stance);
    `confidence` ≈ the estimate (dual use is the schema's worst naming trap);
    `consensusLine`/`sourceSummary` vs `summary`/`externalReasoning`.
 
@@ -882,7 +882,7 @@ Concrete hide conditions (all observed or reachable in prod):
    when uncertainty is highest.
 2. **LLM-fallback snapshots** have no `oracleSnapshot` ⇒ timeline "±" hidden;
    the gauge then falls back to `Prediction.aiCiLow/High`, which may be a
-   *stale* band from an earlier Oracle write around a fresh fallback needle.
+   *stale* band from an earlier Oracul write around a fresh fallback needle.
 3. **Abstention** (`insufficientData`) hides needle and band.
 4. **Legacy rows**: forecasts whose latest write predates the denormalized
    columns have null `aiCiLow/High` ⇒ card shows bare "X%".
@@ -907,7 +907,7 @@ with four different ideas of what "evidence" is (all refs daatan `d742ce90`):
 
 | | evidence fed to the math | limit | snapshot writer | persists `externalProbability` | notifies |
 |---|---|---|---|---|---|
-| **A** creation | *none* — express-generate is a plain LLM read of searched articles (`expressPrediction.ts:335`), express-guess calls the Oracle **question-only** (`express/guess/route.ts:32`) | — | **none** (writes `Prediction.confidence` directly, no snapshot — `forecast.ts:229`) | — | none |
+| **A** creation | *none* — express-generate is a plain LLM read of searched articles (`expressPrediction.ts:335`), express-guess calls the Oracul **question-only** (`express/guess/route.ts:32`) | — | **none** (writes `Prediction.confidence` directly, no snapshot — `forecast.ts:229`) | — | none |
 | **B** indexer push | caller-provided matched `articles[]` (`news-indexer/context/route.ts:88`) | **uncapped** daatan-side (`.min(1)`, no `.max()` — `:35`); 15 retro-side | `saveNewsIndexerMatch` (`context.ts:218`) | yes | crossing + Telegram news-match |
 | **C** analyze | daatan `oracleSearch` → 15 `articles[]` (`[id]/context/route.ts:107,177`) | 15 | `saveContextUpdate` (`context.ts:129`) | yes | crossing |
 | **D** backfill | daatan `oracleSearch` → 15 `articles[]` (`oracle-backfill.ts:26`) | 15 | `saveOracleSnapshotOnly` (`context.ts:337`) | **no — left null** | crossing |
@@ -921,7 +921,7 @@ cannot tell them apart. The concrete asymmetries that produce flip-flops:
    news push clobbers a 15-article analyze estimate and vice versa; no
    `articles_used`/mass comparison exists in any writer (`context.ts:154,254,352`).
 2. **A vs B/C answer different questions.** Creation numbers come from an LLM
-   opinion or a question-only Oracle run (retro's own search chain); B/C feed
+   opinion or a question-only Oracul run (retro's own search chain); B/C feed
    explicit article sets. The first analyze after creation typically moves the
    number even with zero news — different evidence universe, not new evidence.
 3. **B is uncapped, C/D are capped at 15** — different evidence masses for the
@@ -1043,7 +1043,7 @@ constant, not a reason to drop the direction):
 | memory makes errors sticky — a false settled article keeps voting (today it washes out on the next run; the F-35 estimate "recovered" precisely because runs are memoryless) | settlement hardening (code-enforced settled-claim rules, clearable latch) **and** per-article admin exclusion ship *before* the pool |
 | stale-mass accumulation: with a weighted mean and recency floor 0.02, fifty stale articles ≈ weight 1.0, enough to outvote two fresh ones | drop the recency floor *inside* the pool (it exists to protect single-old-article calls, which the pool makes moot) + cap pool at top-N by current weight or hard age cutoff |
 | re-extracting the whole pool per update is too slow/expensive (~2–4 s, 1–2 k tokens per article) | cache extraction per (article, question): daatan persists extracted signals, or retro accepts pre-extracted signals / caches per-article; also kills the 25 s-timeout volatility |
-| identity change: the Oracle stops being "answer a question by searching" and becomes "score this evidence set" | conscious decision — same shape later needed for polls/market prices as first-class evidence (TEMPORAL_MODEL_PLAN §5 open question) |
+| identity change: the Oracul stops being "answer a question by searching" and becomes "score this evidence set" | conscious decision — same shape later needed for polls/market prices as first-class evidence (TEMPORAL_MODEL_PLAN §5 open question) |
 | duplicates across days (same wire story pushed repeatedly) | move syndication dedupe from per-call to per-pool |
 | what symmetry does **not** fix: single-source dominance is a weights problem (cluster 2) | S2 (`evidence_class`) proceeds independently |
 
@@ -1098,7 +1098,7 @@ Shipped, in the accepted sequencing order (§6):
   The reliable lever is a stronger extractor model (nova-pro 2/5; gemini-2.5-flash
   and flash-lite 0/3; gemini-2.5-pro 0/2 — all on the unmodified prompt). DONE
   2026-07-12: prod extractor switched to Claude Haiku 4.5 (0/10 failures, stance
-  +0.37 deterministic, 3.7s, $1/$5 per M) via systemd drop-in on the Oracle host +
+  +0.37 deterministic, 3.7s, $1/$5 per M) via systemd drop-in on the Oracul host +
   Bedrock IAM grant (see infra/iam/README.md §4); verified live — the incident
   article now scores stance +0.31 / settled=false (~66%) instead of +1.0/settled
   (99%). Batch pipeline (`truthmachine.service`) deliberately stays on nova-lite.
@@ -1148,8 +1148,8 @@ Shipped, in the accepted sequencing order (§6):
   that estimate; it now goes through `resolve_stance_certainty` like ordinary
   evidence.
 - **daatan claim-field wiring** — daatan #1061: analyze, news-indexer push,
-  the admin Oracle-sources backfill, and bot voting now forward the
-  prediction's stored `claimDirection`/`claimDeadline` on every Oracle call,
+  the admin Oracul-sources backfill, and bot voting now forward the
+  prediction's stored `claimDirection`/`claimDeadline` on every Oracul call,
   arming the #244 direction guard (previously fail-open everywhere — nothing
   sent the fields). `ClaimDirection.NONE`/null are omitted, never sent as the
   literal string `"none"` (this API's `claim_direction` is a strict
@@ -1289,12 +1289,12 @@ Open, in suggested order:
   `news-indexer` + `backfill` once stable in prod; move dedup + drop the
   recency floor inside the pool; decide `creation`-path scope (structurally
   harder than the others — creation uses `expressPrediction.ts`, not
-  retro's Oracle at all, so it can't reuse this funnel without its own
+  retro's Oracul at all, so it can't reuse this funnel without its own
   design pass).
 - S3–S6 and the remaining small known defect from §7: `credibilityWeight`
   still ≈1.0 for all real sources — **not a code bug** (investigated
   2026-07-09): `get_credibility_weight()` is correctly implemented, but
-  `data/leaderboard.json` on the Oracle host has been frozen since
+  `data/leaderboard.json` on the Oracul host has been frozen since
   2026-03-28 (no cron/systemd timer/workflow anywhere regenerates it), and
   even that stale snapshot only ever scored 5 Israeli outlets against a
   2022-dated historical backtesting harness (`data/events/*.json`)
@@ -1314,7 +1314,7 @@ score sources against real daatan resolutions instead of only the frozen,
 hand-curated vault (`data/events/*.json`) — rather than build a second,
 parallel credibility mechanism. Ships in shadow mode: the resolution-informed
 score is computed and logged alongside the live `credibility_weight`, but
-does not affect live Oracle forecasting math until it's been watched for a
+does not affect live Oracul forecasting math until it's been watched for a
 while, mirroring the pool-recompute shadow-compare rollout in §6/§8.
 Excludes `opinion`-class articles from the signal — an op-ed disagreeing
 with how a claim resolved isn't the same kind of credibility failure as a
@@ -1505,7 +1505,7 @@ prompt fix (§7-adjacent gatekeeper/extractor work, retro #262) shipped. Root
 cause was one source: a Dec 29, 2022 JNS opinion column — confirmed via its
 own `article:published_time` / JSON-LD `datePublished` metadata — got
 re-crawled by news-indexer and stamped `published_at ≈ 2026-07-11`, then fed
-to the Oracle as fresh, near-certain settlement evidence
+to the Oracul as fresh, near-certain settlement evidence
 (`stance=1.0, certainty=0.95, settled=true`) for an election three and a
 half months in the future. At this repo's 7-day `recency_half_life_days`
 (`api/src/forecast_api/config.py`), the wrong date alone gave the source
@@ -2013,7 +2013,7 @@ precision review this slice exists to enable:
 `node["_polymarket_cache"]` (transient — popped before the node is ever persisted,
 either by `_anchor`'s cache-check or, for nodes `_anchor` never reaches, by the
 per-depth/end-of-job cleanup in `run_job`). `_anchor` checks that cache before making
-its own fetch, so enabling this slice does not double the Oracle's Gamma HTTP volume —
+its own fetch, so enabling this slice does not double the Oracul's Gamma HTTP volume —
 one fetch per node either way.
 
 ### Config (`api/src/forecast_api/config.py`)
@@ -2029,7 +2029,7 @@ one fetch per node either way.
 
 **Metaculus** as a third grounding source — retro#608's original proposal named it, but
 nothing in this repo does full-text search over Metaculus questions today (the existing
-`metaculus/` module is Oracle→Metaculus submission for benchmarking, the opposite
+`metaculus/` module is Oracul→Metaculus submission for benchmarking, the opposite
 direction, and isn't fully wired up yet). Deferred to a follow-up once a
 read/search-capable Metaculus client exists.
 
@@ -2124,7 +2124,7 @@ change a response.
 **The recovered response is tagged, never silently swapped in.** `ForecastResponse`
 gained `fallback_path: "primary" | "retry-relaxed"` (`models.py`), surfaced in the MCP
 tool's default (non-verbose) payload too — retro#621 ask item 4 is explicit that a
-fallback must never masquerade as an ordinary Oracle forecast, and a Metaculus
+fallback must never masquerade as an ordinary Oracul forecast, and a Metaculus
 rationale comment built off this field can say plainly which rung produced the number.
 
 ### Config (`api/src/forecast_api/config.py`)
@@ -2153,8 +2153,8 @@ the limit lever alone doesn't recover much.
 scoring-EV analysis on retro#621 itself. Short version: an *uninformative* 50% guess is
 expected-negative EV relative to just forfeiting whenever the peer field is informed
 (the normal case) — it does not belong on this ladder as a safe last resort. This
-rung's retry, by contrast, is a genuine (if narrower) Oracle forecast, so it carries no
-special scoring risk beyond Oracle's ordinary accuracy.
+rung's retry, by contrast, is a genuine (if narrower) Oracul forecast, so it carries no
+special scoring risk beyond Oracul's ordinary accuracy.
 
 **The premise_verifier correlation check itself** — the issue's point 3 names this as a
 prerequisite for *promoting* settled-grounding, not for shipping the shadow log. Both

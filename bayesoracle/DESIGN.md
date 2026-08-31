@@ -2,7 +2,7 @@
 
 > ⚠️ **Design document — not implemented.** This describes the intended Bayes-derived
 > forecast and a future hard cutover from the base TM forecast. As of today the live
-> Oracle (`/forecast`) does **not** use this DAG (see `README.md`). Read this as the
+> Oracul (`/forecast`) does **not** use this DAG (see `README.md`). Read this as the
 > plan, not the current behavior.
 
 ## Context
@@ -138,7 +138,7 @@ When A has multiple parents B1, B2:
 
 ---
 
-## Oracle API Changes
+## Oracul API Changes
 
 `POST /forecast` gains:
 - Optional `bayesian: bool` flag (default `true` once validated)

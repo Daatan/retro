@@ -2,7 +2,7 @@
 
 > Goal: give the retro engines (Bediavad source-leaderboard + Duel) a **free,
 > reproducible, historical** article-discovery layer, **without changing the
-> Oracle `/search` API**. Date: 2026-07-11. Verified live from the Oracle host
+> Oracul `/search` API**. Date: 2026-07-11. Verified live from the Oracul host
 > `i-00ac444b94c5ff9b2` (egress IP `3.122.48.104` since 2026-08-27; was `3.120.185.111` when this was written).
 
 ---
@@ -17,7 +17,7 @@
 ## Status: unblocked (2026-07-11)
 
 The BigQuery credential — the only blocker — is now provisioned and verified
-**live** from the Oracle host. A fresh JSON key was minted for the pre-existing
+**live** from the Oracul host. A fresh JSON key was minted for the pre-existing
 SA `retro-search@daatan.iam.gserviceaccount.com` (project `daatan`, already
 scoped `bigquery.jobUser`) and stored as Secrets Manager
 `daatan/gcp-service-account-key`. `_get_bq_client()` builds and a live query
@@ -25,7 +25,7 @@ returned real Ynet Oct-2023 URLs. Remaining blockers below are code-level, not
 credential-level.
 
 1. ~~The BigQuery credential is absent.~~ **DONE** — see above.
-2. **The free DOC API is 429-throttled from our IP.** Two probes from the Oracle
+2. **The free DOC API is 429-throttled from our IP.** Two probes from the Oracul
    host both returned `HTTP 429 — "one request every 5 seconds"`; production
    `/forecast` already spends that IP's GDELT budget. DOC is 3-month-only anyway,
    so it can't serve "3 years ago." → **DOC API is not the retro mechanism.**
@@ -82,7 +82,7 @@ force gdelt-only on a *recent* (<90d) query — not the retro case.
 
 **Phase 0 — unblock (needs you): provision the GCP key.**
 Create a least-privilege service account, put its JSON in
-`daatan/gcp-service-account-key`. Then I re-run the dry-run from the Oracle host
+`daatan/gcp-service-account-key`. Then I re-run the dry-run from the Oracul host
 to (a) prove the client builds and (b) report exact per-event bytes/$.
 
 **Phase 1 — measure + verify (no code).**
@@ -92,7 +92,7 @@ row counts before trusting a domain).
 
 **Phase 2 — pipeline patch (retro repo, PR, no API change). ✅ IMPLEMENTED (this PR).**
 - Added optional **`domains=` filter + `max_rows=`** to `_search_gdelt_bq`
-  (`SourceCommonName IN (...)`), backward-compatible (live Oracle path unchanged),
+  (`SourceCommonName IN (...)`), backward-compatible (live Oracul path unchanged),
   plus a `maximum_bytes_billed` cost fuse. Verified live: 622 rows across exactly
   the two whitelisted outlets, 0 off-whitelist, 9.64 GB ($0.06).
 - New **`tm.gdelt_bq_ingest`**: ONE per-event GKG scan over tracked outlets →
@@ -112,7 +112,7 @@ Re-run `backtest.py`; the results are now reproducible run-to-run.
 
 **Phase 3a — NO-event curation pass (retro#509). ✅ DONE (this PR).** `pipeline/scripts/seed_no_events_batch1.py`
 had speculatively seeded 6 candidate NO-events (`A20`, `B14`, `C10`, `C11`, `C13`, `D07`)
-"pending Oracle in-window validation ... events that return no in-window coverage
+"pending Oracul in-window validation ... events that return no in-window coverage
 get pruned." Running that validation surfaced a tooling bug, not a coverage
 problem:
 

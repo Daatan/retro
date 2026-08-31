@@ -163,7 +163,7 @@ Every article processed by the extractor now has conditional claims captured in
 
 ### What's Queryable
 
-In prod (Oracle database):
+In prod (Oracul database):
 
 ```sql
 -- Conditional claims per relation

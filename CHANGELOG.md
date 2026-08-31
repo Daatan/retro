@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the Oracle (the `api/` service and the `pipeline/` batch lane) are
+All notable changes to the Oracul (the `api/` service and the `pipeline/` batch lane) are
 recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Version scheme (retro#742).** The number is the *product generation*, not an API contract:
@@ -26,6 +26,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 - Extractor prompt **v10** (retro#684, Oracle 1.5 Phase 1): two elicited shadow fields at the schema tail — `tone` (`approve`/`neutral`/`alarm`, the quote's own register, so an evaluation stops being read as a direction) and `voice` (`{kind, attributed_to}`, whose assertion the quote is, so a wire carried by thirty outlets counts once). Both thread to `ClaimDetail` per claim and roll up to `SourceSignal` as the dominant claim's; `provenance.schema_version` 1.3 → 1.4. Zero A/B regressions on both raters, `token_usage` +7.9%. **`tone` is Haiku-only** — Nova Lite answers `neutral` on 145/145 and trips the field's kill criterion; `voice` clears it on both
 
 ### Changed
+- Prose rename Oracle → Oracul across this repo's docs (Daatan/retro#766 wave 1, retro#767): 131 mentions in 30 markdown files. **Documentation only — no code, no config, no deploy artefact.** Every wire identifier keeps the Oracle name permanently per the wave 3 decision (`oracle.daatan.com`, `ORACLE_URL`/`ORACLE_API_KEY`, `oracle-api.service`, `oracle.conf`, `oracle.tf`, the served FastAPI title and the MCP server description), as do `Oracle 1.5`/`Oracle 2.0`, which name the product generation rather than the product
 - `per_article_timeout_seconds` 25 → 35 (retro#697 follow-up). After the v11 deploy, 5+-article batches lost every article to the per-article budget in 8/15 forecasts in the first 20 min (vs ~6% on 08-27..29); extract p50 ~8s / p90 ~13s on Haiku, and the A/B harness ran 15–27% slower on output-heavy files. Primary + relaxed retry (2 × 35s) still fit inside the 90s `forecast_timeout_seconds`
 
 ### Fixed
@@ -65,7 +66,7 @@ First release under the generation scheme (retro#742): `0.4.1` → `1.4.0`, same
 - Articles that cannot be dated are dropped rather than dated to today (retro#705, #706); provider publication dates normalised (retro#714, #715); search-engine link wrappers dropped instead of stored (retro#709, #713)
 - Bedrock gatekeeper/extractor/ground-truth defaults pinned to the `us.` region (retro#548, #596)
 - Search-provider keys and Cognito Google OAuth moved from Secrets Manager to SSM (docs#122, #603, #605, #607, #672)
-- Oracle box: Elastic IP (retro#436, #668); unit file synced with the retro#600 mitigations (#636); nginx `client_max_body_size` 16m (#716, #718); Bedrock alarms on a `us-east-1` SNS topic (#674)
+- Oracul box: Elastic IP (retro#436, #668); unit file synced with the retro#600 mitigations (#636); nginx `client_max_body_size` 16m (#716, #718); Bedrock alarms on a `us-east-1` SNS topic (#674)
 - Docs: batch/live prompt-version divergence made explicit (retro#631, #634); extraction/elicitation split adopted in prose (docs#156, #667); extractor/gatekeeper/settlement-verifier model survey (#647); claim-issues-first rule (#594); "track record" wording (#662)
 - Deps: aiohttp, cryptography, h2, starlette, pyasn1, pydantic-settings (#638); official uv binary in Docker, compose SIGTERM handling (#640)
 
@@ -98,7 +99,7 @@ First release under the generation scheme (retro#742): `0.4.1` → `1.4.0`, same
 - feat(oracle): MCP server exposing forecast + Polymarket-edge tools, OAuth via Cognito (#270)
 
 ## [0.1.0] — 2026-04-14
-- feat: Oracle API — FastAPI prediction service skeleton (#25)
+- feat: Oracul API — FastAPI prediction service skeleton (#25)
 
 [Unreleased]: https://github.com/Daatan/retro/compare/v1.4.0...HEAD
 [1.4.0]: https://github.com/Daatan/retro/compare/924538f3e...v1.4.0

@@ -1,4 +1,4 @@
-# Oracle API (`forecast_api`)
+# Oracul API (`forecast_api`)
 
 FastAPI microservice that turns a binary question into a calibrated probability
 by searching current articles, extracting predictions, and weighting each source

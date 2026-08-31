@@ -70,7 +70,7 @@ The result:
 
 ---
 
-## Slide 5: The Oracle (Product 2)
+## Slide 5: The Oracul (Product 2)
 
 **Because we know who was right in the past, we can predict the future more accurately than market consensus.**
 
@@ -114,7 +114,7 @@ This is **TruthMachine** — a calibrated oracle API for geopolitical and econom
 | Tier | Audience | Product | Price |
 |---|---|---|---|
 | **Free** | Anyone | Public credibility leaderboard — journalist & outlet scores by domain | $0 |
-| **Pro** | Individual traders, analysts | Oracle API — probability estimates for current events; full source credibility data | $299/year |
+| **Pro** | Individual traders, analysts | Oracul API — probability estimates for current events; full source credibility data | $299/year |
 | **Enterprise** | Quant funds, government risk desks, media orgs | Raw forensic dataset, custom domain scoring, white-label, dedicated support | $2,400/year |
 
 The free leaderboard drives awareness and positions us as the credibility standard.
@@ -202,7 +202,7 @@ We are building at the intersection of investigative journalism, quantitative fi
 Prove the thesis. 5-year Israeli press analysis complete. Scoring system validated. Statistically significant accuracy advantage over Kalshi/Polymarket consensus demonstrated on the same questions.
 
 **Stage 2 — $300K — upon hitting Stage 1 milestones:**
-Build the product and expand the dataset. Oracle API live. First paying institutional clients. Public credibility leaderboard launched.
+Build the product and expand the dataset. Oracul API live. First paying institutional clients. Public credibility leaderboard launched.
 
 Dataset expansion is a first-class goal — not a side effect:
 - **More time** — extend history from 5 to 10+ years

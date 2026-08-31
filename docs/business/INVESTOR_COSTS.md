@@ -221,14 +221,14 @@ This is the **fastest-growing cost** at scale. The oracle runs searches for ever
 
 > ⚠️ **Risk — Serper quota exhaustion:** Happened once already (April 2026). At enterprise scale, a single bad day of scraping can exhaust the monthly quota. Need prepaid buffer or auto-downgrade to BrightData.
 
-### 7. LLM APIs — Oracle Pipeline at Scale
+### 7. LLM APIs — Oracul Pipeline at Scale
 
 At 21,000 oracle calls/day, each running gatekeeper + extractor on 10 articles (the default `max_articles`):
 = 420,000 LLM calls/day × 1,000 tokens avg = **420M tokens/day = 12.6B tokens/month** (scales linearly with `max_articles`; the table below was sized at 5 articles)
 
 | Provider | Use | Monthly | Annual |
 |---|---|---|---|
-| OpenAI GPT-4o-mini | Oracle gatekeeper + extractor | ~$1,100 | ~$13,200 |
+| OpenAI GPT-4o-mini | Oracul gatekeeper + extractor | ~$1,100 | ~$13,200 |
 | OpenAI GPT-4o | Hard questions (est. 10% of calls) | ~$500 | ~$6,000 |
 | Google Gemini Flash | RetroAnalysis bulk + research | ~$100 | ~$1,200 |
 | **Subtotal** | | **~$1,700/mo** | **~$20,400/yr** |

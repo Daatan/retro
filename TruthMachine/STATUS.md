@@ -61,7 +61,7 @@ The pipeline loop (`infra/ec2_run.sh`) runs continuously: it sleeps 300s between
 | PoC event generation (`poc_event_gen.py`) | ✅ Complete |
 | Duel report generator (`poc_report.py`) | ✅ Complete |
 | `duel.html` generated and deployed to GitHub Pages | ✅ Live |
-| TM vs PM Brier comparison section | ✅ Live — 13 events scored, TM wins 8/13; aggregate Brier: TM ~0.123 vs PM ~0.377; Oracle n=1–20 per event (PRs #82/#84); [daatan.github.io/retro/duel.html](https://daatan.github.io/retro/duel.html) |
+| TM vs PM Brier comparison section | ✅ Live — 13 events scored, TM wins 8/13; aggregate Brier: TM ~0.123 vs PM ~0.377; Oracul n=1–20 per event (PRs #82/#84); [daatan.github.io/retro/duel.html](https://daatan.github.io/retro/duel.html) |
 
 ### Why is it sleeping?
 
@@ -188,7 +188,7 @@ ec2_run.sh (systemd loop)
 
 1. ~~**Refresh Brave API quota or add SerpAPI fallback**~~ — resolved 2026-04-28.
    BrightData, Nimbleway, and ScrapingBee added to `web_search.py` as additional fallbacks.
-   Keys in Secrets Manager. Oracle survives simultaneous exhaustion of all three original providers.
+   Keys in Secrets Manager. Oracul survives simultaneous exhaustion of all three original providers.
    Next: implement oracle `/search` endpoint so daatan uses the same chain (Phase 2 in TODO.md).
 
 2. **Reduce sleep interval or make it adaptive**
@@ -206,7 +206,7 @@ ec2_run.sh (systemd loop)
    - `pipeline/src/tm/backtest.py` — not yet run on EC2
    - Requires resolved events with known outcomes
 
-3. ~~**Wire TM into `duel.html`**~~ — ✅ Done (2026-05-06). PM price history harvested for 12 Atlas events; Oracle-driven TM probabilities computed; duel report live. TM wins 7/12. CLOB API ceiling reached at 12 events — pre-2023 markets (E01, E02, C01, C02, G01) not available in the CLOB system. Expanding beyond 12 requires newer events with sufficient PM CLOB history.
+3. ~~**Wire TM into `duel.html`**~~ — ✅ Done (2026-05-06). PM price history harvested for 12 Atlas events; Oracul-driven TM probabilities computed; duel report live. TM wins 7/12. CLOB API ceiling reached at 12 events — pre-2023 markets (E01, E02, C01, C02, G01) not available in the CLOB system. Expanding beyond 12 requires newer events with sufficient PM CLOB history.
 
 ---
 

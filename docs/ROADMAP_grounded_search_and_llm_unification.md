@@ -17,16 +17,16 @@ Two related future directions, plus the cross-cutting rule they must both respec
 ## Current state (so whoever implements this starts from facts)
 
 `ibi` and `duel` are subsystems, not separate repos: **ibi** = the daatan IBI
-endpoints (`/api/ibi/{llm,search,fetch-url}`) which proxy to the Oracle API;
+endpoints (`/api/ibi/{llm,search,fetch-url}`) which proxy to the Oracul API;
 **duel** = the retro backtest/scoring harness (`tm.duel_report`, `duel.html`).
-Everything lives in the two repos **retro** (Python: Oracle API + pipeline) and
+Everything lives in the two repos **retro** (Python: Oracul API + pipeline) and
 **daatan** (TypeScript/Next.js: product).
 
 ### Search — already a single chokepoint ✅
 There is one logical search path, and it is good:
 
 ```
-daatan /api/ibi/search ──▶ Oracle POST /search ──▶ tm.web_search.search_articles()
+daatan /api/ibi/search ──▶ Oracul POST /search ──▶ tm.web_search.search_articles()
    (oracleSearch.ts,           (api/searcher.py)        multi-provider fallback chain:
     oracleClient.ts)                                    news-indexer → GDELT → GDELT BQ
                                                         → Google CSE → SerpAPI → Serper
@@ -104,7 +104,7 @@ credentials are set, so it ships with zero behavior change.
    news sites). Note its `cx`.
 2. Set both secrets (env vars on the box, or AWS Secrets Manager):
    `GOOGLE_CSE_API_KEY` (= `daatan/google-cse-api-key`) and
-   `GOOGLE_CSE_CX` (= `daatan/google-cse-cx`). Restart/reload the Oracle.
+   `GOOGLE_CSE_CX` (= `daatan/google-cse-cx`). Restart/reload the Oracul.
 3. Verify: `GET /search/health` shows `google_cse: ok`; a `/search` returns
    `provider: "google_cse"`.
 
@@ -122,8 +122,8 @@ of whether daatan uses Gemini grounding for a fast research answer.
 ## The unification rule (applies to whatever we pick)
 
 1. **Search stays single-chokepoint.** Add Google CSE (or a grounding-backed search)
-   *inside `tm.web_search`*, behind Oracle `/search`. **Do not** add a parallel
-   Gemini-grounding search in daatan that bypasses the Oracle — that re-fragments
+   *inside `tm.web_search`*, behind Oracul `/search`. **Do not** add a parallel
+   Gemini-grounding search in daatan that bypasses the Oracul — that re-fragments
    the one thing that is currently unified.
 2. **One way to reach each LLM.** Decide a single convention and document the model
    IDs:

@@ -983,7 +983,7 @@ def test_the_provenance_schema_version_is_pinned():
     has to be deliberate — schema_version is what daatan gates on."""
     from forecast_api.models import PROVENANCE_SCHEMA_VERSION
 
-    assert PROVENANCE_SCHEMA_VERSION == "1.5"
+    assert PROVENANCE_SCHEMA_VERSION == "1.6"
 
 
 class TestClaimDecompositionThreading:
@@ -1430,3 +1430,68 @@ class TestToneAndVoiceThreading:
             assert field in ClaimDetail.model_fields
             assert field in SourceSignal.model_fields
         assert "report_kind" not in SourceSignal.model_fields
+
+
+class TestGroundsThreading:
+    """`grounds` through the live path (Oracle 1.5 Phase 1, retro#763).
+
+    Same reason as `tone`/`voice` above: a shadow field's only guard against
+    "silently 0% filled for a month" is a test that runs the real pipeline and
+    reads what comes out the far end (retro#566). Rolls up as the DOMINANT
+    claim's, like `voice` — the pool counts reasons at the grain of the source.
+    """
+
+    async def test_it_reaches_the_claim_layer_with_its_basis(self, monkeypatch):
+        """`basis` is the half that lets two `authority_asserted` rows be seen as
+        the SAME statement, so a projection carrying `kind` and dropping it would
+        look populated while making the dedup impossible."""
+        source = await _one_source(monkeypatch, [
+            _claim(claim="The ministry pledged to act",
+                   grounds={"kind": "authority_asserted", "basis": "the ministry's 12 March statement"}),
+            _claim(claim="The columnist's own line", grounds={"kind": "writer_assertion"}),
+        ], "[P1-grounds] Will the event occur?")
+
+        stmt, own = source.claims_detail
+        assert (stmt.grounds.kind, stmt.grounds.basis) == (
+            "authority_asserted", "the ministry's 12 March statement")
+        assert own.grounds.kind == "writer_assertion" and own.grounds.basis is None
+
+    async def test_a_claim_the_model_did_not_answer_projects_to_none(self, monkeypatch):
+        source = await _one_source(
+            monkeypatch, [_claim(claim="A")], "[P1-grounds-null] Will the event occur?"
+        )
+        assert source.claims_detail[0].grounds is None
+
+    async def test_it_rides_the_dominant_claim_to_the_article_level(self, monkeypatch):
+        """Pinned with the dominant claim NOT first, so `claims_detail[0]` fails."""
+        source = await _one_source(monkeypatch, [
+            _claim(claim="A minor precursor", stance=0.2, fact_signal=0.2,
+                   grounds={"kind": "writer_assertion"}),
+            _claim(claim="The decisive report", stance=0.9, fact_signal=0.9,
+                   grounds={"kind": "event_observed", "basis": "the line opened on 3 May"}),
+        ], "[P1-grounds-dom] Will the event occur?")
+
+        assert (source.grounds.kind, source.grounds.basis) == (
+            "event_observed", "the line opened on 3 May")
+        assert [c.grounds.kind for c in source.claims_detail] == [
+            "writer_assertion", "event_observed"]
+
+    async def test_the_article_rollup_is_none_when_no_claim_carries_a_fact(self, monkeypatch):
+        source = await _one_source(monkeypatch, [
+            _claim(claim="Pure opinion", grounds={"kind": "writer_assertion"},
+                   fact_signal_absent_reason="opinion"),
+        ], "[P1-grounds-nofact] Will the event occur?")
+
+        assert source.fact_signal is None
+        assert source.grounds is None
+        assert source.claims_detail[0].grounds.kind == "writer_assertion"
+
+    async def test_a_malformed_answer_costs_the_field_and_not_the_article(self, monkeypatch):
+        source = await _one_source(monkeypatch, [
+            _claim(claim="The ministry said so", stance=0.7,
+                   grounds={"basis": "the ministry said so"}),
+        ], "[P1-grounds-bad] Will the event occur?")
+
+        claim = source.claims_detail[0]
+        assert claim.grounds is None
+        assert claim.stance == 0.7 and claim.claim == "The ministry said so"

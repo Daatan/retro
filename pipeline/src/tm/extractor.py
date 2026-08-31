@@ -306,9 +306,7 @@ evidence_class is fine, a wrong one is worse than none.
 
 Choose exactly one of the FIVE below — nothing else is an evidence class. In particular \
 `official_statement`, `observed_milestone` and the other GROUNDS kinds are NOT evidence \
-classes: they answer what a position rests on and go in `grounds.kind`, never here. A \
-minister's announcement reported flat is `reported_fact` here and `official_statement` \
-under GROUNDS — two fields, two answers.
+classes: they answer what a position rests on and belong in `grounds.kind`, never here.
   reported_fact      — a plain declarative statement of something that
                         happened or is currently true (not hedged, not a
                         forecast). Independent of `settled`: a reported_fact
@@ -844,28 +842,18 @@ figure published as fact
   basis  — one short phrase naming the fact or reasoning itself, in the article's terms \
 ("the ministry's 12 March statement", "the 41% Ipsos figure", "no incumbent has lost \
 since 1992"). Omit only when the article gives nothing to name.
-`grounds` is not `evidence_class`: class is the ROUTE the information took (reported, \
-cited, opinion); grounds is WHAT WAS SEEN at the end of it. The two enums never share a \
-value — `official_statement` is a grounds kind and is never an evidence class, `reported_fact` \
-is an evidence class and is never a grounds kind — so a minister's announcement is \
-evidence_class `reported_fact` with grounds `official_statement`. A reporter citing a poll is \
-`cited_share` by class and `market_or_poll_figure` by grounds; a columnist reasoning \
-from a poll is `opinion` by class and still `market_or_poll_figure` by grounds. Answer \
-for every quote — a bare assertion with nothing behind it IS `authors_judgement`, not an \
-omission.
+`grounds` is not `evidence_class` and the two enums never share a value: class is the \
+ROUTE the information took (reported, cited, opinion); grounds is WHAT WAS SEEN at the \
+end of it. A quote can be `opinion` by class and still `market_or_poll_figure` by grounds \
+when the columnist reasons from a poll. Answer for every quote — a bare assertion with \
+nothing behind it IS `authors_judgement`, not an omission. `grounds` never changes stance, \
+facet, evidence_class or any other field.
 
 Examples — related event: "Regulator R revokes operator O's licence by 31 March 2027":
-  "Inspectors logged 14 safety breaches at the depot last quarter, the regulator said"  \
-  →  {"kind": "observed_milestone", "basis": "14 breaches logged last quarter"}
-  "We will act on the evidence, said Regulator R's chief executive"  \
-  →  {"kind": "official_statement", "basis": "chief executive's pledge to act"}
+  "Fourteen breaches were logged at the depot last quarter, the safety authority said"  \
+  →  {"kind": "official_statement", "basis": "the safety authority's Q3 breach figure"}
   "Markets price a revocation at 70%, according to Exchange E"  \
   →  {"kind": "market_or_poll_figure", "basis": "Exchange E's 70% price"}
-  "With the review reopened and the chair on record, revocation now looks likely, \
-analyst N said"  \
-  →  {"kind": "analyst_inference", "basis": "reopened review plus chair's stance"}
-  "No regulator has revoked a licence of this size in twenty years"  \
-  →  {"kind": "precedent_or_base_rate", "basis": "no comparable revocation in 20 years"}
   "The regulator will not dare, whatever it says" (the columnist's own line)  \
   →  {"kind": "authors_judgement"}
 

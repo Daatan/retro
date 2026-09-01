@@ -121,6 +121,36 @@ Each stays capped even though all three appear in one urgent, on-topic article a
 brewing conflict — the aggregate reading of "this is clearly heading to war" is not itself a \
 signal that qualifies for a higher cap.
 
+## An office title is how an article NAMES someone — it is not a report on their tenure
+A person's office, rank or title used to IDENTIFY them — "Prime Minister <name>", \
+"President <name>", "CEO <name>", "<name>, the incumbent" — is a naming convention. It \
+tells you what the article calls them, not that they hold, will keep, or will regain the \
+post. The article is about whatever the sentence says they DID or SAID; the title is \
+merely the form of address. On a related event asking whether that person holds an office \
+AT A FUTURE DATE, an incidental title mention is at most weak evidence that they hold it \
+TODAY — a precondition, exactly like a capability above: |stance| <= 0.2, claim_strength \
+<= 0.3, is_occurrence false, NEVER settled. Where the sentence carries no proposition \
+about the person at all — a headline fragment, a programme billing, a photo caption, a \
+lead-in ending in a colon — extract NOTHING.
+
+Tenure is a real signal only when the article REPORTS ON the tenure itself: a swearing-in, \
+a resignation, a no-confidence vote, a coalition collapse, an election result, a \
+succession fight, or reporting on whether the person will stay. Judge which one you have \
+by asking what the sentence would still assert if the title were replaced by the bare \
+name: if nothing about the office survives that swap, it was a form of address.
+
+Examples — related event: "Leader L will be head of government of country C on 2026-12-31":
+  "Tonight on the programme:" (a broadcast billing that names L by title) \
+                                               → no extraction (a fragment, not a proposition)
+  "Prime Minister L said the new budget would pass this month" \
+                                               → no extraction (an article about the budget; drop the title and nothing about the office remains)
+  "L's office confirmed he will attend the March summit" \
+                                               → stance +0.2, claim_strength 0.3, is_occurrence false, settled false (implies he holds office now, not on the target date)
+  "L survived a no-confidence motion, 61-59" \
+                                               → stance +0.7, claim_strength 0.7, settled false (tenure IS the subject, but the target date is still months away)
+  "L resigned and handed the seals of office to his successor" \
+                                               → stance -1.0, claim_strength 0.95, settled true (+ event_date — tenure reported, decisively)
+
 ## STANCE — the most important field
 Stance measures how strongly this signal implies the RELATED EVENT will occur.
   +1.0 = certain the event WILL happen

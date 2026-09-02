@@ -394,6 +394,38 @@ def _drop_malformed_voice(data: Any) -> Any:
 # object and `kind`, the half the n_eff is taken over, goes with it. `basis` is optional
 # for the same reason — a model that answers the pick and skips the phrase has still
 # answered the question the consumer asks first.
+#
+# ELICITATION WITHDRAWN 2026-09-02 (retro#774). The model is no longer ASKED for this: the
+# field is gone from `PredictionExtraction`, and with it from the JSON schema instructor
+# serialises into every call. The class stays because rows written between 2026-08-31 and
+# now carry `grounds`, and `ClaimDetail`/`PoolSourceInput` still parse and serve them —
+# withdrawing the question does not unwrite the answers.
+#
+# Why it was withdrawn, measured on prod rather than on a corpus. Comparing pool rows that
+# carry an `extractor_prompt_version` (rows without one come from another lane and are 95%
+# unclassified for unrelated reasons — comparing by DATE instead of by version mixes those
+# in and inflates the effect roughly tenfold):
+#
+#     versioned, pre-grounds   35 / 10,945 unclassified   0.32%
+#     grounds live (v12, v13)  10 /    235 unclassified   4.26%   ~13x
+#
+# Every unclassified claim falls back to `evidence_class_weight_unclassified_cap` (0.25,
+# 4x below `reported_fact`). That 4.26% lands almost exactly on the 3.4% (Haiku) the v12
+# A/B itself predicted — the number was known before v12d shipped and was the criterion
+# v12d was supposed to clear.
+#
+# Of the 18 hard leaks in `oracle_log.txt` over the same window, 13 were
+# `authority_asserted` and 5 `expert_inference` — every one a `grounds.kind` member, with
+# zero such leaks in the 4.5 months before the field went live. So the rename to a
+# non-colliding vocabulary (retro#763's fix 2) was never the thing under test: prod had
+# nothing to leak until `grounds` shipped at all. The leak is also not the whole effect —
+# the rest is silent OMISSION, the model answering the grounds question and dropping the
+# class one.
+#
+# retro#763's own comment set the standard this violates: "a field that is read by nothing
+# must not pay for itself in live weighting quality". Nothing reads `grounds` yet. So the
+# question goes away until the n_eff-over-reasons consumer that justifies it exists, and
+# the collision is solved by something other than wording — both attempts at that failed.
 class Grounds(BaseModel):
     # Billed on every call (schema ~29% of the prompt, retro#700): say WHICH value, not
     # HOW to find it. The GROUNDS block carries the rule and the worked examples.
@@ -413,29 +445,6 @@ class Grounds(BaseModel):
                     "article's terms ('the ministry's 12 March statement', 'the Q2 "
                     "throughput figure'). Omit only when the article gives nothing to name.",
     )
-
-
-def _drop_malformed_grounds(data: Any) -> Any:
-    """`_drop_malformed_voice` for `grounds` (retro#763) — same trade, same reason.
-
-    `kind` is a closed six-member enum on a required key, so a bare-string answer
-    ("the ministry said so") or an out-of-set kind would raise out of
-    `ExtractionOutput` under instructor's `max_retries=1` and drop a real article
-    from a real forecast. Nulling the field keeps the claim. Logged, not silent,
-    so that "answered badly" stays distinguishable from "did not answer" — the one
-    distinction a fill rate has to draw. Grep `event=grounds_malformed`.
-    """
-    if not isinstance(data, dict):
-        return data
-    raw = data.get("grounds")
-    if raw is None:
-        return data
-    try:
-        Grounds.model_validate(raw)
-    except (_ValidationError, TypeError, ValueError):
-        logger.warning("event=grounds_malformed value=%r", raw)
-        return {**data, "grounds": None}
-    return data
 
 
 def _drop_malformed_quantity(data: Any) -> Any:
@@ -776,13 +785,8 @@ class PredictionExtraction(BaseModel):
                     "({kind, attributed_to}): the author's own, a named person's, an "
                     "institution's, a wire agency's, or nobody's. See VOICE.",
     )
-    grounds: Optional[Grounds] = Field(
-        default=None,
-        description="EXPERIMENTAL, shadow (retro#763) — what this quote's position RESTS "
-                    "ON ({kind, basis}): a milestone, a statement, a figure, an inference, "
-                    "a precedent, or the writer's own judgement, plus the phrase naming "
-                    "it. See GROUNDS. Answer for every prediction.",
-    )
+    # `grounds` sat here until retro#774. It is NOT re-added without a consumer and a
+    # non-lexical fix for the evidence_class collision — see the Grounds class comment.
 
     @model_validator(mode="before")
     @classmethod
@@ -790,11 +794,9 @@ class PredictionExtraction(BaseModel):
         data = _coerce_nested_json_string(_unwrap_properties_envelope(data), "reader_confidence")
         data = _coerce_nested_json_string(data, "quantity")
         data = _coerce_nested_json_string(data, "voice")
-        data = _coerce_nested_json_string(data, "grounds")
         data = _drop_malformed_reader_confidence(data)
         data = _drop_malformed_quantity(data)
         data = _drop_malformed_voice(data)
-        data = _drop_malformed_grounds(data)
         data = _drop_out_of_enum(data, "tone", _TONE_VALUES)
         data = _drop_out_of_enum(data, "evidence_class", _EVIDENCE_CLASS_VALUES)
         return _drop_out_of_enum(data, "report_kind", _REPORT_KIND_VALUES)

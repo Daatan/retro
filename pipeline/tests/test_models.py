@@ -459,8 +459,19 @@ class TestReportKindAndConsensusView:
         # whole ordered tail rather than one index each — the rule is about the
         # ORDER of the block, and an index-per-field assertion goes on passing while
         # a new field is quietly inserted between two of them.
+        # `grounds` sat at the end of this list until retro#774 withdrew it.
+        #
+        # It is tempting to argue that removing the LAST element is free — every
+        # remaining field keeps its neighbours and its position in the text the model
+        # reads. That argument was made during retro#774 and MEASURED FALSE: dropping
+        # the tail field cost Nova Lite a third of its `fact_signal` fill (53.9% ->
+        # 37.3% over 102 predictions), the same block retro#680 lost to a MIDDLE
+        # perturbation, while Haiku was unmoved (73.0% -> 73.0%). So the rule is not
+        # "the middle is fragile and the tail is safe" — it is that Nova's fill is
+        # sensitive to this schema's SHAPE, wherever the change lands, and only a
+        # per-rater A/B can say what an edit costs.
         assert props[props.index("reader_confidence"):] == [
-            "reader_confidence", "report_kind", "quantity", "tone", "voice", "grounds",
+            "reader_confidence", "report_kind", "quantity", "tone", "voice",
         ]
 
     # --- consensus_view ---
@@ -919,102 +930,12 @@ class TestVoice:
         }
 
 
-class TestGrounds:
-    """`grounds` {kind, basis} — what the position rests on (Oracle 1.5 Phase 1,
-    retro#763, unparked from retro#673 §1).
-
-    The pool counts articles where it means to count reasons. What these pin is
-    the same boundary `Voice` has: the closed pick survives a partial answer, a
-    malformed answer costs the field and never the claim, and the field is a
-    separate axis from `evidence_class` rather than an extension of it.
-    """
-
-    KINDS = (
-        "event_observed", "authority_asserted", "market_or_poll_number",
-        "expert_inference", "historical_base_rate", "writer_assertion",
-    )
-
-    @staticmethod
-    def _pred(**over):
-        base = dict(quote="q", claim="c", stance=0.4, claim_strength=0.65)
-        return PredictionExtraction(**{**base, **over})
-
-    @pytest.mark.parametrize("kind", KINDS)
-    def test_every_kind_lands(self, kind):
-        assert self._pred(grounds={"kind": kind}).grounds.kind == kind
-
-    def test_the_basis_rides_with_the_kind(self):
-        pred = self._pred(grounds={"kind": "authority_asserted",
-                                   "basis": "the ministry's 12 March statement"})
-        assert (pred.grounds.kind, pred.grounds.basis) == (
-            "authority_asserted", "the ministry's 12 March statement")
-
-    def test_it_defaults_to_none(self):
-        """Every row extracted before v12 has none, and the prompt asks for it on
-        every prediction, so on a v12 row None means the model did not answer."""
-        assert self._pred().grounds is None
-
-    def test_a_kind_without_a_basis_is_kept(self):
-        """`basis` is optional on purpose: the pick is what the n_eff is taken
-        over, and a model that answers it and skips the phrase has answered the
-        question the consumer asks first. Requiring the phrase would hand the drop
-        guard a raise and null the pick with it."""
-        assert self._pred(grounds={"kind": "writer_assertion"}).grounds.basis is None
-
-    def test_it_is_a_separate_axis_from_evidence_class(self):
-        """The issue's own rule: class is the ROUTE the information took, grounds
-        is WHAT WAS SEEN. A columnist reasoning from a poll is `opinion` by class
-        and `market_or_poll_number` by grounds, and the schema must let the two
-        vary independently — a field that merely re-labelled `evidence_class`
-        would fill at 100% and carry nothing."""
-        pred = self._pred(evidence_class="opinion",
-                          grounds={"kind": "market_or_poll_number", "basis": "the 41% Ipsos figure"})
-        assert pred.evidence_class == "opinion"
-        assert pred.grounds.kind == "market_or_poll_number"
-
-    @pytest.mark.parametrize("bad", [
-        {},                                        # no kind
-        {"basis": "the ministry said so"},         # the phrase without the pick
-        {"kind": "rumour"},                        # not an enum member
-        {"kind": "Official_Statement"},            # right member, wrong case
-        "the ministry said so",                    # the bare string, not the object
-        ["authority_asserted", "the ministry"],
-    ])
-    def test_a_malformed_answer_is_dropped_and_the_prediction_survives(self, bad, caplog):
-        import logging
-
-        with caplog.at_level(logging.WARNING, logger="tm.models"):
-            pred = self._pred(grounds=bad)
-        assert pred.grounds is None
-        assert pred.claim_strength == 0.65, "the rest of the prediction must be untouched"
-        assert "event=grounds_malformed" in caplog.text, (
-            "a silent drop would make 'answered badly' look like 'did not answer'"
-        )
-
-    def test_a_double_serialized_object_is_parsed(self):
-        """retro#306: some models emit a nested object as a JSON string."""
-        pred = self._pred(grounds='{"kind": "historical_base_rate", "basis": "no incumbent has lost since 1992"}')
-        assert pred.grounds == Grounds(kind="historical_base_rate",
-                                       basis="no incumbent has lost since 1992")
-
-    def test_constructing_it_directly_still_raises(self):
-        with pytest.raises(ValidationError):
-            Grounds(basis="the ministry said so")
-        with pytest.raises(ValidationError):
-            Grounds(kind="rumour")
-
-    def test_it_survives_a_dump_validate_round_trip(self):
-        pred = self._pred(grounds={"kind": "event_observed", "basis": "the line opened on 3 May"})
-        assert PredictionExtraction.model_validate(pred.model_dump()).grounds == pred.grounds
-
-    def test_it_does_not_pay_for_a_docstring(self):
-        """retro#700: a model docstring lands in the schema billed on every call."""
-        assert Grounds.model_json_schema().get("description", "") == ""
-
-    def test_the_llm_schema_offers_exactly_six_kinds(self):
-        schema = PredictionExtraction.model_json_schema()
-        assert "grounds" in schema["properties"]
-        assert set(schema["$defs"]["Grounds"]["properties"]["kind"]["enum"]) == set(self.KINDS)
+# `TestGrounds` lived here until retro#774 withdrew the elicitation. It pinned a real
+# contract — the closed pick surviving a partial answer, a malformed answer costing the
+# field and never the claim — and every one of those guarantees is now vacuous, because
+# nothing asks the model for `grounds`. The class stays deleted rather than skipped: a
+# skipped suite reads as a known gap, and this is a decision. What DID survive is the
+# `evidence_class` guard below, which is the half that still has a job.
 
 
 class TestEvidenceClassGuard:
@@ -1022,11 +943,18 @@ class TestEvidenceClassGuard:
 
     Measured on v12's first A/B: both raters wrote the GROUNDS kind then
     spelled `official_statement` into `evidence_class` on four corpus cases,
-    5/5 runs each (the kinds were later renamed to stop the collision at the
-    source; this guard stays as the floor under that rename). `evidence_class` had always been strict, so every one of those runs
-    raised out of ExtractionOutput — on a live forecast that is the article
-    gone, deterministically, for a field confusion the prompt can only lower
-    and never rule out.
+    5/5 runs each. `evidence_class` had always been strict, so every one of
+    those runs raised out of ExtractionOutput — on a live forecast that is the
+    article gone, deterministically, for a field confusion the prompt can only
+    lower and never rule out.
+
+    retro#763 paired this guard with a rename of the GROUNDS vocabulary,
+    expecting the rename to stop the collision at the source. It did not, and
+    prod says the rename was never what was under test: the leak's entire
+    population postdates `grounds` going live on 2026-08-31, with zero
+    occurrences in the 4.5 months before. retro#774 withdrew the elicitation;
+    this guard stays as the floor under that, because the model can still
+    volunteer a word nobody asked it for.
     """
 
     @staticmethod
@@ -1040,15 +968,25 @@ class TestEvidenceClassGuard:
     def test_every_real_class_still_lands(self, value):
         assert self._pred(evidence_class=value).evidence_class == value
 
-    def test_a_grounds_kind_written_as_the_class_is_dropped_and_the_claim_survives(self, caplog):
+    @pytest.mark.parametrize("leaked", ["authority_asserted", "expert_inference"])
+    def test_a_grounds_kind_written_as_the_class_is_dropped_and_the_claim_survives(
+        self, caplog, leaked,
+    ):
+        """The guard outlives the field it was built for (retro#774).
+
+        `grounds` is no longer elicited, so nothing asks the model for these
+        words any more — but they are the two values prod actually saw leak
+        (13 `authority_asserted`, 5 `expert_inference` between 2026-08-31 and
+        09-02), and the guard is the only thing standing between a repeat and
+        a dropped article. Withdrawing the question is not proof the model
+        will never volunteer the answer, so this stays.
+        """
         import logging
 
         with caplog.at_level(logging.WARNING, logger="tm.models"):
-            pred = self._pred(evidence_class="authority_asserted",
-                              grounds={"kind": "authority_asserted", "basis": "the minister's announcement"})
+            pred = self._pred(evidence_class=leaked)
         assert pred.evidence_class is None
-        assert pred.grounds.kind == "authority_asserted", "the right field keeps the answer"
-        assert pred.claim_strength == 0.65
+        assert pred.claim_strength == 0.65, "the claim survives; only the class is lost"
         assert "event=evidence_class_malformed" in caplog.text
 
     def test_none_and_absent_are_untouched(self):

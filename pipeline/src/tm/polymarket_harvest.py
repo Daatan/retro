@@ -1,9 +1,10 @@
 """
 Polymarket Harvest — bulk download of resolved political/geopolitical markets.
 
-Fetches all resolved binary markets from the Gamma API (2023-01-01 to today),
-filters to political/geopolitical categories, validates outcome clarity, and
-writes data/poc/pm_harvest/events.jsonl for poc_event_gen.py to consume.
+Fetches all resolved binary markets from the Polymarket CLOB API (2023-01-01 to
+today; cursor-paginated, no offset cap — see retro#764), filters to
+political/geopolitical categories, validates outcome clarity, and writes
+data/poc/pm_harvest/events.jsonl for poc_event_gen.py to consume.
 
 Usage:
     python -m tm.polymarket_harvest
@@ -32,8 +33,16 @@ console = Console()
 
 GAMMA_BASE = "https://gamma-api.polymarket.com"
 CLOB_BASE = "https://clob.polymarket.com"
-PAGE_SIZE = 100
 REQUEST_DELAY = 0.5  # seconds between pages (be polite)
+
+# retro#764: Gamma's `offset` pagination hard-caps at ~2,100 rows (offset param
+# is capped around 2000, limit=100), after which it returns a non-200 and the
+# old code treated that identically to "no more markets". Both loops below now
+# page the CLOB `/markets` endpoint instead, which is cursor-based with no
+# observed offset cap. CLOB ignores any `limit` you pass and always returns
+# 1,000 rows per page; `next_cursor` drives pagination until it equals the
+# sentinel below.
+CLOB_END_CURSOR = "LTE="  # base64("-1") — CLOB's "no more pages" marker
 
 # Polymarket category values to include (exact match, case-insensitive)
 # NOTE: only old (<2022) markets have categories populated; newer ones are empty.
@@ -157,6 +166,43 @@ def _extract_outcome(market: dict) -> bool | None:
     return None  # ambiguous
 
 
+def _clob_market_to_legacy_shape(m: dict) -> dict:
+    """
+    Normalize one CLOB `/markets` entry into the field shape `_is_political`,
+    `_parse_outcome_date`, and `_extract_outcome` already expect (originally a
+    Gamma `/markets` entry — see retro#764 for why the source endpoint changed).
+
+    CLOB has no `category` field (only `tags`, a large freeform list) and no
+    combined `outcomePrices` string (only a per-outcome `tokens` array with a
+    settled `price`), so both are reconstructed here rather than touching the
+    three helpers above.
+    """
+    tokens = m.get("tokens") or []
+    yes_tok = next((t for t in tokens if str(t.get("outcome", "")).lower() == "yes"), None)
+    no_tok = next((t for t in tokens if str(t.get("outcome", "")).lower() == "no"), None)
+
+    outcome_prices = None
+    if yes_tok is not None and no_tok is not None:
+        outcome_prices = [yes_tok.get("price"), no_tok.get("price")]
+
+    tags = [str(t).strip().lower() for t in (m.get("tags") or [])]
+    category = next((t for t in tags if t in POLITICAL_CATEGORIES), "")
+
+    condition_id = m.get("condition_id", "")
+    return {
+        "id": condition_id,
+        "conditionId": condition_id,
+        "question": m.get("question", ""),
+        "category": category,
+        "endDate": m.get("end_date_iso"),
+        "outcomePrices": json.dumps(outcome_prices) if outcome_prices is not None else None,
+        "lastTradePrice": yes_tok.get("price") if yes_tok else None,
+        "resolutionValue": None,
+        "slug": m.get("market_slug", ""),
+        "clobTokenIds": [yes_tok["token_id"]] if yes_tok and yes_tok.get("token_id") else [],
+    }
+
+
 def _fetch_price_history(clob_token_yes: str, outcome_date: str, client: httpx.Client) -> list[dict]:
     """
     Fetch and normalise daily prices for a market using the CLOB API.
@@ -239,45 +285,51 @@ def harvest(
         ) as progress:
             task = progress.add_task("Fetching pages...", total=None)
 
+            cursor = ""
             while True:
-                raw_cache = harvest_dir / f"raw_page_{page}.json"
+                raw_cache = harvest_dir / f"raw_clob_page_{page}.json"
 
                 # Load from cache, or fetch and cache
-                markets = None
+                payload = None
                 if raw_cache.exists():
                     try:
                         with open(raw_cache) as f:
-                            markets = json.load(f)
+                            payload = json.load(f)
                     except (json.JSONDecodeError, ValueError):
                         logger.warning("Corrupted cache page %d — re-fetching", page)
                         raw_cache.unlink()
 
-                if markets is None:
+                if payload is None:
                     try:
-                        r = client.get(
-                            f"{GAMMA_BASE}/markets",
-                            params={
-                                "closed": "true",
-                                "limit": PAGE_SIZE,
-                                "offset": page * PAGE_SIZE,
-                            },
-                            timeout=20,
-                        )
+                        params = {"next_cursor": cursor} if cursor else {}
+                        r = client.get(f"{CLOB_BASE}/markets", params=params, timeout=20)
                         if r.status_code != 200:
-                            logger.warning("Page %d: HTTP %d", page, r.status_code)
+                            # A non-200 mid-corpus is a transient API failure, NOT
+                            # end-of-pagination — re-running resumes from the cached
+                            # pages and re-fetches from this cursor (retro#764).
+                            logger.error(
+                                "Page %d: HTTP %d fetching cursor=%r — treating as a "
+                                "transient failure, not end of corpus. Re-run to resume.",
+                                page, r.status_code, cursor,
+                            )
                             break
-                        markets = r.json()
+                        payload = r.json()
                         with open(raw_cache, "w") as f:
-                            json.dump(markets, f)
+                            json.dump(payload, f)
                         time.sleep(REQUEST_DELAY)
                     except Exception as exc:
                         logger.error("Page %d fetch error: %s", page, exc)
                         break
 
-                if not markets:
-                    break  # End of pagination
+                raw_markets = payload.get("data") or []
+                next_cursor = payload.get("next_cursor", CLOB_END_CURSOR)
 
-                for market in markets:
+                if not raw_markets:
+                    logger.info("Page %d: empty page — reached end of corpus.", page)
+                    break
+
+                for raw_market in raw_markets:
+                    market = _clob_market_to_legacy_shape(raw_market)
                     total_checked += 1
                     market_id = market.get("id") or market.get("conditionId", "")
                     if not market_id or market_id in seen_ids:
@@ -348,6 +400,10 @@ def harvest(
                     ),
                 )
                 page += 1
+                cursor = next_cursor
+                if cursor == CLOB_END_CURSOR:
+                    logger.info("Reached CLOB end-of-pagination sentinel after page %d.", page - 1)
+                    break
 
     all_events = existing_events + new_events
     console.print(f"\n[bold green]Done.[/bold green] Total events: {len(all_events)}")
@@ -419,61 +475,71 @@ def backfill_clob_tokens(data_dir: Path) -> int:
     if cached_pages:
         console.print(f"  From cache ({cached_pages} pages): found {len(clob_lookup)} tokens")
 
-    # Pass 2: fetch remaining from Gamma API (paging through all closed markets)
+    # Pass 2: fetch remaining from the CLOB API (cursor-paginated, retro#764 —
+    # the old Gamma `offset` pagination here silently capped at ~2,100 rows).
+    # Caveat: matching is by `condition_id`, so this only recovers tokens for
+    # events whose pm_id is already a conditionId. Events harvested before this
+    # fix, whose pm_id came from Gamma's separate numeric `id` field, won't
+    # match here — Pass 1 (cached Gamma pages) is unaffected and still covers
+    # those. Shares the `raw_clob_page_N.json` cache with harvest() above.
     still_need = need_token - set(clob_lookup.keys())
     if still_need:
-        console.print(f"  Fetching {len(still_need)} remaining tokens from Gamma API...")
+        console.print(f"  Fetching {len(still_need)} remaining tokens from CLOB API...")
         fetched_from_api = 0
         api_page = 0
+        cursor = ""
         with httpx.Client(timeout=30) as client:
             while still_need:
-                raw_cache = harvest_dir / f"raw_page_{api_page}.json"
-                markets = None
+                raw_cache = harvest_dir / f"raw_clob_page_{api_page}.json"
+                payload = None
                 if raw_cache.exists():
                     try:
                         with open(raw_cache) as f:
-                            markets = json.load(f)
+                            payload = json.load(f)
                     except Exception:
                         pass
 
-                if markets is None:
+                if payload is None:
                     try:
-                        r = client.get(
-                            f"{GAMMA_BASE}/markets",
-                            params={"closed": "true", "limit": PAGE_SIZE, "offset": api_page * PAGE_SIZE},
-                            timeout=20,
-                        )
+                        params = {"next_cursor": cursor} if cursor else {}
+                        r = client.get(f"{CLOB_BASE}/markets", params=params, timeout=20)
                         if r.status_code != 200:
-                            logger.warning("Backfill page %d: HTTP %d", api_page, r.status_code)
+                            logger.warning(
+                                "Backfill page %d: HTTP %d fetching cursor=%r — transient "
+                                "failure, stopping this pass (not necessarily end of corpus)",
+                                api_page, r.status_code, cursor,
+                            )
                             break
-                        markets = r.json()
+                        payload = r.json()
                         # Cache for future use
                         with open(raw_cache, "w") as f:
-                            json.dump(markets, f)
+                            json.dump(payload, f)
                         time.sleep(REQUEST_DELAY)
                     except Exception as exc:
                         logger.error("Backfill page %d error: %s", api_page, exc)
                         break
 
-                if not markets:
+                raw_markets = payload.get("data") or []
+                next_cursor = payload.get("next_cursor", CLOB_END_CURSOR)
+
+                if not raw_markets:
                     break
 
-                for m in markets:
-                    mid = str(m.get("id") or m.get("conditionId", ""))
-                    tokens = m.get("clobTokenIds") or []
-                    if isinstance(tokens, str):
-                        try:
-                            tokens = json.loads(tokens)
-                        except Exception:
-                            tokens = []
-                    if mid and tokens and mid in still_need:
-                        clob_lookup[mid] = str(tokens[0])
+                for m in raw_markets:
+                    mid = str(m.get("condition_id", ""))
+                    tokens = m.get("tokens") or []
+                    yes_tok = next((t for t in tokens if str(t.get("outcome", "")).lower() == "yes"), None)
+                    if mid and yes_tok and yes_tok.get("token_id") and mid in still_need:
+                        clob_lookup[mid] = str(yes_tok["token_id"])
                         still_need.discard(mid)
                         fetched_from_api += 1
 
                 api_page += 1
+                cursor = next_cursor
                 if api_page % 20 == 0:
                     console.print(f"    Page {api_page}, {len(still_need)} still needed...")
+                if cursor == CLOB_END_CURSOR:
+                    break
 
         console.print(f"  From API: found {fetched_from_api} additional tokens")
 

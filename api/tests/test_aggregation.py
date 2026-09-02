@@ -18,6 +18,7 @@ from forecast_api.aggregation import (
     claim_weighted_stance,
     effective_sample_size,
     evidence_class_weight,
+    harmonic_source_discount_factors,
     logit,
     pool_sources,
     prob_to_stance,
@@ -741,6 +742,100 @@ class TestSourceMassCap:
         )
         assert uncapped is not None and capped is not None
         assert capped.mean < uncapped.mean
+
+
+class TestHarmonicSourceDiscount:
+    """harmonic_source_discount_factors() bounds one outlet's influence by
+    volume via a 1/i per-row discount (retro#781, source-dependence Rule 2,
+    umbrella #779). Ships inert (harmonic_source_discount=False); these tests
+    both pin that inert default and, separately, that the mechanism is
+    correct once switched on.
+    """
+
+    # ── harmonic_source_discount_factors() directly ─────────────────────
+
+    def test_disabled_is_the_identity(self):
+        assert harmonic_source_discount_factors(["a", "a", "b"], None, False) is None
+
+    def test_no_source_ids_is_the_identity(self):
+        assert harmonic_source_discount_factors(None, None, True) is None
+
+    def test_one_row_per_source_is_all_ones(self):
+        source_ids = ["a", "b", "c"]
+        assert harmonic_source_discount_factors(source_ids, None, True) == [1.0, 1.0, 1.0]
+
+    def test_undated_rows_discount_by_pool_order(self):
+        # No published_dates supplied: every row in the "dominant" group is
+        # equally undated, so rank comes from position in the pool.
+        source_ids = ["dominant", "dominant", "dominant", "other"]
+        out = harmonic_source_discount_factors(source_ids, None, True)
+        assert out == pytest.approx([1.0, 0.5, 1 / 3, 1.0])
+
+    def test_most_recent_row_gets_full_weight_regardless_of_pool_order(self):
+        source_ids = ["a", "a", "a"]
+        # Oldest listed first in the pool, most recent listed last.
+        published_dates = ["2026-01-01", "2026-06-01", "2026-09-01"]
+        out = harmonic_source_discount_factors(source_ids, published_dates, True)
+        assert out == pytest.approx([1 / 3, 0.5, 1.0])
+
+    def test_none_source_id_rows_are_singleton_groups_not_lumped_together(self):
+        source_ids = [None, None, "b"]
+        out = harmonic_source_discount_factors(source_ids, None, True)
+        assert out == pytest.approx([1.0, 1.0, 1.0])
+
+    def test_bounded_influence_property_converges_as_n_grows(self):
+        # A pool with N rows from one outlet and 1 row from another: the
+        # single outlet's share of total weight must be <= H_N / (H_N + 1)
+        # and must not diverge as N grows (the issue's own stated property).
+        import math
+
+        def harmonic_number(n: int) -> float:
+            return sum(1.0 / i for i in range(1, n + 1))
+
+        for n in (5, 20, 100):
+            source_ids = ["dominant"] * n + ["other"]
+            out = harmonic_source_discount_factors(source_ids, None, True)
+            dominant_total = sum(out[:n])
+            other_total = sum(out[n:])
+            share = dominant_total / (dominant_total + other_total)
+            h_n = harmonic_number(n)
+            bound = h_n / (h_n + 1.0)
+            assert share <= bound + 1e-9
+            assert math.isclose(dominant_total, h_n, rel_tol=1e-9)
+
+    # ── wired into aggregate_pool() ─────────────────────────────────────
+
+    def test_ships_inert_default_moves_no_number_even_with_a_prolific_source(self):
+        stances = [0.9, 0.9, 0.9, 0.9, -0.9]
+        weights = [1.0] * 5
+        relevances = [0.7] * 5
+        settled = [False] * 5
+        source_ids = ["prolific"] * 4 + ["other"]
+        baseline = aggregate_pool(stances, weights, relevances, settled, **_aggregate_kwargs())
+        with_ids = aggregate_pool(
+            stances, weights, relevances, settled,
+            source_ids=source_ids,  # harmonic_source_discount defaults to False — still inert
+            **_aggregate_kwargs(),
+        )
+        assert with_ids == baseline
+
+    def test_a_prolific_source_no_longer_swamps_a_minority_dissent_once_enabled(self):
+        stances = [0.9, 0.9, 0.9, 0.9, -0.9]
+        weights = [1.0] * 5
+        relevances = [0.7] * 5
+        settled = [False] * 5
+        source_ids = ["prolific"] * 4 + ["other"]
+        off = aggregate_pool(
+            stances, weights, relevances, settled,
+            source_ids=source_ids, **_aggregate_kwargs(),
+        )
+        on = aggregate_pool(
+            stances, weights, relevances, settled,
+            source_ids=source_ids, harmonic_source_discount=True,
+            **_aggregate_kwargs(),
+        )
+        assert off is not None and on is not None
+        assert on.mean < off.mean
 
 
 class TestPoolReportingFields:

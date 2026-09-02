@@ -285,6 +285,18 @@ class ApiSettings(BaseSettings):
     # would bind) so the threshold can be chosen from prod evidence, not a
     # guess — the same two-step retro#355 and retro#404 already took.
     max_source_share: float = 1.0
+    # ── Harmonic per-source discount (retro#781, source-dependence Rule 2,
+    # umbrella #779) ─────────────────────────────────────────────────────
+    # Distinct from `max_source_share` above: that caps a group's TOTAL share
+    # against a tuned threshold; this discounts a group's OWN rows against
+    # each other by recency (1/i for the i-th row), a property (bounded,
+    # logarithmic growth) rather than a value needing a backtest, so unlike
+    # `max_source_share` it ships as a plain on/off switch, no magnitude to
+    # choose. `harmonic_source_discount` = False is the identity (no-op) and
+    # the shipped default — flipping it on changes already-published pool
+    # weights, so a republish sweep (this repo's CLAUDE.md) is required
+    # before it counts as live for existing forecasts.
+    harmonic_source_discount: bool = False
     # When a caller supplies a gatekeeper verdict on an ArticleInput (relevance +
     # is_prediction — news-indexer's POST /relevance result, threaded through daatan),
     # reuse it instead of re-running check_is_prediction. The SAME claim-aware judge already

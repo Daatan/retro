@@ -979,6 +979,63 @@ def cluster_downweight_factors(
     return [sizes[cid] ** -exponent for cid in cluster_ids]
 
 
+def harmonic_source_discount_factors(
+    source_ids: Optional[Sequence[str]],
+    published_dates: Optional[Sequence[Optional[str]]],
+    enabled: bool,
+) -> Optional[list[float]]:
+    """Per-row weight multipliers bounding one outlet's influence by volume
+    (retro#781, source-dependence Rule 2, umbrella #779).
+
+    Within one `source_id` group, order rows by recency (most recent first;
+    undated rows sort last, keeping their original relative order) and
+    multiply the i-th row's (1-indexed) weight by `1/i`: the first row is
+    full weight, the second half, the third a third. A group's total then
+    grows like the harmonic number H_k (log) instead of linearly with k — 10
+    rows from one outlet contribute ~2.9 rows' worth, 100 contribute ~5.2 —
+    so a prolific outlet is still heard but cannot dominate by volume alone.
+    Composes with rule 1 (retro#780, echo collapsing): once near-identical
+    rows from one outlet collapse to one, what survives here is already
+    genuinely distinct coverage, and this is the diminishing-returns shape on
+    top of that.
+
+    Unlike `cap_source_mass` (retro#458), this needs no tuned threshold — the
+    `1/i` shape is a property (bounded, monotonically diminishing), not a
+    value to backtest — so it ships gated only by `enabled`, no magnitude
+    knob.
+
+    A row with no `source_id` is its own singleton group (weight untouched),
+    matching `cap_source_mass`'s convention for the same case.
+
+    Returns `None` when `source_ids is None` or `enabled` is falsy, which
+    callers treat as "leave the weights alone" rather than multiplying by
+    ones.
+    """
+    if not enabled or source_ids is None:
+        return None
+    n = len(source_ids)
+    if n == 0:
+        return None
+    dates = list(published_dates) if published_dates is not None and len(published_dates) == n else [None] * n
+
+    groups: dict[object, list[int]] = {}
+    for i, sid in enumerate(source_ids):
+        key = sid if sid is not None else object()
+        groups.setdefault(key, []).append(i)
+
+    def sort_key(i: int) -> tuple[int, int]:
+        d = _parse_date(dates[i])
+        if d is None:
+            return (1, i)
+        return (0, -d.toordinal())
+
+    factors = [1.0] * n
+    for idxs in groups.values():
+        for rank, i in enumerate(sorted(idxs, key=sort_key), start=1):
+            factors[i] = 1.0 / rank
+    return factors
+
+
 def cap_source_mass(
     weights: Sequence[float],
     source_ids: Optional[Sequence[str]],
@@ -1311,6 +1368,7 @@ def aggregate_pool(
     age_adjusted_weights: Optional[Sequence[float]] = None,
     source_ids: Optional[Sequence[str]] = None,
     max_source_share: float = 1.0,
+    harmonic_source_discount: bool = False,
     evidence_window_lookback_days: int = -1,
     hazard_shadow_base_rate: Optional[float] = None,
     hazard_shadow_half_life_fraction: float = 0.5,
@@ -1405,6 +1463,22 @@ def aggregate_pool(
     factors = cluster_downweight_factors(cluster_ids, cluster_downweight_exponent)
     if factors is not None and len(factors) == len(weights):
         weights = [w * f for w, f in zip(weights, factors)]
+
+    # Harmonic per-source discount (retro#781, source-dependence Rule 2,
+    # umbrella #779), applied AFTER the cluster discount and BEFORE the
+    # source-mass cap for the same reason retro#355's discount is ordered
+    # first: cap_source_mass caps a GROUP's total share, so it must see the
+    # group's already-diminishing-returns total, not the raw one.
+    #
+    # Inert at the shipped default (harmonic_source_discount=False, factors
+    # is None) -- a change to already-published pool weights needs the
+    # republish sweep this repo's CLAUDE.md requires before it counts as live
+    # for existing forecasts (retro#545 gate 0's 127-row miss).
+    harmonic_factors = harmonic_source_discount_factors(
+        source_ids, published_dates, harmonic_source_discount,
+    )
+    if harmonic_factors is not None and len(harmonic_factors) == len(weights):
+        weights = [w * f for w, f in zip(weights, harmonic_factors)]
 
     # Per-source mass cap (retro#458, Phase 1), applied AFTER the cluster
     # discount so a correlated cluster's rows are judged on their

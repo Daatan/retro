@@ -13142,7 +13142,7 @@
     "C11:axios": {
       "event_id": "C11",
       "source_id": "axios",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13163,7 +13163,7 @@
     "C11:calcalist": {
       "event_id": "C11",
       "source_id": "calcalist",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13219,7 +13219,7 @@
     "C11:maariv": {
       "event_id": "C11",
       "source_id": "maariv",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13352,7 +13352,7 @@
     "C13:maariv": {
       "event_id": "C13",
       "source_id": "maariv",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-08-23T11:21:15.460737"
+  "last_updated": "2026-09-02T19:24:30.171562"
 }

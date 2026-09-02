@@ -85,6 +85,32 @@ baseline held" — is true and useful, but "the baseline held it" means "held it
 When the model is the variable, read the per-run values alongside the gate, and treat
 `eval_extractor_stability.py`'s sign-flip rate as the companion statistic.
 
+### A single 5-run FAIL is a prompt to re-measure, not a result (retro#757)
+
+`complete_structured` runs at `temperature=0`, but Bedrock's residual non-determinism at zero is
+measured, not theoretical (retro#532: "6 of the 13 questions the gate ever saw more than once
+returned BOTH verdicts on an unchanged vote-set"). While gating retro#697, `RUNS_PER_CASE = 5`
+returned four different verdicts on one case across prompt variants that turned out to be
+indistinguishable — two independent 15-run samples of the *same unchanged baseline* gave 13/15
+and then 8/15. Every diagnosis made from a 5-run reading in that PR was wrong; every one made
+from 15 runs with the baseline re-measured alongside held. #683 found the same thing independently
+("Any FAIL gets investigated at higher `--runs` before it is called noise") without it being
+written down here, so the next prompt PR repeated the ~6 hours of chasing sampling noise.
+
+Two mechanical guards, neither of which changes what the gate fails on:
+
+- A case with measured history of this (a `volatile: true` field in its corpus JSON) is always
+  run at `VOLATILE_MIN_RUNS` (15) regardless of `--runs-per-case`, in `ab_extractor_prompt.py`'s
+  `run` command. The four cases marked so far: `threshold-at-or-below-satisfied`,
+  `threshold-tone-negative-number-satisfies`, `decider-denial-regression-sentinel`,
+  `stance-tone-conflation-hazard-persists-control`. Add the tag to any case a re-measurement
+  later confirms is unstable at the default count.
+- `compare` prints `LOW CONFIDENCE` beside any `REGRESSION` line measured at fewer than
+  `CONFIDENT_MIN_RUNS` (15) — informational only, so the exit code is unchanged and a CI-style
+  gate still fails the same way it always did. Treat that line as the prompt to re-run the
+  affected case at `--runs-per-case 15` (or higher) with the baseline alongside it before
+  concluding the regression is real.
+
 ### The strict counterpart: `no_predictions` (retro#775)
 
 Every reader in `_FACET_READERS` reads a value off *a* prediction, so any of them can only ever

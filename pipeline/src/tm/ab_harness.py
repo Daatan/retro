@@ -109,6 +109,12 @@ class Case:
     journalist: str = "unknown"
     control_event_description: Optional[str] = None
     tags: tuple[str, ...] = ()
+    # retro#757: Bedrock's residual temperature=0 noise (retro#532) means a case whose
+    # true hit-rate is low but nonzero can show 0/5 at the default run count and read as
+    # a REGRESSION when it is not one -- two independent 15-run baseline samples of the
+    # same case gave 13/15 and 8/15. `volatile: true` marks a case with that measured
+    # history so the driver runs it at `VOLATILE_MIN_RUNS` instead of the default.
+    volatile: bool = False
     # --- retro#683, diagnostic only ---
     # Deliberately NOT inside `expect`, which is the zero-regression gate. `quantity` is a
     # shadow field whose validator (exact match on 100 hand-labelled claims, accuracy >= 0.9
@@ -193,12 +199,24 @@ def unmet_facets(prediction_runs: list[list[PredictionExtraction]], expect: dict
     return unmet
 
 
+# retro#757: below this many runs, a facet reading 0/n hits is not distinguishable
+# from Bedrock's residual temperature=0 noise -- the issue's own re-measurement found
+# a 0/5 "regression" that was 1/15, alongside two independent 15-run BASELINE samples
+# of the same case (13/15, then 8/15) on an unchanged prompt. This does not change what
+# `gate_exit_code` fails on (a behaviour change there would move every future prompt
+# PR's pass/fail with no live-model verification behind it) -- it only decides whether
+# a regression is reported as confident or flagged for a re-run at higher --runs-per-case.
+CONFIDENT_MIN_RUNS = 15
+
+
 @dataclass
 class CaseResult:
     case: Case
     baseline_unmet: set[str]
     patched_unmet: set[str]
     control_unmet: Optional[set[str]] = None
+    n_baseline_runs: int = 0
+    n_patched_runs: int = 0
 
     @property
     def regressions(self) -> set[str]:
@@ -212,6 +230,13 @@ class CaseResult:
         """Facets baseline failed that patched now satisfies — reported, not gated."""
         patched_met = set(self.case.expect) - self.patched_unmet
         return self.baseline_unmet & patched_met
+
+    @property
+    def low_confidence_regression(self) -> bool:
+        """retro#757: this case has a regression measured at fewer than
+        `CONFIDENT_MIN_RUNS` runs, so it warrants a re-run before being trusted —
+        it does not change whether the gate fails, only how the report reads."""
+        return bool(self.regressions) and self.n_patched_runs < CONFIDENT_MIN_RUNS
 
 
 def build_case_results(
@@ -232,6 +257,8 @@ def build_case_results(
                 unmet_facets(control[case.id], case.expect)
                 if control is not None and case.id in control else None
             ),
+            n_baseline_runs=len(baseline[case.id]),
+            n_patched_runs=len(patched[case.id]),
         ))
     return results
 

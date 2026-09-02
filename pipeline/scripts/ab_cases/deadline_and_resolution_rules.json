@@ -71,7 +71,8 @@
       "retro-351",
       "decider-statement",
       "regression-sentinel"
-    ]
+    ],
+    "volatile": true
   },
   {
     "id": "resolution-rules-covert-recruitment-vs-official-announcement",

@@ -24,7 +24,8 @@
       "value": 8.75,
       "unit": "percent",
       "comparator": "="
-    }
+    },
+    "volatile": true
   },
   {
     "id": "threshold-at-or-below-contradicted",
@@ -215,7 +216,8 @@
       "value": 35,
       "unit": "percent",
       "comparator": "="
-    }
+    },
+    "volatile": true
   },
   {
     "id": "threshold-near-boundary-satisfied",

@@ -13,6 +13,7 @@ import pytest
 from tm.ab_harness import (
     _FACET_READERS,
     _band,
+    CONFIDENT_MIN_RUNS,
     Case,
     build_case_results,
     gate_exit_code,
@@ -308,3 +309,87 @@ class TestRegressionGate:
             control={"c1": [[_pred(stance=0.9)]]},
         )
         assert results[0].control_unmet == set()
+
+
+class TestVolatileAndConfidence:
+    """retro#757: a case's run count feeds a confidence read on its regressions,
+    without changing what the gate fails on."""
+
+    def test_volatile_defaults_false_and_round_trips_through_json(self, tmp_path: Path):
+        assert _case().volatile is False
+
+        raw = [{
+            "id": "v1", "event_name": "E", "event_description": "rules",
+            "claim_deadline": "2026-09-05", "article_date": "2026-08-20",
+            "article_text": "text", "expect": {}, "volatile": True,
+        }]
+        p = tmp_path / "cases.json"
+        p.write_text(json.dumps(raw))
+        assert load_cases(p)[0].volatile is True
+
+    def test_run_counts_are_tracked_on_case_result(self):
+        case = _case(expect={"stance_sign": 1})
+        results = build_case_results(
+            [case],
+            baseline={"c1": [[_pred(stance=0.5)]] * 5},
+            patched={"c1": [[_pred(stance=0.5)]] * 15},
+        )
+        assert results[0].n_baseline_runs == 5
+        assert results[0].n_patched_runs == 15
+
+    def test_regression_below_confident_min_runs_is_low_confidence(self):
+        case = _case(expect={"stance_sign": 1})
+        results = build_case_results(
+            [case],
+            baseline={"c1": [[_pred(stance=0.5)]] * 5},
+            patched={"c1": [[_pred(stance=-0.5)]] * (CONFIDENT_MIN_RUNS - 1)},
+        )
+        assert results[0].regressions == {"stance_sign"}
+        assert results[0].low_confidence_regression is True
+        # The gate itself is unchanged by confidence -- retro#757 asks for a
+        # better-informed report, not a behaviour change to what CI fails on.
+        assert gate_exit_code(results) == 1
+
+    def test_regression_at_confident_min_runs_is_not_low_confidence(self):
+        case = _case(expect={"stance_sign": 1})
+        results = build_case_results(
+            [case],
+            baseline={"c1": [[_pred(stance=0.5)]] * 5},
+            patched={"c1": [[_pred(stance=-0.5)]] * CONFIDENT_MIN_RUNS},
+        )
+        assert results[0].regressions == {"stance_sign"}
+        assert results[0].low_confidence_regression is False
+
+    def test_no_regression_is_never_low_confidence_regardless_of_run_count(self):
+        case = _case(expect={"stance_sign": 1})
+        results = build_case_results(
+            [case],
+            baseline={"c1": [[_pred(stance=0.5)]]},
+            patched={"c1": [[_pred(stance=0.5)]]},
+        )
+        assert results[0].regressions == set()
+        assert results[0].low_confidence_regression is False
+
+
+class TestVolatileCorpusTags:
+    """The four cases retro#757 measured as unstable at the default run count
+    must carry `volatile: true` in the shipped corpus, or the driver will keep
+    running them too few times to trust a regression on them."""
+
+    _EXPECTED_VOLATILE_IDS = {
+        "threshold-at-or-below-satisfied",
+        "threshold-tone-negative-number-satisfies",
+        "decider-denial-regression-sentinel",
+        "stance-tone-conflation-hazard-persists-control",
+    }
+
+    def test_named_cases_are_tagged_volatile(self):
+        all_cases = [
+            c
+            for path in CASE_DIR.glob("*.json")
+            for c in load_cases(path)
+        ]
+        by_id = {c.id: c for c in all_cases}
+        for case_id in self._EXPECTED_VOLATILE_IDS:
+            assert case_id in by_id, f"{case_id} missing from the corpus"
+            assert by_id[case_id].volatile is True, f"{case_id} should be volatile"

@@ -85,6 +85,21 @@ baseline held" — is true and useful, but "the baseline held it" means "held it
 When the model is the variable, read the per-run values alongside the gate, and treat
 `eval_extractor_stability.py`'s sign-flip rate as the companion statistic.
 
+### The strict counterpart: `no_predictions` (retro#775)
+
+Every reader in `_FACET_READERS` reads a value off *a* prediction, so any of them can only ever
+be satisfied by something being extracted. That makes "the correct extraction is nothing at all"
+inexpressible: with zero predictions, every named facet is unmet by construction, so a baseline
+that wrongly extracts something and a patched prompt that correctly extracts nothing look
+identical — both `unmet`, reported as `no change` instead of `improved`, and a future regression
+back to over-extraction would look like `no change` too and pass the gate silently.
+
+`expect: {"no_predictions": true}` is the deliberate exception to the any-run leniency above: it
+uses the opposite reduce, met only if **every** run produced zero predictions — one stray
+extraction in one run unmets it. Use it alone (or alongside facets that only make sense if the
+case is later found still extracting something, e.g. while iterating on a fix); it does not
+combine meaningfully with a facet that requires a prediction to exist.
+
 ### An arm that never ran is not a clean arm
 
 `run` catches every per-case exception so one bad case can't abort a sweep. The cost of that is
@@ -293,7 +308,10 @@ omit both otherwise, and the case is simply left out of the quantity report.
 `is_occurrence`, `facet`, `verified`, `settled`, `evidence_class`). A facet is
 satisfied if **any** prediction, in **any** run, matches the expected value —
 matching how one correct signal among several extracted predictions (or one
-correct run among several, given LLM non-determinism) is enough.
+correct run among several, given LLM non-determinism) is enough. The one
+exception is `no_predictions` (see "The strict counterpart" above), which
+uses an all-runs reduce instead — it is not in `_FACET_READERS` because it
+has no per-prediction value to read.
 
 ### Direction vs strength (retro#720)
 

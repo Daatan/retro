@@ -91,7 +91,7 @@ EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 # human-readable label only, see docs/PROMPT_VERSIONS.md. The *_HASH is computed from the
 # actual prompt text above, so it stays correct even if a version bump is forgotten.
 GATEKEEPER_PROMPT_VERSION = "v1"
-EXTRACTOR_PROMPT_VERSION = "v13"
+EXTRACTOR_PROMPT_VERSION = "v14"
 GATEKEEPER_PROMPT_HASH = hashlib.sha256(GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
 EXTRACTOR_PROMPT_HASH = hashlib.sha256(EXTRACTOR_PROMPT.encode()).hexdigest()[:16]
 
@@ -363,8 +363,11 @@ def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDe
             # gets, so the wire contract stays free of pipeline-internal types.
             tone=p.tone,
             voice=p.voice.model_dump() if p.voice is not None else None,
-            # retro#763. Same projection, same retro#566 reason.
-            grounds=p.grounds.model_dump() if p.grounds is not None else None,
+            # retro#774: the elicitation is withdrawn, so nothing new carries `grounds`.
+            # The wire field stays (rows written 2026-08-31 → 09-02 have it, and dropping
+            # the key would make them read as a schema change rather than as history), but
+            # it is None on everything extracted from here on.
+            grounds=None,
             # Phase 1 conditional capture (#504) — pre-resolution shadow fields.
             # Omitted here from 2026-08-09 to retro#566: the prompt asked, the
             # model answered, and this projection dropped all nine on the wire.
@@ -545,9 +548,10 @@ def reduce_article(
         # retro#684 — same dominant claim, same reason as `facet` and `verified`: the
         # article-level grain Phase 3 S2 counts in is the source, not the outlet.
         tone, voice = dominant.tone, dominant.voice
-        # retro#763 — same dominant claim: the ground the decisive claim stands on is
-        # the ground the article brings to the pool.
-        grounds = dominant.grounds
+        # retro#774 — the elicitation is withdrawn, so there is no dominant-claim ground
+        # to roll up any more. Kept as an explicit None rather than deleted so the
+        # article-level rollup decision stays visible if the field is ever re-asked.
+        grounds = None
         # fact_signal is present on the dominant claim, so by
         # fact_signal_absent_reason's own contract (retro#471) it has none.
         fact_signal_absent_reason = None

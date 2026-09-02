@@ -157,13 +157,34 @@ def unmet_facets(prediction_runs: list[list[PredictionExtraction]], expect: dict
     expected value — one correct signal among several extracted predictions
     (or one correct run among several, given LLM non-determinism) is enough,
     mirroring how a single dominant claim can carry a fact for the pool.
+
+    `no_predictions` (retro#775) is the deliberate exception to that
+    "any-run" leniency: it is the ONLY correct reading for a case whose
+    correct extraction is nothing at all — every other facet is satisfied
+    by *a* prediction existing, so a case like that can never express "the
+    model should stay silent" any other way. It is met only if EVERY run
+    extracted zero predictions; one stray extraction in one run unmets it.
+    It does not participate in the per-prediction reader loop below (there
+    is no prediction to read a value off when the value under test IS the
+    absence of predictions), so it is resolved first and skipped there.
+    An empty `prediction_runs` (no runs at all, e.g. a dead arm) is not
+    this function's problem to catch — see `run`'s dead-arm exit code.
     """
     unmet = set(expect)
+
+    if "no_predictions" in unmet:
+        if expect["no_predictions"] is not True:
+            raise ValueError("no_predictions only supports the value True")
+        if all(len(preds) == 0 for preds in prediction_runs):
+            unmet.discard("no_predictions")
+
     for preds in prediction_runs:
         if not unmet:
             break
         for p in preds:
             for facet in list(unmet):
+                if facet == "no_predictions":
+                    continue
                 reader = _FACET_READERS.get(facet)
                 if reader is None:
                     raise KeyError(f"unknown facet {facet!r} in case expectation")

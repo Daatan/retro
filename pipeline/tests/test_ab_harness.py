@@ -119,6 +119,47 @@ class TestUnmetFacets:
         assert unmet_facets(runs, expect) == {"facet"}
 
 
+class TestNoPredictionsFacet:
+    """retro#775 — the strict, all-runs counterpart to the lenient any-run
+    default, for a case whose correct answer is "extract nothing"."""
+
+    def test_met_when_every_run_extracted_nothing(self):
+        expect = {"no_predictions": True}
+        runs = [[], [], []]
+        assert unmet_facets(runs, expect) == set()
+
+    def test_unmet_when_any_single_run_extracted_something(self):
+        expect = {"no_predictions": True}
+        runs = [[], [_pred()], []]
+        assert unmet_facets(runs, expect) == {"no_predictions"}
+
+    def test_unmet_when_every_run_extracted_something(self):
+        expect = {"no_predictions": True}
+        runs = [[_pred()], [_pred()]]
+        assert unmet_facets(runs, expect) == {"no_predictions"}
+
+    def test_does_not_flatter_a_regression_into_no_predictions(self):
+        """The false-positive this issue was filed over: baseline is wrong
+        (extracts something), patched is right (extracts nothing) — must
+        read as newly satisfied, not as a no-op."""
+        expect = {"no_predictions": True}
+        baseline_unmet = unmet_facets([[_pred(stance=1.0, is_occurrence=True)]], expect)
+        patched_unmet = unmet_facets([[]], expect)
+        assert baseline_unmet == {"no_predictions"}
+        assert patched_unmet == set()
+
+    def test_rejects_non_true_value(self):
+        with pytest.raises(ValueError):
+            unmet_facets([[]], {"no_predictions": False})
+
+    def test_combines_independently_with_other_facets(self):
+        # Not a realistic case shape (an extraction can't both exist and not
+        # exist), but the two facets must still be tracked independently.
+        expect = {"no_predictions": True, "stance_sign": 1}
+        runs = [[_pred(stance=0.5)]]
+        assert unmet_facets(runs, expect) == {"no_predictions"}
+
+
 class TestMagnitudeBands:
     """retro#720: the facet set could read direction but not strength.
 

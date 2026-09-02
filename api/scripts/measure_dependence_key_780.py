@@ -19,8 +19,9 @@ Candidate keys:
 
 For each pool this also estimates a **needle delta**: the pooled mean today
 (each row its own vote) vs. the pooled mean if rule (c)'s groups each collapsed
-to one row (stance = credibility-weighted mean of the group, weight = MAX
-member weight, per the rule in retro#780). Per-row weight is reconstructed from
+to one row (stance = weighted mean of the group using the SAME per-row weight
+described below — not credibility alone, despite retro#780's rule text saying
+"credibility-weighted" — weight = MAX member weight). Per-row weight is reconstructed from
 the stored ``credibilityWeight`` / ``evidenceWeight`` / ``relevanceScore`` /
 ``publishedDate`` columns using the real ``aggregation.recency_weight`` /
 ``relevance_weight`` / ``pool_sources`` — not a reimplementation — so the delta
@@ -100,9 +101,12 @@ def _get(obj, name):
 
 
 def _dominant_claim(claims_detail):
-    """Same rule as clustering._pick_claim_facets: highest claim_strength wins,
-    ties broken by array position — kept in sync deliberately so this script's
-    numbers describe what the live path would actually key on."""
+    """Highest claim_strength wins, ties broken by array position. NOT the same
+    ranking as clustering._pick_claim_facets, which first drops claims lacking
+    event_actors/event_target before ranking — this function ranks every claim,
+    so the attribution key and the event key can come from different claims on
+    the same row (deliberate: a byline claim with no event facets can still
+    carry voice)."""
     best = None
     best_rank = None
     for i, c in enumerate(claims_detail or []):

@@ -675,6 +675,7 @@ separately: one source, two computations, free to drift.
 | `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — the count is over **independent clusters**, not rows, whenever a cluster assignment exists (retro#372: two syndicated copies of one report are one observation; rows without claim text stay singletons, so a missing claim layer never costs a vote; matrix case C19). **Revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at, claim_deadline]` (creation lower bound on every archetype since 2026-08-16) and ≤ its article's date; a non-occurrence vote needs a closed window (dated anchors at most `settlement_post_deadline_grace_days` past it, or an undated vote from an article published within that grace — else `stale_undated_foreclosure`) or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Count alone isn't enough either: `settlement_quality_floor` (**0.20** since 2026-08-02, retro#279/#372 — calibrated against every pin production had published; 0 disables) additionally requires the winning direction's combined per-source weight to clear a bar, else the pin is suppressed (`settlement_quality_floor`). Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
 | `event_key_ids → weight × max/sum` | echo collapse, source-dependence Rule 1 (retro#780, umbrella #779, see 2026-09-03 entry below). Pool rows sharing an `event_key` (retro#682's paraphrase-invariant `(actor, target, day)` key, distinct from the Jaccard `cluster_ids` row below) are scaled so the group carries one row's worth: every member is multiplied by `max(group weights) / sum(group weights)`, which cancels out of the group's weighted-mean stance and leaves only its loudest member's mass. **`settings.event_key_dependence_collapse=True` ships it ON** — unlike every other row in this table, this is a structural-property justification (duplication invariance), not a backtest-gated one, so there is no exponent to tune. Applied before `cluster_ids`. |
 | `cluster_ids → weight × k^-exponent` | correlated-evidence discount (retro#355). Pool rows echoing one development are grouped by shingle-Jaccard over their `claims_detail` text (`clustering.py`), and each member of a cluster of size `k` is scaled by `k^-exponent`, so the cluster carries `k^(1-exponent)` rows' worth instead of `k`. **`cluster_downweight_exponent=0.0` ships it inert** — the identity — so nothing has moved. Applied after the event-key collapse above, before `evidence_mass`, so the decisiveness floor is judged on independent mass rather than on echo. `relevance_mass` is deliberately NOT discounted (same reasoning as the band table above). |
+| `source_ids → weight × factor_g` | source-lineage stratum balance, source-dependence Rule 3 (retro#782, umbrella #779, see 2026-09-03 entry below). Rows are grouped by `source_strata_map[source_id]` (`data/source_strata.json`, country+language) rather than by exact outlet, and each group's rows are rescaled to carry `1/n_strata_present` of total pool weight — grand-total-preserving, per `cap_source_mass`'s convention, a deliberate departure from the issue's literal normalize-to-1.0 spec. Strata below `min_stratum_share` of total weight merge into one shared "other" bucket. An outlet with no stratum mapping is its own singleton stratum. **`source_lineage_stratum_balance=False` ships it inert**; `min_stratum_share=0.0` is a placeholder pending the offline measurement (`api/scripts/measure_source_strata_782.py`). |
 | `insufficient_data, reason, placeholder, articles_used/found` | abstention encoding |
 
 Config constants (16): `recency_half_life_days=7`, `recency_floor=0.02`,
@@ -2622,3 +2623,49 @@ distinct coverage.
 **Changes already-published pool weights.** Per this repo's hard rule on `aggregation.py`
 changes, the republish sweep (daatan's `POST /api/admin/forecasts/republish`, dry-run first)
 has not been run as of this PR — that is Mark's call, post-merge.
+
+## 2026-09-03 — source lineage strata (retro#782, source-dependence Rule 3, umbrella #779)
+
+`aggregation.source_lineage_stratum_factors`: balances pool mass across outlet **lineage
+strata** (country+language in v1) rather than across individual outlets — three outlets from
+one stratum should not out-vote a stratum represented by a single outlet, the failure
+`harmonic_source_discount_factors` (Rule 2) does not reach because it discounts *within* one
+`source_id`, not across sibling outlets sharing a lineage. `data/source_strata.json`
+(`{source_id: "COUNTRY:language"}`, 27 entries) is generated from the already-curated
+`data/sources/*.json` catalog by `api/scripts/generate_source_strata_782.py` — no new data
+source. A `source_id` absent from the map is its own singleton stratum, the same convention
+`cap_source_mass` already uses for an unclassified outlet.
+
+**Grand-total-preserving, not the issue's literal spec.** The issue text asks for pool mass
+normalized to 1.0; this instead returns a per-row **factor** such that `factor_g = (total_weight
+/ stratum_total_weight_g) * (1 / n_strata_present)`, chosen to match `cap_source_mass`'s
+documented convention that a redistribution must preserve `sum(weights)` — every downstream
+consumer (`evidence_mass`, the decisiveness floor, `n_eff`) reads one honest total either way.
+Sub-threshold strata (below `min_stratum_share` of total pool weight) merge into one shared
+"other" bucket instead of each keeping a full stratum's vote, so a handful of fringe/unmapped
+outlets cannot jointly outweigh a single well-covered stratum.
+
+**`min_stratum_share` is the one tunable number**, per the issue's own text — to be proposed
+from `api/scripts/measure_source_strata_782.py` (Step 0, reuses the real
+`source_lineage_stratum_factors` against a prod pool dump across `[0.0, 0.05, 0.10, 0.15, 0.20,
+0.25]`, not a resolved-forecast backtest), once Mark runs it against a prod dump — the dump SQL
+is `--sql`-printable for SSM per that script's own docstring. `0.0` here is a placeholder
+(accepts every stratum, including singletons), not a proposed value.
+
+**Both ship OFF**: `settings.source_lineage_stratum_balance = False` mirrors
+`harmonic_source_discount` (Rule 2) rather than `event_key_dependence_collapse` (Rule 1) —
+unlike Rule 1's structural-property justification, this rule's threshold needs the offline
+measurement above before it can be turned on. Flipping it on changes already-published pool
+weights, so the republish sweep this repo's `CLAUDE.md` requires is Mark's call, post-merge.
+
+**Incidental fix: `haaretz.co.il` domain alias.** While generating the strata map,
+`data/sources/haaretz.json`'s catalog `url` (`https://www.haaretz.co.il`, the Hebrew edition)
+was resolving through `forecaster._DOMAIN_MAP` to the raw domain `haaretz.co.il` instead of the
+canonical `source_id` `haaretz` that real prod evidence rows carry — a real identity-space bug,
+not new in this PR, that would have silently produced an unreachable stratum-map key forever.
+Fixed by adding `"haaretz.co.il": "haaretz"` alongside the existing `haaretz.com` entry,
+following the same multi-domain-alias precedent `_DOMAIN_MAP` already uses for `ynet`,
+`israel_hayom`, `globes` and `walla`. **Known, deliberately unfixed gap**: `n12.co.il` still
+does not map to `mako` — they are different pipeline identities with no existing `_DOMAIN_MAP`
+precedent for merging them, unlike the haaretz case; left as separate, out-of-scope
+`_DOMAIN_MAP` cleanup.

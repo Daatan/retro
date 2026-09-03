@@ -27,6 +27,7 @@ from forecast_api.aggregation import (
     recency_weight,
     resolve_stance_certainty,
     sigmoid,
+    source_lineage_stratum_factors,
     stance_to_prob,
     weighted_mean,
     widen_ci_for_thin_evidence,
@@ -846,6 +847,143 @@ class TestHarmonicSourceDiscount:
         on = aggregate_pool(
             stances, weights, relevances, settled,
             source_ids=source_ids, harmonic_source_discount=True,
+            **_aggregate_kwargs(),
+        )
+        assert off is not None and on is not None
+        assert on.mean < off.mean
+
+
+class TestSourceLineageStrata:
+    """source_lineage_stratum_factors() balances pool mass across outlet
+    lineage strata (retro#782, source-dependence Rule 3, umbrella #779).
+    Ships inert (source_lineage_stratum_balance=False); these tests both pin
+    that inert default and, separately, that the mechanism is correct once
+    switched on.
+    """
+
+    # ── source_lineage_stratum_factors() directly ───────────────────────
+
+    def test_disabled_is_the_identity(self):
+        assert source_lineage_stratum_factors(
+            ["a", "b"], [1.0, 1.0], {"a": "s1", "b": "s2"}, 0.0, False,
+        ) is None
+
+    def test_no_strata_map_is_the_identity(self):
+        assert source_lineage_stratum_factors(["a", "b"], [1.0, 1.0], None, 0.0, True) is None
+
+    def test_no_source_ids_is_the_identity(self):
+        assert source_lineage_stratum_factors(None, [1.0, 1.0], {"a": "s1"}, 0.0, True) is None
+
+    def test_single_stratum_pool_is_a_noop(self):
+        weights = [1.0, 2.0, 3.0]
+        source_ids = ["a", "b", "c"]
+        strata_map = {"a": "s1", "b": "s1", "c": "s1"}
+        out = source_lineage_stratum_factors(source_ids, weights, strata_map, 0.0, True)
+        assert out == pytest.approx([1.0, 1.0, 1.0])
+
+    def test_three_outlets_in_one_stratum_get_one_strata_worth_of_vote(self):
+        # The issue's own worked example: three Qatari outlets in one stratum
+        # vs one independent outlet in another must end up with equal total
+        # stratum mass, not 3:1.
+        weights = [1.0] * 4
+        source_ids = ["qatar1", "qatar2", "qatar3", "other"]
+        strata_map = {"qatar1": "QA:en", "qatar2": "QA:en", "qatar3": "QA:en", "other": "US:en"}
+        out = source_lineage_stratum_factors(source_ids, weights, strata_map, 0.0, True)
+        qatar_total = sum(out[:3])
+        other_total = out[3]
+        assert qatar_total == pytest.approx(other_total)
+
+    def test_grand_total_weight_is_preserved(self):
+        weights = [3.0, 1.0, 1.0, 1.0, 0.5, 2.0]
+        source_ids = ["a", "a", "a", "b", "c", "c"]
+        strata_map = {"a": "s1", "b": "s2", "c": "s2"}
+        out = source_lineage_stratum_factors(source_ids, weights, strata_map, 0.0, True)
+        adjusted = [w * f for w, f in zip(weights, out)]
+        assert sum(adjusted) == pytest.approx(sum(weights))
+
+    def test_sub_threshold_strata_merge_into_one_shared_other_bucket(self):
+        # Two fringe strata each below min_stratum_share must be pooled into
+        # ONE "other" bucket competing for a single stratum's worth of mass —
+        # not each getting to sneak in as its own stratum.
+        weights = [10.0, 10.0, 0.1, 0.1]
+        source_ids = ["big1", "big2", "fringe1", "fringe2"]
+        strata_map = {"big1": "s1", "big2": "s2", "fringe1": "s3", "fringe2": "s4"}
+        out = source_lineage_stratum_factors(source_ids, weights, strata_map, 0.2, True)
+        # 3 groups survive: s1, s2, and the merged "other" (s3+s4) -> each
+        # gets 1/3 of total mass.
+        total = sum(weights)
+        assert sum(out[:1]) * weights[0] / total == pytest.approx(1.0 / 3)
+        fringe_total = out[2] * weights[2] + out[3] * weights[3]
+        assert fringe_total / total == pytest.approx(1.0 / 3)
+
+    def test_unmapped_source_id_is_its_own_singleton_stratum(self):
+        # cap_source_mass's convention for the same case: a source_id absent
+        # from the map is not lumped in with other unmapped rows.
+        weights = [1.0, 1.0, 1.0, 1.0]
+        source_ids = ["mapped1", "mapped2", "unmapped1", "unmapped2"]
+        strata_map = {"mapped1": "s1", "mapped2": "s1"}
+        out = source_lineage_stratum_factors(source_ids, weights, strata_map, 0.0, True)
+        # 3 strata present: s1 (mapped1+mapped2), {unmapped1}, {unmapped2}.
+        total = sum(weights)
+        n_strata = 3
+        assert out[2] * weights[2] / total == pytest.approx(1.0 / n_strata)
+        assert out[3] * weights[3] / total == pytest.approx(1.0 / n_strata)
+
+    def test_none_source_id_rows_are_singleton_groups_not_lumped_together(self):
+        weights = [1.0, 1.0, 1.0, 1.0]
+        source_ids = [None, None, "b", "c"]
+        strata_map = {"b": "s1", "c": "s2"}
+        out = source_lineage_stratum_factors(source_ids, weights, strata_map, 0.0, True)
+        total = sum(weights)
+        n_strata = 4  # two None singletons + s1 + s2
+        for i in range(4):
+            assert out[i] * weights[i] / total == pytest.approx(1.0 / n_strata)
+
+    def test_mismatched_source_ids_length_is_ignored_rather_than_crashing(self):
+        weights = [1.0, 1.0]
+        out = source_lineage_stratum_factors(["a"], weights, {"a": "s1"}, 0.0, True)
+        assert out is None
+
+    # ── wired into aggregate_pool() ─────────────────────────────────────
+
+    def test_ships_inert_default_moves_no_number_even_with_a_lopsided_stratum(self):
+        stances = [0.9, 0.9, 0.9, 0.9, -0.9]
+        weights = [1.0] * 5
+        relevances = [0.7] * 5
+        settled = [False] * 5
+        source_ids = ["qatar1", "qatar2", "qatar3", "qatar4", "other"]
+        strata_map = {"qatar1": "QA:en", "qatar2": "QA:en", "qatar3": "QA:en", "qatar4": "QA:en", "other": "US:en"}
+        baseline = aggregate_pool(stances, weights, relevances, settled, **_aggregate_kwargs())
+        with_map = aggregate_pool(
+            stances, weights, relevances, settled,
+            source_ids=source_ids, source_strata_map=strata_map,
+            # source_lineage_stratum_balance defaults to False — still inert
+            **_aggregate_kwargs(),
+        )
+        # leave_one_source_out_sensitivity groups by exact source_id, not by
+        # stratum — with four DISTINCT qatar source_ids, removing the lone
+        # dissenting "other" row (not any single qatar outlet) swings the
+        # mean the most, so it — not a qatar source — is reported dominant.
+        assert with_map.max_swing is not None
+        assert with_map.dominant_source == "other"
+        assert with_map._replace(max_swing=None, dominant_source=None) == baseline
+
+    def test_a_lopsided_stratum_no_longer_swamps_a_minority_dissent_once_enabled(self):
+        stances = [0.9, 0.9, 0.9, 0.9, -0.9]
+        weights = [1.0] * 5
+        relevances = [0.7] * 5
+        settled = [False] * 5
+        source_ids = ["qatar1", "qatar2", "qatar3", "qatar4", "other"]
+        strata_map = {"qatar1": "QA:en", "qatar2": "QA:en", "qatar3": "QA:en", "qatar4": "QA:en", "other": "US:en"}
+        off = aggregate_pool(
+            stances, weights, relevances, settled,
+            source_ids=source_ids, source_strata_map=strata_map,
+            **_aggregate_kwargs(),
+        )
+        on = aggregate_pool(
+            stances, weights, relevances, settled,
+            source_ids=source_ids, source_strata_map=strata_map,
+            source_lineage_stratum_balance=True,
             **_aggregate_kwargs(),
         )
         assert off is not None and on is not None

@@ -1270,6 +1270,95 @@ def cap_source_mass(
     return out
 
 
+def source_lineage_stratum_factors(
+    source_ids: Optional[Sequence[str]],
+    weights: Sequence[float],
+    strata_map: Optional[dict[str, str]],
+    min_stratum_share: float,
+    enabled: bool,
+) -> Optional[list[float]]:
+    """Per-row weight multipliers balancing pool mass across outlet lineage
+    strata (retro#782, source-dependence Rule 3, umbrella #779).
+
+    Distinct from `harmonic_source_discount_factors` (Rule 2) and
+    `cap_source_mass`, which both discount volume from one OUTLET: this
+    balances across GROUPS of outlets that share a lineage (country +
+    language in v1 — see `api/scripts/generate_source_strata_782.py`'s
+    docstring for why ownership/wire-dependence are left for a later pass).
+    Three outlets from the same stratum publishing five articles each should
+    not out-vote a stratum represented by a single outlet, the way three
+    individually distinct (non-clustering, non-repeating) outlets otherwise
+    would.
+
+    Each row's `source_id` is looked up in `strata_map` (outlet -> stratum
+    key, e.g. "IL:he"); a row with no `source_id`, or one absent from
+    `strata_map`, is its own singleton stratum — `cap_source_mass`'s
+    convention for the same case. Any stratum (singleton or not) whose share
+    of total pool weight is below `min_stratum_share` does not get its own
+    vote — letting it through would give one fringe outlet (or a single
+    unmapped row) a full stratum's worth of influence; instead every such
+    stratum's rows are pooled into one shared "other" bucket, which then
+    competes for its own share like any qualifying stratum. `min_stratum_share`
+    is this rule's one tunable number — the issue's own text: "propose it
+    from the offline measurement, not from a backtest" — see
+    `api/scripts/measure_source_strata_782.py`.
+
+    The issue's literal spec ("each row's weight is multiplied by
+    `1 / (stratum's total weight)` x `(1 / number of strata present)`")
+    normalizes total pool mass to 1.0, which would silently change the scale
+    every downstream consumer of `weights` reads (evidence_mass, the
+    decisiveness floor, `pool_sources`, effective_sample_size). This applies
+    the same equal-share intent but preserves the grand total instead — the
+    same substitution `cap_source_mass` makes for the analogous reason:
+    `factor_g = (total_weight / stratum_total_weight_g) * (1 / n_strata_present)`,
+    so `sum(factor_g * stratum_total_weight_g for g) == total_weight`.
+
+    A pool with only one stratum present (after the min-share merge) is a
+    no-op: `factor = (total/total) * (1/1) == 1`. A single-source pool
+    cannot be balanced across strata it doesn't have — the same limit
+    `cap_source_mass` documents for capping a single-source pool down to a
+    minority share of itself.
+
+    Returns `None` when `not enabled`, `strata_map` is `None`, `source_ids`
+    is `None`, or the weights don't sum positive — callers treat `None` as
+    "leave the weights alone."
+    """
+    if not enabled or strata_map is None or source_ids is None:
+        return None
+    n = len(weights)
+    if n == 0 or len(source_ids) != n:
+        return None
+    total = sum(weights)
+    if total <= 0:
+        return None
+
+    groups: dict[object, list[int]] = {}
+    for i, sid in enumerate(source_ids):
+        key: object = strata_map.get(sid) if sid is not None else None
+        if key is None:
+            key = object()  # singleton: unmapped or missing source_id
+        groups.setdefault(key, []).append(i)
+
+    sums = {k: sum(weights[i] for i in idxs) for k, idxs in groups.items()}
+    qualifying = {k: idxs for k, idxs in groups.items() if sums[k] / total >= min_stratum_share}
+    other_indices = [i for k, idxs in groups.items() if k not in qualifying for i in idxs]
+
+    final_groups: dict[object, list[int]] = dict(qualifying)
+    if other_indices:
+        final_groups[object()] = other_indices  # shared "other" bucket
+    n_strata = len(final_groups)
+
+    factors = [1.0] * n
+    for idxs in final_groups.values():
+        gsum = sum(weights[i] for i in idxs)
+        if gsum <= 0:
+            continue
+        factor = (total / gsum) * (1.0 / n_strata)
+        for i in idxs:
+            factors[i] = factor
+    return factors
+
+
 def _settlement_pin(
     settlement_stance: float, direction: float,
 ) -> tuple[float, float, float, float]:
@@ -1498,6 +1587,9 @@ def aggregate_pool(
     source_ids: Optional[Sequence[str]] = None,
     max_source_share: float = 1.0,
     harmonic_source_discount: bool = False,
+    source_strata_map: Optional[dict[str, str]] = None,
+    min_stratum_share: float = 0.0,
+    source_lineage_stratum_balance: bool = False,
     evidence_window_lookback_days: int = -1,
     hazard_shadow_base_rate: Optional[float] = None,
     hazard_shadow_half_life_fraction: float = 0.5,
@@ -1637,6 +1729,22 @@ def aggregate_pool(
     # discount hadn't happened). Inert at the shipped default
     # (max_source_share = 1.0 ⇒ cap_source_mass is a no-op); see config.py.
     weights = cap_source_mass(weights, source_ids, max_source_share)
+
+    # Source lineage stratum balance (retro#782, source-dependence Rule 3,
+    # umbrella #779), applied AFTER cap_source_mass so a group's already-
+    # capped weight (not its raw pre-cap weight) is what competes for its
+    # stratum's equal share — same "each stage sees the prior stage's
+    # already-adjusted weights" chain philosophy as every earlier stage.
+    #
+    # Inert at the shipped default (source_lineage_stratum_balance=False,
+    # factors is None) -- a change to already-published pool weights needs
+    # the republish sweep this repo's CLAUDE.md requires before it counts as
+    # live for existing forecasts.
+    stratum_factors = source_lineage_stratum_factors(
+        source_ids, weights, source_strata_map, min_stratum_share, source_lineage_stratum_balance,
+    )
+    if stratum_factors is not None and len(stratum_factors) == len(weights):
+        weights = [w * f for w, f in zip(weights, stratum_factors)]
 
     # NOT discounted, deliberately — same reasoning as retro#404 kept it on the
     # raw square: this answers "is the whole set off-topic", a question about

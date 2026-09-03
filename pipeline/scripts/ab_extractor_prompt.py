@@ -62,14 +62,19 @@ from pathlib import Path
 
 from tm import llm
 from tm.ab_harness import (
-    Case, QuantityDiagnostic, build_case_results, gate_exit_code, load_cases,
-    quantity_diagnostics,
+    CONFIDENT_MIN_RUNS, Case, QuantityDiagnostic, build_case_results, gate_exit_code,
+    load_cases, quantity_diagnostics,
 )
 from tm.config import settings
 from tm.extractor import PROMPT_PREFIX, PROMPT_SUFFIX
 from tm.models import ExtractionOutput, PredictionExtraction
 
 RUNS_PER_CASE = 5
+
+# retro#757: a case tagged `volatile` in its corpus JSON is run at this many times
+# regardless of `--runs-per-case`, since the whole point of the tag is a measured
+# history of a false regression at the default count (see `Case.volatile`).
+VOLATILE_MIN_RUNS = 15
 
 
 def _git_commit() -> str:
@@ -147,13 +152,15 @@ async def _cmd_run(args: argparse.Namespace) -> None:
     article: dict[str, list[dict]] = {}
     usage: dict[str, list[dict]] = {}
     for case in cases:
+        case_runs = max(args.runs_per_case, VOLATILE_MIN_RUNS) if case.volatile else args.runs_per_case
         runs, article_runs, usage_runs = await _run_case(
-            case, model, use_control=args.use_control_description, runs=args.runs_per_case,
+            case, model, use_control=args.use_control_description, runs=case_runs,
         )
         results[case.id] = runs
         article[case.id] = article_runs
         usage[case.id] = usage_runs
-        print(f"  [{case.id}] {len(runs)} usable runs")
+        volatile_note = " (volatile, retro#757)" if case.volatile else ""
+        print(f"  [{case.id}] {len(runs)} usable runs{volatile_note}")
     payload = {
         "label": args.label,
         "git_commit": _git_commit(),
@@ -294,6 +301,7 @@ def _case_asdict(case: Case) -> dict:
         # retro#683 — without these the arm's results file could not answer any quantity
         # question after the fact, which is the same blindness _ARTICLE_FIELDS fixed.
         "question_threshold": case.question_threshold, "expect_quantity": case.expect_quantity,
+        "volatile": case.volatile,
     }
 
 
@@ -399,7 +407,12 @@ def _cmd_compare(args: argparse.Namespace) -> None:
         leak = " [LEAKAGE]" if r.case.is_temporal_leakage else ""
         if r.regressions:
             any_regression = True
-            print(f"  REGRESSION {r.case.id}{leak}: lost {sorted(r.regressions)}")
+            confidence_note = (
+                f" -- LOW CONFIDENCE at {r.n_patched_runs} run(s), re-measure at "
+                f"--runs-per-case {CONFIDENT_MIN_RUNS}+ before trusting this (retro#757)"
+                if r.low_confidence_regression else ""
+            )
+            print(f"  REGRESSION {r.case.id}{leak}: lost {sorted(r.regressions)}{confidence_note}")
         elif r.improvements:
             print(f"  improved   {r.case.id}{leak}: fixed {sorted(r.improvements)}")
         elif r.patched_unmet:
@@ -412,9 +425,13 @@ def _cmd_compare(args: argparse.Namespace) -> None:
         r for r in results
         if r.regressions and (args.allow_leakage or not r.case.is_temporal_leakage)
     ]
+    low_confidence = [r for r in gated_regressions if r.low_confidence_regression]
     print(f"\nGate: {'FAIL' if code else 'PASS'} "
           f"({len(gated_regressions)} in-scope regression(s)"
           f"{', leakage cases excluded' if not args.allow_leakage and any_regression else ''})")
+    if low_confidence:
+        print(f"  {len(low_confidence)} of those measured at fewer than {CONFIDENT_MIN_RUNS} "
+              f"runs -- retro#757: re-measure before treating as a real regression")
     sys.exit(code)
 
 

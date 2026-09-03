@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from sync import build_comment, needs_forecast, question_text, select_season_tournament
+from sync import build_comment, coverage_share, needs_forecast, question_text, select_season_tournament
 
 NOW = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
 STALE_AFTER = timedelta(hours=24)
@@ -100,6 +100,17 @@ class TestBuildComment:
     def test_missing_reason_falls_back(self):
         comment = build_comment({}, probability=0.5)
         assert "Forecast from Daatan Oracul." in comment
+
+
+class TestCoverageShare:
+    def test_half_the_tournament_is_binary(self):
+        assert coverage_share(169, 337) == pytest.approx(0.501, abs=0.001)
+
+    def test_all_binary_is_full_coverage(self):
+        assert coverage_share(60, 60) == 1.0
+
+    def test_no_open_questions_does_not_divide_by_zero(self):
+        assert coverage_share(0, 0) == 0.0
 
 
 def test_required_env_rejects_unset_and_blank(monkeypatch):

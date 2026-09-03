@@ -9,12 +9,14 @@ Flow:
 """
 import asyncio
 import hashlib
+import json
 import logging
 import re
 import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Callable, NamedTuple, Optional, Sequence
 from urllib.parse import urlparse
 
@@ -275,6 +277,7 @@ def _log_phase(
 _DOMAIN_MAP: dict[str, str] = {
     "timesofisrael.com": "toi",
     "haaretz.com": "haaretz",
+    "haaretz.co.il": "haaretz",
     "jpost.com": "jpost",
     "ynetnews.com": "ynet",
     "ynet.co.il": "ynet",
@@ -306,6 +309,25 @@ def _source_id_from_url(url: str) -> str:
         if domain == key or domain.endswith("." + key):
             return sid
     return domain  # fallback: raw domain as id
+
+
+def _load_source_strata() -> dict[str, str]:
+    """source_id -> lineage stratum key ("country:language"), for
+    `aggregation.source_lineage_stratum_factors` (retro#782). Generated,
+    versioned data — see `api/scripts/generate_source_strata_782.py` — not
+    hand-authored here, same "static lookup baked at import time" role
+    `_DOMAIN_MAP` plays above, just sourced from a repo-root JSON file
+    instead of inline in code. Missing file -> empty dict (every source_id
+    falls back to its own singleton stratum), matching leaderboard.py's
+    fail-open convention for a missing data file.
+    """
+    path = Path(__file__).resolve().parents[3] / "data" / "source_strata.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text()).get("strata", {})
+
+
+_SOURCE_STRATA: dict[str, str] = _load_source_strata()
 
 
 def build_claims_detail(predictions: list[PredictionExtraction]) -> list[ClaimDetail]:
@@ -2565,6 +2587,9 @@ async def _run_forecast_inner(
         source_ids=all_source_ids,
         max_source_share=settings.max_source_share,
         harmonic_source_discount=settings.harmonic_source_discount,
+        source_strata_map=_SOURCE_STRATA,
+        min_stratum_share=settings.min_stratum_share,
+        source_lineage_stratum_balance=settings.source_lineage_stratum_balance,
         evidence_window_lookback_days=settings.evidence_window_lookback_days,
     )
     # F12 residual instrumentation (retro#449 Stage A): every settlement-voting
@@ -3049,6 +3074,9 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         source_ids=source_ids,
         max_source_share=settings.max_source_share,
         harmonic_source_discount=settings.harmonic_source_discount,
+        source_strata_map=_SOURCE_STRATA,
+        min_stratum_share=settings.min_stratum_share,
+        source_lineage_stratum_balance=settings.source_lineage_stratum_balance,
         evidence_window_lookback_days=settings.evidence_window_lookback_days,
     )
     # F12 residual instrumentation (retro#449 Stage A) — same event as the

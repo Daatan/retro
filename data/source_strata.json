@@ -1,0 +1,33 @@
+{
+  "_generated_by": "api/scripts/generate_source_strata_782.py from data/sources/*.json — do not hand-edit, regenerate instead",
+  "_stratum_key": "country:language",
+  "strata": {
+    "aljazeera": "QA:en",
+    "axios.com": "US:en",
+    "bbc": "GB:en",
+    "bloomberg": "US:en",
+    "calcalist": "IL:he",
+    "channel13": "IL:he",
+    "cnn": "US:en",
+    "ft": "GB:en",
+    "globes": "IL:he",
+    "haaretz": "IL:he",
+    "israel_hayom": "IL:he",
+    "jpost": "IL:en",
+    "kan": "IL:he",
+    "kurlianchik.substack.com": "IL:he",
+    "maariv": "IL:he",
+    "n12.co.il": "IL:he",
+    "now14.co.il": "IL:he",
+    "nytimes.com": "US:en",
+    "polymarket.com": "US:en",
+    "reuters": "GB:en",
+    "theguardian.com": "GB:en",
+    "themarker.com": "IL:he",
+    "toi": "IL:en",
+    "walla": "IL:he",
+    "washingtonpost.com": "US:en",
+    "wsj": "US:en",
+    "ynet": "IL:he"
+  }
+}

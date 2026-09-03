@@ -27,12 +27,34 @@ Three modes:
         is recorded with `error: "leak"` rather than silently scored on
         hindsight.
 
-    uv run python scripts/metaculus_backtest.py score results.json questions.json
+    uv run python scripts/metaculus_backtest.py self-resolve questions.json \\
+        --out self_resolutions.json [--deployed-commit SHA] [--limit N] \\
+        [--window-days N] [--confidence 0.9]
+        retro#737 — a fallback ground truth for questions whose Metaculus
+        `resolution` is withheld (no Bot Benchmarking Access Tier). Runs the
+        real Oracul pipeline **in-process**, exactly like `run-oracle`, but
+        searches a window **after** `actual_close_time` instead of before it
+        — this is deliberately the mirror image of `run-oracle`'s leak check,
+        not a reuse of it: `run-oracle` forecasts, this resolves. A
+        confident post-close probability (>= --confidence or <= 1 -
+        --confidence) is recorded as a self-resolved outcome; anything in
+        between is left unresolved rather than guessed. This is **strictly
+        weaker evidence than a real Metaculus resolution** — see the honesty
+        constraint in retro#737 — and every row this produces is labelled
+        `ground_truth_source: "self_resolved"`, never "validated".
+
+    uv run python scripts/metaculus_backtest.py score results.json questions.json \\
+        [--self-resolved self_resolutions.json]
         Join Oracul's sliced probability against resolution + community
         prediction and print calibration buckets, log score, and Brier
         score. A question without a resolution/CP value is reported as
         unscored, never silently dropped or treated as a pass (retro#395's
         rule for measurement scripts — see scan_outlier_estimates.py).
+        With --self-resolved, a question that has no Metaculus resolution
+        falls back to that file's self-resolved outcome when present,
+        scored and reported **separately** under a "self-resolved (weaker
+        evidence — retro#737)" heading — never merged into the primary
+        Metaculus-backed numbers.
 
 Why in-process for run-oracle, not the live HTTP API: no 10/min `/forecast`
 rate limit for a run over dozens of questions, matching
@@ -262,6 +284,111 @@ def cmd_run_oracle(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# self-resolve (retro#737)
+# ---------------------------------------------------------------------------
+
+
+def classify_self_resolution(probability: float, confidence: float) -> str | None:
+    """Map a post-close Oracul probability to a self-resolved outcome.
+
+    Returns "yes"/"no" only when the post-close evidence is decisive (>=
+    confidence either direction); otherwise None — an ambiguous post-close
+    read must never be silently forced into a verdict.
+    """
+    eps = 1e-9  # float slop guard: 1 - 0.9 != 0.1 exactly in binary float
+    if probability >= confidence - eps:
+        return "yes"
+    if probability <= (1 - confidence) + eps:
+        return "no"
+    return None
+
+
+async def _self_resolve_one(run_search, run_forecast, SearchRequest, ForecastRequest, ArticleInput, q: dict, article_limit: int, window_days: int, confidence: float) -> dict:
+    close = q.get("actual_close_time")
+    if not close:
+        return {"post_id": q["post_id"], "error": "no_close_time"}
+    close_dt = datetime.fromisoformat(close.replace("Z", "+00:00")).date()
+    window_start = close_dt
+    window_end = close_dt + timedelta(days=window_days)
+
+    search_resp = await run_search(
+        SearchRequest(query=q["title"], date_from=window_start.isoformat(), date_to=window_end.isoformat(), limit=article_limit)
+    )
+    articles = [
+        ArticleInput(url=r.url, title=r.title, snippet=r.snippet, source=r.source, published_date=r.published_date)
+        for r in search_resp.results
+    ]
+    fc = await run_forecast(ForecastRequest(question=q["title"], articles=articles))
+
+    if fc.insufficient_data:
+        return {
+            "post_id": q["post_id"],
+            "window": [window_start.isoformat(), window_end.isoformat()],
+            "self_resolution": None,
+            "reason": "insufficient_post_close_evidence",
+            "ground_truth_source": "self_resolved",
+        }
+
+    probability = (fc.mean + 1) / 2
+    resolution = classify_self_resolution(probability, confidence)
+    return {
+        "post_id": q["post_id"],
+        "window": [window_start.isoformat(), window_end.isoformat()],
+        "self_resolution": resolution,
+        "self_resolution_probability": probability,
+        "reason": None if resolution else "ambiguous_post_close_evidence",
+        "articles_used": fc.articles_used,
+        "articles_found": search_resp.count,
+        "provider": search_resp.provider,
+        "ground_truth_source": "self_resolved",
+    }
+
+
+def cmd_self_resolve(args: argparse.Namespace) -> int:
+    os.environ.setdefault("ORACLE_API_KEY", "dummy")
+    os.environ.setdefault("SETTLEMENT_VERIFIER_ENABLED", "false")
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+    if args.deployed_commit:
+        _check_deployed_commit(args.deployed_commit)
+    else:
+        print(
+            "WARNING: no --deployed-commit given — this run is not verified against "
+            "what production actually serves. Pass the sha from GET https://oracle.daatan.com/version.",
+            file=sys.stderr,
+        )
+
+    from forecast_api.forecaster import run_forecast  # noqa: E402
+    from forecast_api.models import ArticleInput, ForecastRequest, SearchRequest  # noqa: E402
+    from forecast_api.searcher import run_search  # noqa: E402
+
+    questions = json.loads(Path(args.questions).read_text())
+    if args.limit:
+        questions = questions[: args.limit]
+
+    async def run_all():
+        results = []
+        for i, q in enumerate(questions):
+            print(f"[{i+1}/{len(questions)}] {q['title'][:80]}", file=sys.stderr)
+            r = await _self_resolve_one(
+                run_search, run_forecast, SearchRequest, ForecastRequest, ArticleInput, q, args.article_limit, args.window_days, args.confidence
+            )
+            results.append(r)
+        return results
+
+    results = asyncio.run(run_all())
+    Path(args.out).write_text(json.dumps(results, indent=2))
+
+    resolved = [r for r in results if r.get("self_resolution") is not None]
+    print(
+        f"Wrote {len(results)} rows to {args.out}: {len(resolved)}/{len(results)} self-resolved "
+        f"at confidence >= {args.confidence}. This is weaker evidence than a Metaculus resolution "
+        "(retro#737) — never report these as 'validated'."
+    )
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # score
 # ---------------------------------------------------------------------------
 
@@ -285,8 +412,12 @@ def _has_hard_threshold(text: str) -> bool:
 def cmd_score(args: argparse.Namespace) -> int:
     results = {r["post_id"]: r for r in json.loads(Path(args.results).read_text())}
     questions = {q["post_id"]: q for q in json.loads(Path(args.questions).read_text())}
+    self_resolutions = {}
+    if args.self_resolved:
+        self_resolutions = {r["post_id"]: r for r in json.loads(Path(args.self_resolved).read_text())}
 
     rows = []
+    self_resolved_rows = []
     unscored = []
     for post_id, r in results.items():
         q = questions.get(post_id)
@@ -298,37 +429,67 @@ def cmd_score(args: argparse.Namespace) -> int:
         if r.get("oracle_probability") is None:
             unscored.append((post_id, q["title"], f"insufficient_data ({r.get('reason')})"))
             continue
-        resolution = q.get("resolution")
-        if resolution not in ("yes", "no", True, False, 1, 0):
-            unscored.append((post_id, q["title"], "no resolution on this token — needs Bot Benchmarking Access Tier"))
-            continue
-        outcome = 1 if resolution in ("yes", True, 1) else 0
         p = r["oracle_probability"]
         cp = q.get("community_prediction_latest")
-        rows.append(
-            {
-                "post_id": post_id,
-                "title": q["title"],
-                "oracle_p": p,
-                "community_p": cp,
-                "outcome": outcome,
-                "oracle_brier": _brier(p, outcome),
-                "oracle_log_score": _log_score(p, outcome),
-                "community_brier": _brier(cp, outcome) if cp is not None else None,
-                "community_log_score": _log_score(cp, outcome) if cp is not None else None,
-                "hard_threshold": _has_hard_threshold(q.get("resolution_criteria", "") or q["title"]),
-            }
-        )
+        hard_threshold = _has_hard_threshold(q.get("resolution_criteria", "") or q["title"])
 
-    print(f"Scored {len(rows)}/{len(results)} questions; {len(unscored)} unscored.")
+        resolution = q.get("resolution")
+        if resolution in ("yes", "no", True, False, 1, 0):
+            outcome = 1 if resolution in ("yes", True, 1) else 0
+            rows.append(
+                {
+                    "post_id": post_id,
+                    "title": q["title"],
+                    "oracle_p": p,
+                    "community_p": cp,
+                    "outcome": outcome,
+                    "oracle_brier": _brier(p, outcome),
+                    "oracle_log_score": _log_score(p, outcome),
+                    "community_brier": _brier(cp, outcome) if cp is not None else None,
+                    "community_log_score": _log_score(cp, outcome) if cp is not None else None,
+                    "hard_threshold": hard_threshold,
+                }
+            )
+            continue
+
+        # No Metaculus resolution on this token — fall back to our own
+        # self-resolved outcome (retro#737) if one was supplied and decisive.
+        sr = self_resolutions.get(post_id)
+        sr_outcome = sr.get("self_resolution") if sr else None
+        if sr_outcome in ("yes", "no"):
+            outcome = 1 if sr_outcome == "yes" else 0
+            self_resolved_rows.append(
+                {
+                    "post_id": post_id,
+                    "title": q["title"],
+                    "oracle_p": p,
+                    "outcome": outcome,
+                    "oracle_brier": _brier(p, outcome),
+                    "oracle_log_score": _log_score(p, outcome),
+                    "hard_threshold": hard_threshold,
+                }
+            )
+            continue
+
+        unscored.append((post_id, q["title"], "no resolution on this token — needs Bot Benchmarking Access Tier"))
+
+    print(f"Scored {len(rows)}/{len(results)} questions on Metaculus resolutions; {len(unscored)} unscored.")
     if unscored:
         print("\nUnscored (not silently dropped — see retro#395):")
         for post_id, title, why in unscored:
             print(f"  #{post_id} {title[:70]}: {why}")
 
-    if not rows:
+    if not rows and not self_resolved_rows:
         print("\nNothing scorable yet. This is expected until the Bot Benchmarking Access Tier is granted — see retro#619.")
         return 1  # a run that measured nothing must never read as a pass
+
+    if not rows:
+        print(
+            "\nNo Metaculus-resolution-backed rows — only self-resolved fallback data below "
+            "(needs the Bot Benchmarking Access Tier for real Metaculus resolutions, see retro#619)."
+        )
+        _print_self_resolved_summary(self_resolved_rows)
+        return 0
 
     n = len(rows)
     mean_brier = sum(r["oracle_brier"] for r in rows) / n
@@ -362,7 +523,20 @@ def cmd_score(args: argparse.Namespace) -> int:
         if outcomes:
             print(f"  [{b}-{b+10}%): n={len(outcomes)}, observed {sum(outcomes)/len(outcomes)*100:.0f}%")
 
+    if self_resolved_rows:
+        _print_self_resolved_summary(self_resolved_rows)
+
     return 0
+
+
+def _print_self_resolved_summary(self_resolved_rows: list[dict]) -> None:
+    """retro#737 — always printed under its own heading, never merged into the
+    Metaculus-backed numbers above: this is strictly weaker evidence."""
+    n = len(self_resolved_rows)
+    mean_brier = sum(r["oracle_brier"] for r in self_resolved_rows) / n
+    mean_log = sum(r["oracle_log_score"] for r in self_resolved_rows) / n
+    print(f"\n--- Self-resolved (weaker evidence — retro#737, not a Metaculus resolution) ---")
+    print(f"Oracle vs. our own settlement: mean Brier {mean_brier:.4f}, mean log score {mean_log:.4f} (n={n})")
 
 
 # ---------------------------------------------------------------------------
@@ -386,9 +560,20 @@ def main() -> int:
     pr.add_argument("--article-limit", type=int, default=15)
     pr.set_defaults(func=cmd_run_oracle)
 
+    psr = sub.add_parser("self-resolve")
+    psr.add_argument("questions")
+    psr.add_argument("--out", default="self_resolutions.json")
+    psr.add_argument("--deployed-commit")
+    psr.add_argument("--limit", type=int, default=0)
+    psr.add_argument("--article-limit", type=int, default=15)
+    psr.add_argument("--window-days", type=int, default=14, help="days after actual_close_time to search for outcome evidence")
+    psr.add_argument("--confidence", type=float, default=0.9, help="min |p-0.5| distance to call the outcome resolved")
+    psr.set_defaults(func=cmd_self_resolve)
+
     ps = sub.add_parser("score")
     ps.add_argument("results")
     ps.add_argument("questions")
+    ps.add_argument("--self-resolved", default=None, help="retro#737 fallback outcomes for questions with no Metaculus resolution")
     ps.set_defaults(func=cmd_score)
 
     args = p.parse_args()

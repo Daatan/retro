@@ -2527,6 +2527,7 @@ async def _run_forecast_inner(
         age_adjusted_weights=all_age_adjusted_weights,
         source_ids=all_source_ids,
         max_source_share=settings.max_source_share,
+        harmonic_source_discount=settings.harmonic_source_discount,
         evidence_window_lookback_days=settings.evidence_window_lookback_days,
     )
     # F12 residual instrumentation (retro#449 Stage A): every settlement-voting
@@ -2995,6 +2996,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         age_adjusted_weights=age_adjusted_weights,
         source_ids=source_ids,
         max_source_share=settings.max_source_share,
+        harmonic_source_discount=settings.harmonic_source_discount,
         evidence_window_lookback_days=settings.evidence_window_lookback_days,
     )
     # F12 residual instrumentation (retro#449 Stage A) — same event as the

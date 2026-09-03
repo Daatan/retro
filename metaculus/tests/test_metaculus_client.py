@@ -99,6 +99,65 @@ def test_post_comment_payload_shape():
     }
 
 
+def test_count_open_questions_uses_count_field_when_present():
+    requests: list[httpx.Request] = []
+    page = httpx.Response(200, json={"results": [{"id": 1}, {"id": 2}], "next": "http://x/?offset=2", "count": 337})
+    transport = httpx.MockTransport(_handler(requests, {("GET", "/api/posts/"): page}))
+
+    with MetaculusClient("tok", transport=transport) as client:
+        total = client.count_open_questions("fall-futureeval-2026")
+
+    assert total == 337
+    assert len(requests) == 1  # count field short-circuits pagination
+    params = dict(httpx.QueryParams(requests[0].url.query))
+    assert params["tournaments"] == "fall-futureeval-2026"
+    assert params["statuses"] == "open"
+    assert "forecast_type" not in params
+
+
+def test_count_open_questions_passes_forecast_type_filter():
+    requests: list[httpx.Request] = []
+    page = httpx.Response(200, json={"results": [], "next": None, "count": 169})
+    transport = httpx.MockTransport(_handler(requests, {("GET", "/api/posts/"): page}))
+
+    with MetaculusClient("tok", transport=transport) as client:
+        total = client.count_open_questions("fall-futureeval-2026", forecast_type="binary")
+
+    assert total == 169
+    params = dict(httpx.QueryParams(requests[0].url.query))
+    assert params["forecast_type"] == "binary"
+
+
+def test_count_open_questions_falls_back_to_walking_pages_without_count():
+    requests: list[httpx.Request] = []
+    responses = iter(
+        [
+            httpx.Response(200, json={"results": [{"id": 1}], "next": "http://x/?offset=1"}),
+            httpx.Response(200, json={"results": [{"id": 2}], "next": None}),
+        ]
+    )
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return next(responses)
+
+    transport = httpx.MockTransport(handle)
+    with MetaculusClient("tok", transport=transport) as client:
+        total = client.count_open_questions("bot-testing-area")
+
+    assert total == 2
+    assert len(requests) == 2
+
+
+def test_count_open_questions_empty_tournament_returns_zero():
+    requests: list[httpx.Request] = []
+    page = httpx.Response(200, json={"results": [], "next": None})
+    transport = httpx.MockTransport(_handler(requests, {("GET", "/api/posts/"): page}))
+
+    with MetaculusClient("tok", transport=transport) as client:
+        assert client.count_open_questions("bot-testing-area") == 0
+
+
 def test_list_tournaments_accepts_bare_list_and_paginated_shape():
     for payload in ([{"slug": "a"}], {"results": [{"slug": "a"}]}):
         requests: list[httpx.Request] = []

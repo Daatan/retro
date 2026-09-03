@@ -78,6 +78,23 @@ about *how many times we answer it*:
 `bot-testing-area` is the exception the rule itself names ("testing areas where
 resubmission is encouraged"), so a lower value is fine there.
 
+## Coverage share
+
+Only binary questions have an output shape today, so every run logs how much of the
+currently-open tournament that structurally forfeits — the same measurement retro#730
+did by hand once (binary is 50.1% of an AIB season, 38.3-57.7% of MiniBench), now taken
+automatically on every run instead of once (retro#739, §6 O6):
+
+```
+event=coverage_share tournament=fall-futureeval-2026 binary_open=169 total_open=337 share=0.501
+```
+
+This is a live snapshot of the open board (binary-typed open posts ÷ all open posts in
+the tournament), not a season-cumulative "questions we've actually submitted to" count —
+read it beside the score Metaculus reports, per the condition attached to the
+binary-only decision, not as a claim about how much of the season we've covered so far.
+Numeric/discrete support (retro#739) would raise this toward 1.0 when it lands.
+
 ## Scheduling — a systemd timer on the oracle box, not Actions cron
 
 Discovery runs from `infra/metaculus-sync.timer` (every 20 minutes), not from a

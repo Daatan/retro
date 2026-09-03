@@ -58,6 +58,33 @@ class MetaculusClient:
             offset += len(page_results)
         return results[:limit]
 
+    def count_open_questions(self, tournament: str, forecast_type: str | None = None) -> int:
+        """Count open questions in a tournament, optionally filtered by ``forecast_type``.
+
+        Used for coverage-share reporting (retro#739 / §6 O6): comparing this with
+        ``forecast_type="binary"`` against a call with no filter is the same measurement
+        retro#730 did by hand (binary is 50.1% of an AIB season, 38.3-57.7% of MiniBench).
+        Reads the API's own ``count`` when the paginated response carries one (a single
+        request); falls back to walking every page and summing ``results`` when it
+        doesn't, since the pagination shape isn't pinned in tests.
+        """
+        params: dict[str, str | int] = {"tournaments": tournament, "statuses": "open", "limit": 50}
+        if forecast_type is not None:
+            params["forecast_type"] = forecast_type
+        offset = 0
+        total = 0
+        while True:
+            resp = self._client.get("/posts/", params={**params, "offset": offset})
+            resp.raise_for_status()
+            page = resp.json()
+            if isinstance(page.get("count"), int):
+                return page["count"]
+            results = page.get("results", [])
+            total += len(results)
+            if not page.get("next") or not results:
+                return total
+            offset += len(results)
+
     def list_tournaments(self) -> list[dict]:
         """Every tournament-type project visible to this bot (``/projects/tournaments/``).
 

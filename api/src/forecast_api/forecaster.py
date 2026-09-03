@@ -51,6 +51,7 @@ from tm.extractor import (
     audit_author_lean_sign_mismatch,
     audit_named_entity_dyad_mismatch,
     audit_quote_provenance_mismatch,
+    audit_scheduled_deadline_unconfirmed,
     flag_claim_stance_sign_conflicts,
     PROMPT_PREFIX as _EXTRACTOR_PROMPT_PREFIX,
     PROMPT_SUFFIX as _EXTRACTOR_PROMPT_SUFFIX,
@@ -1271,6 +1272,7 @@ async def _process_article_bounded(
     claim_deadline: str | None = None,
     claim_created_at: str | None = None,
     claim_direction: str | None = None,
+    claim_archetype: str | None = None,
     prediction_id: str | None = None,
     resolution_criteria: str | None = None,
     usage_events: list[dict] | None = None,
@@ -1296,6 +1298,7 @@ async def _process_article_bounded(
                 claim_deadline=claim_deadline,
                 claim_created_at=claim_created_at,
                 claim_direction=claim_direction,
+                claim_archetype=claim_archetype,
                 prediction_id=prediction_id,
                 resolution_criteria=resolution_criteria,
                 usage_events=usage_events,
@@ -1352,6 +1355,7 @@ async def _process_article(
     claim_deadline: str | None = None,
     claim_created_at: str | None = None,
     claim_direction: str | None = None,
+    claim_archetype: str | None = None,
     prediction_id: str | None = None,
     resolution_criteria: str | None = None,
     usage_events: list[dict] | None = None,
@@ -1682,6 +1686,15 @@ async def _process_article(
         # survey surfaced. See docs/ORACLE_VARIABLES.md.
         extraction.predictions = audit_quote_provenance_mismatch(
             extraction.predictions, question, resolution_criteria or question,
+        )
+        # Log-only (retro#590): a scheduled/threshold claim whose deadline has
+        # already passed, covered by an article published after that deadline,
+        # yet with no event_date confirming the outcome — see
+        # docs/ORACLE_VARIABLES.md. Batch (tm/runner.py) omits this the same
+        # way it omits enforce_deadline_arithmetic: the batch schema carries no
+        # per-article claim_deadline/claim_archetype.
+        extraction.predictions = audit_scheduled_deadline_unconfirmed(
+            extraction.predictions, article_date, claim_deadline, claim_archetype,
         )
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", result.url, exc)
@@ -2228,6 +2241,7 @@ async def _run_forecast_inner(
                 claim_deadline=req.claim_deadline,
                 claim_created_at=req.claim_created_at,
                 claim_direction=req.claim_direction,
+                claim_archetype=req.claim_archetype,
                 prediction_id=req.prediction_id,
                 resolution_criteria=req.resolution_criteria,
                 usage_events=usage_events,

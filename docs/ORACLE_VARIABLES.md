@@ -2545,3 +2545,40 @@ so regenerating them is a prerequisite for that measurement, not something this
 PR could do from the checkout alone. Enable the flag against a tmp cache path
 and rerun `ab_settled_decision.py` with candidates/labels regenerated before
 considering this shipped.
+
+## 2026-09-03 — leave-one-source-out sensitivity (retro#783, source-dependence Rule 4, umbrella #779)
+
+`PoolAggregateResult.max_swing` / `dominant_source`
+(`aggregation.leave_one_source_out_sensitivity`): for each distinct
+`source_id` carrying positive weight, re-pools with that outlet's rows
+zeroed and compares the resulting mean to the full pool's. `max_swing` is
+the largest `|Δmean|`; `dominant_source` names the outlet responsible. "This
+forecast rests on one outlet" made into a number instead of a sentence —
+Rule 4 of the umbrella's source-dependence plan, and the **acceptance test**
+for Rules 1-3 (#780/#781/#782, whichever of them ship): the distribution of
+`max_swing` across live pools should fall visibly once they land.
+
+**Reporting only, always on, no threshold.** Unlike `harmonic_source_discount`
+or `max_source_share`, this needs no separate enable flag — it never reads
+back into `mean`/`std`/`ci_low`/`ci_high`, so there is nothing for a flag to
+gate and no republish-sweep obligation. Populates whenever the caller
+supplies `source_ids` (already threaded for Rules 1/2/#458) and the pool
+pools at least two distinct sources with positive weight; `None` on an
+abstained/settlement-pin result (no pooled mean exists to be sensitive
+about) and on a single-source pool (zeroing the only source falls through
+`pool_sources`' zero-total guard and silently reproduces the original mean —
+reporting that as zero swing would hide the exact case this exists to flag:
+total dependence on one outlet). Measured against the pre-settlement-override
+pooled mean even when the same result later pins — the estimation-lane
+needle, not the categorical pin that may replace it.
+
+Logged on both the live and recompute paths as
+`event=source_sensitivity question=<hash> rows=<n> max_swing=<float>
+dominant=<source_id>`, mirroring `event=evidence_window_shadow`.
+
+**Not yet on `ForecastResponse`/`PoolAggregateResponse`** — unlike `n_eff` /
+`age_adjusted_mass` (retro#458 Phase 2), which are. The issue's own text asks
+for exposure "in the response `diagnostics` block (Phase 2 shape,
+daatan#1644)", but that block (daatan#1644 §2.3) is itself an unbuilt stub on
+another repo's umbrella as of this writing — this PR is log-only until 2.3
+lands, the same shape `hazard_shadow_mean` (retro#356) ships in today.

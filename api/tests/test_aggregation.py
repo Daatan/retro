@@ -19,6 +19,7 @@ from forecast_api.aggregation import (
     effective_sample_size,
     evidence_class_weight,
     harmonic_source_discount_factors,
+    leave_one_source_out_sensitivity,
     logit,
     pool_sources,
     prob_to_stance,
@@ -721,7 +722,12 @@ class TestSourceMassCap:
             source_ids=source_ids,  # max_source_share defaults to 1.0 — still inert
             **_aggregate_kwargs(),
         )
-        assert with_ids == baseline
+        # max_swing/dominant_source (retro#783) populate from source_ids alone
+        # (reporting-only, no separate flag) — see the harmonic-discount
+        # version of this test for the full rationale.
+        assert with_ids.max_swing is not None
+        assert with_ids.dominant_source == "dominant"
+        assert with_ids._replace(max_swing=None, dominant_source=None) == baseline
 
     def test_a_dominant_source_no_longer_swamps_a_minority_dissent_once_capped(self):
         # 4 agreeing rows from one dominant source vs one independent
@@ -817,7 +823,14 @@ class TestHarmonicSourceDiscount:
             source_ids=source_ids,  # harmonic_source_discount defaults to False — still inert
             **_aggregate_kwargs(),
         )
-        assert with_ids == baseline
+        # max_swing/dominant_source (retro#783) are reporting-only and, unlike
+        # harmonic_source_discount, need no separate flag — supplying
+        # source_ids alone is enough to populate them, since nothing here
+        # changes a weight or the published mean/std/ci. Compare those
+        # explicitly rather than folding them into the blanket equality below.
+        assert with_ids.max_swing is not None
+        assert with_ids.dominant_source == "prolific"
+        assert with_ids._replace(max_swing=None, dominant_source=None) == baseline
 
     def test_a_prolific_source_no_longer_swamps_a_minority_dissent_once_enabled(self):
         stances = [0.9, 0.9, 0.9, 0.9, -0.9]
@@ -836,6 +849,126 @@ class TestHarmonicSourceDiscount:
         )
         assert off is not None and on is not None
         assert on.mean < off.mean
+
+
+class TestLeaveOneSourceOutSensitivity:
+    """leave_one_source_out_sensitivity() (retro#783, source-dependence Rule
+    4, umbrella #779) — reporting only, the acceptance test for rules 1-3.
+    Always-on (no feature flag): it never changes a weight or mean, so it
+    carries no republish-sweep obligation."""
+
+    # ── leave_one_source_out_sensitivity() directly ─────────────────────
+
+    def test_no_source_ids_is_none(self):
+        assert leave_one_source_out_sensitivity(
+            [0.5, -0.5], [1.0, 1.0], None, clamp_eps=0.01,
+        ) == (None, None)
+
+    def test_mismatched_length_is_none(self):
+        assert leave_one_source_out_sensitivity(
+            [0.5, -0.5], [1.0, 1.0], ["a"], clamp_eps=0.01,
+        ) == (None, None)
+
+    def test_single_source_is_none_not_zero(self):
+        # Zeroing the only source's weight would make pool_sources fall back
+        # to flat weighting on that same lone row and reproduce the original
+        # mean — reporting that as max_swing=0.0 would hide total dependence
+        # on one outlet, the exact case this function exists to flag.
+        result = leave_one_source_out_sensitivity(
+            [0.9, 0.9], [1.0, 1.0], ["only", "only"], clamp_eps=0.01,
+        )
+        assert result == (None, None)
+
+    def test_two_equal_sources_agreeing_have_zero_swing(self):
+        max_swing, dominant = leave_one_source_out_sensitivity(
+            [0.5, 0.5], [1.0, 1.0], ["a", "b"], clamp_eps=0.01,
+        )
+        assert max_swing == pytest.approx(0.0, abs=1e-9)
+        assert dominant is None
+
+    def test_one_dominant_dissenting_source_is_flagged(self):
+        # Four rows from "a" all agreeing, one row from "b" dissenting: "a"
+        # is not just prolific here but also unanimous, so removing it should
+        # swing the needle the most and be named as dominant.
+        stances = [0.9, 0.9, 0.9, 0.9, -0.9]
+        weights = [1.0] * 5
+        source_ids = ["a", "a", "a", "a", "b"]
+        max_swing, dominant = leave_one_source_out_sensitivity(
+            stances, weights, source_ids, clamp_eps=0.01,
+        )
+        full_mean, _, _, _ = pool_sources(stances, weights, clamp_eps=0.01)
+        without_a_mean, _, _, _ = pool_sources(
+            stances, [0.0, 0.0, 0.0, 0.0, 1.0], clamp_eps=0.01,
+        )
+        assert dominant == "a"
+        assert max_swing == pytest.approx(abs(full_mean - without_a_mean))
+
+    def test_zero_weight_rows_never_form_their_own_group(self):
+        # A row with source_id set but weight already zeroed (e.g. by an
+        # upstream gate) must not count toward "how many distinct sources
+        # does this pool have" — it carries no voting influence to remove.
+        max_swing, dominant = leave_one_source_out_sensitivity(
+            [0.5, -0.5, 0.2], [1.0, 1.0, 0.0], ["a", "b", "c"], clamp_eps=0.01,
+        )
+        assert dominant in ("a", "b")
+
+    # ── wired into aggregate_pool() ──────────────────────────────────────
+
+    def test_none_on_an_abstained_result(self):
+        result = aggregate_pool(
+            [0.9, 0.7], [0.0, 0.0], [1.0, 1.0], [False, False],
+            source_ids=["a", "b"], **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.insufficient_reason == "no_usable_weight"
+        assert result.max_swing is None
+        assert result.dominant_source is None
+
+    def test_none_without_source_ids(self):
+        result = aggregate_pool(
+            [0.9, 0.9, 0.9, 0.9, -0.9], [1.0] * 5, [0.7] * 5, [False] * 5,
+            **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.max_swing is None
+        assert result.dominant_source is None
+
+    def test_populated_on_a_normal_pooled_result(self):
+        stances = [0.9, 0.9, 0.9, 0.9, -0.9]
+        weights = [1.0] * 5
+        relevances = [0.7] * 5
+        settled = [False] * 5
+        source_ids = ["a", "a", "a", "a", "b"]
+        result = aggregate_pool(
+            stances, weights, relevances, settled,
+            source_ids=source_ids, **_aggregate_kwargs(),
+        )
+        assert result is not None
+        assert result.dominant_source == "a"
+        assert result.max_swing is not None and result.max_swing > 0.0
+
+    def test_measured_before_the_settlement_override_not_after(self):
+        # A pool that pools AND then pins (decision.direction is not None):
+        # max_swing must describe the pre-pin estimation-lane needle, not the
+        # pinned mean the settlement override replaces it with.
+        stances = [0.9, 0.9, -0.9]
+        weights = [1.0, 1.0, 1.0]
+        relevances = [1.0, 1.0, 1.0]
+        settled = [True, True, True]
+        source_ids = ["a", "a", "b"]
+        result = aggregate_pool(
+            stances, weights, relevances, settled,
+            source_ids=source_ids,
+            **_aggregate_kwargs(settlement_min_sources=2, settlement_stance=1.0),
+        )
+        assert result is not None
+        assert result.settled is True
+        assert result.mean == pytest.approx(1.0)  # the pin
+        assert result.max_swing is not None
+        # The pinned mean is 1.0; a swing measured against the pin itself
+        # would be ~0 for removing "b" (the dissenter already outvoted) —
+        # measured pre-pin it must be strictly positive.
+        assert result.max_swing > 0.0
 
 
 class TestPoolReportingFields:

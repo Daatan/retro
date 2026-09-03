@@ -11574,7 +11574,7 @@
     "H04:ch13": {
       "event_id": "H04",
       "source_id": "ch13",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -11665,7 +11665,7 @@
     "H04:ynet": {
       "event_id": "H04",
       "source_id": "ynet",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12274,7 +12274,7 @@
     "H10:israel_hayom": {
       "event_id": "H10",
       "source_id": "israel_hayom",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12330,7 +12330,7 @@
     "H10:ynet": {
       "event_id": "H10",
       "source_id": "ynet",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-02T19:24:30.171562"
+  "last_updated": "2026-09-03T05:25:05.463845"
 }

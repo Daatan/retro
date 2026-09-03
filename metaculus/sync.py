@@ -159,16 +159,17 @@ def build_comment(result: dict, probability: float) -> str:
     return comment
 
 
-def coverage_share(binary_open: int, total_open: int) -> float:
-    """Fraction of the currently-open tournament board Oracul can even attempt.
+def coverage_share(binary_total: int, total: int) -> float:
+    """Fraction of the tournament's posts Oracul can even attempt.
 
     Only binary questions have an output shape today (metaculus_client.py's module
     docstring; numeric/discrete is retro#739, not yet built). retro#730 measured this
-    by hand once (50.1% of an AIB season, 38.3-57.7% of MiniBench) so a respectable
-    peer score on half a season wouldn't be mistaken for a respectable season (§6 O6).
-    This is that same measurement, taken automatically on every run instead of once.
+    by hand once, over every post in the tournament regardless of status (50.1% of an
+    AIB season, 38.3-57.7% of MiniBench) so a respectable peer score on half a season
+    wouldn't be mistaken for a respectable season (§6 O6). This is that same
+    measurement, taken automatically on every run instead of once.
     """
-    return binary_open / total_open if total_open else 0.0
+    return binary_total / total if total else 0.0
 
 
 def run(
@@ -225,14 +226,14 @@ def run(
             processed += 1
 
         try:
-            binary_open = mc.count_open_questions(tournament, forecast_type="binary")
-            total_open = mc.count_open_questions(tournament)
+            binary_total = mc.count_tournament_questions(tournament, forecast_type="binary")
+            total = mc.count_tournament_questions(tournament)
         except Exception:
             log.exception("Coverage-share count failed for tournament %s — skipping", tournament)
         else:
             log.info(
-                "event=coverage_share tournament=%s binary_open=%d total_open=%d share=%.3f",
-                tournament, binary_open, total_open, coverage_share(binary_open, total_open),
+                "event=coverage_share tournament=%s binary_total=%d total=%d share=%.3f",
+                tournament, binary_total, total, coverage_share(binary_total, total),
             )
 
     log.info("Done — forecasted %d question(s)", processed)

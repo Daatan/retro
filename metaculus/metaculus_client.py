@@ -58,17 +58,23 @@ class MetaculusClient:
             offset += len(page_results)
         return results[:limit]
 
-    def count_open_questions(self, tournament: str, forecast_type: str | None = None) -> int:
-        """Count open questions in a tournament, optionally filtered by ``forecast_type``.
+    def count_tournament_questions(self, tournament: str, forecast_type: str | None = None) -> int:
+        """Count every post in a tournament, optionally filtered by ``forecast_type``.
 
         Used for coverage-share reporting (retro#739 / §6 O6): comparing this with
         ``forecast_type="binary"`` against a call with no filter is the same measurement
-        retro#730 did by hand (binary is 50.1% of an AIB season, 38.3-57.7% of MiniBench).
+        retro#730 did by hand ("full pagination over every post in each tournament,
+        counting question.type" — binary is 50.1% of an AIB season, 38.3-57.7% of
+        MiniBench). Deliberately does **not** filter by ``statuses`` — #730's 337/60
+        counts covered every post regardless of status, and a live ``statuses=open``
+        filter would instead measure whatever handful of the ~3h-window questions
+        happen to be open at this exact poll (as few as 1-5), which is noise, not a
+        season-level coverage figure.
         Reads the API's own ``count`` when the paginated response carries one (a single
         request); falls back to walking every page and summing ``results`` when it
         doesn't, since the pagination shape isn't pinned in tests.
         """
-        params: dict[str, str | int] = {"tournaments": tournament, "statuses": "open", "limit": 50}
+        params: dict[str, str | int] = {"tournaments": tournament, "limit": 50}
         if forecast_type is not None:
             params["forecast_type"] = forecast_type
         offset = 0

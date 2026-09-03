@@ -81,19 +81,23 @@ resubmission is encouraged"), so a lower value is fine there.
 ## Coverage share
 
 Only binary questions have an output shape today, so every run logs how much of the
-currently-open tournament that structurally forfeits — the same measurement retro#730
-did by hand once (binary is 50.1% of an AIB season, 38.3-57.7% of MiniBench), now taken
-automatically on every run instead of once (retro#739, §6 O6):
+tournament that structurally forfeits — the same measurement retro#730 did by hand once
+("full pagination over every post in each tournament, counting `question.type`" — binary
+is 50.1% of an AIB season, 38.3-57.7% of MiniBench), now taken automatically on every run
+instead of once (retro#739, §6 O6):
 
 ```
-event=coverage_share tournament=fall-futureeval-2026 binary_open=169 total_open=337 share=0.501
+event=coverage_share tournament=fall-futureeval-2026 binary_total=169 total=337 share=0.501
 ```
 
-This is a live snapshot of the open board (binary-typed open posts ÷ all open posts in
-the tournament), not a season-cumulative "questions we've actually submitted to" count —
-read it beside the score Metaculus reports, per the condition attached to the
-binary-only decision, not as a claim about how much of the season we've covered so far.
-Numeric/discrete support (retro#739) would raise this toward 1.0 when it lands.
+Deliberately **not** filtered by status: questions launch at random hours up to 5 at a
+time with 3h windows (see "Cadence" above), so a live `statuses=open` count would be
+whatever handful happen to be open at this exact 20-minute poll — as few as 1-5 — not a
+season-level figure. `count_tournament_questions` counts every post in the tournament
+regardless of status, mirroring #730's method exactly, so `share` is stable across a run
+rather than bouncing between 0.0/0.5/1.0 tick to tick. Read it beside the score
+Metaculus reports, per the condition attached to the binary-only decision. Numeric/
+discrete support (retro#739) would raise this toward 1.0 when it lands.
 
 ## Scheduling — a systemd timer on the oracle box, not Actions cron
 

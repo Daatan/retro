@@ -549,8 +549,14 @@ class TestPoolWireIsAdditive:
             "outlet": f"Outlet {index}",
             "evidence_class": "reported_fact",
             "fact_signal": -0.4,
-            "event_actors": "Alpha",
-            "event_target": "Beta",
+            # Unique per index (retro#780): distinct actors/target so the
+            # rows never collide on `event_key` and trigger the echo
+            # collapse -- this class tests additivity of STORAGE fields,
+            # not the collapse itself (covered in test_aggregation.py's
+            # TestEventKeyDependenceCollapse), and a same-event collision
+            # here is a false positive for that.
+            "event_actors": f"Alpha{index}",
+            "event_target": f"Beta{index}",
             "is_occurrence": False,
             "verified": False,
             "claims_detail": [

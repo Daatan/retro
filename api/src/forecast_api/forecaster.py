@@ -768,6 +768,21 @@ def _cluster_ids(
     return ids
 
 
+def _event_ids(keys: list[Optional[str]]) -> Optional[tuple[int, ...]]:
+    """Event-key cluster ids for one pool's rows (retro#780, source-dependence
+    Rule 1, umbrella #779) — the ids that actually feed `aggregate_pool`'s
+    `event_key_ids` and its echo-collapse discount.
+
+    `_cluster_ids` above already computes the same ids internally (as
+    `ekstats`), but only for the comparative `event=evidence_clusters` log
+    line — this is the caller-facing copy, kept as its own function so a
+    change to the discount's inputs can never accidentally change what gets
+    logged, or vice versa.
+    """
+    ids, _stats = cluster_by_event_key(keys)
+    return ids
+
+
 def _settlement_votes(
     outlet: Optional[str], claims_detail: Optional[list[ClaimDetail]],
 ) -> list[SettlementVote]:
@@ -2510,6 +2525,12 @@ async def _run_forecast_inner(
     # aggregate_pool() (see aggregation.py) so a future recompute over an
     # accumulated evidence pool can never silently drift from what a fresh
     # run produces here.
+    #
+    # Computed once and reused for both the Jaccard side-by-side logging
+    # (`_cluster_ids`) and the live retro#780 discount (`_event_ids`) below
+    # — the two must see IDENTICAL per-row keys, or the log line would
+    # describe a different pool than the one actually collapsed.
+    _pool_event_keys = [_event_key_of(s) for s in source_signals]
     _pool_kwargs = dict(
         relevance_weight_floor=settings.relevance_weight_floor,
         decisiveness_floor=settings.decisiveness_floor,
@@ -2533,10 +2554,12 @@ async def _run_forecast_inner(
         settlement_quality_floor=settings.settlement_quality_floor,
         cluster_ids=_cluster_ids(
             [_cluster_text_of(s) for s in source_signals],
-            [_event_key_of(s) for s in source_signals],
+            _pool_event_keys,
             _question_hash(req.question),
         ),
         cluster_downweight_exponent=settings.cluster_downweight_exponent,
+        event_key_ids=_event_ids(_pool_event_keys),
+        event_key_dependence_collapse=settings.event_key_dependence_collapse,
         valve_weights=all_valve_weights,
         age_adjusted_weights=all_age_adjusted_weights,
         source_ids=all_source_ids,
@@ -2984,6 +3007,10 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         published_dates.append(s.published_date)
         source_ids.append(s.source_id)
 
+    # Computed once and reused for both the Jaccard side-by-side logging
+    # (`_cluster_ids`) and the live retro#780 discount (`_event_ids`) below —
+    # same reasoning as the live /forecast path above.
+    _pool_event_keys = [_event_key_of(s) for s in sources]
     _pool_kwargs = dict(
         relevance_weight_floor=settings.relevance_weight_floor,
         decisiveness_floor=settings.decisiveness_floor,
@@ -3011,10 +3038,12 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         # whitelist comment reserved for exactly this issue (retro#355).
         cluster_ids=_cluster_ids(
             [_cluster_text_of(s) for s in sources],
-            [_event_key_of(s) for s in sources],
+            _pool_event_keys,
             _question_hash(req.question or ""),
         ),
         cluster_downweight_exponent=settings.cluster_downweight_exponent,
+        event_key_ids=_event_ids(_pool_event_keys),
+        event_key_dependence_collapse=settings.event_key_dependence_collapse,
         valve_weights=valve_weights,
         age_adjusted_weights=age_adjusted_weights,
         source_ids=source_ids,

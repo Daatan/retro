@@ -1043,6 +1043,69 @@ def cluster_downweight_factors(
     return [sizes[cid] ** -exponent for cid in cluster_ids]
 
 
+def event_key_collapse_factors(
+    event_ids: Optional[Sequence[int]], weights: Sequence[float], enabled: bool,
+) -> Optional[list[float]]:
+    """Per-row weight multipliers that collapse same-event echoes to one
+    row's worth (retro#780, source-dependence Rule 1, umbrella #779).
+
+    Rows sharing an ``event_key`` (retro#682's paraphrase-invariant ``(actor,
+    target, day)`` triple, via :func:`clustering.cluster_by_event_key`) are
+    scaled so the group's total weight equals its single most-weighted
+    member's weight, instead of the sum of all of them — five outlets
+    confirming one development stop reading as five independent facts and
+    read as one, the strongest one. Every row in a group is scaled by the
+    SAME factor, so the group's internal weighted-average stance is
+    unchanged (uniform scaling cancels out of a weighted mean) — only the
+    group's total contribution to the wider pool shrinks. That is
+    mathematically identical to replacing the group with one collapsed row
+    whose stance is the members' weighted mean and whose weight is their
+    max, which is the exact mechanism `scripts/measure_dependence_key_780.py`
+    measured to produce the approved effect sizes (2026-09-02: 2.3% row
+    collapse, up to 11.51pp needle move, 1/120 pools >= 5pp) — reproduced
+    here as a per-row multiplier instead of a row-merge so every other
+    consumer indexed by row (settlement voting, evidence-window logging,
+    leave-one-source-out sensitivity) keeps seeing one row per source,
+    unchanged.
+
+    Event-key-only, deliberately: #780's original wording additionally
+    required attribution or text-Jaccard corroboration before collapsing,
+    but that combined bar barely fired (0.2% collapse, 2.38pp max move,
+    0/120 pools) because `voice.attributed_to` fills only 2.7% of dominant
+    claims today. Mark's 2026-09-03 decision ships the looser, stronger bar
+    now rather than wait for attribution coverage to mature.
+
+    A group whose total weight is zero (or negative) is left untouched
+    (factor 1.0) rather than dividing by zero — those rows carry no
+    influence to collapse.
+
+    Returns ``None`` when ``enabled`` is falsy, ``event_ids`` is falsy, or
+    the two sequences don't line up, which callers treat as "leave the
+    weights alone" rather than multiplying by ones — same contract as
+    `cluster_downweight_factors` and `harmonic_source_discount_factors`.
+    """
+    if not enabled or not event_ids:
+        return None
+    n = len(event_ids)
+    if n == 0 or len(weights) != n:
+        return None
+    groups: dict[int, list[int]] = {}
+    for i, eid in enumerate(event_ids):
+        groups.setdefault(eid, []).append(i)
+    factors = [1.0] * n
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        group_weights = [weights[i] for i in members]
+        total = sum(group_weights)
+        if total <= 0:
+            continue
+        factor = max(group_weights) / total
+        for i in members:
+            factors[i] = factor
+    return factors
+
+
 def harmonic_source_discount_factors(
     source_ids: Optional[Sequence[str]],
     published_dates: Optional[Sequence[Optional[str]]],
@@ -1428,6 +1491,8 @@ def aggregate_pool(
     settlement_quality_floor: float = 0.0,
     cluster_ids: Optional[Sequence[int]] = None,
     cluster_downweight_exponent: float = 0.0,
+    event_key_ids: Optional[Sequence[int]] = None,
+    event_key_dependence_collapse: bool = False,
     valve_weights: Optional[Sequence[float]] = None,
     age_adjusted_weights: Optional[Sequence[float]] = None,
     source_ids: Optional[Sequence[str]] = None,
@@ -1514,8 +1579,28 @@ def aggregate_pool(
                 0.0 if i in _excluded else w for i, w in enumerate(age_adjusted_weights)
             ]
 
-    # Correlated-evidence discount (retro#355), applied FIRST so that every
-    # downstream consumer — evidence_mass, the decisiveness floor, pool_sources,
+    # Event-key echo collapse (retro#780, source-dependence Rule 1, umbrella
+    # #779), applied BEFORE every other correlated-evidence discount — rule 2
+    # below (retro#781, harmonic per-outlet decay) is explicitly the
+    # diminishing-returns shape "on top of" this one (see that function's
+    # docstring): genuinely-echoing rows must already be collapsed by the
+    # time it runs, or the same echo gets discounted twice by two different
+    # mechanisms measured against two different baselines.
+    #
+    # Ships enabled at the Settings layer (Mark, 2026-09-03 decision on
+    # retro#780) but defaults off here like every other discount in this
+    # function — changing already-published pool weights needs the
+    # republish sweep this repo's CLAUDE.md requires before it counts as
+    # live for existing forecasts.
+    event_key_factors = event_key_collapse_factors(
+        event_key_ids, weights, event_key_dependence_collapse,
+    )
+    if event_key_factors is not None and len(event_key_factors) == len(weights):
+        weights = [w * f for w, f in zip(weights, event_key_factors)]
+
+    # Correlated-evidence discount (retro#355), applied FIRST of the
+    # Jaccard-keyed mechanisms so that every downstream consumer —
+    # evidence_mass, the decisiveness floor, pool_sources,
     # effective_sample_size, the settlement vote weighting — sees one consistent
     # set of weights. Discounting later would let the thin-evidence test pass on
     # inflated mass and only then shrink it, which is how a pool of twenty

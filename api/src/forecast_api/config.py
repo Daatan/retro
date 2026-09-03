@@ -297,6 +297,36 @@ class ApiSettings(BaseSettings):
     # weights, so a republish sweep (this repo's CLAUDE.md) is required
     # before it counts as live for existing forecasts.
     harmonic_source_discount: bool = False
+    # ── Event-key echo collapse (retro#780, source-dependence Rule 1,
+    # umbrella #779) ─────────────────────────────────────────────────────
+    # Rule 1 conceptually precedes Rule 2 above (`harmonic_source_discount`'s
+    # own docstring names this as the collapse it composes on top of) even
+    # though it landed second in this file — #783 (leave-one-source-out
+    # sensitivity, reporting-only) and #781 shipped first per the umbrella's
+    # stated measurement order, #780 needed its own Step 0 offline
+    # measurement and a three-way cutover decision from Mark first.
+    #
+    # Collapses rows sharing an `event_key` (retro#682's paraphrase-invariant
+    # (actor, target, day) triple) to one row's worth of weight — see
+    # `aggregation.event_key_collapse_factors`. Event-key-only, no
+    # attribution/text-Jaccard corroboration required: `scripts/
+    # measure_dependence_key_780.py` measured the literal combined spec at
+    # 0.2% row collapse / 2.38pp max needle move / 0/120 pools >= 5pp
+    # (too weak — `voice.attributed_to` fills only 2.7% of dominant claims
+    # today) versus event-key-only at 2.3% collapse / up to 11.51pp / 1/120
+    # pools >= 5pp. Mark's 2026-09-03 decision (via /dilemma, issue comment
+    # 5524245079) was to ship the looser, stronger bar now rather than wait
+    # for attribution coverage to mature.
+    #
+    # Unlike `cluster_downweight_exponent` and `max_source_share`, this
+    # ships ON: the umbrella's whole premise (#779) is justification by
+    # structural property (duplication invariance) rather than by a
+    # resolved-forecast backtest, so there is no magnitude to tune and no
+    # #403-style gate to wait on. Flipping it on changes already-published
+    # pool weights, so a republish sweep (this repo's CLAUDE.md) is required
+    # before it counts as live for existing forecasts — see the PR that
+    # introduced this setting for whether that sweep has run.
+    event_key_dependence_collapse: bool = True
     # When a caller supplies a gatekeeper verdict on an ArticleInput (relevance +
     # is_prediction — news-indexer's POST /relevance result, threaded through daatan),
     # reuse it instead of re-running check_is_prediction. The SAME claim-aware judge already

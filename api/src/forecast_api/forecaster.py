@@ -2593,6 +2593,15 @@ async def _run_forecast_inner(
             _question_hash(req.question), len(agg.evidence_window_outside_rows),
             agg.n, settings.evidence_window_lookback_days,
         )
+        # Leave-one-source-out sensitivity (retro#783, source-dependence Rule
+        # 4, umbrella #779) — reporting only, and only meaningful when the
+        # pool actually pooled (max_swing is None on abstained/settlement-pin
+        # results, see PoolAggregateResult's docstring).
+        if agg.max_swing is not None:
+            logger.info(
+                "event=source_sensitivity question=%s rows=%d max_swing=%.4f dominant=%s",
+                _question_hash(req.question), agg.n, agg.max_swing, agg.dominant_source,
+            )
         # question (hash) + the claim-window bounds the rule actually compared
         # against, so a demotion can be tied back to its forecast and audited
         # for false positives; event_date_state separates genuinely undated
@@ -3041,6 +3050,12 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
             _question_hash(req.question or ""), len(agg.evidence_window_outside_rows),
             agg.n, settings.evidence_window_lookback_days,
         )
+        # Recompute-path twin of the live path's source-sensitivity line.
+        if agg.max_swing is not None:
+            logger.info(
+                "event=source_sensitivity question=%s rows=%d max_swing=%.4f dominant=%s",
+                _question_hash(req.question or ""), agg.n, agg.max_swing, agg.dominant_source,
+            )
         # Recompute-path twin of the live path's demotion line: question hash +
         # claim-window bounds + event_date_state, same rationale (retro#554).
         for idx, demotion_reason in agg.settlement_demotions:

@@ -706,6 +706,57 @@ def pool_sources(
     return mean, std, ci_low, ci_high
 
 
+def leave_one_source_out_sensitivity(
+    stances: Sequence[float],
+    weights: Sequence[float],
+    source_ids: Optional[Sequence[str]],
+    *,
+    clamp_eps: float,
+) -> tuple[Optional[float], Optional[str]]:
+    """How far the pooled needle would move without its most influential
+    source (retro#783, source-dependence Rule 4, umbrella #779).
+
+    For each distinct `source_id` carrying positive weight, re-pools with
+    that group's weight zeroed and compares the resulting mean against the
+    full pool's mean. `max_swing` is the largest such `|Δmean|`;
+    `dominant_source` is the `source_id` responsible for it. Reporting only —
+    this never changes a weight or the published mean, same
+    compute-but-don't-use contract as `age_adjusted_mass`/`hazard_shadow_mean`.
+    Rules 1-3 (#780/#781/#782) change how weights are formed; this is their
+    acceptance test, answering "did that make the needle less dependent on
+    any one outlet" without needing an outcome backtest.
+
+    `(None, None)` when there is nothing to compare: `source_ids` is absent
+    or mismatched in length, or fewer than two distinct sources carry
+    positive weight. A single-source pool is deliberately left unmeasured
+    rather than reported as zero swing — zeroing the only source's weight
+    just makes `pool_sources` fall back to flat weighting on that same lone
+    row (its zero-total guard), which reproduces the original mean and would
+    silently under-report the exact case (total dependence on one outlet)
+    this function exists to flag.
+    """
+    if not source_ids or len(source_ids) != len(stances):
+        return None, None
+    by_source: dict[str, list[int]] = {}
+    for i, (sid, w) in enumerate(zip(source_ids, weights)):
+        if sid and w > 0:
+            by_source.setdefault(sid, []).append(i)
+    if len(by_source) < 2:
+        return None, None
+    full_mean, _, _, _ = pool_sources(stances, weights, clamp_eps=clamp_eps)
+    max_swing = 0.0
+    dominant_source: Optional[str] = None
+    for sid, indices in by_source.items():
+        excluded = frozenset(indices)
+        without = [0.0 if i in excluded else w for i, w in enumerate(weights)]
+        mean_without, _, _, _ = pool_sources(stances, without, clamp_eps=clamp_eps)
+        swing = abs(full_mean - mean_without)
+        if swing > max_swing:
+            max_swing = swing
+            dominant_source = sid
+    return max_swing, dominant_source
+
+
 def widen_ci_for_thin_evidence(
     mean: float,
     ci_low: float,
@@ -898,6 +949,19 @@ class PoolAggregateResult(NamedTuple):
     # the pooled estimate; same compute-but-don't-use contract as
     # age_adjusted_mass.
     hazard_shadow_mean: Optional[float] = None
+    # Leave-one-source-out sensitivity (retro#783, source-dependence Rule 4,
+    # umbrella #779) — see leave_one_source_out_sensitivity(). Unlike n_eff/
+    # age_adjusted_mass, computed ONLY on the branch that actually calls
+    # pool_sources: the abstained/off-topic branches return before any mean
+    # exists to be sensitive about, and the settlement-pin branch replaces the
+    # pooled mean with a categorical override that "swing" does not describe.
+    # Measures the estimation-lane needle specifically — before, not after, any
+    # settlement override this same result may still receive below (the
+    # "estimation lane vs settlement lane" split retro#545's window-exclusion
+    # gate also draws) — so a pool that both pools AND later pins still
+    # reports how dependent its pre-pin needle was on one outlet.
+    max_swing: Optional[float] = None
+    dominant_source: Optional[str] = None
 
 
 # Layer C's weight, per relevance band (retro#394).
@@ -1661,6 +1725,13 @@ def aggregate_pool(
 
     n = len(stances)
     mean, std, ci_low, ci_high = pool_sources(stances, weights, clamp_eps=logit_clamp)
+    # Measured on the raw pooled weights, before the thin-evidence/dispersion
+    # widening below (those touch the CI, not the mean) and before the
+    # settlement override further down (see the field's docstring on
+    # PoolAggregateResult for why pre-override is the right lane).
+    max_swing, dominant_source = leave_one_source_out_sensitivity(
+        stances, weights, source_ids, clamp_eps=logit_clamp,
+    )
 
     # Reads the valve mass for the same reason `thin_evidence` does: §6.1's
     # intended consequence is that an aging pool's CI widens toward "we barely
@@ -1723,4 +1794,6 @@ def aggregate_pool(
         settlement_vote_indices=decision.vote_indices,
         evidence_window_outside_rows=window_outside,
         hazard_shadow_mean=_hazard(mean),
+        max_swing=max_swing,
+        dominant_source=dominant_source,
     )

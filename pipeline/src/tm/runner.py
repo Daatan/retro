@@ -186,6 +186,10 @@ async def run_article(
         extraction.predictions = audit_quote_provenance_mismatch(
             extraction.predictions, article.event_name, article.event_description,
         )
+        # audit_scheduled_deadline_unconfirmed (retro#590) is omitted here for the same
+        # reason enforce_deadline_arithmetic is above: it needs a per-article
+        # claim_deadline/claim_archetype the batch pipeline's per-event schema doesn't
+        # carry. Wired into forecaster.py's live path instead — see docs/ORACLE_VARIABLES.md.
 
         update_cell(
             article.event_id,

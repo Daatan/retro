@@ -2326,6 +2326,93 @@ def audit_named_entity_dyad_mismatch(
     return predictions
 
 
+_SCHEDULED_ANCHOR_ARCHETYPES = frozenset({"scheduled", "threshold"})
+
+
+def audit_scheduled_deadline_unconfirmed(
+    predictions: list[PredictionExtraction],
+    article_date: Optional[str],
+    claim_deadline: Optional[str],
+    claim_archetype: Optional[str],
+    today: Optional[str] = None,
+) -> list[PredictionExtraction]:
+    """Log-only (retro#590, proposal 3 of retro#575): does this article cover a
+    scheduled/threshold claim whose deadline has already passed, without itself
+    asserting the outcome occurred?
+
+    Scoping research (issue #590) found the "has this scheduled date passed"
+    check already exists twice, and neither is what this flags:
+    ``aggregation.settlement_direction_allowed``/``settlement_vote_validity``
+    compare ``claim_deadline`` against wall-clock "today" too, but only at
+    pool-aggregation time and only once a settlement vote already exists — a
+    forecast where coverage has simply moved on, with no article ever voting
+    ``settled``, never reaches them. daatan's ``temporal-clock.ts`` pins the
+    *published number* once the deadline passes, but that is a post-pool
+    wrapper that never touches extraction/stance. So this is the first place
+    in the pipeline a "deadline passed, still unconfirmed" fact would be
+    visible at all — and, per the issue's own framing, whether that is worth
+    anything is unmeasured. Shadow-first, same rollout as
+    :func:`audit_named_entity_dyad_mismatch` (the Gate-0/#558 precedent).
+
+    Fires once per prediction when: ``claim_deadline`` is parseable and on or
+    before ``today`` (reusing the ``_parse_date``/``datetime.now().date()``
+    idiom already proven in ``aggregation.py``); ``claim_archetype`` is
+    ``scheduled`` or ``threshold``; ``article_date`` is on or after the
+    deadline (the article had the opportunity to report the outcome — an
+    older preview article naturally has nothing to confirm yet, and is not
+    the "coverage moved on" shape this targets); and the claim's own
+    ``event_date`` is unset — a claim that DOES carry an ``event_date`` is
+    already handled by ``enforce_deadline_arithmetic``/
+    ``enforce_settlement_event_date``, so flagging it here would just
+    re-describe their output.
+
+    Fails open throughout, matching every sibling audit: no deadline, an
+    unparseable deadline, a non-scheduled/threshold archetype, a future
+    deadline, or an article published before the deadline => no-op entirely
+    (still logged once, as ``eligible=0``). Never mutates
+    ``stance``/``claim_strength``/``settled``/anything else — pure logging,
+    same contract as ``audit_named_entity_dyad_mismatch``.
+    """
+    deadline = _parse_iso_date(claim_deadline)
+    article = _parse_iso_date(article_date)
+    ref = _parse_iso_date(today) or date.today()
+    eligible_run = (
+        deadline is not None
+        and claim_archetype in _SCHEDULED_ANCHOR_ARCHETYPES
+        and deadline <= ref
+        and article is not None
+        and article >= deadline
+    )
+    if not eligible_run:
+        logger.info(
+            "event=scheduled_deadline_unconfirmed_shadow claim_archetype=%s "
+            "claim_deadline=%s eligible=0 fired=0 n=%d",
+            claim_archetype, claim_deadline, len(predictions),
+        )
+        return predictions
+
+    eligible = 0
+    fired = 0
+    for p in predictions:
+        eligible += 1
+        if p.event_date:
+            continue
+        fired += 1
+        logger.warning(
+            "event=scheduled_deadline_unconfirmed claim_archetype=%s claim_deadline=%s "
+            "article_date=%s today=%s stance=%+.2f claim_strength=%.2f settled=%s claim=%r",
+            claim_archetype, deadline.isoformat(), article.isoformat(), ref.isoformat(),
+            p.stance, p.claim_strength, p.settled, p.claim[:120],
+        )
+
+    logger.info(
+        "event=scheduled_deadline_unconfirmed_shadow claim_archetype=%s claim_deadline=%s "
+        "eligible=%d fired=%d n=%d",
+        claim_archetype, claim_deadline, eligible, fired, len(predictions),
+    )
+    return predictions
+
+
 # retro#602 sizing (2026-08-23): at |stance|>=0.7 & certainty>=0.7 with a
 # populated fact_signal, 44/531 (8.3%) prod rows disagree in sign with their
 # own stance. Hand-checked 20: 18 genuine sign-inversions (the tracked Burnham

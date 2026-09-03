@@ -316,6 +316,38 @@ review has a real denominator. Precision on this shape is unmeasured (only 2 kno
 same rollout shape as the other audit-only guards: ship the shadow log, review real
 trigger/precision rate, decide on promotion in a follow-up slice.
 
+#### A scheduled/threshold deadline has passed with no article confirming the outcome — `audit_scheduled_deadline_unconfirmed` (log-only)
+
+retro#590 (proposal 3 of retro#575): a scheduled-date "anchor" — has the claim's own deadline
+already passed, with coverage simply moving on rather than ever reporting the outcome — was
+found to have no representation at the extraction/stance stage anywhere in the pipeline.
+`aggregation.settlement_direction_allowed`/`settlement_vote_validity` (`api/`) compare
+`claim_deadline` against wall-clock "today" too, but only at pool-aggregation time and only once
+a settlement vote already exists — the unreported case never reaches them. daatan's
+`temporal-clock.ts` pins the *published number* once the deadline passes, but that's a post-pool
+wrapper that never touches extraction or stance. So this fact was invisible before it was
+introduced, and — per the issue's own framing — whether surfacing it is worth anything is
+unmeasured, hence shadow-first, same rollout as `audit_named_entity_dyad_mismatch`.
+
+Fires once per prediction when: `claim_deadline` is parseable and on or before "today"
+(`_parse_iso_date`/`date.today()`, the same idiom `aggregation.py` already uses);
+`claim_archetype` is `scheduled` or `threshold`; the article was published on or after the
+deadline (an older preview article naturally has nothing to confirm yet — not the "coverage
+moved on" shape this targets); and the claim's own `event_date` is unset — a claim that DOES
+carry an `event_date` is already handled by `enforce_deadline_arithmetic`/
+`enforce_settlement_event_date`, so flagging it here would just re-describe their output.
+
+**Live path only.** Wired into `forecaster.py`'s per-article chain, not `runner.py`'s batch/atlas
+one — the same reason `enforce_deadline_arithmetic` is already batch-omitted: the batch
+pipeline's per-event schema carries no per-article `claim_deadline`/`claim_archetype` (a
+retroactive event has no single binary question with a deadline the way a live `/forecast`
+request does).
+
+**Log-only — never mutates `stance`/`claim_strength`/`settled`/anything else.**
+`event=scheduled_deadline_unconfirmed` fires per match; `event=scheduled_deadline_unconfirmed_shadow`
+logs `eligible=`/`fired=`/`n=` once per call regardless of outcome, same convention as the guards
+above, so a future review has a real trigger-rate denominator.
+
 #### Claim/stance sign conflicts are logged, not corrected — `flag_claim_stance_sign_conflicts`
 
 retro#298 found rows where the extracted `claim` text and `stance` disagree with each other in

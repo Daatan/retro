@@ -17,6 +17,7 @@ from forecast_api.aggregation import (
     capped_weight_count,
     claim_weighted_stance,
     effective_sample_size,
+    event_key_collapse_factors,
     evidence_class_weight,
     harmonic_source_discount_factors,
     leave_one_source_out_sensitivity,
@@ -849,6 +850,123 @@ class TestHarmonicSourceDiscount:
         )
         assert off is not None and on is not None
         assert on.mean < off.mean
+
+
+class TestEventKeyDependenceCollapse:
+    """event_key_collapse_factors() folds same-event echoes to one row's
+    worth of weight (retro#780, source-dependence Rule 1, umbrella #779).
+    Event-key-only: no attribution/text-Jaccard corroboration required, per
+    Mark's 2026-09-03 decision. aggregate_pool()'s own default is off
+    (event_key_dependence_collapse=False); Settings ships it on.
+    """
+
+    # ── event_key_collapse_factors() directly ───────────────────────────
+
+    def test_disabled_is_the_identity(self):
+        assert event_key_collapse_factors([0, 0, 1], [1.0, 1.0, 1.0], False) is None
+
+    def test_no_event_ids_is_the_identity(self):
+        assert event_key_collapse_factors(None, [1.0], True) is None
+        assert event_key_collapse_factors([], [], True) is None
+
+    def test_mismatched_lengths_is_the_identity(self):
+        assert event_key_collapse_factors([0, 1], [1.0, 1.0, 1.0], True) is None
+
+    def test_all_singleton_ids_is_all_ones(self):
+        out = event_key_collapse_factors([0, 1, 2], [0.4, 0.9, 0.2], True)
+        assert out == [1.0, 1.0, 1.0]
+
+    def test_group_scales_to_max_over_sum(self):
+        # Two rows share event 0 (weights 0.6, 0.3); one row is its own
+        # event 1. Group 0's total weight (0.9) should shrink to its
+        # loudest member's weight (0.6) -- factor 0.6 / 0.9 = 2/3 applied
+        # uniformly to both members.
+        out = event_key_collapse_factors([0, 0, 1], [0.6, 0.3, 1.0], True)
+        assert out == pytest.approx([2 / 3, 2 / 3, 1.0])
+
+    def test_uniform_scaling_preserves_the_groups_weighted_mean_stance(self):
+        event_ids = [0, 0, 1]
+        stances = [0.8, -0.4, 0.5]
+        weights = [0.6, 0.3, 1.0]
+        factors = event_key_collapse_factors(event_ids, weights, True)
+        collapsed_weights = [w * f for w, f in zip(weights, factors)]
+        before = weighted_mean(stances[:2], weights[:2])
+        after = weighted_mean(stances[:2], collapsed_weights[:2])
+        assert after == pytest.approx(before)
+        # And the group's total weight now equals its loudest member's.
+        assert sum(collapsed_weights[:2]) == pytest.approx(max(weights[:2]))
+
+    def test_zero_weight_group_left_untouched(self):
+        out = event_key_collapse_factors([0, 0], [0.0, 0.0], True)
+        assert out == [1.0, 1.0]
+
+    def test_three_way_echo_collapses_to_loudest_member(self):
+        out = event_key_collapse_factors([0, 0, 0], [0.2, 0.5, 0.1], True)
+        total = sum(0.2 * out[0] + 0.5 * out[1] + 0.1 * out[2] for _ in [0])
+        assert out[0] == out[1] == out[2] == pytest.approx(0.5 / 0.8)
+        assert 0.2 * out[0] + 0.5 * out[1] + 0.1 * out[2] == pytest.approx(0.5)
+
+    # ── wired into aggregate_pool() ───────────────────────────────────────
+
+    def test_ships_inert_default_moves_no_number_even_with_an_echoing_pool(self):
+        stances = [0.9, 0.9, 0.9, 0.9, -0.9]
+        weights = [1.0] * 5
+        relevances = [0.7] * 5
+        settled = [False] * 5
+        event_ids = [0, 0, 0, 0, 1]  # 4 rows echo one event, 1 is distinct
+        baseline = aggregate_pool(stances, weights, relevances, settled, **_aggregate_kwargs())
+        with_ids = aggregate_pool(
+            stances, weights, relevances, settled,
+            event_key_ids=event_ids,  # event_key_dependence_collapse defaults to False
+            **_aggregate_kwargs(),
+        )
+        assert with_ids == baseline
+
+    def test_echoing_pool_moves_toward_the_dissenter_once_enabled(self):
+        stances = [0.9, 0.9, 0.9, 0.9, -0.9]
+        weights = [1.0] * 5
+        relevances = [0.7] * 5
+        settled = [False] * 5
+        event_ids = [0, 0, 0, 0, 1]
+        off = aggregate_pool(
+            stances, weights, relevances, settled,
+            event_key_ids=event_ids, **_aggregate_kwargs(),
+        )
+        on = aggregate_pool(
+            stances, weights, relevances, settled,
+            event_key_ids=event_ids, event_key_dependence_collapse=True,
+            **_aggregate_kwargs(),
+        )
+        assert off is not None and on is not None
+        assert on.mean < off.mean
+
+    def test_composes_with_harmonic_discount_rule_1_runs_first(self):
+        # Once the four echoing rows collapse to one row's worth of weight,
+        # the harmonic per-source discount (retro#781) has nothing left to
+        # discount within that group -- it should see one already-collapsed
+        # "voice" from `source_id="prolific"`, not four.
+        stances = [0.9, 0.9, 0.9, 0.9, -0.9]
+        weights = [1.0] * 5
+        relevances = [0.7] * 5
+        settled = [False] * 5
+        event_ids = [0, 0, 0, 0, 1]
+        source_ids = ["prolific"] * 4 + ["other"]
+        both_on = aggregate_pool(
+            stances, weights, relevances, settled,
+            event_key_ids=event_ids, event_key_dependence_collapse=True,
+            source_ids=source_ids, harmonic_source_discount=True,
+            **_aggregate_kwargs(),
+        )
+        collapse_only = aggregate_pool(
+            stances, weights, relevances, settled,
+            event_key_ids=event_ids, event_key_dependence_collapse=True,
+            **_aggregate_kwargs(),
+        )
+        assert both_on is not None and collapse_only is not None
+        # The harmonic discount composing on top still moves the mean
+        # further toward the dissenter (each of the 4 collapsed-weight rows
+        # is additionally ranked 1..4 by pool order within its source).
+        assert both_on.mean <= collapse_only.mean
 
 
 class TestLeaveOneSourceOutSensitivity:

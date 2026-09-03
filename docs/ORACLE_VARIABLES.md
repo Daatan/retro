@@ -673,7 +673,8 @@ separately: one source, two computations, free to drift.
 | `n_eff`, `age_adjusted_mass` (retro#458 Phase 2, reporting-only) | `n_eff` is Kish's `effective_sample_size(weight)` — the *exact* call the CI floor's `floor_n` divisor already uses, computed once and reused rather than twice. `age_adjusted_mass` is `evidence_mass` recomputed with `rweight` forced to 1.0 (`credibility × avg_evidence_weight × relevance_weight(relevance)`, no recency term) — "how much would this pool weigh if nothing had aged," always ≥ `evidence_mass`. Both are exposed on `ForecastResponse`/`PoolAggregateResponse` alongside `evidence_mass` (previously computed internally but never returned to callers); **neither feeds back into `mean`/`std`/`ci_low`/`ci_high`** — visibility only. Still populated on an abstained/off-topic result, mirroring `evidence_mass`/`thin_evidence`. |
 | `relevance_mass = Σ relevance²` | off-topic abstention (floor 0.05). **Deliberately still the raw square, not `relevance_weight`** (retro#394): this asks a different question — *is the whole set off-topic* — and its 0.05 floor was tuned against Σ`relevance²`. Routing it through the band table would silently retune the floor the moment those weights are changed. If the band weights are ever retuned, revisit this floor in the same commit. |
 | `settled_directions → settled` | settlement pin ±0.94 when ≥2 valid votes agree — the count is over **independent clusters**, not rows, whenever a cluster assignment exists (retro#372: two syndicated copies of one report are one observation; rows without claim text stay singletons, so a missing claim layer never costs a vote; matrix case C19). **Revalidated per vote** (`settlement_vote_validity`, default on): an occurrence-direction vote needs a parseable `settlement_event_date` within `[claim_created_at, claim_deadline]` (creation lower bound on every archetype since 2026-08-16) and ≤ its article's date; a non-occurrence vote needs a closed window (dated anchors at most `settlement_post_deadline_grace_days` past it, or an undated vote from an article published within that grace — else `stale_undated_foreclosure`) or a dated in-window foreclosure. Valid votes in BOTH directions ⇒ pin suppressed (`settlement_conflict`) — unanimity, not majority. Count alone isn't enough either: `settlement_quality_floor` (**0.20** since 2026-08-02, retro#279/#372 — calibrated against every pin production had published; 0 disables) additionally requires the winning direction's combined per-source weight to clear a bar, else the pin is suppressed (`settlement_quality_floor`). Kill switch `SETTLEMENT_REVALIDATE=false` restores flag-trusting majority vote + `settlement_direction_allowed`. |
-| `cluster_ids → weight × k^-exponent` | correlated-evidence discount (retro#355). Pool rows echoing one development are grouped by shingle-Jaccard over their `claims_detail` text (`clustering.py`), and each member of a cluster of size `k` is scaled by `k^-exponent`, so the cluster carries `k^(1-exponent)` rows' worth instead of `k`. **`cluster_downweight_exponent=0.0` ships it inert** — the identity — so nothing has moved. Applied FIRST, before `evidence_mass`, so the decisiveness floor is judged on independent mass rather than on echo. `relevance_mass` is deliberately NOT discounted (same reasoning as the band table above). |
+| `event_key_ids → weight × max/sum` | echo collapse, source-dependence Rule 1 (retro#780, umbrella #779, see 2026-09-03 entry below). Pool rows sharing an `event_key` (retro#682's paraphrase-invariant `(actor, target, day)` key, distinct from the Jaccard `cluster_ids` row below) are scaled so the group carries one row's worth: every member is multiplied by `max(group weights) / sum(group weights)`, which cancels out of the group's weighted-mean stance and leaves only its loudest member's mass. **`settings.event_key_dependence_collapse=True` ships it ON** — unlike every other row in this table, this is a structural-property justification (duplication invariance), not a backtest-gated one, so there is no exponent to tune. Applied before `cluster_ids`. |
+| `cluster_ids → weight × k^-exponent` | correlated-evidence discount (retro#355). Pool rows echoing one development are grouped by shingle-Jaccard over their `claims_detail` text (`clustering.py`), and each member of a cluster of size `k` is scaled by `k^-exponent`, so the cluster carries `k^(1-exponent)` rows' worth instead of `k`. **`cluster_downweight_exponent=0.0` ships it inert** — the identity — so nothing has moved. Applied after the event-key collapse above, before `evidence_mass`, so the decisiveness floor is judged on independent mass rather than on echo. `relevance_mass` is deliberately NOT discounted (same reasoning as the band table above). |
 | `insufficient_data, reason, placeholder, articles_used/found` | abstention encoding |
 
 Config constants (16): `recency_half_life_days=7`, `recency_floor=0.02`,
@@ -2491,13 +2492,13 @@ coverage collapse into one "story", and with the discount enabled that pool woul
 largest 24. The row-level `event_actors`/`event_target` fallback then buys +27% coverage
 (5,403 → 6,886 rows) with the largest cluster unchanged.
 
-**Reporting only. R8: no case moved.** `_cluster_ids` returns the same Jaccard ids it
-always did; the event key is logged *beside* the Jaccard numbers
-(`event_keyed`, `event_clusters`, `event_echoed_rows`, `event_largest`) so the two can be
-compared on identical pools before anything is switched over.
-`cluster_downweight_exponent` stays 0.0 and enabling the discount remains gated on #355's
-December backtest (#403). This changes the key the seam will use *when* it turns on, not
-whether it turns on.
+**Was reporting only through 2026-08-29; the Jaccard seam it was measured against still is.**
+`_cluster_ids` returns the same Jaccard ids it always did; the event key was logged *beside*
+the Jaccard numbers (`event_keyed`, `event_clusters`, `event_echoed_rows`, `event_largest`) so
+the two could be compared on identical pools before anything switched over.
+`cluster_downweight_exponent` still stays 0.0 and enabling *that* Jaccard-keyed discount remains
+gated on #355's December backtest (#403) — nothing here changes that. What changed on 09-03 is a
+**second, independent** seam keyed off this same `event_key`: see the retro#780 entry below.
 
 Normalisation is stdlib and deterministic — lowercase, punctuation stripped, leading
 article removed, multi-actor strings split on commas and **sorted** so "United States,
@@ -2582,3 +2583,42 @@ for exposure "in the response `diagnostics` block (Phase 2 shape,
 daatan#1644)", but that block (daatan#1644 §2.3) is itself an unbuilt stub on
 another repo's umbrella as of this writing — this PR is log-only until 2.3
 lands, the same shape `hazard_shadow_mean` (retro#356) ships in today.
+
+## 2026-09-03 — echo collapse, event-key-only (retro#780, source-dependence Rule 1, umbrella #779)
+
+`aggregation.event_key_collapse_factors`: the discount the 2026-08-29 event-key entry above
+said was reporting-only turns live here, on a **second, independent seam** — it does not enable
+`cluster_downweight_exponent` (that Jaccard-keyed discount, retro#355, is still 0.0 and still
+gated on #403). Rows sharing an `event_key` are scaled to one row's worth of weight: every
+member of a group is multiplied by `max(group weights) / sum(group weights)`. Because uniform
+scaling cancels out of a weighted average, this leaves the group's weighted-mean stance
+untouched while shrinking its total contribution to the pool from the sum of all echoing rows
+down to its single loudest member's — mathematically the same result as collapsing the group to
+one row (weighted-mean stance, max weight), without changing row count or breaking the
+per-row-indexed machinery (`forecaster.py`'s settlement voting, evidence-window logging,
+`leave_one_source_out_sensitivity`) that assumes index correspondence.
+
+**Event-key-only, not the umbrella's original combined spec.** `scripts/measure_dependence_key_780.py`
+(Step 0, merged in PR#788) measured both: the combined bar (event-key **and**
+`voice.attributed_to`/text-Jaccard corroboration) barely fires — 0.2% row collapse, 2.38pp max
+needle move, 0/120 pools ≥5pp — because `voice.attributed_to` fills only 2.7% of dominant claims
+today. Event-key-only collapses 2.3% of rows, moves up to 11.51pp, 1/120 pools ≥5pp. Mark's
+2026-09-03 `/dilemma` decision (retro#780 issue comment 5524245079) ships the looser, stronger
+bar now rather than waiting on `voice.attributed_to` coverage to grow.
+
+**Ships ON**, `settings.event_key_dependence_collapse=True` — the one setting in this document
+that defaults on without a resolved-forecast backtest behind it. The umbrella's premise
+(`Daatan/docs`/session memory `project_source_dependence_compensation_retro779.md`) is
+duplication invariance as a structural property, not a tuned magnitude, so there is no
+exponent and no #403-style gate to wait on, unlike `cluster_downweight_exponent` or
+`max_source_share`.
+
+**Composition order:** event-key collapse runs first among the correlated-evidence discounts —
+before the Jaccard `cluster_ids` row above, and before `harmonic_source_discount_factors`
+(retro#781, Rule 2), whose own docstring states it composes on top of Rule 1: once
+near-identical rows from one outlet collapse to one, what survives is already genuinely
+distinct coverage.
+
+**Changes already-published pool weights.** Per this repo's hard rule on `aggregation.py`
+changes, the republish sweep (daatan's `POST /api/admin/forecasts/republish`, dry-run first)
+has not been run as of this PR — that is Mark's call, post-merge.

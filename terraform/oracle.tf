@@ -39,7 +39,7 @@ resource "aws_instance" "oracle" {
     volume_size           = 30
     iops                  = 3000
     throughput            = 125
-    encrypted             = false
+    encrypted             = true
     delete_on_termination = false
   }
 

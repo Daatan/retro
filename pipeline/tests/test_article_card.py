@@ -75,6 +75,16 @@ class TestTextContainsAlias:
         # the card has to carry it.
         assert not text_contains_alias(normalize_for_match("חנוך מילבידסקי"), "מילביצקי")
 
+    def test_leading_matres_letter_is_required_not_optional(self):
+        # Regression (measured 2026-09-07 on the W1 fixture, retro#805): a name whose FIRST
+        # letter is י/ו — e.g. יואז (Yoaz) — is not an inserted vowel marker, so it must not
+        # be droppable the way a MEDIAL/final one is. Before the fix, "יואז" matched the bare
+        # word "אז" ("then") anywhere in an unrelated article: a false surface_form PASS on
+        # an article that never names the subject at all.
+        t = normalize_for_match("כבר אז התאספו מאחוריו דמויות בעלות פרופיל ציבורי")
+        assert not text_contains_alias(t, "יואז")
+        assert text_contains_alias(normalize_for_match("יואז הנדל אמר"), "יואז")
+
     def test_hebrew_final_forms_fold(self):
         assert text_contains_alias(normalize_for_match("סגלוביץ'"), "סגלוביצ")
         assert text_contains_alias(normalize_for_match("של רעם"), "רעמ")

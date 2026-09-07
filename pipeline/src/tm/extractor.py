@@ -1171,11 +1171,16 @@ def _alias_pattern(normalized_alias: str) -> str:
     some spellings and misses others (measured 2026-09-07: it gave שמריז/שמריץ and not the
     שימריז the Walla control uses — a false drop). Plene/defective variation is a closed
     rule, so it is handled here rather than begged from the model: inside a Hebrew word
-    every י/ו of the alias is optional, and one may appear after any other letter. Only
-    ever LOOSENS a match, and only within Hebrew script."""
+    a MEDIAL/FINAL י/ו of the alias is optional, and one may appear after any other letter.
+    The FIRST letter is always a required literal even when it is י/ו (a name's initial
+    consonant, e.g. יואז, is never an inserted/omitted vowel marker) — treating it as
+    optional made the alias "יואז" match the bare word "אז" ("then") anywhere in an
+    unrelated article, a false PASS on the trusted surface_form route (measured 2026-09-07
+    on the W1 fixture: retro#805). Only ever LOOSENS a match, and only within Hebrew
+    script."""
     out = []
-    for ch in normalized_alias:
-        if ch in _MATRES:
+    for i, ch in enumerate(normalized_alias):
+        if ch in _MATRES and i > 0:
             out.append(f"[{_MATRES}]?")
         elif _HEBREW_LETTER.match(ch):
             out.append(re.escape(ch) + f"[{_MATRES}]?")

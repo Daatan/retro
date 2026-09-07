@@ -254,23 +254,76 @@ def claim_weighted_stance(
     stances: Sequence[float],
     certainties: Sequence[float],
     specificities: Optional[Sequence[Optional[float]]] = None,
+    conditional_coefficients: Optional[Sequence[Optional[float]]] = None,
 ) -> float:
-    """Within-article aggregation: certainty(×specificity)-weighted mean stance.
+    """Within-article aggregation: certainty(×specificity×conditional-coefficient)-weighted
+    mean stance.
 
     A decisive claim ("they clinched it", certainty ≈ 1) dominates tangential,
     hedged claims (certainty ≈ 0.2) extracted from the same article, instead of
     being washed out by a flat mean. ``specificity`` is optional (the live
     extractor does not emit it) and defaults to a neutral 1.0.
+
+    ``conditional_coefficients`` (retro#568) attenuates a claim asserted only
+    *given* an antecedent ("if the court rules X, Y will happen"), which today
+    would otherwise vote as if asserted flat. None-safe like ``specificities``:
+    a missing list, or a ``None`` element, defaults to a neutral 1.0 — so a
+    caller that never computes coefficients (or a claim that isn't
+    conditional, per :func:`conditional_attenuation_coefficient`) reproduces
+    pre-#568 math exactly.
     """
     if not stances:
         raise ValueError("claim_weighted_stance requires at least one claim")
     if specificities is None:
         specificities = [None] * len(stances)
+    if conditional_coefficients is None:
+        conditional_coefficients = [None] * len(stances)
     weights = [
-        c * (sp if sp is not None else 1.0)
-        for c, sp in zip(certainties, specificities)
+        c * (sp if sp is not None else 1.0) * (cc if cc is not None else 1.0)
+        for c, sp, cc in zip(certainties, specificities, conditional_coefficients)
     ]
     return weighted_mean(list(stances), weights)
+
+
+# Ordinal strength -> attenuation coefficient (retro#568, Phase 4 of
+# docs/CONDITIONAL_CAPTURE.md). "certain" reads as close to unconditional in
+# practice ("if the court rules X, which it basically will, Y follows") through
+# "unlikely" reads as mostly a hedge. Missing/unrecognised strength on a
+# conditional claim lands on the neutral midpoint, deliberately below the 1.0
+# an unconditional claim gets — the claim is still conditional even without a
+# reported strength.
+_CONDITIONAL_STRENGTH_COEFFICIENTS: dict[str, float] = {
+    "certain": 0.9,
+    "likely": 0.7,
+    "possible": 0.5,
+    "unlikely": 0.3,
+}
+_CONDITIONAL_STRENGTH_NEUTRAL = 0.5
+
+
+def conditional_attenuation_coefficient(
+    is_conditional: Optional[bool],
+    strength: Optional[str],
+    stated_probability: Optional[float],
+) -> Optional[float]:
+    """Per-claim conditional-attenuation coefficient (retro#568, shadow-only until
+    the min-n Brier gate in docs/CONDITIONAL_CAPTURE.md clears).
+
+    Returns ``None`` when ``is_conditional`` is not True — :func:`claim_weighted_stance`'s
+    own None-safe default then applies a neutral 1.0, so unconditional claims
+    (the large majority of the corpus) are byte-identical to pre-#568 behaviour.
+
+    When conditional: ``stated_probability`` (the source's own explicit
+    P(consequent|antecedent), when given) is used directly, as a strictly more
+    precise version of the same signal ``strength`` encodes qualitatively.
+    Otherwise ``strength`` maps through the ordinal table above; a missing or
+    unrecognised strength on a conditional claim falls to the neutral midpoint.
+    """
+    if not is_conditional:
+        return None
+    if stated_probability is not None:
+        return stated_probability
+    return _CONDITIONAL_STRENGTH_COEFFICIENTS.get(strength, _CONDITIONAL_STRENGTH_NEUTRAL)
 
 
 def resolve_stance_certainty(

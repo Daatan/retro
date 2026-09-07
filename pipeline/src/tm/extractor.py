@@ -1357,10 +1357,12 @@ async def extract_predictions(
     different model/cost tradeoff (e.g. a benchmark harness with a wider latency budget) pass one
     in; nothing here decides what a caller should choose.
     """
-    # retro#803/#805: max_tokens 1200 -> 1500 below. 1200 already truncated v14 output on
-    # quote-rich articles (every model), and the v15 article card adds ~60-120 output tokens
-    # per call; a cap is not a cost, only a ceiling, so raising it changes nothing for the
-    # calls that fit and rescues the ones that did not.
+    # retro#803/#805: max_tokens 1200 -> 2200 below. 1200 already truncated v14 output on
+    # quote-rich Hebrew articles; measured 2026-09-07 on the retro#545 A/B fixture (11 cases
+    # x3 runs, Haiku, v15 prompt, no cap): completion tokens ranged up to 1,950 on a 5-claim
+    # multi-actor article, with 1,200 already truncating 6/33 runs and 1,500 still truncating
+    # 6/33. 2,200 gives ~13% headroom over the observed max. A cap is not a cost, only a
+    # ceiling — raising it changes nothing for calls that already fit.
     # retro#801: neutralise in-word ASCII gershayim before the model can copy them unescaped
     # into `quote`. Done here, not in the callers, so the pool-fill path (forecaster) and the
     # batch runner get the same text.
@@ -1390,7 +1392,7 @@ async def extract_predictions(
 
     async def _call_extractor():
         return await complete_structured(
-            model or settings.extractor_model, ExtractionOutput, prompt, max_tokens=1500, timeout=180,
+            model or settings.extractor_model, ExtractionOutput, prompt, max_tokens=2200, timeout=180,
             cached_prefix=None if is_single_article else PROMPT_PREFIX,
         )
 

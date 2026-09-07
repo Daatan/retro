@@ -1094,6 +1094,29 @@ def has_conditional_language(text: str) -> bool:
 # Instruction block for extracting conditional fields; all 9 fields are nullable, so this
 # block is purely informational — when omitted, the model defaults them to null.
 # PRE-RESOLUTION: these fields are recorded BEFORE the enforce_* chain (conditional-capture-phase1.md §3.3).
+# retro#801 — ASCII `"` doubling as the Hebrew gershayim (יו"ר, ח"כ, צה"ל, רה"מ, עו"ד, מנכ"ל).
+# Haiku copies the article's quote verbatim into the JSON `quote` field and, when the
+# abbreviation opens the quote string, does not escape the inner `"` — instructor's JSON parse
+# fails and the whole article is lost (forecaster: `article_unhandled_error`; runner: cell
+# `failed`). Rewriting the character to U+05F4 ״ *before* the text reaches the model removes
+# the hazard at the source: the model copies ״ faithfully (seen on kikar articles that already
+# use it) and the quote stays verbatim w.r.t. the text it was given. Only a `"` flanked by
+# Hebrew letters on both sides is touched — quoted speech opened after a space ("קומו") is
+# left alone, which is also the form the model escapes correctly. A quote glued to a
+# one-letter prefix (ו"קומו", ב"הארץ") IS rewritten: by shape it is indistinguishable from a
+# suffixed abbreviation (ח"כים, דו"חות), and ״ is itself a standard Hebrew quotation mark, so
+# the text keeps its meaning either way.
+_HEBREW_INNER_ASCII_QUOTE = re.compile(r'(?<=[\u05D0-\u05EA])"(?=[\u05D0-\u05EA])')
+
+
+def normalize_hebrew_gershayim(text: str) -> str:
+    """Return ``text`` with every ASCII ``"`` that sits between two Hebrew letters replaced by
+    U+05F4 (HEBREW PUNCTUATION GERSHAYIM). Idempotent; a no-op on text with no such quote."""
+    if not text or '"' not in text:
+        return text
+    return _HEBREW_INNER_ASCII_QUOTE.sub("\u05f4", text)
+
+
 _CONDITIONAL_BLOCK = """
 
 ## CONDITIONAL (v1.1 — Phase 1 capture)
@@ -1236,6 +1259,10 @@ async def extract_predictions(
     different model/cost tradeoff (e.g. a benchmark harness with a wider latency budget) pass one
     in; nothing here decides what a caller should choose.
     """
+    # retro#801: neutralise in-word ASCII gershayim before the model can copy them unescaped
+    # into `quote`. Done here, not in the callers, so the pool-fill path (forecaster) and the
+    # batch runner get the same text.
+    article_text = normalize_hebrew_gershayim(article_text)
     prompt = PROMPT_SUFFIX.format(
         article_text=article_text,
         source_name=source_name,

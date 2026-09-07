@@ -430,6 +430,8 @@ class TestTheReductionReplaysFromPersistedClaims:
             class_weights=settings.evidence_class_weight,
             class_weight_default=settings.evidence_class_weight_default,
             class_weight_unclassified_cap=settings.evidence_class_weight_unclassified_cap,
+            conditional_attenuation_enabled=settings.conditional_attenuation_enabled,
+            conditional_attenuation_enforce=settings.conditional_attenuation_enforce,
         )
 
     @staticmethod

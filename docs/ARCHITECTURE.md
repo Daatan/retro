@@ -244,11 +244,14 @@ only when the antecedent (court rules X) resolves. Divorcing this from the uncon
 (treat as ordinary evidence regardless) inflates forecaster confidence in claims that rest on
 unresolved preconditions. The plan (3 phases) is to:
 1. **Phase 1 (DONE):** Capture conditionals on shadow lane (zero scoring impact yet)
-2. **Phase 2 (TBD):** Measure Brier delta; decide if attenuation is worth the complexity
-3. **Phase 4 (TBD):** Gate on `is_conditional=True` to attenuate certainty weights
+2. **Phase 2 (in progress, retro#567):** Measure Brier delta; decide if attenuation is worth the complexity
+3. **Phase 4 (retro#568): shadow-computed + logged, `enforce` pending the min-n Brier gate.**
+   Seam is `reduce_article()`/`claim_weighted_stance()` in `api/src/forecast_api/forecaster.py`
+   and `aggregation.py` — see `CONDITIONAL_CAPTURE.md`'s Phase 4 section for the coefficient
+   table and config flags.
 
 **Fields (all Optional, default None):**
-- `is_conditional` — True when the claim is conditional on an antecedent; gate for Phase 4 attenuation
+- `is_conditional` — True when the claim is conditional on an antecedent; Phase 4 attenuation trigger (retro#568)
 - `antecedent_text` — Verbatim "if"-clause from the article (original language)
 - `antecedent_text_en` — English canonical form; the ONLY field used for antecedent→question embedding/linking (§3.4)
 - `antecedent_polarity` — False if the antecedent is negated ("if NOT X")
@@ -263,7 +266,7 @@ The extractor uses a cheap lexical pre-filter (12 keywords: if, unless, should, 
 
 **Safety:** The settlement-match gate (retro#388, which reads claim/quote/event_date/settled) is unaffected by the new conditional fields. Test `test_settlement_gate_unchanged_with_conditional_fields()` verifies this.
 
-**Backward compatibility:** All fields are Optional and nullable; old articles missing them parse fine. Scoring systems unchanged until Phase 4.
+**Backward compatibility:** All fields are Optional and nullable; old articles missing them parse fine. Live scoring (`stance`/`fact_signal`) is unaffected while `conditional_attenuation_enforce=False` (current state) — Phase 4 ships shadow-only.
 
 Full field docs: `PredictionExtraction` in `pipeline/src/tm/models.py`; `ClaimDetail` in `api/src/forecast_api/models.py`.
 

@@ -422,6 +422,27 @@ class ApiSettings(BaseSettings):
     # (prod, 2026-08-01): 33 of 5729 COMPLETE pool rows are unclassified (0.6%),
     # all of them above the cap (certainty 0.38–0.74, mean 0.58).
     evidence_class_weight_unclassified_cap: float = 0.25
+    # Conditional-claim attenuation (retro#568, Phase 4 of
+    # docs/CONDITIONAL_CAPTURE.md). A claim asserted only *given* an antecedent
+    # ("if the court rules X, Y will happen") today votes into
+    # claim_weighted_stance() as if asserted flat. When enabled, reduce_article()
+    # additionally computes an ATTENUATED stance/fact_signal — each conditional
+    # claim's weight multiplied by conditional_attenuation_coefficient()
+    # (aggregation.py): the source's own stated_probability directly when given,
+    # else an ordinal table on strength (certain 0.9 / likely 0.7 / possible 0.5 /
+    # unlikely 0.3 / missing 0.5) — and shadow-logs the delta against the live
+    # value (event=conditional_attenuation_shadow).
+    #
+    # `enabled` ships True: shadow computation + logging is live on merge/deploy,
+    # at effectively zero cost — the extra weighted-mean call only runs on the
+    # small minority of articles carrying a conditional claim.
+    # `enforce` ships False: the shadow value is never substituted into the live
+    # stance/fact_signal that flows into SourceSignal. Flipping to True is a
+    # separate follow-up PR, gated on the min-n Brier thresholds in the issue (30
+    # reportable / 100 decisive resolutions) clearing on the shadow log — same
+    # shadow-then-promote shape as the resolution_shadow_* settings below.
+    conditional_attenuation_enabled: bool = True
+    conditional_attenuation_enforce: bool = False
     # Syndication dedupe: two search results are treated as the same (re-hosted)
     # story when their title-token Jaccard is >= this. Kept high so genuinely
     # different stories sharing a topic word are not merged; only true re-prints

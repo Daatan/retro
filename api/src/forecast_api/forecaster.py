@@ -161,6 +161,7 @@ from .aggregation import (
     PoolAggregateResult,
     aggregate_pool,
     claim_weighted_stance,
+    conditional_attenuation_coefficient,
     event_date_state,
     evidence_class_weight,
     recency_weight,
@@ -423,6 +424,10 @@ class ArticleReduction:
     Same formulas, same order of operations, same floats as before — this is a
     refactor. Any implementation of it that MOVES a number has quietly imported
     R1 (claim-level weighting), which is Phase 2 and gated on the shadow pool.
+    The one deliberate exception is `conditional_attenuation_enforce` (retro#568):
+    when that flag is True, `stance`/`fact_signal` DO move for articles carrying
+    a conditional claim — that is the point of flipping it, and it only happens
+    after the min-n Brier gate in docs/CONDITIONAL_CAPTURE.md clears.
     """
     stance: float
     certainty: float
@@ -445,6 +450,16 @@ class ArticleReduction:
     grounds: Optional[Grounds]
     reader_confidence_level: Optional[str]
     reader_confidence_traps: Optional[list[str]]
+    # retro#568 (Phase 4 of docs/CONDITIONAL_CAPTURE.md) — the attenuated
+    # counterpart of `stance`/`fact_signal`, computed only when
+    # `conditional_attenuation_enabled` and at least one claim in the
+    # relevant subset is conditional. `None` in the (overwhelmingly common)
+    # steady state: the flag is off, or the article has no conditional
+    # claims. When `conditional_attenuation_enforce` is also True, `stance`/
+    # `fact_signal` above already ARE these values — the shadow field then
+    # duplicates the live one so the delta reads as zero, not as missing.
+    stance_conditional_shadow: Optional[float] = None
+    fact_signal_conditional_shadow: Optional[float] = None
 
 
 def _reader_confidence_rollup(
@@ -488,6 +503,8 @@ def reduce_article(
     class_weights: dict,
     class_weight_default: float,
     class_weight_unclassified_cap: float,
+    conditional_attenuation_enabled: bool = False,
+    conditional_attenuation_enforce: bool = False,
 ) -> ArticleReduction:
     """Collapse one article's claims into the scalars the pool consumes.
 
@@ -510,9 +527,22 @@ def reduce_article(
       others: worst level over all claims, traps collected rather than voted.
       See ``_reader_confidence_rollup`` for why neither a mean nor a vote works.
 
+    ``conditional_attenuation_enabled``/``_enforce`` (retro#568): a claim
+    asserted only *given* an antecedent (``is_conditional=True``) today votes
+    into ``stance``/``fact_signal`` as if asserted flat. When ``enabled``, this
+    function additionally computes the attenuated value (see
+    :func:`conditional_attenuation_coefficient`) into
+    ``stance_conditional_shadow``/``fact_signal_conditional_shadow`` — cost is
+    near zero on an article with no conditional claims, the overwhelming
+    common case. ``enforce`` decides whether the attenuated value becomes the
+    live ``stance``/``fact_signal`` this function returns; both default False
+    so a caller passing neither reproduces pre-#568 math exactly, which two
+    existing test call sites rely on.
+
     Pure: takes claims and configuration, touches no globals, and is therefore
     replayable over persisted ``claims_detail`` rows — which is the whole point
-    of keeping them (retroactive backtesting, R1 fitting, F3 attribution).
+    of keeping them (retroactive backtesting, R1 fitting, F3 attribution). The
+    two new parameters keep this: they're passed in, never read off ``settings``.
     """
     # Settlement-grade gate: the extractor's own stated rule, enforced in code.
     # A settled claim that fails it is demoted to ordinary evidence — it still
@@ -528,10 +558,28 @@ def reduce_article(
     demoted = sum(1 for c in claims if c.settled) - len(settled_claims)
     scored = settled_claims or claims
 
-    stance = claim_weighted_stance(
+    stance_unattenuated = claim_weighted_stance(
         [c.stance for c in scored],
         [c.certainty for c in scored],
         [c.specificity for c in scored],
+    )
+    stance_conditional_shadow = None
+    if conditional_attenuation_enabled:
+        stance_coefficients = [
+            conditional_attenuation_coefficient(c.is_conditional, c.strength, c.stated_probability)
+            for c in scored
+        ]
+        if any(cc is not None for cc in stance_coefficients):
+            stance_conditional_shadow = claim_weighted_stance(
+                [c.stance for c in scored],
+                [c.certainty for c in scored],
+                [c.specificity for c in scored],
+                stance_coefficients,
+            )
+    stance = (
+        stance_conditional_shadow
+        if (conditional_attenuation_enforce and stance_conditional_shadow is not None)
+        else stance_unattenuated
     )
     certainty = sum(c.certainty for c in claims) / len(claims)
     # S2 cutover: evidence-class weight replaces certainty as the linear factor
@@ -559,11 +607,35 @@ def reduce_article(
     # compares like with like; None when no scored claim carried a fact_signal.
     fact_claims = [c for c in scored if c.fact_signal is not None]
     if fact_claims:
-        fact_signal = claim_weighted_stance(
+        fact_signal_unattenuated = claim_weighted_stance(
             [c.fact_signal for c in fact_claims],
             [c.certainty for c in fact_claims],
             [c.specificity for c in fact_claims],
         )
+        fact_signal_conditional_shadow = None
+        if conditional_attenuation_enabled:
+            # Recomputed over fact_claims, not sliced from stance_coefficients above —
+            # fact_claims is a different subset of scored (only claims that carry a
+            # fact_signal), so its conditional coefficients must be their own list.
+            fact_coefficients = [
+                conditional_attenuation_coefficient(c.is_conditional, c.strength, c.stated_probability)
+                for c in fact_claims
+            ]
+            if any(cc is not None for cc in fact_coefficients):
+                fact_signal_conditional_shadow = claim_weighted_stance(
+                    [c.fact_signal for c in fact_claims],
+                    [c.certainty for c in fact_claims],
+                    [c.specificity for c in fact_claims],
+                    fact_coefficients,
+                )
+        fact_signal = (
+            fact_signal_conditional_shadow
+            if (conditional_attenuation_enforce and fact_signal_conditional_shadow is not None)
+            else fact_signal_unattenuated
+        )
+        # `dominant` stays keyed on the raw (unattenuated) fact_signal magnitude —
+        # attenuation only softens the article-level MEAN, it deliberately does not
+        # change which claim's facets (event_actors/event_target/tone/...) ride along.
         dominant = max(fact_claims, key=lambda c: abs(c.fact_signal))
         event_actors, event_target = dominant.event_actors, dominant.event_target
         is_occurrence, verified = dominant.is_occurrence, dominant.verified
@@ -580,6 +652,7 @@ def reduce_article(
         fact_signal_absent_reason = None
     else:
         fact_signal = None
+        fact_signal_conditional_shadow = None
         event_actors = event_target = None
         is_occurrence = verified = None
         facet = None
@@ -619,6 +692,8 @@ def reduce_article(
         grounds=grounds,
         reader_confidence_level=reader_confidence_level,
         reader_confidence_traps=reader_confidence_traps,
+        stance_conditional_shadow=stance_conditional_shadow,
+        fact_signal_conditional_shadow=fact_signal_conditional_shadow,
     )
 
 
@@ -2389,11 +2464,30 @@ async def _run_forecast_inner(
             class_weights=settings.evidence_class_weight,
             class_weight_default=settings.evidence_class_weight_default,
             class_weight_unclassified_cap=settings.evidence_class_weight_unclassified_cap,
+            conditional_attenuation_enabled=settings.conditional_attenuation_enabled,
+            conditional_attenuation_enforce=settings.conditional_attenuation_enforce,
         )
         if reduction.settlement_demoted:
             logger.info(
                 "event=settlement_demoted url=%s demoted=%d (below stance/certainty gates)",
                 result.url, reduction.settlement_demoted,
+            )
+        if reduction.stance_conditional_shadow is not None:
+            # Fires only on an article carrying a conditional claim (retro#568) —
+            # `reduction.stance_conditional_shadow` is None otherwise, per
+            # reduce_article()'s own guard — so this stays quiet on the ~97% of
+            # articles with none, not one line per forecast.
+            n_conditional = sum(1 for c in claims_detail if c.is_conditional)
+            logger.info(
+                "event=conditional_attenuation_shadow url=%s question_hash=%s "
+                "n_scored=%d n_conditional=%d stance_live=%.4f stance_attenuated=%.4f "
+                "stance_delta=%.4f fact_signal_live=%s fact_signal_attenuated=%s enforce=%s",
+                result.url, _question_hash(req.question),
+                len(claims_detail), n_conditional,
+                reduction.stance, reduction.stance_conditional_shadow,
+                reduction.stance_conditional_shadow - reduction.stance,
+                reduction.fact_signal, reduction.fact_signal_conditional_shadow,
+                settings.conditional_attenuation_enforce,
             )
         avg_stance = reduction.stance
         avg_certainty = reduction.certainty

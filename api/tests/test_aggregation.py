@@ -16,6 +16,7 @@ from forecast_api.aggregation import (
     cap_source_mass,
     capped_weight_count,
     claim_weighted_stance,
+    conditional_attenuation_coefficient,
     effective_sample_size,
     event_key_collapse_factors,
     evidence_class_weight,
@@ -170,6 +171,55 @@ class TestClaimWeightedStance:
     def test_empty_raises(self):
         with pytest.raises(ValueError):
             claim_weighted_stance([], [])
+
+    def test_conditional_coefficient_multiplies_weight(self):
+        # Equal stance/certainty/specificity; only the coefficient differs —
+        # mirrors test_specificity_multiplies_weight above.
+        stances = [1.0, -1.0]
+        certainties = [1.0, 1.0]
+        coefficients = [1.0, 0.0]
+        assert claim_weighted_stance(stances, certainties, None, coefficients) == pytest.approx(1.0)
+
+    def test_conditional_coefficients_none_preserves_old_behavior(self):
+        stances = [1.0, 0.2, 0.2, 0.2]
+        certainties = [1.0, 0.1, 0.1, 0.1]
+        without = claim_weighted_stance(stances, certainties)
+        with_none_list = claim_weighted_stance(stances, certainties, None, [None] * 4)
+        assert without == with_none_list
+
+    def test_all_conditional_zero_falls_back_to_plain_mean(self):
+        # A coefficient of 0.0 for every claim (e.g. every stated_probability is a
+        # real 0.0, not "unset") collapses total weight to 0 — this must hit
+        # weighted_mean's existing zero-total fallback, not raise.
+        stances = [0.2, 0.8]
+        certainties = [1.0, 1.0]
+        coefficients = [0.0, 0.0]
+        assert claim_weighted_stance(stances, certainties, None, coefficients) == pytest.approx(0.5)
+
+
+class TestConditionalAttenuationCoefficient:
+    def test_not_conditional_returns_none_regardless_of_strength(self):
+        assert conditional_attenuation_coefficient(False, "unlikely", None) is None
+        assert conditional_attenuation_coefficient(None, "certain", None) is None
+
+    @pytest.mark.parametrize(
+        "strength,expected",
+        [("certain", 0.9), ("likely", 0.7), ("possible", 0.5), ("unlikely", 0.3)],
+    )
+    def test_strength_table(self, strength, expected):
+        assert conditional_attenuation_coefficient(True, strength, None) == pytest.approx(expected)
+
+    def test_missing_strength_is_neutral(self):
+        assert conditional_attenuation_coefficient(True, None, None) == pytest.approx(0.5)
+
+    def test_unrecognised_strength_falls_to_neutral(self):
+        assert conditional_attenuation_coefficient(True, "garbage", None) == pytest.approx(0.5)
+
+    def test_stated_probability_overrides_strength(self):
+        assert conditional_attenuation_coefficient(True, "unlikely", 0.85) == pytest.approx(0.85)
+
+    def test_stated_probability_zero_is_a_real_value_not_unset(self):
+        assert conditional_attenuation_coefficient(True, "certain", 0.0) == pytest.approx(0.0)
 
 
 class TestPoolSources:

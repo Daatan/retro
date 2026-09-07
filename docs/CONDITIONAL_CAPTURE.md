@@ -1,8 +1,9 @@
 # Conditional Claims Extraction — Phase 1 Capture
 
 **Status:** Phase 1 (capture) shipped 2026-08-09, PR #504  
-**Phase 2:** Measurement (Brier delta analysis) — pending  
-**Phase 4:** Attenuation (scoring integration) — pending  
+**Phase 2:** Measurement (Brier delta analysis) — in progress (retro#567)  
+**Phase 4:** Attenuation — shadow-computed + logged (retro#568), `enforce` pending the min-n
+Brier gate below  
 
 ---
 
@@ -241,11 +242,43 @@ keep recording but don't gate.
 
 ---
 
-## Phase 4: Attenuation Scoring (If Phase 2 Green-Lights)
+## Phase 4: Attenuation Scoring (retro#568)
 
-Attenuate claims where `is_conditional=True` by multiplying into certainty weight in
-`forecaster.py:268` (per-claim weighting). Gate only activates if Phase 2 measurement shows
-conditional handling improves forecast accuracy.
+Shadow-computed and logged since 2026-09, shipped ahead of Phase 2's formal green-light per
+Mark's explicit go-ahead — the min-n Brier gate below is what decides whether it starts
+affecting live scoring, not this PR's merge.
+
+**Seam:** `reduce_article()` in `api/src/forecast_api/forecaster.py` — both the `stance` and
+`fact_signal` claim-weighted-mean computations. Each conditional claim's weight is multiplied by
+`conditional_attenuation_coefficient()` (`api/src/forecast_api/aggregation.py`), a new optional
+argument to `claim_weighted_stance()` alongside `specificity`.
+
+**Coefficient:** `stated_probability` (the source's own explicit P(consequent\|antecedent), when
+given) directly; otherwise an ordinal table on `strength`:
+
+| `strength` | coefficient |
+|---|---|
+| certain | 0.9 |
+| likely | 0.7 |
+| possible | 0.5 |
+| unlikely | 0.3 |
+| missing/unrecognised | 0.5 (neutral) |
+
+An unconditional claim (`is_conditional` not True) gets no coefficient at all — `claim_weighted_stance`'s
+own None-safe default then applies a neutral 1.0, so the large majority of claims are
+byte-identical to pre-#568 math.
+
+**Config (`api/src/forecast_api/config.py`):**
+- `conditional_attenuation_enabled: bool = True` — shadow computation + structured logging
+  (`event=conditional_attenuation_shadow`) is live on every forecast whose article carries a
+  conditional claim.
+- `conditional_attenuation_enforce: bool = False` — the shadow value is NOT substituted into the
+  live `stance`/`fact_signal` yet.
+
+**Min-n Brier gate (from the issue, not yet measured against):** 30 reportable / 100 decisive
+resolutions on the conditional-vs-unconditional Brier delta. Flipping `enforce` to `True` is a
+separate follow-up PR once that clears — this PR does not build a gate-checker, only the shadow
+log the gate gets measured from.
 
 ---
 
@@ -263,7 +296,14 @@ conditional handling improves forecast accuracy.
 
 All tests in `api/tests/test_claims_detail.py::TestConditionalFields`.
 
-Full suite: 696 API tests + 679 pipeline tests (1,375 total) all pass.
+**Phase 4 test coverage (retro#568):**
+
+| Test | Purpose |
+|---|---|
+| `test_aggregation.py::TestConditionalAttenuationCoefficient` | Strength table, stated_probability override, is_conditional gate |
+| `test_aggregation.py::TestClaimWeightedStance` (new cases) | Coefficient multiplies weight; None-safe; zero-weight fallback |
+| `test_conditional_attenuation.py::TestReduceArticleConditionalShadow` | enabled/enforce flag matrix, no-conditional-claims steady state, fact_signal subset correctness, dominant-claim selection unaffected |
+| `test_conditional_attenuation.py::TestConditionalAttenuationShadowLog` | Shadow log fires only when a conditional claim is present |
 
 ---
 
@@ -281,6 +321,8 @@ Full suite: 696 API tests + 679 pipeline tests (1,375 total) all pass.
 
 **Tests:**
 - `api/tests/test_claims_detail.py::TestConditionalFields` — 5 tests
+- `api/tests/test_conditional_attenuation.py` — Phase 4 shadow attenuation (retro#568)
+- `api/tests/test_aggregation.py::TestConditionalAttenuationCoefficient` — coefficient helper
 - Pipeline integration: all extractor tests pass
 
 **Documentation:**
@@ -298,9 +340,9 @@ we've already collapsed stance/certainty via rules that assume unconditional cla
 Splitting conditional capture to pre-resolution preserves auditability.
 
 **Q: Why not gate on something other than is_conditional?**  
-A: Phase 4 will use `is_conditional=True` as the attenuation trigger. If a claim isn't
-marked conditional, we treat it as ordinary evidence (status quo). Once measurement
-confirms conditionals matter, we attenuate only those marked true.
+A: Phase 4 uses `is_conditional=True` as the attenuation trigger (retro#568). If a claim isn't
+marked conditional, it is treated as ordinary evidence (status quo, coefficient absent → neutral
+1.0). Only claims marked true get attenuated, by `strength`/`stated_probability`.
 
 **Q: What if the lexical pre-filter misses a conditional?**  
 A: Phase 2 will measure the false-negative rate via 5% bypass probe. If it's >5%,
@@ -324,8 +366,9 @@ Mark will decide.
 | 2026-08-09 | Phase 1 merged (PR #504) | ✅ DONE |
 | 2026-08-09 | Documentation updated | ✅ DONE |
 | 2026-09-15 (est.) | Sufficient data for measurement | ⏳ PENDING |
-| TBD | Phase 2 measurement complete | ⏳ PENDING |
-| TBD | Phase 4 attenuation shipped (if approved) | ⏳ PENDING |
+| TBD | Phase 2 measurement complete (retro#567) | ⏳ PENDING |
+| 2026-09 | Phase 4 shadow attenuation shipped (retro#568), `enforce=False` | ✅ DONE |
+| TBD | `enforce` flipped once the min-n Brier gate clears | ⏳ PENDING |
 
 ---
 

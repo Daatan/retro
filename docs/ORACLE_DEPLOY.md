@@ -45,7 +45,14 @@ There are three supported ways to deploy. **Normal operation is path 1 — do no
 
 #### 1. Automatic: merge to `main`
 
-`.github/workflows/deploy-oracle.yml` runs on every push to `main` that touches `api/**`, `pipeline/**`, `infra/deploy_oracle.sh`, `infra/oracle-api.service`, or the workflow file itself. It authenticates to AWS via OIDC, calls `aws ssm send-command` against the box, waits for completion, and prints the deploy script's stdout/stderr into the Actions log. A `no-op` fast-path in `deploy_oracle.sh` makes the workflow cheap when the resolved HEAD already matches what's on the box.
+`.github/workflows/deploy-oracle.yml` runs on every push to `main` that touches `api/**`,
+`pipeline/**`, `metaculus/**`, `infra/deploy_oracle.sh`, `infra/oracle-api.service`,
+`infra/metaculus-sync.service`, `infra/metaculus-sync.timer`, `infra/install_metaculus_timer.sh`,
+or the workflow file itself **[CORRECTED 2026-09-07 — the metaculus paths were added later and
+this list had gone stale]**. It authenticates to AWS via OIDC, calls `aws ssm send-command`
+against the box, waits for completion, and prints the deploy script's stdout/stderr into the
+Actions log. A `no-op` fast-path in `deploy_oracle.sh` makes the workflow cheap when the resolved
+HEAD already matches what's on the box.
 
 Manual trigger (for rollbacks or redeploying the same SHA): **Actions → Deploy Oracul API → Run workflow**, optionally pinning `ref` to a prior commit.
 

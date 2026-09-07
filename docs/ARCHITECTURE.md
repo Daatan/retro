@@ -319,11 +319,19 @@ git push → GitHub Actions → GitHub Pages
 | Role | Model | Notes |
 |---|---|---|
 | Gatekeeper | `bedrock/amazon.nova-micro-v1:0` | Topic-relevance filter: is this article on-topic for the event? Uses a directive coarse-gate prompt that passes INDIRECT evidence (rival collapse, coalition dynamics, etc.), not just explicit predictions; regression-guarded by `pipeline/eval_gatekeeper.py`. |
-| Extractor | `bedrock/amazon.nova-lite-v1:0` | Structured extraction of up to 5 predictions per article (14 requested fields — see "Prediction (extracted by LLM)" above) |
+| Extractor | `bedrock/amazon.nova-lite-v1:0` (batch `truthmachine.service` only) | Structured extraction of up to 5 predictions per article (14 requested fields — see "Prediction (extracted by LLM)" above) |
 | Article Aggregator | `bedrock/amazon.nova-lite-v1:0` | Collapses high-spread (>0.4) predictions within a single article into one editorial signal |
 | Keywords | `bedrock/amazon.nova-micro-v1:0` | One-time: generate search keywords per event (via `tm.llm`) |
 
 All defaults via AWS Bedrock. Override via env vars in `pipeline/src/tm/config.py`. The `model_api_base` and `model_api_key` settings allow routing through any LiteLLM-compatible provider (OpenRouter, etc.).
+
+**[CORRECTED 2026-09-07] The Extractor row above is the batch-lane default only.** The live
+`oracle-api.service` (the `/forecast` path most callers hit) overrides `EXTRACTOR_MODEL` to
+`bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0` via a committed systemd drop-in
+(`infra/oracle-api.service.d/extractor-model.conf`) — a deliberate quality-over-cost call after
+Nova Lite failed an adjacent-event A/B. The example response further down this doc already shows
+the correct live value (`"extractor": "claude-haiku-4-5"`); this table previously contradicted
+it. See `retro/CLAUDE.md`'s infra cheat-sheet for the same note.
 
 Before shipping ANY extractor prompt edit, run the A/B harness against a fixed case sample on the live model — see [`docs/AB_HARNESS.md`](./AB_HARNESS.md) (retro#470).
 

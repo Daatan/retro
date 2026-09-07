@@ -27,7 +27,7 @@ probability, compare to the price, find an edge — plus general forecasting.
 | `search_news(query, limit?, date_from?, date_to?)` | `read` | 60/min | News search via the provider chain |
 | `fetch_article(url)` | `read` | 30/min | Fetch + extract one article (SSRF-guarded) |
 | `bayes_nodes(observations?)` | `read` | none | BayesOracle Israeli-politics DAG probabilities |
-| `source_leaderboard()` | `read` | none | Live source-credibility ranking |
+| `source_leaderboard()` | `read` | none | **[CORRECTED 2026-09-07]** A frozen snapshot of the legacy vault leaderboard, not live — check `snapshot_date` in the response. See `Daatan/docs/oracle-mcp.md`, which already documents this correctly. |
 
 `forecast` / `polymarket_edge` are **slow** (a live news + LLM pipeline — tens of
 seconds, occasionally past the 120s proxy timeout) and cost LLM + search credits,

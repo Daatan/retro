@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import unicodedata
 from datetime import date, timedelta
 from typing import Optional
 
@@ -889,6 +890,19 @@ Example: {{"predictions": [ {{...}}, {{...}} ], "author_lean": 0.6, "author_lean
 0.5, "consensus_view": "expects_yes", "claim_actor": {{"name": "Party Y", "type": "party"}}, \
 "claim_predicate": "withdraws from the parliamentary race", "claim_scope": "at least one \
 party, before the election"}}
+ARTICLE_CARD — also REQUIRED at top level, on every call, even when "predictions" is empty: \
+"article_card" ({{"named_actors": [{{"span": string, "name_en": string}}, ...], \
+"bears_on_question": boolean}}). "named_actors" lists up to 6 of the people, parties, \
+companies, countries or institutions the ARTICLE ITSELF names most prominently: "span" is \
+the name EXACTLY as it is written in the article — original language and spelling, copied \
+verbatim, never translated or normalised (every span is checked against the article text and \
+a span that is not in it is discarded); "name_en" is that same name in English. This is who \
+the ARTICLE is about, not who the related event is about — if the event's subject is never \
+named in the article, it does not appear here. "bears_on_question" is true only when the \
+article reports something about the related event's own subject, and false when the article \
+is about a different person, party or matter, however adjacent.
+Example: "article_card": {{"named_actors": [{{"span": "Party Y", "name_en": "Party Y"}}, \
+{{"span": "Minister X", "name_en": "Minister X"}}], "bears_on_question": true}}
 
 Each prediction has five core fields, plus several used only when applicable:
   quote (string — original language), claim (string — English), \
@@ -975,7 +989,8 @@ Example — related event: "Assad regime falls in Syria":
   "consensus_view": "expects_yes",
   "claim_actor": {{"name": "the Assad regime", "type": "institution"}},
   "claim_predicate": "falls from power",
-  "claim_scope": "Syria, by the claim deadline"
+  "claim_scope": "Syria, by the claim deadline",
+  "article_card": {{"named_actors": [{{"span": "Syrian rebel forces", "name_en": "Syrian rebel forces"}}, {{"span": "Assad", "name_en": "Bashar al-Assad"}}], "bears_on_question": true}}
 }}
 
 Example — related event: "France wins the 2026 World Cup" (a source citing a named model):
@@ -999,7 +1014,8 @@ Example — related event: "France wins the 2026 World Cup" (a source citing a n
   "consensus_view": "expects_no",
   "claim_actor": {{"name": "France", "type": "country"}},
   "claim_predicate": "wins the tournament",
-  "claim_scope": "the 2026 World Cup"
+  "claim_scope": "the 2026 World Cup",
+  "article_card": {{"named_actors": [{{"span": "Opta", "name_en": "Opta"}}, {{"span": "France", "name_en": "France"}}], "bears_on_question": true}}
 }}
 
 Example — related event: "Airline A operates more than 250 daily departures from Hub H by \
@@ -1029,7 +1045,8 @@ Example — related event: "Airline A operates more than 250 daily departures fr
   "consensus_view": "divided",
   "claim_actor": {{"name": "Airline A", "type": "company"}},
   "claim_predicate": "operates daily departures from Hub H",
-  "claim_scope": "more than 250 a day, from Hub H, by the deadline"
+  "claim_scope": "more than 250 a day, from Hub H, by the deadline",
+  "article_card": {{"named_actors": [{{"span": "Airline A", "name_en": "Airline A"}}, {{"span": "Hub H", "name_en": "Hub H"}}], "bears_on_question": true}}
 }}
 """
 
@@ -1115,6 +1132,87 @@ def normalize_hebrew_gershayim(text: str) -> str:
     if not text or '"' not in text:
         return text
     return _HEBREW_INNER_ASCII_QUOTE.sub("\u05f4", text)
+
+
+# --- Verified article card (retro#805) -------------------------------------------------------
+# The model copies names out of the article as verbatim spans (`ExtractionOutput.article_card`);
+# this is the deterministic half that makes the field trustworthy: a span survives only if the
+# article text contains it. Both sides pass through `normalize_for_match`, so the model's
+# copying quirks that carry no meaning — niqqud, geresh/gershayim/quote variants (including the
+# retro#801 U+05F4 rewrite the extractor applies to its own input), dash variants, case,
+# whitespace — cannot fail a genuine span, while a translated, transliterated or invented name
+# still does. Hand-ported from the phase-0 measurement script (`subject_gate.py`, 38/310 prod
+# rows subject-absent; W1/W3/W4 caught, every control passed).
+_MATCH_STRIP = re.compile("[\u0591-\u05c7\u05f3\u05f4\"'\u2018\u2019\u201c\u201d`]")
+_MATCH_DASHES = str.maketrans({"\u05be": " ", "-": " ", "\u2013": " ", "\u2014": " "})
+# Hebrew proclitics: an alias glued to up to two of ו ה ל ב מ ש כ ("ולגנץ", "בליכוד") is still
+# that alias at a word start. Harmless on Latin/Cyrillic text.
+_HEBREW_PREFIX_RE = "[\u05d5\u05d4\u05dc\u05d1\u05de\u05e9\u05db]{0,2}"
+# Final-form letters fold to their medial form so a name spelled with a different word
+# boundary (or a transliteration that ends mid-letter) still lines up: ך→כ ם→מ ן→נ ף→פ ץ→צ.
+_HEBREW_FINALS = str.maketrans({"\u05da": "\u05db", "\u05dd": "\u05de", "\u05df": "\u05e0",
+                                "\u05e3": "\u05e4", "\u05e5": "\u05e6"})
+_HEBREW_LETTER = re.compile("[\u05d0-\u05ea]")
+_MATRES = "\u05d9\u05d5"  # י ו — the vowel letters plene spelling inserts and defective omits
+_ALIAS_MIN_CHARS = 3
+_SPAN_MIN_CHARS = 2
+
+
+def normalize_for_match(text: Optional[str]) -> str:
+    """Canonical form for span/alias comparison. Idempotent."""
+    t = unicodedata.normalize("NFKC", text or "")
+    t = _MATCH_STRIP.sub("", t).translate(_MATCH_DASHES).translate(_HEBREW_FINALS)
+    return re.sub(r"\s+", " ", t).casefold().strip()
+
+
+def _alias_pattern(normalized_alias: str) -> str:
+    """Regex body for one alias. Hebrew names carry no vowels, so outlets disagree on the
+    vowel letters: Walla writes שימריז, ynet שמריז; the subject card (a model's guess) lists
+    some spellings and misses others (measured 2026-09-07: it gave שמריז/שמריץ and not the
+    שימריז the Walla control uses — a false drop). Plene/defective variation is a closed
+    rule, so it is handled here rather than begged from the model: inside a Hebrew word
+    every י/ו of the alias is optional, and one may appear after any other letter. Only
+    ever LOOSENS a match, and only within Hebrew script."""
+    out = []
+    for ch in normalized_alias:
+        if ch in _MATRES:
+            out.append(f"[{_MATRES}]?")
+        elif _HEBREW_LETTER.match(ch):
+            out.append(re.escape(ch) + f"[{_MATRES}]?")
+        else:
+            out.append(re.escape(ch))
+    return "".join(out)
+
+
+def text_contains_alias(normalized_text: str, alias: Optional[str]) -> bool:
+    """True when ``alias`` occurs in the (already normalised) article text at a word start,
+    Hebrew proclitics allowed, suffixes allowed (Russian inflection). Aliases shorter than
+    ``_ALIAS_MIN_CHARS`` never match — "Li" would hit inside anything."""
+    na = normalize_for_match(alias)
+    if len(na) < _ALIAS_MIN_CHARS:
+        return False
+    return re.search(r"(?<!\w)" + _HEBREW_PREFIX_RE + _alias_pattern(na), normalized_text) is not None
+
+
+def verify_article_card(card, article_text: str):
+    """Return ``(verified_card, dropped_spans)``: a copy of ``card`` keeping only the actors
+    whose ``span`` really occurs in ``article_text``. ``card=None`` → ``(None, [])``. Never
+    raises. Logged per dropped span (`event=article_card_span_unverified`) because the drop
+    rate IS the measurement of how often the model invents a name it claims to have copied —
+    the exact failure retro#545 phase 0 saw on the elicited actor fields."""
+    from .models import ArticleCard
+    if card is None:
+        return None, []
+    norm_text = normalize_for_match(article_text)
+    kept, dropped = [], []
+    for actor in card.named_actors:
+        ns = normalize_for_match(actor.span)
+        if len(ns) >= _SPAN_MIN_CHARS and ns in norm_text:
+            kept.append(actor)
+        else:
+            dropped.append(actor.span)
+            logger.info("event=article_card_span_unverified span=%r name_en=%r", actor.span, actor.name_en)
+    return ArticleCard(named_actors=kept, bears_on_question=card.bears_on_question), dropped
 
 
 _CONDITIONAL_BLOCK = """
@@ -1259,6 +1357,10 @@ async def extract_predictions(
     different model/cost tradeoff (e.g. a benchmark harness with a wider latency budget) pass one
     in; nothing here decides what a caller should choose.
     """
+    # retro#803/#805: max_tokens 1200 -> 1500 below. 1200 already truncated v14 output on
+    # quote-rich articles (every model), and the v15 article card adds ~60-120 output tokens
+    # per call; a cap is not a cost, only a ceiling, so raising it changes nothing for the
+    # calls that fit and rescues the ones that did not.
     # retro#801: neutralise in-word ASCII gershayim before the model can copy them unescaped
     # into `quote`. Done here, not in the callers, so the pool-fill path (forecaster) and the
     # batch runner get the same text.
@@ -1288,7 +1390,7 @@ async def extract_predictions(
 
     async def _call_extractor():
         return await complete_structured(
-            model or settings.extractor_model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
+            model or settings.extractor_model, ExtractionOutput, prompt, max_tokens=1500, timeout=180,
             cached_prefix=None if is_single_article else PROMPT_PREFIX,
         )
 

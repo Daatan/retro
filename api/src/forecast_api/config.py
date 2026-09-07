@@ -721,6 +721,29 @@ class ApiSettings(BaseSettings):
     event_decomposition_cache_enabled: bool = True
     event_decomposition_cache_path: Path = Path("")  # empty = data_dir/event_decomposition_cache
 
+    # Subject gate (retro#805, slice 1 of the verified-article-card design; child of
+    # retro#545). Measured 2026-09-07: 38/310 strong prod pool rows in 14 election
+    # forecasts came from articles that never name the subject, and Haiku votes ±1.0 on
+    # them anyway. `enabled` derives a subject card once per question (cached below) and
+    # evaluates the gate per article in SHADOW — `event=subject_gate` log lines, nothing
+    # dropped. `enforce` turns a fired gate into a dropped article (outcome
+    # `subject_absent`); it stays off until ≥1 day of shadow shows W1/W3/W4-shaped fires
+    # and no control drops (issue acceptance criteria). `trust_gloss`: whether a match
+    # found only through the model's unverified English gloss of a verified span clears
+    # the gate (default no — the gloss is exactly what W3 gets wrong); the shadow log's
+    # `matched_via=gloss` count is the number that decides it. Model default follows
+    # settlement_verifier_model → the live extractor, like event_decomposition_model.
+    subject_gate_enabled: bool = True
+    subject_gate_enforce: bool = False
+    subject_gate_trust_gloss: bool = False
+    subject_gate_model: Optional[str] = None
+    subject_gate_timeout_seconds: int = 20
+    # Scripts the pool actually carries (Hebrew, Russian, Arabic sources next to English);
+    # the card lists surface forms in each so the deterministic route works cross-script.
+    subject_gate_languages: str = "English, Hebrew, Russian, Arabic"
+    subject_gate_cache_enabled: bool = True
+    subject_gate_cache_path: Path = Path("")  # empty = data_dir/subject_card_cache
+
     # The premise verifier (retro#575 slice 1) — shadow/log-only, off by
     # default. Asks whether a question's premise is already dead (resolved
     # or structurally impossible) before pricing it. `enforce` is unread this
@@ -958,6 +981,12 @@ class ApiSettings(BaseSettings):
         if self.event_decomposition_cache_path != Path(""):
             return self.event_decomposition_cache_path
         return self.data_dir / "event_decomposition_cache"
+
+    @property
+    def resolved_subject_card_cache_path(self) -> Path:
+        if self.subject_gate_cache_path != Path(""):
+            return self.subject_gate_cache_path
+        return self.data_dir / "subject_card_cache"
 
 
 settings = ApiSettings()

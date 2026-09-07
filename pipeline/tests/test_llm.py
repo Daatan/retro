@@ -488,7 +488,7 @@ class TestCallerDelegation:
         await extractor.extract_predictions("article", "src", "2024-01-01", "Event", "desc")
         assert captured["model"] == extractor.settings.extractor_model
         assert captured["response_model"] is ExtractionOutput
-        assert captured["max_tokens"] == 1200
+        assert captured["max_tokens"] == 1500  # retro#803/#805: 1200 truncated quote-rich articles
         assert captured["timeout"] == 180
         assert captured["cached_prefix"] == extractor.PROMPT_PREFIX
 

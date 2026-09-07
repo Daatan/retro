@@ -348,6 +348,77 @@ request does).
 logs `eligible=`/`fired=`/`n=` once per call regardless of outcome, same convention as the guards
 above, so a future review has a real trigger-rate denominator.
 
+#### The article never names the question's subject — the subject gate (`article_card` + `subject_card.py`; shadow, enforce off)
+
+retro#805, slice 1 of the verified-article-card design (child of retro#545). **Measured
+2026-09-07 on prod: 38 of 310 strong, usable pool rows in 14 gated election forecasts came
+from articles that never name the forecast's subject** — Hendel 46%, Milwidsky/Silman 100%,
+Netanyahu/Likud ~0%. The gatekeeper (Nova Micro) passes "actor's party / coalition" as indirect
+evidence by design, so a topic-adjacent article reaches the extractor; Haiku 4.5 then rewrites
+the article's subject into the question's subject and votes ±1.0 (the W3 shape, 15/15 in the
+A/B; Sonnet 4.5/5 extract nothing on the same articles). No stage between the embedding and
+the extractor asks whether the subject is even present (`Daatan/docs` funnel.md §2.1); this
+is that check, and it is deterministic where it matters.
+
+**Three parts.**
+
+1. **`article_card`** (`ExtractionOutput`, prompt v15) — the extractor lists up to 6 actors the
+   ARTICLE names, each as a **verbatim span** in the article's own language, plus an English
+   gloss `name_en` and a shadow-only `bears_on_question`. `tm.extractor.verify_article_card`
+   then keeps only the spans the article text really contains (both sides through
+   `normalize_for_match`: NFKC, niqqud/geresh/gershayim/quote variants stripped, dashes and
+   whitespace folded, Hebrew final letters folded, casefold). A verified span is *extracted* in
+   the glossary sense — checkable — which is what the elicited `event_actors`/`claim_actor`
+   never were; `audit_named_entity_dyad_mismatch` above was built on those and ran at ~0%
+   precision for exactly that reason. Dropped spans log `event=article_card_span_unverified`;
+   a malformed card is nulled and logged (`event=article_card_malformed`), never a failed
+   article. **Not on the wire, not persisted** — no `ClaimDetail`/`SourceSignal` field, so
+   `PROVENANCE_SCHEMA_VERSION` is unchanged; the card exists to be checked, not stored.
+2. **Subject card** (`api/src/forecast_api/subject_card.py`) — who the QUESTION is about,
+   derived **once per question** from `event_name` + `resolution_criteria` by a structured
+   call (`subject_gate_model` → `settlement_verifier_model` → the live extractor), with
+   surface forms in English, Hebrew, Russian and Arabic (`subject_gate_languages`), and
+   cached under `data_dir/subject_card_cache` (`subject_card_store.py`, keyed on prompt
+   version + model + question + criteria). Option B of the 2026-09-07 dilemma: retro-only, no
+   daatan schema change; a curated daatan-side field is the deferred Option A. An empty card
+   (the question names nobody: "the next PM serves less than a full term") is a real,
+   cached answer that switches the gate off for that question.
+3. **The gate** (`evaluate_subject_gate`, wired in `forecaster.py` after the per-article
+   guard chain) — the article must name **at least one** subject actor ("any listed actor
+   present": a party-only mention satisfies a person+party card — the Gantz and Hendel rules
+   name no party, so a stricter rule would drop legitimate party coverage). Two routes,
+   logged as `matched_via=`:
+   - `surface_form` — deterministic: a card surface form found in the normalised article
+     text at a word start, Hebrew proclitics (ו ה ל ב מ ש כ) allowed, plene/defective
+     spelling tolerated (Walla שימריז = ynet שמריז), suffixes allowed (Russian inflection).
+     Cross-script by construction — the card carries the article's script, the gloss is
+     never needed.
+   - `gloss` — a verified span whose model-given `name_en` stem-matches a subject actor. The
+     gloss is unverified and W3 is exactly a wrong gloss, so by default it is **reported but
+     does not clear the gate** (`subject_gate_trust_gloss=false`); the shadow count of
+     "gloss was the only match" is the number that decides it.
+
+   Both routes miss for every actor → the gate **fires**. Fail-open at every joint: no
+   subject card (derivation error), an empty one, no article card, or a card with zero
+   verified spans → `skip=<reason>`, never fired. A hallucinated surface form on the subject
+   card can only cause a false *pass* (it would have to occur in the text), never a false
+   drop — the asymmetry is deliberate.
+
+**Rollout.** `subject_gate_enabled=true` ships in **shadow**: one `event=subject_gate` line per
+extracted article (`fired= enforce= matched_via= matched_actor= skip= subjects=
+verified_spans= dropped_spans= bears_on_question= n_preds= url= prediction_id=`), nothing
+dropped. `subject_gate_enforce=true` turns a fired gate into a dropped article — outcome
+`subject_absent` in `ArticleDebug`/timings, the article never reaches the pool — and stays
+off until ≥1 day of shadow shows the fires are W1/W3/W4-shaped and no control fires (issue
+acceptance criteria). `prediction_id` + `url` on the log line are what the retroactive pool
+cleanup Mark accepted will key on. **Live path only**, like `audit_scheduled_deadline_unconfirmed`:
+`runner.py`'s batch schema has no resolution criteria to derive a subject card from, so the
+batch extractor emits the card and nothing reads it.
+
+**Fixture (both test files, real Walla/Kikar HaShabbat text from the A/B):** W1/W3/W4 fire,
+every control passes, a party-only mention passes a person+party card, the gloss-only case is
+reported and not trusted. Per-rater fill and token cost: PROMPT_VERSIONS.md v15 row.
+
 #### Claim/stance sign conflicts are logged, not corrected — `flag_claim_stance_sign_conflicts`
 
 retro#298 found rows where the extracted `claim` text and `stance` disagree with each other in

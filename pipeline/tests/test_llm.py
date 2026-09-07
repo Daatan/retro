@@ -176,6 +176,10 @@ class TestIsRateLimitError:
         "schema validation error",
         "connection refused",
         "invalid model id",
+        # retro#803/#805: a truncation is deterministic, not transient — "limit" in the
+        # instructor message must not buy it four attempts and 210 s of backoff.
+        "The output is incomplete due to a max_tokens length limit.",
+        "InstructorRetryException: <failed_attempts> ... max_tokens length limit ...",
     ])
     def test_other_messages_are_not_retryable(self, msg):
         assert llm.is_rate_limit_error(Exception(msg)) is False

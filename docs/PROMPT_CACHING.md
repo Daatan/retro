@@ -58,7 +58,7 @@ production prompt/schema, not a synthetic stand-in:
 |---|---|---|
 | `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0` | live `oracle-api` extractor | 4/4 clean runs. Call 1: `cache_creation_input_tokens=9394`. Calls 2-4: `cache_read_input_tokens=9394`, `write=0`. **9,394 of 10,135 total input tokens (~93%) landed in the cached prefix.** |
 | `bedrock/amazon.nova-micro-v1:0` | gatekeeper (both `oracle-api` and `truthmachine.service`) | 4/4 clean runs with the real gatekeeper prompt. Call 1 write=1182, calls 2-4 read=1182 (~90% of that call's tokens). |
-| `bedrock/amazon.nova-lite-v1:0` | batch `truthmachine.service` extractor default | Caching itself works when a call succeeds (`cache_read_input_tokens` populated correctly) — but see the finding below, which is unrelated to caching. |
+| `bedrock/amazon.nova-lite-v1:0` | batch `truthmachine.service` extractor default until retro#778 (2026-09-08) — batch now defaults to Haiku like live | Caching itself works when a call succeeds (`cache_read_input_tokens` populated correctly) — but see the finding below, which is unrelated to caching. |
 
 **A real, pre-existing bug surfaced while verifying this, filed separately —
 [retro#306](https://github.com/Daatan/retro/issues/306):** Nova Lite, under

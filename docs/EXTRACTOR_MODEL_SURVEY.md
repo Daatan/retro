@@ -54,7 +54,7 @@ extractor produces enough to matter, and what would each candidate cost?
 | claude-sonnet-4.5 | Anthropic | $28.18 | public list price |
 | claude-opus-4.5 | Anthropic | $46.14 | public list price |
 | claude-3-haiku (legacy) | Anthropic | — | **not tested** — Bedrock use-case access not granted on this account |
-| nova-lite | Amazon | $0.27 | current batch-pipeline default |
+| nova-lite | Amazon | $0.27 | batch-pipeline default until retro#778 (2026-09-08) — batch now runs Haiku 4.5 like live |
 | nova-micro | Amazon | $0.15 | current gatekeeper model (different task, tested separately below) |
 | nova-2-lite | Amazon | $2.54 | |
 | nova-pro | Amazon | $7.74 | |
@@ -162,7 +162,7 @@ five more LLM call sites that produce numbers/semantic judgments:
 
 | Task | Explanation | Model used |
 |---|---|---|
-| **Extractor** — *tested above* | Article → claims: extracts stance, certainty, settled, `quantitative_estimate`, `evidence_class` per prediction. Main "funnel" stage. | `extractor_model` — Nova Lite (batch default) / **Claude Haiku 4.5** (prod override, `oracle-api` systemd drop-in), plus `threshold_extractor_model` for threshold-shaped batch events (retro#688, off by default — see below) |
+| **Extractor** — *tested above* | Article → claims: extracts stance, certainty, settled, `quantitative_estimate`, `evidence_class` per prediction. Main "funnel" stage. | `extractor_model` — **Claude Haiku 4.5** for both live and batch as of retro#778 (2026-09-08; was Nova Lite on batch, live still additionally pins it via the `oracle-api` systemd drop-in), plus `threshold_extractor_model` for threshold-shaped batch events (retro#688, off by default — see below) |
 | **Gatekeeper** — *tested, see below* | Pre-filter: is this article even relevant to the forecast question? Produces `relevance_score` (0–1) and `prediction_count_estimate`. | `gatekeeper_model` — **Nova Micro** (own separate knob, no override anywhere) |
 | **Aggregator** | Collapses multiple predictions from one article into one combined read. | Reuses `extractor_model` (no separate knob) |
 | **Settlement verifier** — *tested, see below* | Vetoes false/premature "this claim is settled" calls before they pin the forecast. Built specifically for the false-settlement failure mode (retro#532). | `settlement_verifier_model` (config default `None`) → falls back to `extractor_model` |

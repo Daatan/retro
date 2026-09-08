@@ -538,6 +538,72 @@ def _drop_malformed_claim_actor(data: Any) -> Any:
     return data
 
 
+# retro#805 — the VERIFIED ARTICLE CARD. The extractor nominates the actors the ARTICLE names,
+# each as a verbatim span; code then checks every span against the article text and discards
+# the rest (`extractor.verify_article_card`). A span is *extracted* in the glossary sense — it
+# is in the text and checkable — which is what makes this usable as a gate where the elicited
+# `event_actors`/`claim_actor` never were (retro#545 phase 0: Haiku rewrites the article's
+# subject into the question's subject, W3 15/15, and the dyad audit built on those fields ran
+# at ~0% precision). `name_en` is a gloss, NOT verified; the gate trusts it less (see
+# `forecast_api.subject_card`). `bears_on_question` is shadow-only: a self-assessed relevance
+# is not a filter (Daatan/docs funnel.md §7.1) — it is logged so its agreement with the
+# deterministic check can be measured, nothing more.
+#
+# `#` comments, not docstrings: retro#700 (see ClaimActor above).
+class ArticleCardActor(BaseModel):
+    span: str = Field(
+        description="The name exactly as written in the article, verbatim.",
+    )
+    name_en: Optional[str] = Field(default=None, description="The same name in English.")
+
+
+_ARTICLE_CARD_MAX_ACTORS = 8
+
+
+class ArticleCard(BaseModel):
+    named_actors: list[ArticleCardActor] = Field(
+        default_factory=list,
+        description="Up to 6 actors the ARTICLE itself names, as verbatim spans. See "
+                    "ARTICLE_CARD.",
+    )
+    bears_on_question: Optional[bool] = Field(
+        default=None,
+        description="EXPERIMENTAL, shadow (retro#805) — does the article report on the "
+                    "related event's own subject. See ARTICLE_CARD.",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_bare_spans(cls, data: Any) -> Any:
+        # A bare string in `named_actors` ("Likud") is the cheap failure shape; read it as a
+        # span with no gloss rather than losing the whole card. The cap is enforced here and
+        # not by the schema so an over-long list is truncated, not rejected.
+        if not isinstance(data, dict):
+            return data
+        raw = data.get("named_actors")
+        if not isinstance(raw, list):
+            return data
+        actors = [{"span": a} if isinstance(a, str) else a for a in raw]
+        return {**data, "named_actors": actors[:_ARTICLE_CARD_MAX_ACTORS]}
+
+
+def _drop_malformed_article_card(data: Any) -> Any:
+    """`_drop_malformed_claim_actor` for `article_card` (retro#805) — same trade, same reason:
+    a malformed card must never fail the article, and a logged None keeps "answered badly"
+    distinguishable from "did not answer". Grep `event=article_card_malformed`."""
+    if not isinstance(data, dict):
+        return data
+    raw = data.get("article_card")
+    if raw is None:
+        return data
+    try:
+        ArticleCard.model_validate(raw)
+    except (_ValidationError, TypeError, ValueError):
+        logger.warning("event=article_card_malformed value=%r", raw)
+        return {**data, "article_card": None}
+    return data
+
+
 class PredictionExtraction(BaseModel):
     # `claim_strength` was named `certainty` until Oracle 1.5 Phase 1 (retro#680). The
     # elicitation text is unchanged — only the name moved, so the number this field carries
@@ -865,6 +931,11 @@ class ExtractionOutput(BaseModel):
                     "('at least one party, by the general election'). Omit only when the "
                     "event states none of the three.",
     )
+    # retro#805. Article-level and at the tail (retro#680's rule). See the ArticleCard comment.
+    article_card: Optional[ArticleCard] = Field(
+        default=None,
+        description="REQUIRED — who the ARTICLE names. See ARTICLE_CARD.",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -879,6 +950,8 @@ class ExtractionOutput(BaseModel):
         data = _drop_out_of_enum(data, "consensus_view", _CONSENSUS_VIEW_VALUES)
         data = _coerce_nested_json_string(data, "claim_actor")
         data = _drop_malformed_claim_actor(data)
+        data = _coerce_nested_json_string(data, "article_card")
+        data = _drop_malformed_article_card(data)
         if isinstance(data, dict) and "predictions" in data:
             preds = data["predictions"]
             if not isinstance(preds, list):

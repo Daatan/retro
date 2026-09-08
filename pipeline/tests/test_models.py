@@ -550,6 +550,7 @@ class TestReportKindAndConsensusView:
         assert props[props.index("author_lean"):] == [
             "author_lean", "author_lean_certainty", "consensus_view",
             "claim_actor", "claim_predicate", "claim_scope",
+            "article_card",  # retro#805
         ]
 
     def test_neither_field_pays_for_a_docstring(self):

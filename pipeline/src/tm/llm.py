@@ -137,9 +137,19 @@ def apply_routing(kwargs: dict) -> dict:
     return kwargs
 
 
+# An output truncated at max_tokens is deterministic — the same prompt overflows the same
+# cap every time — so retrying it is pure cost. instructor phrases it "output is incomplete
+# due to a max_tokens length limit", and "limit" alone used to read as a throttle: four
+# attempts, 210 s of sleep and ~8 model calls per truncated article (retro#803/#805 A/B,
+# 2026-09-07 — a live-path article in that state times out instead of failing fast).
+_NOT_A_RATE_LIMIT = ("max_tokens", "length limit")
+
+
 def is_rate_limit_error(exc: Exception) -> bool:
     """True if the exception looks like a transient rate-limit / throttle worth retrying."""
     err = str(exc).lower()
+    if any(marker in err for marker in _NOT_A_RATE_LIMIT):
+        return False
     return "rate" in err or "429" in err or "limit" in err or "temporarily" in err
 
 

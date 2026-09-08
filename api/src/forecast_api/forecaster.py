@@ -94,7 +94,7 @@ EXTRACTOR_PROMPT = _EXTRACTOR_PROMPT_PREFIX + _EXTRACTOR_PROMPT_SUFFIX
 # human-readable label only, see docs/PROMPT_VERSIONS.md. The *_HASH is computed from the
 # actual prompt text above, so it stays correct even if a version bump is forgotten.
 GATEKEEPER_PROMPT_VERSION = "v1"
-EXTRACTOR_PROMPT_VERSION = "v14"
+EXTRACTOR_PROMPT_VERSION = "v15"
 GATEKEEPER_PROMPT_HASH = hashlib.sha256(GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
 EXTRACTOR_PROMPT_HASH = hashlib.sha256(EXTRACTOR_PROMPT.encode()).hexdigest()[:16]
 
@@ -213,6 +213,8 @@ from .settlement_semantic import (
 )
 from .settlement_verifier import SettlementVote, Verdict, build_prompt, verify_settlement
 from .premise_verifier import PremiseResult, premise_check_triggered, verify_premise
+from .subject_card import SubjectCard, derive_subject_card, evaluate_subject_gate
+from .subject_card_store import get_subject_card, put_subject_card, subject_card_key
 
 
 def _hazard_shadow_base_rate() -> Optional[float]:
@@ -1392,6 +1394,7 @@ async def _process_article_bounded(
     cache_coordinator: CacheWriteCoordinator | None = None,
     extractor_model: str | None = None,
     event_decomposition: str | None = None,
+    subject_card: SubjectCard | None = None,
 ) -> ArticleOutcome | None:
     """Run _process_article under a per-article wall-clock ceiling.
 
@@ -1418,6 +1421,7 @@ async def _process_article_bounded(
                 cache_coordinator=cache_coordinator,
                 extractor_model=extractor_model,
                 event_decomposition=event_decomposition,
+                subject_card=subject_card,
             ),
             timeout=timeout_s,
         )
@@ -1475,6 +1479,7 @@ async def _process_article(
     cache_coordinator: CacheWriteCoordinator | None = None,
     extractor_model: str | None = None,
     event_decomposition: str | None = None,
+    subject_card: SubjectCard | None = None,
 ) -> ArticleOutcome | None:
     """
     Run gatekeeper + extractor for one article.
@@ -1825,6 +1830,49 @@ async def _process_article(
         ))
         return None
     extract_ms = (time.perf_counter() - extract_start) * 1000
+
+    # retro#805 — the subject gate. Article-level, evaluated on the model's verified
+    # article card against the once-per-question subject card; shadow-logged on every
+    # article, and a dropped article only behind `subject_gate_enforce`. Live path only,
+    # like audit_scheduled_deadline_unconfirmed: runner.py's batch schema has no
+    # resolution_criteria to derive a subject card from. Own try/except: a bug here must
+    # read as "gate skipped", never as an extract_error on a real article.
+    subject_gate_fired = False
+    if subject_card is not None:
+        try:
+            gate_result = evaluate_subject_gate(
+                extraction.article_card, text, subject_card,
+                trust_gloss=settings.subject_gate_trust_gloss,
+            )
+            subject_gate_fired = gate_result.fired
+            logger.info(
+                "event=subject_gate fired=%s enforce=%s matched_via=%s matched_actor=%r "
+                "matched_form=%r skip=%s subjects=%r verified_spans=%r dropped_spans=%r "
+                "bears_on_question=%s n_preds=%d url=%s prediction_id=%s",
+                gate_result.fired, settings.subject_gate_enforce, gate_result.matched_via,
+                gate_result.matched_actor, gate_result.matched_form, gate_result.skip_reason,
+                gate_result.subjects, gate_result.verified_spans, gate_result.dropped_spans,
+                gate_result.bears_on_question, len(extraction.predictions), result.url,
+                prediction_id,
+            )
+        except Exception:  # noqa: BLE001 - fail open
+            logger.warning("event=subject_gate_error url=%s", result.url, exc_info=True)
+    if subject_gate_fired and settings.subject_gate_enforce and extraction.predictions:
+        timings.append({
+            "url": result.url, "fetch_ms": fetch_ms, "gate_ms": gate_ms,
+            "extract_ms": extract_ms, "outcome": "subject_absent",
+        })
+        article_debugs.append(ArticleDebug(
+            url=result.url, outcome="subject_absent",
+            gate_passed=True,
+            gate_reason=gate.reason,
+            gate_prediction_count_estimate=gate.prediction_count_estimate,
+            gate_tokens=gate_usage.get("total_tokens"),
+            extract_tokens=extract_usage.get("total_tokens"),
+            total_tokens=(gate_usage.get("total_tokens", 0) + extract_usage.get("total_tokens", 0)) or None,
+            fetch_ms=round(fetch_ms, 1), gate_ms=round(gate_ms, 1), extract_ms=round(extract_ms, 1),
+        ))
+        return None
 
     if not extraction.predictions:
         timings.append({
@@ -2331,6 +2379,33 @@ async def _run_forecast_inner(
             if event_decomposition and settings.event_decomposition_cache_enabled:
                 await put_decomposition(decomp_store_path, decomp_key, event_decomposition)
 
+    # retro#805: the subject card — who the QUESTION is about, with multilingual surface
+    # forms — once per question, cached. Fails open to None on any error, which makes the
+    # per-article gate a no-op ("skipped"), exactly like the decomposition above.
+    subject_card: Optional[SubjectCard] = None
+    if settings.subject_gate_enabled:
+        subject_model = (
+            settings.subject_gate_model or settings.settlement_verifier_model or effective_extractor_model
+        )
+        sc_key = subject_card_key(req.question, req.resolution_criteria, model=subject_model)
+        sc_path = settings.resolved_subject_card_cache_path
+        if settings.subject_gate_cache_enabled:
+            subject_card = await get_subject_card(sc_path, sc_key)
+        if subject_card is None:
+            subject_card = await derive_subject_card(
+                req.question, req.resolution_criteria,
+                model=subject_model, languages=settings.subject_gate_languages,
+                timeout_s=settings.subject_gate_timeout_seconds,
+            )
+            if subject_card is not None:
+                logger.info(
+                    "event=subject_card_derived question=%r actors=%r",
+                    req.question[:120],
+                    [(a.name_en, len(a.surface_forms)) for a in subject_card.actors],
+                )
+                if settings.subject_gate_cache_enabled:
+                    await put_subject_card(sc_path, sc_key, subject_card)
+
     # Step 2: gatekeeper + extractor in parallel
     process_start = time.perf_counter()
     timings: list[dict] = []
@@ -2361,6 +2436,7 @@ async def _run_forecast_inner(
                 cache_coordinator=cache_coordinator,
                 extractor_model=effective_extractor_model,
                 event_decomposition=event_decomposition,
+                subject_card=subject_card,
             )
             for r in search_results
         ],

@@ -52,6 +52,7 @@ from tm.extractor import (
     enforce_winner_entity_consistency,
     audit_author_lean_sign_mismatch,
     audit_named_entity_dyad_mismatch,
+    audit_pushed_title_fragment,
     audit_quote_provenance_mismatch,
     audit_scheduled_deadline_unconfirmed,
     flag_claim_stance_sign_conflicts,
@@ -1812,6 +1813,13 @@ async def _process_article(
         # per-article claim_deadline/claim_archetype.
         extraction.predictions = audit_scheduled_deadline_unconfirmed(
             extraction.predictions, article_date, claim_deadline, claim_archetype,
+        )
+        # Log-only (retro#770 suggestion 3): a pushed (Telegram) source whose whole text is
+        # a colon-terminated lead-in fragment or a very short teaser, yet the extractor still
+        # emitted a claim — the class-1 shape PR#773 targeted, checked deterministically in
+        # prod to see whether that clause holds. See docs/ORACLE_VARIABLES.md.
+        extraction.predictions = audit_pushed_title_fragment(
+            extraction.predictions, result.url, text,
         )
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", result.url, exc)

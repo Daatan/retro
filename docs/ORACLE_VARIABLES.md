@@ -1206,7 +1206,10 @@ Shipped, in the accepted sequencing order (§6):
   +0.37 deterministic, 3.7s, $1/$5 per M) via systemd drop-in on the Oracul host +
   Bedrock IAM grant (see infra/iam/README.md §4); verified live — the incident
   article now scores stance +0.31 / settled=false (~66%) instead of +1.0/settled
-  (99%). Batch pipeline (`truthmachine.service`) deliberately stays on nova-lite.
+  (99%). Batch pipeline (`truthmachine.service`) stayed on nova-lite until
+  retro#778 (2026-09-08): measured batch call volume at ~2-3% of live's meant the
+  cost of converging both lanes onto Haiku was immaterial, so `tm/config.py`'s
+  `extractor_model` default now IS Haiku and batch inherits it with no override.
 - **Extractor guard consolidation (2026-07-26/27)** — three more prompt guards
   in the same "don't let a near-miss read as the event" family, all in
   `extractor.py`:

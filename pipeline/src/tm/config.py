@@ -14,7 +14,20 @@ class Settings(BaseSettings):
     # landing on us-east-1 in practice, so `us.` here is a no-op for current
     # behavior, just makes it deliberate instead of accidental.
     gatekeeper_model: str = "bedrock/us.amazon.nova-micro-v1:0"
-    extractor_model: str = "bedrock/us.amazon.nova-lite-v1:0"
+    # retro#778 (2026-09-08 dilemma): was Nova Lite. The live oracle-api service has
+    # overridden this to Haiku since 2026-07-12 (via the systemd drop-in below) after
+    # Nova Lite's `fact_signal` sign-mismatch regression; the batch/atlas lane
+    # (truthmachine.service, no override) inherited every later Nova regression this
+    # same rater kept failing (retro#770 v13, retro#774 v14) with nothing checking for
+    # it. Measured this session: batch call volume is ~2-3% of live's
+    # (`data/progress.json`: 2,009/2,093 matrix cells over ~92 days vs. live's ~940
+    # Haiku calls/day) — Mark's call was to converge both lanes onto one model/prompt
+    # unless that is expensive, and at this volume ratio it isn't. IAM already allows
+    # Haiku from `truthmachine-ec2-role` (infra/iam/README.md §4), so this is a pure
+    # config change. Accepted cost: batch stops producing Nova Lite rows, so the
+    # Nova-vs-Haiku rater-disagreement signal (`confusion_flags.py`) disappears from
+    # prod — a real trade Mark chose to make, not an oversight.
+    extractor_model: str = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
     ground_truth_model: str = "bedrock/us.amazon.nova-lite-v1:0"
 
     # retro#688 — per-event extractor override for threshold-shaped batch events, where

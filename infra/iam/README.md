@@ -85,15 +85,19 @@ aws iam put-role-policy \
   --policy-document file:///tmp/pipeline-policy.json
 ```
 
-**Related host config (not IAM):** the extractor model override is now committed at
+**Related host config (not IAM):** the extractor model override is committed at
 [`infra/oracle-api.service.d/extractor-model.conf`](../oracle-api.service.d/extractor-model.conf)
 — sets `Environment=EXTRACTOR_MODEL=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0`,
-scoped to `oracle-api.service` only (the batch `truthmachine.service` stays on the
-`tm/config.py` default, nova-lite). Previously this existed ONLY as an uncommitted
-systemd drop-in discoverable solely via SSM — committing it here is a visibility fix,
-not a behavior change; `infra/deploy_oracle.sh` does not sync it automatically (see
-that file's header for the manual apply command). Rollback = delete the drop-in on
-the host, `daemon-reload`, restart `oracle-api`.
+scoped to `oracle-api.service`. As of retro#778 (2026-09-08) `tm/config.py`'s
+`extractor_model` default is this same Haiku ID, so the batch `truthmachine.service`
+(no override, no `.env` entry needed) picks it up too — Mark's decision was to converge
+both lanes onto one model/prompt once the cost gap (batch is ~2-3% of live's call
+volume) was measured as immaterial. The drop-in above is now redundant with the shared
+default but stays as an explicit pin for the live service, independent of any future
+default change. `infra/deploy_oracle.sh` does not sync drop-in files automatically (see
+that file's header for the manual apply command). Rollback (live only) = delete the
+drop-in on the host, `daemon-reload`, restart `oracle-api`; rolling back the shared
+default is a `tm/config.py` revert.
 
 ## Placeholders to replace
 

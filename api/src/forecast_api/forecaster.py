@@ -54,6 +54,7 @@ from tm.extractor import (
     audit_named_entity_dyad_mismatch,
     audit_quote_provenance_mismatch,
     audit_scheduled_deadline_unconfirmed,
+    audit_settled_on_opinion_content,
     flag_claim_stance_sign_conflicts,
     PROMPT_PREFIX as _EXTRACTOR_PROMPT_PREFIX,
     PROMPT_SUFFIX as _EXTRACTOR_PROMPT_SUFFIX,
@@ -1803,6 +1804,12 @@ async def _process_article(
         # survey surfaced. See docs/ORACLE_VARIABLES.md.
         extraction.predictions = audit_quote_provenance_mismatch(
             extraction.predictions, question, resolution_criteria or question,
+        )
+        # Log-only (retro#770 class 3): `settled=true` at an extreme stance on a URL
+        # whose own path marks it as opinion/commentary, not reporting. See
+        # docs/ORACLE_VARIABLES.md.
+        extraction.predictions = audit_settled_on_opinion_content(
+            extraction.predictions, result.url,
         )
         # Log-only (retro#590): a scheduled/threshold claim whose deadline has
         # already passed, covered by an article published after that deadline,

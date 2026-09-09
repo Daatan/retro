@@ -4,6 +4,7 @@ import re
 import unicodedata
 from datetime import date, timedelta
 from typing import Optional
+from urllib.parse import urlparse
 
 from .models import ExtractionOutput, PredictionExtraction
 from .config import settings
@@ -2736,6 +2737,51 @@ def enforce_settlement_fact_signal_agreement(
         )
         p.settled = False
         p.stance = 0.0
+
+    return predictions
+
+
+# retro#770 class 3: of the ten |stance|>=0.95 outlier rows this issue's audit found, one was
+# `settled=true` on an opinion column (`jpost.com/opinion/article-906779`, an election-math
+# column, scored -1) — arguing a position is not reporting an accomplished fact, however
+# confidently the extractor phrased it. The URL path is a structural signal independent of the
+# model's own confidence, so this fires on the URL alone. Class 3 also names non-opinion cases
+# (a lobbying trip read as a granted licence) with no comparably cheap deterministic signal —
+# not attempted here.
+_OPINION_URL_PATH_MARKERS = (
+    "/opinion/", "/opinions/", "/oped/", "/op-ed/", "/column/", "/columnists/", "/editorial/",
+)
+_SETTLED_OPINION_STANCE_GATE = 0.95
+
+
+def audit_settled_on_opinion_content(
+    predictions: list[PredictionExtraction],
+    url: Optional[str],
+) -> list[PredictionExtraction]:
+    """Log-only: flag `settled=true` at an extreme stance on a URL whose own path marks it
+    as opinion/commentary rather than reporting (retro#770 class 3).
+
+    Fails open like every sibling guard: no URL, no opinion-path marker, no
+    ``settled=True``, or below the stance gate never fires. Never mutates
+    ``settled``/``stance``/anything else — pure observability, same contract as
+    :func:`audit_fact_signal_sign_mismatch`.
+    """
+    if not url:
+        return predictions
+    path = urlparse(url).path.lower()
+    if not any(marker in path for marker in _OPINION_URL_PATH_MARKERS):
+        return predictions
+
+    for p in predictions:
+        if p.settled is not True:
+            continue
+        if abs(p.stance) < _SETTLED_OPINION_STANCE_GATE:
+            continue
+
+        logger.warning(
+            "event=settled_on_opinion_content url=%s stance=%+.2f certainty=%.2f claim=%r",
+            url, p.stance, p.claim_strength, p.claim[:120],
+        )
 
     return predictions
 

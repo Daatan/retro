@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from typing import Optional
 from urllib.parse import urlparse
 
+from .gatekeeper import has_no_article_page
 from .models import ExtractionOutput, PredictionExtraction
 from .config import settings
 from .llm import complete_structured
@@ -2459,6 +2460,55 @@ def audit_named_entity_dyad_mismatch(
     logger.info(
         "event=entity_dyad_mismatch_shadow question_subject=%r eligible=%d fired=%d n=%d",
         subject, eligible, fired, len(predictions),
+    )
+    return predictions
+
+
+# retro#770 suggestion 3: 9 of the 172 live |stance|>=0.95 rows the issue's audit found were
+# Telegram posts whose entire text is a colon-terminated lead-in fragment or teaser under this
+# many characters — "very short" mirrors news-indexer PR#424's short-caption-media threshold,
+# reused here for the text-only shape rather than invented fresh.
+_PUSHED_FRAGMENT_SHORT_CHARS = 100
+
+
+def audit_pushed_title_fragment(
+    predictions: list[PredictionExtraction],
+    url: Optional[str],
+    text: str,
+) -> list[PredictionExtraction]:
+    """Log-only: flag a pushed (Telegram) source whose whole text is a colon-terminated
+    lead-in fragment or a very short teaser, yet the extractor still emitted >=1 claim.
+
+    This is the class-1 lead-in-fragment shape from retro#770 (`"הערב בפטריוטים:"`,
+    `"Hovav Damari, husband of Minister Gila Gamliel:"`) restated as a cheap deterministic
+    detector instead of an LLM judgement call. PR#773 taught the live (Haiku) extractor to
+    emit nothing for exactly this shape; this flag is the production check of whether that
+    clause actually holds, and it also covers the batch/Nova lane PR#773's gate excluded.
+
+    ``has_no_article_page`` is true only for hosts with no real article page behind the push
+    (currently just ``t.me`` — X/Twitter is not yet ingested, ni#220, parked), which is also
+    exactly when ``text`` IS the pushed caption rather than a fetched article body. This
+    scopes to X automatically once that host joins the set; it does not need editing here.
+
+    Fails open, matching every sibling audit_* function: never mutates ``predictions``, and a
+    bug here must read as "flag skipped", never as an extraction error.
+    """
+    if not predictions:
+        return predictions
+    if not has_no_article_page(url):
+        return predictions
+    stripped = (text or "").strip()
+    if not stripped:
+        return predictions
+    ends_with_colon = stripped[-1] in ":："
+    very_short = len(stripped) < _PUSHED_FRAGMENT_SHORT_CHARS
+    if not (ends_with_colon or very_short):
+        return predictions
+    logger.warning(
+        "event=pushed_title_fragment url=%s len=%d ends_with_colon=%s very_short=%s "
+        "n_preds=%d stance=%r fragment=%r",
+        url, len(stripped), ends_with_colon, very_short,
+        len(predictions), [p.stance for p in predictions], stripped[:120],
     )
     return predictions
 

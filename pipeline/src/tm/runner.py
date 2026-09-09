@@ -22,6 +22,7 @@ from .extractor import (
     enforce_winner_entity_consistency,
     audit_fact_signal_sign_mismatch,
     audit_named_entity_dyad_mismatch,
+    audit_pushed_title_fragment,
     audit_quote_provenance_mismatch,
     audit_settled_on_opinion_content,
     flag_claim_stance_sign_conflicts,
@@ -198,6 +199,13 @@ async def run_article(
         # reason enforce_deadline_arithmetic is above: it needs a per-article
         # claim_deadline/claim_archetype the batch pipeline's per-event schema doesn't
         # carry. Wired into forecaster.py's live path instead — see docs/ORACLE_VARIABLES.md.
+        # Log-only (retro#770 suggestion 3): unlike the above, this one only needs the
+        # article's own url/text, both of which the batch schema already carries — and this
+        # is the Nova/batch lane PR#773's Haiku-only gate left unobserved. See
+        # docs/ORACLE_VARIABLES.md.
+        extraction.predictions = audit_pushed_title_fragment(
+            extraction.predictions, article.article_url, article.text,
+        )
 
         update_cell(
             article.event_id,

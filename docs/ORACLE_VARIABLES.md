@@ -373,6 +373,39 @@ request does).
 logs `eligible=`/`fired=`/`n=` once per call regardless of outcome, same convention as the guards
 above, so a future review has a real trigger-rate denominator.
 
+#### A pushed source's whole text is a colon-terminated fragment or a very short teaser — `audit_pushed_title_fragment` (log-only)
+
+retro#770's own audit of the ten |stance| >= 0.95 outlier rows on one forecast found "an
+incidental honorific read as maximal evidence" (class 1): a Telegram TV-billing whose entire
+text is a lead-in fragment (`"הערב בפטריוטים:"`, a colon-terminated teaser) was extracted as a
+verified, occurrence-typed claim at stance +1.0. PR#773 fixed this behaviourally — the live
+(Haiku) extractor now emits nothing for a fragment carrying no proposition — but nothing
+checked in production whether that clause actually holds, and PR#773's own gate excludes the
+batch/Nova lane entirely (retro#773's "not attempted, deliberately" section). 9 of the 13
+Telegram/X rows in retro#770's 172-row scan had a title ending in a colon — the issue names this
+shape as "a cheap detector" in its own suggested-handling section (point 3).
+
+Fires when: the source has no real article page behind the push (`has_no_article_page` — `t.me`
+only today; X/Twitter is parked per ni#220, and this scopes to it automatically once that host
+joins the set), which is also exactly when `text` IS the pushed caption rather than a fetched
+article body; the caption's stripped text ends in a colon (`:`/`：`) or is under 100 characters
+(`_PUSHED_FRAGMENT_SHORT_CHARS`, matching news-indexer PR#424's short-caption-media threshold);
+and the extractor still emitted >=1 claim for it.
+
+**Log-only — never mutates `stance`/`claim`/anything else, and never drops the article.**
+`event=pushed_title_fragment` fires per article, with the fired claims' stances and the fragment
+text logged for review. Deliberately no `_shadow` summary line (unlike the guards above): this
+is a per-article boolean check, not a per-claim scan with an eligible/fired split to report.
+Precision is unmeasured; whether repeated live fires justify enforcement (dropping the article,
+mirroring the subject gate below) is a follow-up decision once the shadow log has volume.
+
+**Wired into both `forecaster.py` (live) and `runner.py` (batch/atlas)** — unlike
+`audit_scheduled_deadline_unconfirmed`, this needs only the article's own url/text, which the
+batch per-event schema already carries. That matters here specifically: PR#773's fix gates on
+Haiku only (Nova's gate did not survive re-measurement at 15 runs), so `runner.py`'s Nova Lite
+lane is exactly where this fragment shape is least likely to have been caught — this flag is the
+only production check either lane has.
+
 #### The article never names the question's subject — the subject gate (`article_card` + `subject_card.py`; shadow, enforce off)
 
 retro#805, slice 1 of the verified-article-card design (child of retro#545). **Measured

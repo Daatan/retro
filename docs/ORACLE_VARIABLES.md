@@ -257,6 +257,31 @@ any decision to neutralise rows the way the settled-only guard already does.
 can't also fire here. Fail-open like every sibling: missing or sub-0.3-magnitude `fact_signal`,
 below either gate, or a matching sign — all no-op.
 
+#### `settled=true` on opinion/commentary content — `audit_settled_on_opinion_content` (log-only)
+
+retro#770 class 3: of the ten `|stance| >= 0.95` outlier rows that issue's audit found on one
+forecast, one was `settled=true` on an opinion column —
+`jpost.com/opinion/article-906779` ("Only two blocs: the election math Netanyahu doesn't want
+Israelis to see"), scored `-1`. An opinion column arguing a position is not a report of an
+accomplished fact, however confidently the extractor phrased it.
+
+Fires when the URL's own path contains an opinion/commentary marker
+(`_OPINION_URL_PATH_MARKERS`: `/opinion/`, `/opinions/`, `/oped/`, `/op-ed/`, `/column/`,
+`/columnists/`, `/editorial/`) **and** a claim on that article has `settled=true` at
+`|stance| >= 0.95` (`_SETTLED_OPINION_STANCE_GATE`). The URL path is a structural signal,
+independent of the model's own stated confidence, so this fires on the URL alone rather than
+attempting any content judgement — it does not need an LLM call.
+
+Class 3 also names non-opinion cases with no comparably cheap deterministic signal (a lobbying
+trip read as a granted licence; a low-relevance tangent let stance ride to +1) — not attempted
+here, and not addressable by a URL-path check.
+
+**Log-only — never mutates `settled`/`stance`/anything else.** Fail-open like every sibling
+guard: no URL, no opinion-path marker, no `settled=True`, or a sub-gate stance — all no-op.
+Precision is unmeasured; whether this generalizes beyond the one flagship case is a question for
+once the shadow log has volume. **Wired into both `forecaster.py` (live) and `runner.py`
+(batch/atlas)** — it needs only the article's own URL, which both paths already carry.
+
 #### author_lean disagreeing with the article's own stance — `audit_author_lean_sign_mismatch` (log-only)
 
 retro#326: the 2026-07-24 PR#314 fix corrected the primary sentiment-vs-forecast leak (an author

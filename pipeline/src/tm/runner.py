@@ -23,6 +23,7 @@ from .extractor import (
     audit_fact_signal_sign_mismatch,
     audit_named_entity_dyad_mismatch,
     audit_quote_provenance_mismatch,
+    audit_settled_on_opinion_content,
     flag_claim_stance_sign_conflicts,
 )
 from .config import settings
@@ -185,6 +186,13 @@ async def run_article(
         # survey surfaced. See docs/ORACLE_VARIABLES.md.
         extraction.predictions = audit_quote_provenance_mismatch(
             extraction.predictions, article.event_name, article.event_description,
+        )
+        # Log-only (retro#770 class 3): `settled=true` at an extreme stance on a URL
+        # whose own path marks it as opinion/commentary, not reporting. Needs only the
+        # article's own url, which the batch schema already carries. See
+        # docs/ORACLE_VARIABLES.md.
+        extraction.predictions = audit_settled_on_opinion_content(
+            extraction.predictions, article.article_url,
         )
         # audit_scheduled_deadline_unconfirmed (retro#590) is omitted here for the same
         # reason enforce_deadline_arithmetic is above: it needs a per-article

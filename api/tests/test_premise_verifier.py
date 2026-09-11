@@ -26,12 +26,14 @@ import pytest
 from forecast_api import forecaster
 from forecast_api.config import settings as api_settings
 from forecast_api.models import ArticleInput, ForecastRequest
+from forecast_api import premise_verifier
 from forecast_api.premise_verifier import (
     PremiseResult,
     Verdict,
     build_prompt,
     parse_verdict,
     premise_check_triggered,
+    verify_premise,
 )
 from tm.models import ExtractionOutput, GatekeeperOutput, PredictionExtraction
 
@@ -39,6 +41,7 @@ from tm.models import ExtractionOutput, GatekeeperOutput, PredictionExtraction
 _FRESH = (date.today() - timedelta(days=1)).isoformat()
 _PAST_DEADLINE = (date.today() - timedelta(days=3)).isoformat()
 _FUTURE_DEADLINE = (date.today() + timedelta(days=30)).isoformat()
+_FAR_FUTURE_DEADLINE = (date.today() + timedelta(days=400)).isoformat()
 _BODY = (
     "Fixture article body for the premise-verifier suite; the gatekeeper and "
     "extractor are stubbed, so no model reads it. "
@@ -99,6 +102,116 @@ class TestPrompt:
         )
         assert "DEADLINE: not-a-date" in prompt
         assert "TODAY:" not in prompt
+
+
+class TestStaleResultFiltering:
+    """retro#817 pattern 3: a real, live-model-confirmed bug. A prompt bullet
+    asking the model to discount an old result was tried first and measured
+    to have zero effect — the model's own training-data recall of a real
+    past event outweighs an in-prompt instruction to disregard it. Filtering
+    the result out before `build_prompt()` ever sees it is what worked."""
+
+    async def test_a_stale_result_never_reaches_the_prompt(self, monkeypatch):
+        seen_prompts: list[str] = []
+
+        async def fake_complete(model, prompt, **kwargs):
+            seen_prompts.append(prompt)
+            return '{"dead": false, "reason": "fixture", "citation": null}'
+
+        monkeypatch.setattr(premise_verifier, "complete_text_once", fake_complete)
+        await verify_premise(
+            "Will Naftali Bennett be sworn in as Prime Minister?",
+            _FUTURE_DEADLINE,
+            [
+                PremiseResult(
+                    title="Stale 2021 swearing-in article",
+                    snippet="Bennett was sworn in as PM.",
+                    published_date="2021-06-13",
+                    source="wire-service",
+                ),
+                PremiseResult(
+                    title="Fresh coalition talks update",
+                    snippet="Coalition talks continue ahead of the vote.",
+                    published_date=_FRESH,
+                    source="wire-service",
+                ),
+            ],
+            model="fixture-model", timeout_s=30,
+        )
+        assert len(seen_prompts) == 1
+        assert "Stale 2021 swearing-in article" not in seen_prompts[0]
+        assert "Fresh coalition talks update" in seen_prompts[0]
+
+    async def test_all_results_stale_short_circuits_without_calling_the_model(self, monkeypatch):
+        async def fail_if_called(*args, **kwargs):
+            raise AssertionError("the model must not be called when every result is stale")
+
+        monkeypatch.setattr(premise_verifier, "complete_text_once", fail_if_called)
+        verdict = await verify_premise(
+            "Will Naftali Bennett be sworn in as Prime Minister?",
+            _FUTURE_DEADLINE,
+            [PremiseResult(
+                title="Stale 2021 swearing-in article",
+                snippet="Bennett was sworn in as PM.",
+                published_date="2021-06-13",
+                source="wire-service",
+            )],
+            model="fixture-model", timeout_s=30,
+        )
+        assert verdict.dead is False
+        assert verdict.errored is True
+
+    async def test_result_shortly_before_a_long_past_deadline_is_not_filtered(self, monkeypatch):
+        """An old article is only noise relative to a *recent* deadline. One
+        published just before a deadline that itself is long past is exactly
+        the evidence a re-check of an old question needs — it must not be
+        thrown away just because it's old relative to *today*."""
+        seen_prompts: list[str] = []
+
+        async def fake_complete(model, prompt, **kwargs):
+            seen_prompts.append(prompt)
+            return '{"dead": true, "reason": "fixture", "citation": "result 1"}'
+
+        monkeypatch.setattr(premise_verifier, "complete_text_once", fake_complete)
+        await verify_premise(
+            "Will the Knesset pass the 2022 budget by its statutory deadline?",
+            "2021-11-14",
+            [PremiseResult(
+                title="Knesset approves 2022 budget just before deadline",
+                snippet="Lawmakers passed the budget before the deadline.",
+                published_date="2021-11-05",
+                source="wire-service",
+            )],
+            model="fixture-model", timeout_s=30,
+        )
+        assert len(seen_prompts) == 1
+        assert "Knesset approves 2022 budget just before deadline" in seen_prompts[0]
+
+    async def test_fresh_result_not_filtered_for_a_far_future_deadline(self, monkeypatch):
+        """Staleness is measured against min(deadline, today), not the raw
+        deadline. A deadline a year out must not make a result published
+        today read as ~a-year-old and get dropped — that would silently
+        exclude every far-future-deadline question from shadow data."""
+        seen_prompts: list[str] = []
+
+        async def fake_complete(model, prompt, **kwargs):
+            seen_prompts.append(prompt)
+            return '{"dead": false, "reason": "fixture", "citation": null}'
+
+        monkeypatch.setattr(premise_verifier, "complete_text_once", fake_complete)
+        await verify_premise(
+            "Will BTC reach $200k by end of 2027?",
+            _FAR_FUTURE_DEADLINE,
+            [PremiseResult(
+                title="BTC price update",
+                snippet="Bitcoin trades near recent highs.",
+                published_date=_FRESH,
+                source="wire-service",
+            )],
+            model="fixture-model", timeout_s=30,
+        )
+        assert len(seen_prompts) == 1
+        assert "BTC price update" in seen_prompts[0]
 
 
 class TestParsing:

@@ -115,6 +115,35 @@ def _deadline_fact(claim_deadline: Optional[str], today: date) -> Optional[str]:
     return f"TODAY: {today.isoformat()} (the deadline has NOT passed yet, {delta} day(s) remain)"
 
 
+_STALE_RESULT_DAYS = 180
+
+
+def _is_stale(published_date: Optional[str], claim_deadline: Optional[str], today: date) -> bool:
+    """Whether a result predates the question's own target window by enough
+    that it can only be describing a different, earlier occurrence.
+
+    A prompt bullet asking the model to discount an old result was tried
+    first and measured to have no effect — the model's own training-data
+    recall of a real past event outweighed an in-prompt instruction to
+    disregard it. Filtering the result out before it ever reaches the model
+    removes the confounding evidence instead of asking the model to
+    disregard evidence it can already see (retro#817 pattern 3).
+
+    Measured relative to ``min(claim_deadline, today)``: for a past deadline,
+    that's the deadline itself, so a result published right at a long-past
+    deadline isn't flagged stale — it's exactly the evidence a re-check of an
+    old deadline needs. For a future deadline, using the deadline directly
+    would flag anything published today as "stale" relative to a still-distant
+    target date, so the reference is capped at today instead.
+    """
+    published = _parse_date(published_date)
+    if published is None:
+        return False
+    deadline = _parse_date(claim_deadline)
+    reference = min(deadline, today) if deadline else today
+    return (reference - published).days > _STALE_RESULT_DAYS
+
+
 def premise_check_triggered(
     claim_deadline: Optional[str],
     claim_archetype: Optional[str],
@@ -213,10 +242,19 @@ async def verify_premise(
     """
     if not results:
         return Verdict(dead=False, reason="no results to check", errored=True)
+    ref_today = _parse_date(today) or datetime.now().date()
+    fresh_results = [r for r in results if not _is_stale(r.published_date, claim_deadline, ref_today)]
+    if len(fresh_results) < len(results):
+        logger.debug(
+            "event=premise_verifier_stale_filtered dropped=%d kept=%d",
+            len(results) - len(fresh_results), len(fresh_results),
+        )
+    if not fresh_results:
+        return Verdict(dead=False, reason="all results too old to evidence this question's premise", errored=True)
     try:
         raw = await complete_text_once(
             model,
-            build_prompt(question, claim_deadline, results, today=today),
+            build_prompt(question, claim_deadline, fresh_results, today=today),
             max_tokens=200,
             timeout=timeout_s,
             temperature=0,

@@ -71,6 +71,34 @@ class TestPrompt:
             PremiseResult(title="Something", snippet=None, published_date=None, source=None),
         ])
         assert "DEADLINE:" not in prompt
+        assert "TODAY:" not in prompt
+
+    def test_future_deadline_states_it_has_not_passed(self):
+        """retro#817: without a stated fact, the model had to infer
+        deadline-vs-today itself, which produced 4/12 false positives in
+        retro#601's sample — all future deadlines misread as already past."""
+        prompt = build_prompt(
+            "Will the assembly still be sitting?", _FUTURE_DEADLINE,
+            [PremiseResult(title="x", snippet=None, published_date=None, source=None)],
+            today=date.today().isoformat(),
+        )
+        assert "has NOT passed yet" in prompt
+
+    def test_past_deadline_states_it_has_passed(self):
+        prompt = build_prompt(
+            "Will the assembly still be sitting?", _PAST_DEADLINE,
+            [PremiseResult(title="x", snippet=None, published_date=None, source=None)],
+            today=date.today().isoformat(),
+        )
+        assert "already passed" in prompt
+
+    def test_unparseable_deadline_states_no_fact(self):
+        prompt = build_prompt(
+            "Will it happen?", "not-a-date",
+            [PremiseResult(title="x", snippet=None, published_date=None, source=None)],
+        )
+        assert "DEADLINE: not-a-date" in prompt
+        assert "TODAY:" not in prompt
 
 
 class TestParsing:

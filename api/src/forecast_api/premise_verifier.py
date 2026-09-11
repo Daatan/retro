@@ -39,8 +39,12 @@ logger = logging.getLogger(__name__)
 
 PROMPT_PREFIX = """You check whether a forecasting question is still open.
 
-You are given a QUESTION (optionally with its DEADLINE) and a list of RESULTS
-— recent search results on the topic. Your only job is to decide whether the
+You are given a QUESTION (optionally with its DEADLINE, and — when a
+DEADLINE is present — a TODAY line stating today's date and whether that
+deadline has already passed) and a list of RESULTS — recent search results
+on the topic. Trust the TODAY line's stated fact about the deadline rather
+than inferring it yourself from the deadline text or from RESULTS' dates —
+it is computed, not a guess. Your only job is to decide whether the
 question's premise is already dead: either the event it asks about has
 already happened (or definitively not happened) as an accomplished fact, or
 the question has become structurally impossible to resolve as asked (the
@@ -95,6 +99,22 @@ def _parse_date(value: Optional[str]) -> Optional[date]:
         return None
 
 
+def _deadline_fact(claim_deadline: Optional[str], today: date) -> Optional[str]:
+    """A deterministic "has this deadline passed" fact, computed here rather
+    than left for the model to infer from the raw deadline string — the
+    inference itself was the cause of 4/12 false positives in retro#601's
+    adjudicated sample (retro#817)."""
+    deadline = _parse_date(claim_deadline)
+    if deadline is None:
+        return None
+    delta = (deadline - today).days
+    if delta < 0:
+        return f"TODAY: {today.isoformat()} (the deadline has already passed, {-delta} day(s) ago)"
+    if delta == 0:
+        return f"TODAY: {today.isoformat()} (the deadline is today)"
+    return f"TODAY: {today.isoformat()} (the deadline has NOT passed yet, {delta} day(s) remain)"
+
+
 def premise_check_triggered(
     claim_deadline: Optional[str],
     claim_archetype: Optional[str],
@@ -125,10 +145,15 @@ def build_prompt(
     question: str,
     claim_deadline: Optional[str],
     results: Sequence[PremiseResult],
+    *,
+    today: Optional[str] = None,
 ) -> str:
     lines = [PROMPT_PREFIX, "", f"QUESTION: {question}"]
     if claim_deadline:
         lines.append(f"DEADLINE: {claim_deadline}")
+        fact = _deadline_fact(claim_deadline, _parse_date(today) or datetime.now().date())
+        if fact:
+            lines.append(fact)
     lines.append("")
     lines.append("RESULTS:")
     for r in results:
@@ -173,6 +198,7 @@ async def verify_premise(
     *,
     model: str,
     timeout_s: int,
+    today: Optional[str] = None,
 ) -> Verdict:
     """Ask whether ``question``'s premise is already dead. Never raises.
 
@@ -180,13 +206,17 @@ async def verify_premise(
     unparseable reply — all return ``dead=False, errored=True``. A question
     the pool would otherwise price normally must not be flagged dead because
     an LLM was unavailable.
+
+    ``today`` is test-only (mirrors ``premise_check_triggered``'s own
+    parameter) — production callers never pass it, so the prompt's stated
+    "TODAY" fact is always the real date.
     """
     if not results:
         return Verdict(dead=False, reason="no results to check", errored=True)
     try:
         raw = await complete_text_once(
             model,
-            build_prompt(question, claim_deadline, results),
+            build_prompt(question, claim_deadline, results, today=today),
             max_tokens=200,
             timeout=timeout_s,
             temperature=0,

@@ -59,11 +59,20 @@ Answer NO (the premise is still open) when:
   evidence the premise is dead;
 - the results discuss a similar but different instance of a recurring event,
   or a different scope than the question asks about;
+- the results describe a current state, statistic, or trend that makes the
+  outcome look unlikely, but the deadline hasn't passed and the situation
+  could still change before it — "currently far from happening" is not the
+  same as "now impossible to happen", however extreme the current numbers or
+  however firm an official's current stated position;
 - you are not citing a specific result for the claim.
 
 Answer YES only when a specific result reports the question's own outcome as
-an accomplished fact, or makes the premise structurally impossible to still
-occur. Name which result you're relying on.
+an accomplished fact, or reports something that removes the *mechanism* by
+which the question could still resolve either way before its deadline (the
+body/position it depends on no longer exists, the vote already occurred, an
+irreversible action was taken) — not merely a result reporting the current
+state is far from, or trending away from, the outcome. Name which result
+you're relying on.
 
 Reply with one JSON object and nothing else:
 {"dead": true or false, "reason": "one short sentence", "citation": "which result, or null"}

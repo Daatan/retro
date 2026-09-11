@@ -103,6 +103,18 @@ class TestPrompt:
         assert "DEADLINE: not-a-date" in prompt
         assert "TODAY:" not in prompt
 
+    def test_prompt_distinguishes_unfavorable_current_state_from_impossibility(self):
+        """retro#817 pattern 4: live-confirmed on Haiku 4.5 — a result reporting
+        strong-but-reversible current evidence ("90% below pre-conflict
+        levels", an official's current stated position) was read as making a
+        still-future, still-open deadline "factually impossible", 3/3 runs.
+        Pins the prompt language that fixed it (live A/B, same 3/3 flip)."""
+        prompt = build_prompt("Will it happen?", _FUTURE_DEADLINE, [
+            PremiseResult(title="x", snippet=None, published_date=None, source=None),
+        ])
+        assert "now impossible to happen" in prompt
+        assert "removes the" in prompt and "mechanism" in prompt
+
 
 class TestStaleResultFiltering:
     """retro#817 pattern 3: a real, live-model-confirmed bug. A prompt bullet

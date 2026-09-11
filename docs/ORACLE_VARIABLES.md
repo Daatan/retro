@@ -738,6 +738,27 @@ exactly when the recompute becomes a writer. Fixtures: `api/tests/test_settlemen
 (prompt payload, parsing, shadow, enforcement, the three skip paths). Note the suite sets
 `SETTLEMENT_VERIFIER_ENABLED=false` in `conftest.py` so no test run depends on Bedrock.
 
+**Deterministic semantic gates and the fail-open backstop (retro#691).** §2.1's gate is one LLM
+call, and it is the *only* check asking whether a settling fact is the claim's own event — every
+other settlement guard is temporal. `settlement_semantic_gates_enabled` shadow-runs three
+deterministic gates (`point_in_time`, `occurrence_consistency`, `facet_missing`) on the same
+vote-set immediately before the verifier's own call, logging `event=settlement_semantic_gates`
+paired to the verifier's log line by question hash. Measured against 387 independently labelled
+(question, settled claim) pairs from the prod pool: 0.79 precision, 0.47 recall, 26→19 pins on
+replay, 2 defensible pins lost. Live n=58 agreement read (2026-09-10): the gates agree with the
+verifier on 4 of its 15 blocks and miss the other 11 — not enough to stand in for the verifier
+generally (see the issue for the full read).
+
+What the gates *can* safely cover is narrower and previously unaddressed: `settlement_verifier`
+fails open on every error path (`_apply_settlement_match_gate`'s `if not decided:` branch —
+every sample errored → unconditional allow, never remembered). `settlement_semantic_gates_
+fallback_enforce` (default **off**) uses the already-computed shadow gate outcome instead of a
+blind allow, but *only* in that branch — a healthy verifier's own verdict is never second-guessed
+by the gates, regardless of this flag. Same shadow-then-promote shape as `settlement_verifier_
+enforce` itself: flipping it is a live decision, not a config default, and is not part of this
+change. Fixtures: `api/tests/test_settlement_verifier.py::TestFallbackToGatesOnVerifierError`,
+`api/tests/test_settlement_semantic_shadow.py`.
+
 ### 2.2 Per-article (gatekeeper LLM — `pipeline/src/tm/gatekeeper.py`)
 
 | variable | scale | role | notes |

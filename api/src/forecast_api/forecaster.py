@@ -931,13 +931,17 @@ def _settlement_config_fingerprint() -> str:
 
 def _log_semantic_gate_shadow(
     question: str, votes: Sequence[SettlementVote], *, claim_deadline: Optional[str],
-) -> None:
+) -> Optional[bool]:
     """Shadow-run the deterministic semantic gates over a pin about to publish.
 
     Logs what they WOULD have demoted and whether the pin would still have
-    reached ``settlement_min_sources``. Changes nothing — see
-    ``settlement_semantic_gates_enabled`` in config for why there is no
-    enforcement knob here yet.
+    reached ``settlement_min_sources``. Returns that ``would_block`` verdict
+    (``None`` if gates are disabled or the evaluation itself failed) so the
+    caller can also use it as the retro#691 fail-open BACKSTOP — see
+    ``settlement_semantic_gates_fallback_enforce`` in config — without a
+    second, redundant gate evaluation. The logging behavior and its meaning
+    are unchanged either way: this remains a shadow read of general
+    verifier/gate agreement, not itself an enforcement path.
 
     Emitted on the same vote-set the verifier is about to judge, immediately
     before its own log line and carrying the same ``question`` hash, so a
@@ -955,14 +959,14 @@ def _log_semantic_gate_shadow(
     distinct questions, one of them re-priced 144 times (retro#691).
     """
     if not settings.settlement_semantic_gates_enabled:
-        return
+        return None
     try:
         gates = tuple(
             g.strip() for g in settings.settlement_semantic_gates.split(",")
             if g.strip() in ALL_GATES
         )
         if not gates:
-            return
+            return None
         subject = claim_subject_from_question(question)
         candidates = [
             SettlementCandidate(
@@ -976,15 +980,18 @@ def _log_semantic_gate_shadow(
         ]
         outcome = apply_gates(subject, candidates, gates=gates, deadline=claim_deadline)
         survives = pin_survives(outcome, min_sources=settings.settlement_min_sources)
+        would_block = not survives
         logger.warning(
             "event=settlement_semantic_gates would_block=%s votes=%d demoted=%d "
             "outlets_left=%d gates=%s reasons=%r question=%s",
-            not survives, len(candidates), len(outcome.demoted),
+            would_block, len(candidates), len(outcome.demoted),
             outcome.distinct_outlets, ",".join(gates),
             dict(Counter(r for _, r in outcome.demoted)), _question_hash(question),
         )
+        return would_block
     except Exception:  # noqa: BLE001 — a shadow signal must never break a forecast
         logger.exception("event=settlement_semantic_gates outcome=error")
+        return None
 
 
 async def _apply_settlement_match_gate(
@@ -1012,7 +1019,11 @@ async def _apply_settlement_match_gate(
     remembered (``settlement_verdict_store``) and every later recompute over
     the same prompt/model/config reuses it, in both directions. Errored and
     undecided rolls stay fail-open for the current recompute and are never
-    remembered.
+    remembered — unless every sample errored AND
+    ``settlement_semantic_gates_fallback_enforce`` is on, in which case the
+    retro#691 deterministic gates' shadow-computed verdict is used instead of
+    a blind allow (still not remembered; see the ``if not decided:`` branch
+    below).
 
     Enforcement re-runs the *same* ``aggregate_pool`` with the vetoed votes'
     ``settled`` flags cleared, rather than editing the pinned result in place.
@@ -1037,7 +1048,7 @@ async def _apply_settlement_match_gate(
     # gates exist precisely because the verifier can be off, time out, or error,
     # and shadow data collected only while it is healthy would miss the cases
     # that motivate them.
-    _log_semantic_gate_shadow(question, votes, claim_deadline=claim_deadline)
+    gates_would_block = _log_semantic_gate_shadow(question, votes, claim_deadline=claim_deadline)
 
     if not settings.settlement_verifier_enabled:
         return agg
@@ -1079,7 +1090,22 @@ async def _apply_settlement_match_gate(
         yes = [r for r in decided if r.settles]
         no = [r for r in decided if not r.settles]
         if not decided:
-            verdict = results[0]  # every sample errored — fail-open, nothing remembered
+            # Every sample errored. Ordinarily fail-open (retro#691: this is the
+            # one case the shadow read can't measure, since it only ever samples
+            # while the verifier is healthy). If the fallback flag is on and the
+            # deterministic gates already evaluated this vote-set as a would-block,
+            # use that instead of a blind allow — see
+            # `settlement_semantic_gates_fallback_enforce` in config for why this
+            # stays scoped to exactly this branch. Nothing is remembered either
+            # way: a fallback verdict is not the verifier's own decision.
+            if settings.settlement_semantic_gates_fallback_enforce and gates_would_block:
+                verdict = Verdict(
+                    settles=False,
+                    reason="retro#691 fallback: verifier errored on every sample; "
+                    f"deterministic gates ({settings.settlement_semantic_gates}) would block",
+                )
+            else:
+                verdict = results[0]  # fail-open, nothing remembered
         elif len(yes) == len(no):
             # Even split (only reachable when errored samples thinned an odd
             # roll): genuinely undecided. Fail-open like an error — a tie must

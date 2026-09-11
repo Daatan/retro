@@ -11938,7 +11938,7 @@
     "H08:aljazeera": {
       "event_id": "H08",
       "source_id": "aljazeera",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -11952,7 +11952,7 @@
     "H08:bbc": {
       "event_id": "H08",
       "source_id": "bbc",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12008,7 +12008,7 @@
     "H08:israel_hayom": {
       "event_id": "H08",
       "source_id": "israel_hayom",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12050,7 +12050,7 @@
     "H08:toi": {
       "event_id": "H08",
       "source_id": "toi",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -12064,7 +12064,7 @@
     "H08:ynet": {
       "event_id": "H08",
       "source_id": "ynet",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-11T09:02:13.538535"
+  "last_updated": "2026-09-11T13:37:02.411035"
 }

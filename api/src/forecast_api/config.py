@@ -672,6 +672,21 @@ class ApiSettings(BaseSettings):
     settlement_semantic_gates_enabled: bool = True
     settlement_semantic_gates: str = "point_in_time,occurrence_consistency,facet_missing"
 
+    # Fail-open BACKSTOP, not a general override (retro#691, 2026-09-11 decision).
+    # The verifier's own fail-open branch (see `_apply_settlement_match_gate`:
+    # every sample errored -> `verdict = results[0]`, unconditional allow) is the
+    # one case the n=58 shadow read does not cover, because it only ever samples
+    # while the verifier is healthy. When the verifier errors on every sample AND
+    # this is on, the shadow-logged gate outcome decides instead of a blind
+    # allow. Ships OFF: flipping it is the actual enforce decision, still
+    # Mark's — same shadow-then-promote shape as `premise_verifier_enforce`.
+    # Deliberately NOT a general gates-vs-verifier override: the same n=58 read
+    # shows the trio catches only 4 of 15 things the healthy verifier blocks
+    # (11 verifier-only blocks), so replacing the verifier with gates loses 73%
+    # of its real catches. This flag only ever fires in the branch where the
+    # verifier itself produced nothing to compare against.
+    settlement_semantic_gates_fallback_enforce: bool = False
+
     settlement_verifier_enabled: bool = True
     settlement_verifier_enforce: bool = True
     settlement_verifier_timeout_seconds: int = 12

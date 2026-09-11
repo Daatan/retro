@@ -218,6 +218,81 @@ class TestEnforcement:
         assert resp.mean == pytest.approx(api_settings.settlement_stance)
 
 
+class TestFallbackToGatesOnVerifierError:
+    """retro#691 — the deterministic gates as a fail-open BACKSTOP, not a
+    general override. Only reachable when every verifier sample errored;
+    `_log_semantic_gate_shadow` itself is stubbed here since its own gate
+    logic is covered by test_settlement_semantic_shadow.py — these tests are
+    only about how `_apply_settlement_match_gate` uses its return value.
+    """
+
+    async def test_off_by_default_still_fails_open_on_error(self, monkeypatch):
+        monkeypatch.setattr(forecaster, "_log_semantic_gate_shadow", lambda *a, **kw: True)
+        resp, _calls = await _run(
+            monkeypatch, "[gate-fallback-off] Will the step be taken?",
+            verdict=Verdict(settles=True, reason="verifier call failed", errored=True),
+            enforce=True,
+        )
+        assert resp.settled is True, "fallback flag defaults off — errors stay fail-open"
+
+    async def test_on_and_gates_would_block_suppresses_the_pin(self, monkeypatch):
+        monkeypatch.setattr(api_settings, "settlement_semantic_gates_fallback_enforce", True)
+        monkeypatch.setattr(forecaster, "_log_semantic_gate_shadow", lambda *a, **kw: True)
+        resp, _calls = await _run(
+            monkeypatch, "[gate-fallback-block] Will the step be taken?",
+            verdict=Verdict(settles=True, reason="verifier call failed", errored=True),
+            enforce=True,
+        )
+        assert resp.settled is False
+
+    async def test_on_but_gates_survive_still_fails_open(self, monkeypatch):
+        monkeypatch.setattr(api_settings, "settlement_semantic_gates_fallback_enforce", True)
+        monkeypatch.setattr(forecaster, "_log_semantic_gate_shadow", lambda *a, **kw: False)
+        resp, _calls = await _run(
+            monkeypatch, "[gate-fallback-survive] Will the step be taken?",
+            verdict=Verdict(settles=True, reason="verifier call failed", errored=True),
+            enforce=True,
+        )
+        assert resp.settled is True
+
+    async def test_fallback_never_overrides_a_healthy_verifier(self, monkeypatch):
+        """The gates disagree with a real (non-errored) verdict here — the
+        verifier's own answer must still win. The fallback is scoped to the
+        all-samples-errored case only, never a general gates-vs-verifier
+        override (n=58 shows gates alone miss 73% of what the healthy
+        verifier catches)."""
+        monkeypatch.setattr(api_settings, "settlement_semantic_gates_fallback_enforce", True)
+        monkeypatch.setattr(forecaster, "_log_semantic_gate_shadow", lambda *a, **kw: True)
+        resp, _calls = await _run(
+            monkeypatch, "[gate-fallback-healthy] Will the step be taken?",
+            verdict=Verdict(settles=True, reason="reported as done", errored=False),
+            enforce=True,
+        )
+        assert resp.settled is True
+
+    async def test_fallback_is_inert_when_verifier_disabled(self, monkeypatch):
+        """`settlement_verifier_enabled=False` skips the verifier call entirely
+        (and the shadow log) before the fallback branch is ever reached."""
+        monkeypatch.setattr(api_settings, "settlement_semantic_gates_fallback_enforce", True)
+        monkeypatch.setattr(forecaster, "_log_semantic_gate_shadow", lambda *a, **kw: True)
+        calls = _patch(monkeypatch, [_settling_claim(1)])
+        monkeypatch.setattr(api_settings, "settlement_verifier_enabled", False)
+        monkeypatch.setattr(api_settings, "settlement_verifier_enforce", True)
+        resp = await forecaster.run_forecast(ForecastRequest(
+            question="[gate-fallback-disabled] Will the step be taken?",
+            articles=[
+                ArticleInput(
+                    url=f"https://source-{i}.example.test/story", title=_TITLES[i - 1],
+                    snippet=f"Fixture snippet long enough to be usable, variant {i}.",
+                    source=f"source-{i}", published_date=_FRESH, text=_BODY,
+                )
+                for i in (1, 2)
+            ],
+        ))
+        assert resp.settled is True
+        assert calls == []
+
+
 class TestItSkipsRatherThanGuesses:
     async def test_disabled_means_no_call_at_all(self, monkeypatch):
         calls = _patch(monkeypatch, [_settling_claim(1)],

@@ -12414,7 +12414,7 @@
     "I01:jpost": {
       "event_id": "I01",
       "source_id": "jpost",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14059,10 +14059,10 @@
     "I05:ynet": {
       "event_id": "I05",
       "source_id": "ynet",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     }
   },
-  "last_updated": "2026-09-11T13:37:02.411035"
+  "last_updated": "2026-09-12T12:05:38.476740"
 }

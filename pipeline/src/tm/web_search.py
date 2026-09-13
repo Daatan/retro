@@ -1739,7 +1739,7 @@ def _top_up_from_paid(
         try:
             extra = _search_articles_chain(
                 query, limit, date_from=date_from, date_to=date_to,
-                skip_news_indexer=True, deadline=deadline,
+                skip_news_indexer=True, skip_gdelt=True, deadline=deadline,
             )
             outcome["value"] = (extra, get_last_search_provider(), get_last_search_provider_chain())
         except BaseException as exc:  # re-raised below, in the caller's thread
@@ -1838,6 +1838,7 @@ def _search_articles_chain(
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     skip_news_indexer: bool = False,
+    skip_gdelt: bool = False,
     deadline: Optional[float] = None,
 ) -> List[SearchResult]:
     """
@@ -1857,6 +1858,11 @@ def _search_articles_chain(
         skip_news_indexer: Leave out leg 0. Used by the `min_results` top-up
                    (`_top_up_from_paid`) to re-run just the paid legs after the
                    index has already answered.
+        skip_gdelt: Leave out the GDELT Doc leg too (retro#826). The top-up pass
+                   sets it: GDELT Doc served 0 of 8,181 `/search` calls on the
+                   Oracul box between May and September 2026 and, when tried,
+                   failed in ~7.3 s (TLS handshake timeout, 620 of 708 failures)
+                   — pure cost against the pass's 15 s budget.
         deadline:  `time.monotonic()` value after which no further leg is started
                    (retro#824); the chain returns whatever it has — `[]` — instead.
                    A leg already in flight is not interrupted. None = no deadline.
@@ -1941,12 +1947,15 @@ def _search_articles_chain(
             )
 
     # 1. GDELT Doc API (free, no key) — primary; news-only, reliable dates, 3-month window
-    if _past_deadline("gdelt"):
-        return []
-    _provider_local.chain.append("gdelt")
+    if not skip_gdelt:
+        if _past_deadline("gdelt"):
+            return []
+        _provider_local.chain.append("gdelt")
     _gdelt_cooldown_remaining = _GDELT_COOLDOWN_UNTIL - time.time()
     _gdelt_broken_remaining = _GDELT_DOC_BROKEN_UNTIL - time.time()
-    if _gdelt_broken_remaining > 0:
+    if skip_gdelt:
+        pass  # paid-only pass (retro#826) — see the `skip_gdelt` docstring for the numbers
+    elif _gdelt_broken_remaining > 0:
         logger.info(
             "GDELT Doc skipped: circuit open for %.0fs more (repeated connection failures)",
             _gdelt_broken_remaining,

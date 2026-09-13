@@ -128,7 +128,8 @@ async def search_news(
     `min_results` (0..30, default 0): when the local news-indexer serves fewer
     hits than this, the paid providers run too and their new URLs are appended
     (dedup by URL, up to `limit`); `provider` then reads `news_indexer+<paid>`.
-    0 keeps first-non-empty-provider-wins.
+    0 keeps first-non-empty-provider-wins. The paid pass is capped at 15 s
+    (`SEARCH_TOPUP_BUDGET_S`); on expiry the index hits come back alone.
     """
     enforce(SEARCH_LIMIT, "search_news")
     resp = await run_search(

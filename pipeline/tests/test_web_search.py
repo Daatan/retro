@@ -724,6 +724,12 @@ class TestNewsIndexerWarm:
                 if self._t:
                     self._t()
 
+            def join(self, timeout=None):  # already ran inline
+                pass
+
+            def is_alive(self):
+                return False
+
         monkeypatch.setattr(ws.threading, "Thread", _Inline)
 
     def test_warms_with_paid_provider_results(self, monkeypatch):
@@ -1291,3 +1297,78 @@ class TestNewsIndexerTopUp:
         assert len(res) == 3
         assert provider == "news_indexer+serpapi"
         assert "serpapi" in chain
+
+    # ── retro#824: time budget + clamp ─────────────────────────────────────────
+
+    def test_min_results_above_limit_is_clamped(self, monkeypatch):
+        """Floor > limit would run the paid pass on every call and slice it all away."""
+        ws = self._ws_with_index_and_serpapi(monkeypatch, self._HITS)
+        serp_spy = MagicMock(return_value=self._serp(ws, "http://paid.com/1"))
+        with patch.multiple(ws, _search_gdelt=MagicMock(return_value=[]),
+                            _search_gdelt_bq=MagicMock(return_value=[]),
+                            _search_serpapi_news=serp_spy):
+            res = ws.search_articles("brent crude", limit=2, min_results=20)
+        assert len(res) == 2
+        assert not serp_spy.called
+        assert ws.get_last_search_provider() == "news_indexer"
+
+    def test_slow_paid_pass_returns_index_hits_within_budget(self, monkeypatch):
+        """The paid pass overruns `_TOPUP_BUDGET_S`: index hits come back alone, provider
+        stays `news_indexer`, the chain records the timeout, nothing is warmed, and the
+        abandoned worker stops at the deadline instead of walking the rest of the chain."""
+        import threading
+        ws = self._ws_with_index_and_serpapi(monkeypatch, self._HITS)
+        ws._TOPUP_BUDGET_S = 0.05
+        posts = []
+        monkeypatch.setattr(ws.httpx, "post", lambda *a, **k: posts.append(1))
+        finished = threading.Event()
+
+        def slow_serp(*a, **k):
+            time.sleep(0.3)
+            finished.set()
+            return self._serp(ws, "http://paid.com/1")
+
+        ddg_spy = MagicMock(return_value=[])
+        with patch.multiple(ws, _search_gdelt=MagicMock(return_value=[]),
+                            _search_gdelt_bq=MagicMock(return_value=[]),
+                            _search_serpapi_news=slow_serp,
+                            _search_ddg_news=ddg_spy,
+                            _search_trusted_sites=MagicMock(return_value=[])):
+            t0 = time.monotonic()
+            res = ws.search_articles("brent crude", limit=10, min_results=5)
+            elapsed = time.monotonic() - t0
+            assert finished.wait(2), "straggler never finished"
+            time.sleep(0.05)  # let it run past the deadline check that follows serpapi
+        assert elapsed < 0.25
+        assert [r.url for r in res] == ["http://ni.com/1", "http://ni.com/2"]
+        assert ws.get_last_search_provider() == "news_indexer"
+        assert ws.get_last_search_provider_chain() == ["news_indexer", "topup_timeout"]
+        assert not posts
+        assert not ddg_spy.called
+
+    def test_chain_deadline_skips_every_leg(self, monkeypatch):
+        ws = _fresh_ws()
+        ws.SERPAPI_API_KEY = "s"
+        ws._SERPAPI_QUOTA_EXHAUSTED = False
+        gdelt_spy = MagicMock(return_value=self._serp(ws, "http://gdelt.com/1"))
+        serp_spy = MagicMock(return_value=self._serp(ws, "http://paid.com/1"))
+        ddg_spy = MagicMock(return_value=self._serp(ws, "http://ddg.com/1"))
+        with patch.multiple(ws, _search_gdelt=gdelt_spy, _search_serpapi_news=serp_spy,
+                            _search_ddg_news=ddg_spy):
+            res = ws._search_articles_chain(
+                "brent crude", 10, skip_news_indexer=True, deadline=time.monotonic() - 1,
+            )
+        assert res == []
+        assert not gdelt_spy.called and not serp_spy.called and not ddg_spy.called
+        assert ws.get_last_search_provider() == "none"
+        assert ws.get_last_search_provider_chain() == []
+
+    def test_no_deadline_leaves_chain_unchanged(self, monkeypatch):
+        ws = _fresh_ws()
+        ws.SERPAPI_API_KEY = "s"
+        ws._SERPAPI_QUOTA_EXHAUSTED = False
+        serp_spy = MagicMock(return_value=self._serp(ws, "http://paid.com/1"))
+        with patch.multiple(ws, _search_gdelt=MagicMock(return_value=[]), _search_serpapi_news=serp_spy):
+            res = ws._search_articles_chain("brent crude", 10, skip_news_indexer=True)
+        assert [r.url for r in res] == ["http://paid.com/1"]
+        assert ws.get_last_search_provider_chain() == ["gdelt", "serpapi"]

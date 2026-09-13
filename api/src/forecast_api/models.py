@@ -25,7 +25,7 @@ class SearchRequest(BaseModel):
     date_to: Optional[str] = Field(default=None, description="ISO date upper bound YYYY-MM-DD")
     enrich_snippets: bool = Field(default=False, description="Scrape article URLs to fill empty snippets (adds latency)")
     distill: bool = Field(default=True, description="On 0 verbatim results, distill the query to keywords (LLM; also translates non-Latin questions) and retry once")
-    min_results: int = Field(default=0, ge=0, le=30, description="Top-up floor: when news-indexer serves fewer hits than this, also run the paid providers and append their new URLs (dedup by URL, up to `limit`). 0 = first non-empty provider wins (historical behaviour)")
+    min_results: int = Field(default=0, ge=0, le=30, description="Top-up floor: when news-indexer serves fewer hits than this, also run the paid providers and append their new URLs (dedup by URL, up to `limit`). 0 = first non-empty provider wins (historical behaviour). Clamped to `limit`; the paid pass is capped at 15 s (`SEARCH_TOPUP_BUDGET_S`) and on expiry the index hits come back alone")
 
 
 class SearchResultItem(BaseModel):

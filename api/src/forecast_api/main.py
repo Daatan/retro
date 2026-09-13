@@ -420,7 +420,9 @@ async def search(
     (news-indexer → GDELT → Google CSE → SerpAPI → Serper → Brave → Tavily → … → DDG →
     trusted sites; see `tm/web_search.py`). First non-empty provider wins, unless
     `min_results` > 0 and news-indexer served fewer hits than that — then the paid legs run
-    too and their new URLs are appended (dedup by URL, up to `limit`).
+    too and their new URLs are appended (dedup by URL, up to `limit`). That second pass is
+    capped at `SEARCH_TOPUP_BUDGET_S` (15 s): on expiry the index hits come back alone and
+    `provider_chain` ends in `topup_timeout`. A floor above `limit` counts as `limit`.
     """
     return await run_search(body)
 

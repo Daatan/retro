@@ -1701,6 +1701,15 @@ def _warm_news_indexer(results: List[SearchResult]) -> None:
         logger.debug("news_indexer warm skipped (non-fatal): %s", exc)
 
 
+# retro#824: wall-clock budget for the paid second pass of the `min_results` top-up.
+# The interactive caller (daatan's `oracleSearch`) gives the whole /search call 25 s and
+# the index leg alone has taken up to ~5 s, so the paid pass has to be bounded on its
+# own: SerpAPI's per-call timeout is 12 s and the chain walks on to the next leg after
+# it, so an unbounded pass has been observed at ~20 s. On expiry the index hits are
+# returned alone, exactly as before retro#822 — a late top-up is worth less than a 503.
+_TOPUP_BUDGET_S = float(os.environ.get("SEARCH_TOPUP_BUDGET_S", "15"))
+
+
 def _top_up_from_paid(
     query: str,
     limit: int,
@@ -1712,13 +1721,47 @@ def _top_up_from_paid(
     the chain once more with the indexer skipped and append whatever it finds that the index
     did not already have (dedup by URL), capped at *limit*. Index hits stay first — they are
     the fresh, already-parsed ones. Provider becomes `news_indexer+<paid>` and the chain
-    lists both passes, so `event=search_done` still shows what actually ran (retro#822)."""
+    lists both passes, so `event=search_done` still shows what actually ran (retro#822).
+
+    The paid pass runs in a worker thread and is waited on for at most `_TOPUP_BUDGET_S`
+    (retro#824). On expiry *base* is returned unchanged, the provider stays `news_indexer`
+    and the chain ends in `topup_timeout`; the abandoned worker sees the same deadline
+    before every remaining leg and stops rather than walking the rest of the chain for a
+    result nobody will read."""
     base_chain = list(_provider_local.chain)
-    extra = _search_articles_chain(
-        query, limit, date_from=date_from, date_to=date_to, skip_news_indexer=True,
-    )
-    paid_provider = get_last_search_provider()
-    paid_chain = get_last_search_provider_chain()
+    budget = _TOPUP_BUDGET_S
+    deadline = time.monotonic() + budget
+
+    outcome: dict = {}
+
+    def _paid_pass() -> None:
+        # Provider/chain are thread-local: read them here, in the thread that ran the chain.
+        try:
+            extra = _search_articles_chain(
+                query, limit, date_from=date_from, date_to=date_to,
+                skip_news_indexer=True, deadline=deadline,
+            )
+            outcome["value"] = (extra, get_last_search_provider(), get_last_search_provider_chain())
+        except BaseException as exc:  # re-raised below, in the caller's thread
+            outcome["error"] = exc
+
+    # A plain daemon thread, not an executor: a straggler must never hold up process exit
+    # (the deploy is a SIGHUP), and the executor's own worker would be a `threading.Thread`
+    # anyway. `_warm_news_indexer` uses the same shape.
+    worker = threading.Thread(target=_paid_pass, name="search-topup", daemon=True)
+    worker.start()
+    worker.join(budget)
+    if worker.is_alive():
+        _provider_local.chain = base_chain + ["topup_timeout"]
+        _provider_local.name = "news_indexer"
+        logger.warning(
+            "event=search_topup_timeout budget_s=%.1f base=%d query=%r",
+            budget, len(base), query[:60],
+        )
+        return base
+    if "error" in outcome:
+        raise outcome["error"]
+    extra, paid_provider, paid_chain = outcome["value"]
 
     seen = {r.url for r in base if r.url}
     topup: List[SearchResult] = []
@@ -1753,11 +1796,14 @@ def search_articles(
     `min_results` > 0 turns the first-non-empty-wins chain into a top-up: when news-indexer
     serves fewer hits than that, the paid legs run too and their new URLs are appended (see
     `_top_up_from_paid`). 0 (default) keeps the historical behaviour — the index short-circuits
-    the chain whenever it has anything at all."""
+    the chain whenever it has anything at all. The floor is clamped to `limit` (retro#824):
+    the index can never serve more than `limit`, so a floor above it would run the paid pass
+    on every call and then slice its result away."""
     results = _search_articles_chain(query, limit, date_from=date_from, date_to=date_to)
+    floor = min(min_results, limit)
     if (
-        min_results > 0
-        and len(results) < min_results
+        floor > 0
+        and len(results) < floor
         and get_last_search_provider() == "news_indexer"
     ):
         return _top_up_from_paid(query, limit, date_from, date_to, results)
@@ -1792,6 +1838,7 @@ def _search_articles_chain(
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     skip_news_indexer: bool = False,
+    deadline: Optional[float] = None,
 ) -> List[SearchResult]:
     """
     Search for news articles matching *query*, returning up to *limit* results.
@@ -1810,6 +1857,9 @@ def _search_articles_chain(
         skip_news_indexer: Leave out leg 0. Used by the `min_results` top-up
                    (`_top_up_from_paid`) to re-run just the paid legs after the
                    index has already answered.
+        deadline:  `time.monotonic()` value after which no further leg is started
+                   (retro#824); the chain returns whatever it has — `[]` — instead.
+                   A leg already in flight is not interrupted. None = no deadline.
 
     Returns:
         List of SearchResult(title, url, snippet, source, published_date).
@@ -1819,6 +1869,12 @@ def _search_articles_chain(
     _expire_stale_quota_flags()
     _provider_local.name = "none"
     _provider_local.chain = []
+
+    def _past_deadline(leg: str) -> bool:
+        if deadline is None or time.monotonic() < deadline:
+            return False
+        logger.info("event=search_deadline leg=%s skipped_rest=1 query=%r", leg, query[:60])
+        return True
 
     # 0. news-indexer — local semantic index; first-in-chain, no SERP cost.
     #    Returns [] (gating check runs server-side) → fall through to GDELT/SERP.
@@ -1885,6 +1941,8 @@ def _search_articles_chain(
             )
 
     # 1. GDELT Doc API (free, no key) — primary; news-only, reliable dates, 3-month window
+    if _past_deadline("gdelt"):
+        return []
     _provider_local.chain.append("gdelt")
     _gdelt_cooldown_remaining = _GDELT_COOLDOWN_UNTIL - time.time()
     _gdelt_broken_remaining = _GDELT_DOC_BROKEN_UNTIL - time.time()
@@ -1935,6 +1993,8 @@ def _search_articles_chain(
         if not GCP_SA_KEY_JSON or _bq_tried:
             return None
         _bq_tried = True
+        if _past_deadline("gdelt_bq"):
+            return None
         _provider_local.chain.append("gdelt_bq")
         _t0 = time.perf_counter()
         try:
@@ -1958,6 +2018,8 @@ def _search_articles_chain(
     # be the workhorse when Google startup credits supply paid quota; on the free
     # 100/day tier it will 429 and fall through). Inert until both keys are set.
     if GOOGLE_CSE_API_KEY and GOOGLE_CSE_CX and not _GOOGLE_CSE_QUOTA_EXHAUSTED:
+        if _past_deadline("google_cse"):
+            return []
         _provider_local.chain.append("google_cse")
         _t0 = time.perf_counter()
         try:
@@ -1971,6 +2033,8 @@ def _search_articles_chain(
 
     # 2. SerpAPI
     if SERPAPI_API_KEY and not _SERPAPI_QUOTA_EXHAUSTED:
+        if _past_deadline("serpapi"):
+            return []
         _provider_local.chain.append("serpapi")
         _t0 = time.perf_counter()
         try:
@@ -1984,6 +2048,8 @@ def _search_articles_chain(
 
     # 3. Serper.dev news
     if SERPER_API_KEY and not _SERPER_QUOTA_EXHAUSTED:
+        if _past_deadline("serper"):
+            return []
         _provider_local.chain.append("serper")
         _t0 = time.perf_counter()
         try:
@@ -1997,6 +2063,8 @@ def _search_articles_chain(
 
     # 4. Brave News (returns published_date; higher free quota than Tavily)
     if BRAVE_API_KEY and not _BRAVE_QUOTA_EXHAUSTED:
+        if _past_deadline("brave"):
+            return []
         _provider_local.chain.append("brave")
         _t0 = time.perf_counter()
         try:
@@ -2010,6 +2078,8 @@ def _search_articles_chain(
 
     # 4b. Tavily news (after Brave: no published_date in API response; 1 credit/call)
     if TAVILY_API_KEY and not _TAVILY_QUOTA_EXHAUSTED:
+        if _past_deadline("tavily"):
+            return []
         _provider_local.chain.append("tavily")
         _t0 = time.perf_counter()
         try:
@@ -2023,6 +2093,8 @@ def _search_articles_chain(
 
     # 4c. Newsdata.io — dedicated news API (published dates), ahead of the generic SERP scrapers.
     if NEWSDATA_API_KEY and not _NEWSDATA_QUOTA_EXHAUSTED:
+        if _past_deadline("newsdata"):
+            return []
         _provider_local.chain.append("newsdata")
         _t0 = time.perf_counter()
         try:
@@ -2036,6 +2108,8 @@ def _search_articles_chain(
 
     # 5. BrightData SERP API
     if BRIGHTDATA_API_KEY and not _BRIGHTDATA_QUOTA_EXHAUSTED:
+        if _past_deadline("brightdata"):
+            return []
         _provider_local.chain.append("brightdata")
         _t0 = time.perf_counter()
         try:
@@ -2049,6 +2123,8 @@ def _search_articles_chain(
 
     # 6. Nimbleway SERP API
     if NIMBLEWAY_API_KEY and not _NIMBLEWAY_QUOTA_EXHAUSTED:
+        if _past_deadline("nimbleway"):
+            return []
         _provider_local.chain.append("nimbleway")
         _t0 = time.perf_counter()
         try:
@@ -2062,6 +2138,8 @@ def _search_articles_chain(
 
     # 7. ScrapingBee Google Search
     if SCRAPINGBEE_API_KEY and not _SCRAPINGBEE_QUOTA_EXHAUSTED:
+        if _past_deadline("scrapingbee"):
+            return []
         _provider_local.chain.append("scrapingbee")
         _t0 = time.perf_counter()
         try:
@@ -2075,6 +2153,8 @@ def _search_articles_chain(
 
     # 9. DataForSEO (paid — last-resort fallback only)
     if DATAFORSEO_API_KEY and not _DATAFORSEO_QUOTA_EXHAUSTED:
+        if _past_deadline("dataforseo"):
+            return []
         _provider_local.chain.append("dataforseo")
         _t0 = time.perf_counter()
         try:
@@ -2087,6 +2167,8 @@ def _search_articles_chain(
             logger.warning("dataforseo failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 10. DuckDuckGo (free, no key)
+    if _past_deadline("ddg"):
+        return []
     _provider_local.chain.append("ddg")
     _t0 = time.perf_counter()
     try:
@@ -2103,6 +2185,8 @@ def _search_articles_chain(
     # domains. Biases to trusted sources and beats the low-relevance gdelt_bq junk
     # that would otherwise serve. Always available (no key); only reached when
     # everything above returned nothing.
+    if _past_deadline("trusted_sites"):
+        return []
     _provider_local.chain.append("trusted_sites")
     _t0 = time.perf_counter()
     try:

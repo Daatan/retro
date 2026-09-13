@@ -416,10 +416,11 @@ async def search(
     _: ApiKeyClient = Depends(verify_api_key),
 ):
     """
-    Search for news articles using the full provider fallback chain.
-
-    Tries: SerpAPI → Serper → Brave → BrightData → Nimbleway → ScrapingBee → DDG.
-    DDG is skipped when the service is running on EC2.
+    Search for news articles using the provider fallback chain
+    (news-indexer → GDELT → Google CSE → SerpAPI → Serper → Brave → Tavily → … → DDG →
+    trusted sites; see `tm/web_search.py`). First non-empty provider wins, unless
+    `min_results` > 0 and news-indexer served fewer hits than that — then the paid legs run
+    too and their new URLs are appended (dedup by URL, up to `limit`).
     """
     return await run_search(body)
 

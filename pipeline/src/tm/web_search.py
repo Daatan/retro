@@ -1701,15 +1701,66 @@ def _warm_news_indexer(results: List[SearchResult]) -> None:
         logger.debug("news_indexer warm skipped (non-fatal): %s", exc)
 
 
+def _top_up_from_paid(
+    query: str,
+    limit: int,
+    date_from: Optional[datetime],
+    date_to: Optional[datetime],
+    base: List[SearchResult],
+) -> List[SearchResult]:
+    """news-indexer served *base* but fewer than the caller's `min_results`: run the rest of
+    the chain once more with the indexer skipped and append whatever it finds that the index
+    did not already have (dedup by URL), capped at *limit*. Index hits stay first — they are
+    the fresh, already-parsed ones. Provider becomes `news_indexer+<paid>` and the chain
+    lists both passes, so `event=search_done` still shows what actually ran (retro#822)."""
+    base_chain = list(_provider_local.chain)
+    extra = _search_articles_chain(
+        query, limit, date_from=date_from, date_to=date_to, skip_news_indexer=True,
+    )
+    paid_provider = get_last_search_provider()
+    paid_chain = get_last_search_provider_chain()
+
+    seen = {r.url for r in base if r.url}
+    topup: List[SearchResult] = []
+    for r in extra:
+        if not r.url or r.url in seen:
+            continue
+        seen.add(r.url)
+        topup.append(r)
+    topup = topup[: max(limit - len(base), 0)]
+
+    _provider_local.chain = base_chain + paid_chain
+    _provider_local.name = f"news_indexer+{paid_provider}" if topup else "news_indexer"
+    logger.info(
+        "event=search_topup base=%d paid=%s paid_hits=%d added=%d query=%r",
+        len(base), paid_provider, len(extra), len(topup), query[:60],
+    )
+    # Warm only the slice the index did not have — the base is already indexed.
+    _warm_news_indexer(topup)
+    return base + topup
+
+
 def search_articles(
     query: str,
     limit: int = 10,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
+    min_results: int = 0,
 ) -> List[SearchResult]:
     """Search wrapper: run the provider chain, then warm the news-indexer cache with any
-    paid-provider results before returning. See `_search_articles_chain` for the chain itself."""
+    paid-provider results before returning. See `_search_articles_chain` for the chain itself.
+
+    `min_results` > 0 turns the first-non-empty-wins chain into a top-up: when news-indexer
+    serves fewer hits than that, the paid legs run too and their new URLs are appended (see
+    `_top_up_from_paid`). 0 (default) keeps the historical behaviour — the index short-circuits
+    the chain whenever it has anything at all."""
     results = _search_articles_chain(query, limit, date_from=date_from, date_to=date_to)
+    if (
+        min_results > 0
+        and len(results) < min_results
+        and get_last_search_provider() == "news_indexer"
+    ):
+        return _top_up_from_paid(query, limit, date_from, date_to, results)
     _warm_news_indexer(results)
     return results
 
@@ -1719,6 +1770,7 @@ def search_capturing(
     limit: int = 10,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
+    min_results: int = 0,
 ) -> tuple[List[SearchResult], str, list[str]]:
     """Run search_articles() and capture the winning provider/chain *in the same
     thread* the search ran in.
@@ -1730,7 +1782,7 @@ def search_capturing(
     thread instead (e.g. ``asyncio.to_thread(search_capturing, query, limit)``)
     so the provider read happens where the search actually ran.
     """
-    results = search_articles(query, limit, date_from, date_to)
+    results = search_articles(query, limit, date_from, date_to, min_results=min_results)
     return results, get_last_search_provider(), get_last_search_provider_chain()
 
 
@@ -1739,6 +1791,7 @@ def _search_articles_chain(
     limit: int = 10,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
+    skip_news_indexer: bool = False,
 ) -> List[SearchResult]:
     """
     Search for news articles matching *query*, returning up to *limit* results.
@@ -1754,6 +1807,9 @@ def _search_articles_chain(
         limit:     Max results to return.
         date_from: Optional start of date window.
         date_to:   Optional end of date window.
+        skip_news_indexer: Leave out leg 0. Used by the `min_results` top-up
+                   (`_top_up_from_paid`) to re-run just the paid legs after the
+                   index has already answered.
 
     Returns:
         List of SearchResult(title, url, snippet, source, published_date).
@@ -1767,7 +1823,7 @@ def _search_articles_chain(
     # 0. news-indexer — local semantic index; first-in-chain, no SERP cost.
     #    Returns [] (gating check runs server-side) → fall through to GDELT/SERP.
     #    Inert when NEWS_INDEXER_URL / NEWS_INDEXER_API_KEY are not configured.
-    if NEWS_INDEXER_URL and NEWS_INDEXER_API_KEY:
+    if NEWS_INDEXER_URL and NEWS_INDEXER_API_KEY and not skip_news_indexer:
         _provider_local.chain.append("news_indexer")
         _t0 = time.perf_counter()
         try:

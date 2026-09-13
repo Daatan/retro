@@ -18,7 +18,7 @@ from tm.web_search import SearchResult
 
 class TestRunSearchProviderAttribution:
     async def test_captures_provider_from_worker_thread(self, monkeypatch):
-        def fake_search(query, limit, date_from, date_to):
+        def fake_search(query, limit, date_from, date_to, min_results=0):
             # search_articles sets these thread-locals in the worker thread.
             searcher._ws._provider_local.name = "gdelt"
             searcher._ws._provider_local.chain = ["gdelt", "serpapi"]
@@ -36,7 +36,7 @@ class TestRunSearchDistillRetry:
     async def test_distills_and_retries_on_zero_results(self, monkeypatch):
         calls: list[str] = []
 
-        def fake_search(q, limit, date_from, date_to):
+        def fake_search(q, limit, date_from, date_to, min_results=0):
             calls.append(q)
             if len(calls) == 1:  # verbatim → nothing
                 searcher._ws._provider_local.name = "none"
@@ -62,7 +62,7 @@ class TestRunSearchDistillRetry:
     async def test_no_distill_when_verbatim_has_results(self, monkeypatch):
         distill_calls = {"n": 0}
 
-        def fake_search(q, limit, date_from, date_to):
+        def fake_search(q, limit, date_from, date_to, min_results=0):
             searcher._ws._provider_local.name = "ddg"
             searcher._ws._provider_local.chain = ["ddg"]
             return [SearchResult(title="t", url="http://x", snippet="s")]
@@ -81,7 +81,7 @@ class TestRunSearchDistillRetry:
     async def test_distill_disabled_skips_retry(self, monkeypatch):
         distill_calls = {"n": 0}
 
-        def fake_search(q, limit, date_from, date_to):
+        def fake_search(q, limit, date_from, date_to, min_results=0):
             searcher._ws._provider_local.name = "none"
             searcher._ws._provider_local.chain = []
             return []
@@ -170,3 +170,24 @@ class TestHealthIncludesTrustedSites:
             1 for k, p in resp.providers.items()
             if k not in ("ddg", "trusted_sites") and p.configured and not p.exhausted and p.status == "ok"
         )
+
+
+class TestRunSearchMinResults:
+    async def test_min_results_is_forwarded_to_search(self, monkeypatch):
+        seen: list[int] = []
+
+        def fake_search(q, limit, date_from, date_to, min_results=0):
+            seen.append(min_results)
+            searcher._ws._provider_local.name = "news_indexer+serpapi"
+            searcher._ws._provider_local.chain = ["news_indexer", "gdelt", "serpapi"]
+            return [SearchResult(title="t", url="http://x", snippet="s")]
+
+        monkeypatch.setattr(searcher._ws, "search_articles", fake_search)
+        resp = await searcher.run_search(SearchRequest(query="brent crude", limit=15, min_results=8))
+        assert seen == [8]
+        assert resp.provider == "news_indexer+serpapi"
+
+    def test_min_results_defaults_to_zero_and_is_bounded(self):
+        assert SearchRequest(query="brent crude").min_results == 0
+        with pytest.raises(Exception):
+            SearchRequest(query="brent crude", min_results=31)

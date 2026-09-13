@@ -50,7 +50,7 @@ class TestEmptyResponseFields:
 class TestNoSearchResultsReason:
     def test_empty_search_sets_reason(self, monkeypatch):
         # Search returns nothing; distillation no-ops (no network).
-        monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None: [])
+        monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None, min_results=0: [])
 
         async def _no_distill(question):
             return question, {}

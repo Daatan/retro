@@ -118,15 +118,24 @@ async def search_news(
     limit: int = 5,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    min_results: int = 0,
 ) -> dict:
     """Search recent news via the Oracle's provider chain.
 
     Returns article title/url/snippet/source/date. `date_from`/`date_to` are
     ISO dates (YYYY-MM-DD). Evidence gathering — does not forecast.
+
+    `min_results` (0..30, default 0): when the local news-indexer serves fewer
+    hits than this, the paid providers run too and their new URLs are appended
+    (dedup by URL, up to `limit`); `provider` then reads `news_indexer+<paid>`.
+    0 keeps first-non-empty-provider-wins.
     """
     enforce(SEARCH_LIMIT, "search_news")
     resp = await run_search(
-        SearchRequest(query=query, limit=limit, date_from=date_from, date_to=date_to)
+        SearchRequest(
+            query=query, limit=limit, date_from=date_from, date_to=date_to,
+            min_results=min_results,
+        )
     )
     return resp.model_dump()
 

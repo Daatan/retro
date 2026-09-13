@@ -17,7 +17,7 @@ from forecast_api.models import ForecastRequest
 def test_distilled_keywords_are_searched_first(monkeypatch):
     calls: list[str] = []
 
-    def fake_search(q, limit, date_from=None, date_to=None):
+    def fake_search(q, limit, date_from=None, date_to=None, min_results=0):
         calls.append(q)
         return []  # force the no-results path; we only assert the query used
 
@@ -40,7 +40,7 @@ def test_distilled_keywords_are_searched_first(monkeypatch):
 def test_no_verbatim_retry_when_distill_is_noop(monkeypatch):
     calls: list[str] = []
 
-    def fake_search(q, limit, date_from=None, date_to=None):
+    def fake_search(q, limit, date_from=None, date_to=None, min_results=0):
         calls.append(q)
         return []
 

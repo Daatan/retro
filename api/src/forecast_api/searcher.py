@@ -39,7 +39,8 @@ async def run_search(req: SearchRequest) -> SearchResponse:
     # same thread*. Reading it here in the event-loop thread always returned
     # "none" — _ws.search_capturing() does the read in the worker thread instead.
     results, provider, chain = await asyncio.to_thread(
-        _ws.search_capturing, req.query, req.limit, date_from, date_to
+        _ws.search_capturing, req.query, req.limit, date_from, date_to,
+        min_results=req.min_results,
     )
 
     # On 0 verbatim results, distill the query to keywords and retry once. Reuses
@@ -55,7 +56,8 @@ async def run_search(req: SearchRequest) -> SearchResponse:
         if distilled and distilled != req.query:
             distilled_query = distilled
             results, provider, chain = await asyncio.to_thread(
-                _ws.search_capturing, distilled, req.limit, date_from, date_to
+                _ws.search_capturing, distilled, req.limit, date_from, date_to,
+                min_results=req.min_results,
             )
 
     duration_ms = round((time.perf_counter() - t0) * 1000, 1)

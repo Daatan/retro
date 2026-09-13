@@ -56,7 +56,7 @@ class TestEmptyResponseForwardsProvider:
 class TestForecastResponseProvider:
     def test_empty_path_carries_provider(self, monkeypatch):
         # Search returns nothing; provider attribution still flows to the top level.
-        monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None: [])
+        monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None, min_results=0: [])
         monkeypatch.setattr(web_search, "get_last_search_provider", lambda: "ddg")
         monkeypatch.setattr(web_search, "get_last_search_provider_chain",
                             lambda: ["gdelt", "brightdata", "dataforseo", "ddg", "gdelt_bq"])
@@ -72,7 +72,7 @@ class TestForecastResponseProvider:
         assert resp.distilled_query is None  # distillation was a no-op
 
     def test_distilled_query_is_exposed(self, monkeypatch):
-        monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None: [])
+        monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None, min_results=0: [])
         monkeypatch.setattr(web_search, "get_last_search_provider", lambda: "none")
         monkeypatch.setattr(web_search, "get_last_search_provider_chain", lambda: [])
 

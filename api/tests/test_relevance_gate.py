@@ -78,7 +78,7 @@ def _wire(monkeypatch, articles, certainty: float = 0.8, evidence_class=None):
         SearchResult(title="t", url=url, snippet="s", source=url, published_date=today)
         for url, _, _ in articles
     ]
-    monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None: list(results))
+    monkeypatch.setattr(web_search, "search_articles", lambda q, limit, date_from=None, date_to=None, min_results=0: list(results))
 
     async def _no_distill(question):
         return question, {}

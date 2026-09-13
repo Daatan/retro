@@ -1183,3 +1183,111 @@ class _FrozenDatetime(_real_datetime):
     @classmethod
     def now(cls, tz=None):
         return cls(2026, 8, 20, 12, 0, 0)
+
+
+class TestNewsIndexerTopUp:
+    """`min_results` (retro#822): when news-indexer serves fewer hits than the caller's floor,
+    the paid legs run too and their *new* URLs are appended — index hits first, dedup by URL,
+    capped at `limit`. Default 0 keeps first-non-empty-provider-wins."""
+
+    _HITS = [
+        {"title": "N1", "url": "http://ni.com/1", "snippet": "s", "source": "ni.com", "published_date": "2026-09-12"},
+        {"title": "N2", "url": "http://ni.com/2", "snippet": "s", "source": "ni.com", "published_date": "2026-09-12"},
+    ]
+
+    @staticmethod
+    def _ws_with_index_and_serpapi(monkeypatch, index_hits):
+        ws = _fresh_ws()
+        ws.NEWS_INDEXER_URL = "http://ni.local"
+        ws.NEWS_INDEXER_API_KEY = "secret"
+        ws.SERPAPI_API_KEY = "s"
+        ws._SERPAPI_QUOTA_EXHAUSTED = False
+        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(200, index_hits))
+        return ws
+
+    @staticmethod
+    def _serp(ws, *urls):
+        return [ws.SearchResult(title=u, url=u, snippet="s") for u in urls]
+
+    def test_default_min_results_keeps_short_circuit(self, monkeypatch):
+        ws = self._ws_with_index_and_serpapi(monkeypatch, self._HITS)
+        serp_spy = MagicMock(return_value=self._serp(ws, "http://paid.com/1"))
+        with patch.multiple(ws, _search_gdelt=MagicMock(return_value=[]),
+                            _search_gdelt_bq=MagicMock(return_value=[]),
+                            _search_serpapi_news=serp_spy):
+            res = ws.search_articles("brent crude", limit=10)
+        assert [r.url for r in res] == ["http://ni.com/1", "http://ni.com/2"]
+        assert not serp_spy.called
+        assert ws.get_last_search_provider() == "news_indexer"
+
+    def test_thin_index_is_topped_up_from_paid(self, monkeypatch):
+        ws = self._ws_with_index_and_serpapi(monkeypatch, self._HITS)
+        TestNewsIndexerWarm._inline_threads(ws, monkeypatch)
+        posts = []
+        monkeypatch.setattr(ws.httpx, "post", lambda *a, **k: posts.append(k) or _FakeResp(200, {}))
+        serp_spy = MagicMock(return_value=self._serp(
+            ws, "http://ni.com/2", "http://paid.com/1", "http://paid.com/2", "http://paid.com/3"))
+        with patch.multiple(ws, _search_gdelt=MagicMock(return_value=[]),
+                            _search_gdelt_bq=MagicMock(return_value=[]),
+                            _search_serpapi_news=serp_spy):
+            res = ws.search_articles("brent crude", limit=4, min_results=5)
+        # index first, duplicate dropped, capped at limit
+        assert [r.url for r in res] == ["http://ni.com/1", "http://ni.com/2", "http://paid.com/1", "http://paid.com/2"]
+        assert serp_spy.call_count == 1
+        assert ws.get_last_search_provider() == "news_indexer+serpapi"
+        chain = ws.get_last_search_provider_chain()
+        assert chain[0] == "news_indexer" and "serpapi" in chain and chain.count("news_indexer") == 1
+        # only the top-up slice is warmed — the base is already indexed
+        assert len(posts) == 1
+        assert posts[0]["json"] == {"urls": ["http://paid.com/1", "http://paid.com/2"]}
+
+    def test_index_meeting_floor_skips_paid(self, monkeypatch):
+        ws = self._ws_with_index_and_serpapi(monkeypatch, self._HITS)
+        serp_spy = MagicMock(return_value=self._serp(ws, "http://paid.com/1"))
+        with patch.multiple(ws, _search_gdelt=MagicMock(return_value=[]),
+                            _search_gdelt_bq=MagicMock(return_value=[]),
+                            _search_serpapi_news=serp_spy):
+            res = ws.search_articles("brent crude", limit=10, min_results=2)
+        assert len(res) == 2
+        assert not serp_spy.called
+        assert ws.get_last_search_provider() == "news_indexer"
+
+    def test_empty_index_runs_chain_once(self, monkeypatch):
+        """0 index hits already fall through to paid in the first pass — no second pass,
+        and the provider is the plain paid name, not a combined one."""
+        ws = self._ws_with_index_and_serpapi(monkeypatch, [])
+        serp_spy = MagicMock(return_value=self._serp(ws, "http://paid.com/1"))
+        with patch.multiple(ws, _search_gdelt=MagicMock(return_value=[]),
+                            _search_gdelt_bq=MagicMock(return_value=[]),
+                            _search_serpapi_news=serp_spy):
+            res = ws.search_articles("brent crude", limit=10, min_results=5)
+        assert [r.url for r in res] == ["http://paid.com/1"]
+        assert serp_spy.call_count == 1
+        assert ws.get_last_search_provider() == "serpapi"
+
+    def test_paid_adds_nothing_new_keeps_index_provider(self, monkeypatch):
+        ws = self._ws_with_index_and_serpapi(monkeypatch, self._HITS)
+        TestNewsIndexerWarm._inline_threads(ws, monkeypatch)
+        posts = []
+        monkeypatch.setattr(ws.httpx, "post", lambda *a, **k: posts.append(1))
+        serp_spy = MagicMock(return_value=self._serp(ws, "http://ni.com/1", "http://ni.com/2"))
+        with patch.multiple(ws, _search_gdelt=MagicMock(return_value=[]),
+                            _search_gdelt_bq=MagicMock(return_value=[]),
+                            _search_serpapi_news=serp_spy):
+            res = ws.search_articles("brent crude", limit=10, min_results=5)
+        assert [r.url for r in res] == ["http://ni.com/1", "http://ni.com/2"]
+        assert serp_spy.called
+        assert ws.get_last_search_provider() == "news_indexer"
+        assert "serpapi" in ws.get_last_search_provider_chain()
+        assert not posts
+
+    def test_search_capturing_passes_min_results(self, monkeypatch):
+        ws = self._ws_with_index_and_serpapi(monkeypatch, self._HITS)
+        serp_spy = MagicMock(return_value=self._serp(ws, "http://paid.com/1"))
+        with patch.multiple(ws, _search_gdelt=MagicMock(return_value=[]),
+                            _search_gdelt_bq=MagicMock(return_value=[]),
+                            _search_serpapi_news=serp_spy):
+            res, provider, chain = ws.search_capturing("brent crude", 10, None, None, min_results=5)
+        assert len(res) == 3
+        assert provider == "news_indexer+serpapi"
+        assert "serpapi" in chain

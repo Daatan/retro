@@ -1363,6 +1363,31 @@ class TestNewsIndexerTopUp:
         assert ws.get_last_search_provider() == "none"
         assert ws.get_last_search_provider_chain() == []
 
+    def test_topup_pass_skips_gdelt(self, monkeypatch):
+        """retro#826: the paid-only second pass never runs GDELT Doc — it eats ~7 s of the
+        budget and has served nothing on the /search path."""
+        ws = self._ws_with_index_and_serpapi(monkeypatch, self._HITS)
+        TestNewsIndexerWarm._inline_threads(ws, monkeypatch)
+        monkeypatch.setattr(ws.httpx, "post", lambda *a, **k: _FakeResp(200, {}))
+        gdelt_spy = MagicMock(return_value=self._serp(ws, "http://gdelt.com/1"))
+        serp_spy = MagicMock(return_value=self._serp(ws, "http://paid.com/1"))
+        with patch.multiple(ws, _search_gdelt=gdelt_spy,
+                            _search_gdelt_bq=MagicMock(return_value=[]),
+                            _search_serpapi_news=serp_spy):
+            res = ws.search_articles("brent crude", limit=10, min_results=5)
+        assert [r.url for r in res][-1] == "http://paid.com/1"
+        assert not gdelt_spy.called
+        assert ws.get_last_search_provider() == "news_indexer+serpapi"
+        assert ws.get_last_search_provider_chain() == ["news_indexer", "serpapi"]
+
+    def test_first_pass_still_runs_gdelt(self, monkeypatch):
+        ws = self._ws_with_index_and_serpapi(monkeypatch, [])
+        gdelt_spy = MagicMock(return_value=self._serp(ws, "http://gdelt.com/1"))
+        with patch.multiple(ws, _search_gdelt=gdelt_spy, _search_serpapi_news=MagicMock(return_value=[])):
+            res = ws.search_articles("brent crude", limit=10, min_results=5)
+        assert [r.url for r in res] == ["http://gdelt.com/1"]
+        assert ws.get_last_search_provider() == "gdelt"
+
     def test_no_deadline_leaves_chain_unchanged(self, monkeypatch):
         ws = _fresh_ws()
         ws.SERPAPI_API_KEY = "s"

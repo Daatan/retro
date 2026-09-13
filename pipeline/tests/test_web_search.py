@@ -1326,7 +1326,7 @@ class TestNewsIndexerTopUp:
         def slow_serp(*a, **k):
             time.sleep(0.3)
             finished.set()
-            return self._serp(ws, "http://paid.com/1")
+            return []  # empty, so the straggler walks on and meets the deadline check
 
         ddg_spy = MagicMock(return_value=[])
         with patch.multiple(ws, _search_gdelt=MagicMock(return_value=[]),

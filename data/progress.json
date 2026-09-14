@@ -13471,7 +13471,7 @@
     "D07:israel_hayom": {
       "event_id": "D07",
       "source_id": "israel_hayom",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13499,7 +13499,7 @@
     "D07:nyt": {
       "event_id": "D07",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -13527,7 +13527,7 @@
     "D07:ynet": {
       "event_id": "D07",
       "source_id": "ynet",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-12T12:05:38.476740"
+  "last_updated": "2026-09-14T14:58:11.787755"
 }

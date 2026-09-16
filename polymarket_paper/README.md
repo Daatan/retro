@@ -22,6 +22,13 @@ fixed date, at a cost of about $30 in LLM calls.
 Flipping this into real trading is a separate decision with its own issue;
 this project must not grow that capability incrementally.
 
+## Relation to `duel.html`
+
+The older public "Duel" page scores TruthMachine vs Polymarket on a hand-picked set of
+already-resolved events (13 at the time of writing). This bot is the forward-looking
+version: forecasts are recorded *before* resolution, on a fixed universe, at a fixed
+cadence, so nothing can be selected after the fact.
+
 ## Universe
 
 The Israeli Knesset election of **2026-10-27** — ten Gamma events, about

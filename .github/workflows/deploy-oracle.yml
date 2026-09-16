@@ -18,6 +18,10 @@ on:
       - infra/metaculus-sync.service
       - infra/metaculus-sync.timer
       - infra/install_metaculus_timer.sh
+      - polymarket_paper/**
+      - infra/polymarket-paper.service
+      - infra/polymarket-paper.timer
+      - infra/install_polymarket_paper_timer.sh
       - .github/workflows/deploy-oracle.yml
 
   # Manual trigger — useful for redeploying the current main (e.g. after a

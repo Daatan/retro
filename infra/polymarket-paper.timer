@@ -1,0 +1,19 @@
+[Unit]
+Description=Run the Polymarket paper bot every 6 hours
+Documentation=https://github.com/Daatan/retro/blob/main/polymarket_paper/README.md
+
+[Timer]
+# Four runs a day, each asking the Oracle about at most MAX_MARKETS_PER_RUN
+# markets whose last answer is older than STALE_AFTER_HOURS (20 h). Net effect:
+# every market in the universe gets one fresh Oracle number per day (the
+# forecast cache TTL is 1 h, so none of these are cache hits), spread across
+# the day instead of one long oneshot, and the price series is sampled 4×/day
+# for the mark-to-market view.
+OnCalendar=*-*-* 00,06,12,18:30:00
+OnBootSec=5min
+Persistent=true
+RandomizedDelaySec=300
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

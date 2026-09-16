@@ -13,6 +13,7 @@ on:
       - pipeline/**
       - bayesoracle/**
       - metaculus/**
+      - polymarket_paper/**
       # The case studies are hand-edited data, and test_event_validation.py
       # validates the committed set — so a bad edit to an event file alone must
       # trigger this workflow, not just changes under pipeline/.
@@ -55,12 +56,18 @@ jobs:
       - name: Run metaculus-sync systemd unit tests
         run: bash infra/tests/test_metaculus_timer.sh
 
+      - name: shellcheck install_polymarket_paper_timer.sh
+        run: shellcheck -S error infra/install_polymarket_paper_timer.sh
+
+      - name: Run polymarket-paper systemd unit tests
+        run: bash infra/tests/test_polymarket_paper_timer.sh
+
   pytest:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        project: [api, pipeline, bayesoracle, metaculus]
+        project: [api, pipeline, bayesoracle, metaculus, polymarket_paper]
     defaults:
       run:
         working-directory: ${{ matrix.project }}

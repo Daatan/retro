@@ -1,0 +1,41 @@
+[Unit]
+Description=Polymarket paper bot — record Oracle vs market price, open notional positions (retro#620)
+Documentation=https://github.com/Daatan/retro/blob/main/polymarket_paper/README.md
+After=network-online.target
+Wants=network-online.target
+
+# Reuses the Metaculus relay credentials file: it already carries the named,
+# capped ORACLE_API_KEY (retro#725). No new secret to provision — the bot never
+# needs a Polymarket credential, because it never writes to Polymarket.
+ConditionPathExists=/home/ubuntu/truthmachine/.env.metaculus
+
+[Service]
+Type=oneshot
+User=ubuntu
+
+# API-only checkout, same tree deploy_oracle.sh resets to origin/main (never
+# /home/ubuntu/truthmachine — that tree has its own lifecycle).
+WorkingDirectory=/home/ubuntu/oracle-api/polymarket_paper
+
+# Credentials from the shared file first; an optional second file can override
+# ORACLE_API_KEY with a bot-specific named key (e.g. one without the metaculus
+# max_articles cap) without touching the Metaculus setup. The leading "-" makes
+# the second file optional.
+EnvironmentFile=/home/ubuntu/truthmachine/.env.metaculus
+EnvironmentFile=-/home/ubuntu/truthmachine/.env.polymarket-paper
+
+# The ledger lives beside the Oracle API's other on-box ledgers, and the API
+# serves it read-only at GET /pm/paper — so the scorecard needs no SSM.
+Environment=PAPER_LEDGER_DIR=/home/ubuntu/truthmachine/data/polymarket_paper
+
+ExecStart=/home/ubuntu/.local/bin/uv run --frozen python paper.py
+
+# 12 Oracle calls at the measured p99 (~226 s) is ~45 min worst case; the timer
+# period is 6 h. A wedged run must fail, not block the next slot.
+TimeoutStartSec=3600
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

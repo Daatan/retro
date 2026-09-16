@@ -11714,7 +11714,7 @@
     "H05:ft": {
       "event_id": "H05",
       "source_id": "ft",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-14T14:58:11.787755"
+  "last_updated": "2026-09-16T20:16:21.321708"
 }

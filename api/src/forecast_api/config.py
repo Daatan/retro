@@ -40,6 +40,10 @@ class ApiSettings(BaseSettings):
     # resolution_feedback_path — this ledger is specifically about pin
     # correctness, not per-source credibility.
     settlement_pin_ledger_path: Path = Path("")  # empty = data_dir/settlement_pin_ledger.jsonl
+    # retro#620: directory the Polymarket paper bot (polymarket_paper/paper.py,
+    # a systemd oneshot on the same box) appends its JSONL ledger to; served
+    # read-only at GET /pm/paper.
+    polymarket_paper_ledger_dir: Path = Path("")  # empty = data_dir/polymarket_paper
     # Step 4 — the cutover (docs/ORACLE_VARIABLES.md §9). When True,
     # get_credibility_weight() sources credibility from the resolution-informed
     # shadow board above instead of the vault-curated leaderboard.json. Full
@@ -984,6 +988,12 @@ class ApiSettings(BaseSettings):
         if self.settlement_pin_ledger_path != Path(""):
             return self.settlement_pin_ledger_path
         return self.data_dir / "settlement_pin_ledger.jsonl"
+
+    @property
+    def resolved_polymarket_paper_ledger_dir(self) -> Path:
+        if self.polymarket_paper_ledger_dir != Path(""):
+            return self.polymarket_paper_ledger_dir
+        return self.data_dir / "polymarket_paper"
 
     @property
     def resolved_settlement_verdict_cache_path(self) -> Path:

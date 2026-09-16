@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import httpx
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from slowapi.errors import RateLimitExceeded
 
 from ._build import build_info
@@ -33,6 +33,7 @@ from .leaderboard import (
 from .resolution_feedback import ingest_resolution
 from .resolution_scorer import load_shadow_leaderboard, rescore_authors_from_disk, rescore_from_disk
 from .settlement_pin_ledger import load_ledger, record_settlement_pin
+from .pm_paper import build_report as build_pm_paper_report, render_markdown as render_pm_paper_markdown
 from tm.config import settings as _pipeline_settings
 from tm.gatekeeper import check_is_prediction
 from tm.llm import complete_text_once_with_usage
@@ -539,6 +540,26 @@ async def pm_markets(
         )
     except httpx.HTTPError:
         return JSONResponse({"detail": "Upstream Polymarket request failed"}, status_code=504)
+
+
+@app.get("/pm/paper", tags=["Polymarket"])
+@limiter.limit("30/minute")
+async def pm_paper(
+    request: Request,
+    format: str = Query(default="json", pattern="^(json|md)$", description="json (default) or md for a Markdown scorecard"),
+):
+    """
+    Scorecard of the Polymarket **paper**-trading bot (retro#620): Oracle
+    probability vs market price per tracked market, notional positions marked
+    to the latest price, and Brier of Oracle vs market on resolved markets.
+    Rebuilt from the on-box JSONL ledger on every call; no Polymarket call is
+    made here. Public and read-only — there is nothing to protect: no funds,
+    no orders, no credentials, hypothetical positions only.
+    """
+    report = await asyncio.to_thread(build_pm_paper_report, settings.resolved_polymarket_paper_ledger_dir)
+    if format == "md":
+        return PlainTextResponse(render_pm_paper_markdown(report), media_type="text/markdown; charset=utf-8")
+    return JSONResponse(report)
 
 
 # ── MCP server mount (only when Cognito OAuth is configured) ─────────────────

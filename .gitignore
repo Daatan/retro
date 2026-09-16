@@ -49,3 +49,6 @@ venv/
 
 # Oracle API build provenance — generated at deploy by infra/deploy_oracle.sh
 api/src/forecast_api/_build_info.json
+
+# Polymarket paper bot ledger (local runs; on the box it lives under data_dir)
+polymarket_paper/data/

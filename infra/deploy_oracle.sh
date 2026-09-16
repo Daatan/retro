@@ -59,6 +59,13 @@ if [[ -f "$API_DIR/infra/install_metaculus_timer.sh" ]]; then
   sudo bash "$API_DIR/infra/install_metaculus_timer.sh"
 fi
 
+# ── 2a'. Re-install the Polymarket paper bot timer (retro#620) ──────────────
+# Same idempotent pattern; the installer also runs the bot project's uv sync.
+if [[ -f "$API_DIR/infra/install_polymarket_paper_timer.sh" ]]; then
+  log "re-installing polymarket-paper timer..."
+  sudo bash "$API_DIR/infra/install_polymarket_paper_timer.sh"
+fi
+
 # ── 2b. Write build provenance (read by /version and /health) ─────────────────
 # Generated, environment-specific — not committed (see .gitignore). The runtime
 # git fallback in _build.py covers dev where this file is absent. The semver is

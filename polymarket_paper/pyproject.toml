@@ -1,0 +1,23 @@
+[project]
+name = "polymarket-paper"
+version = "0.1.0"
+description = "Dry-run Polymarket paper-trading bot: records Oracle probability vs market price, opens notional positions, never signs anything (retro#620)"
+requires-python = ">=3.11"
+# No web3 / signing dependency of any kind — by design (retro#620 "keep the
+# absence of any signing capability structural"). Adding one is a separate,
+# explicit decision, not a follow-up.
+dependencies = [
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

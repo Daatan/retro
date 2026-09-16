@@ -13,6 +13,20 @@ One EC2 box, **two independent checkouts** of this repo:
 
 Both checkouts read the same `data/` directory — it lives in the pipeline's tree, and the API's `.env` points `DATA_DIR=/home/ubuntu/truthmachine/data` at it. Data is shared, **code is not**. This is what lets auto-deploy stay trivial: the deploy script never has to reason about the pipeline's work-in-progress commits because it only touches the API checkout.
 
+## Sidecar timers on the box
+
+Two systemd oneshots share the Oracul box and are (re)installed by `deploy_oracle.sh` on every
+deploy, each gated on `ConditionPathExists=/home/ubuntu/truthmachine/.env.metaculus` (the relay
+key file), so a box without the key simply never runs them:
+
+| Unit | Cadence | What | Docs |
+|---|---|---|---|
+| `metaculus-sync` | 4×/day | Submits Oracul forecasts to a Metaculus tournament | [`../metaculus/README.md`](../metaculus/README.md) |
+| `polymarket-paper` | 00:30/06:30/12:30/18:30 UTC | **Paper** scoreboard on the Knesset-election Polymarket cluster; ledger under `data/polymarket_paper/`, served by `GET /pm/paper` (retro#620) | [`../polymarket_paper/README.md`](../polymarket_paper/README.md) |
+
+Kill switch for either: `sudo systemctl disable --now <unit>.timer` on the box; the next deploy
+re-enables it unless the installer call is removed from `deploy_oracle.sh`.
+
 ## Deploy flow
 
 `infra/deploy_oracle.sh` runs on the box and does:
@@ -48,7 +62,8 @@ There are three supported ways to deploy. **Normal operation is path 1 — do no
 `.github/workflows/deploy-oracle.yml` runs on every push to `main` that touches `api/**`,
 `pipeline/**`, `metaculus/**`, `infra/deploy_oracle.sh`, `infra/oracle-api.service`,
 `infra/metaculus-sync.service`, `infra/metaculus-sync.timer`, `infra/install_metaculus_timer.sh`,
-or the workflow file itself **[CORRECTED 2026-09-07 — the metaculus paths were added later and
+`polymarket_paper/**`, `infra/polymarket-paper.service`, `infra/polymarket-paper.timer`,
+`infra/install_polymarket_paper_timer.sh` (retro#620), or the workflow file itself **[CORRECTED 2026-09-07 — the metaculus paths were added later and
 this list had gone stale]**. It authenticates to AWS via OIDC, calls `aws ssm send-command`
 against the box, waits for completion, and prints the deploy script's stdout/stderr into the
 Actions log. A `no-op` fast-path in `deploy_oracle.sh` makes the workflow cheap when the resolved

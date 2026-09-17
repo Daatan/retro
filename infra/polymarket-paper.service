@@ -4,10 +4,13 @@ Documentation=https://github.com/Daatan/retro/blob/main/polymarket_paper/README.
 After=network-online.target
 Wants=network-online.target
 
-# Reuses the Metaculus relay credentials file: it already carries the named,
-# capped ORACLE_API_KEY (retro#725). No new secret to provision — the bot never
-# needs a Polymarket credential, because it never writes to Polymarket.
-ConditionPathExists=/home/ubuntu/truthmachine/.env.metaculus
+# Gated on the bot's own credentials file. install_polymarket_paper_timer.sh
+# derives it from the box's ORACLE_API_KEYS map (the named `metaculus` relay
+# entry, retro#725, or a `polymarket-paper` entry when one exists) — so no new
+# secret is provisioned by hand, and the bot no longer depends on
+# .env.metaculus, which never landed on the box (retro#619 blocked). The bot
+# needs no Polymarket credential, because it never writes to Polymarket.
+ConditionPathExists=/home/ubuntu/truthmachine/.env.polymarket-paper
 
 [Service]
 Type=oneshot
@@ -17,12 +20,12 @@ User=ubuntu
 # /home/ubuntu/truthmachine — that tree has its own lifecycle).
 WorkingDirectory=/home/ubuntu/oracle-api/polymarket_paper
 
-# Credentials from the shared file first; an optional second file can override
-# ORACLE_API_KEY with a bot-specific named key (e.g. one without the metaculus
-# max_articles cap) without touching the Metaculus setup. The leading "-" makes
-# the second file optional.
-EnvironmentFile=/home/ubuntu/truthmachine/.env.metaculus
-EnvironmentFile=-/home/ubuntu/truthmachine/.env.polymarket-paper
+# The Metaculus file is optional (leading "-") and read first; the bot's own
+# file is required and read last, so it wins. To lift the metaculus
+# max_articles cap: add a `polymarket-paper` entry to ORACLE_API_KEYS, delete
+# .env.polymarket-paper, redeploy — the installer regenerates it from that entry.
+EnvironmentFile=-/home/ubuntu/truthmachine/.env.metaculus
+EnvironmentFile=/home/ubuntu/truthmachine/.env.polymarket-paper
 
 # The ledger lives beside the Oracle API's other on-box ledgers, and the API
 # serves it read-only at GET /pm/paper — so the scorecard needs no SSM.

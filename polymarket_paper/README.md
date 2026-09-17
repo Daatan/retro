@@ -62,7 +62,7 @@ Resolution timing, so the scorecard is read correctly:
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `ORACLE_API_KEY` | required | Relay key for `oracle.daatan.com`. On the box it comes from `.env.metaculus`. |
+| `ORACLE_API_KEY` | required | Relay key for `oracle.daatan.com`. On the box it comes from `.env.polymarket-paper`, which the installer derives from the `ORACLE_API_KEYS` map (`polymarket-paper` entry if present, else `metaculus`). |
 | `ORACLE_BASE_URL` | `https://oracle.daatan.com` | |
 | `PAPER_LEDGER_DIR` | `./data` | On the box: `/home/ubuntu/truthmachine/data/polymarket_paper`, which is what the API reads. |
 | `PAPER_EVENT_SLUGS` | the ten Israeli-election events | |
@@ -74,13 +74,14 @@ Resolution timing, so the scorecard is read correctly:
 | `NOTIONAL_USD` | 100 | Per position. |
 | `DRY_RUN` | unset | `1` = fetch and forecast, write nothing. |
 
-**Relay-key caveat.** The bot reuses the Metaculus relay key, which the API
-caps at `max_articles=5` (prod interactive default is 10). So this measures a
-slightly handicapped Oracul. Every snapshot records `articles_used` and
-`articles_found`, so the handicap is visible in the data. To remove it, add a
-`polymarket-paper` entry to `ORACLE_API_KEYS` without the cap and put that key
-in `/home/ubuntu/truthmachine/.env.polymarket-paper` (read after
-`.env.metaculus`, so it overrides).
+**Relay-key caveat.** Until a `polymarket-paper` entry exists, the installer
+falls back to the Metaculus relay key, which the API caps at `max_articles=5`
+(prod interactive default is 10). So this measures a slightly handicapped
+Oracul. Every snapshot records `articles_used` and `articles_found`, so the
+handicap is visible in the data. To remove it: add a `polymarket-paper` entry
+to `ORACLE_API_KEYS` in the box's `.env` without the cap, delete
+`/home/ubuntu/truthmachine/.env.polymarket-paper`, redeploy (or re-run the
+installer) — it regenerates the file from the new entry.
 
 ## Cost
 

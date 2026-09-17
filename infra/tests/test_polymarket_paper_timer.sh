@@ -6,6 +6,7 @@ set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE="$DIR/polymarket-paper.service"
 TIMER="$DIR/polymarket-paper.timer"
+INSTALLER="$DIR/install_polymarket_paper_timer.sh"
 
 pass=0; fail=0
 ok()   { echo "  ok: $1"; pass=$((pass+1)); }
@@ -24,12 +25,17 @@ check "timer runs 4 times a day" "[[ \$(grep -oP '^OnCalendar=\*-\*-\* \K[0-9,]+
 check "timer is Persistent"      "grep -q '^Persistent=true' '$TIMER'"
 
 # Skipped, not failed, until credentials exist — and it reuses the relay key.
-check "service gated on the shared relay credentials file" \
-  "grep -q '^ConditionPathExists=/home/ubuntu/truthmachine/.env.metaculus' '$SERVICE'"
-check "optional bot-specific env file can override the key" \
-  "grep -q '^EnvironmentFile=-/home/ubuntu/truthmachine/.env.polymarket-paper' '$SERVICE'"
+check "service gated on the bot's own credentials file (not .env.metaculus — it never landed)" \
+  "grep -q '^ConditionPathExists=/home/ubuntu/truthmachine/.env.polymarket-paper' '$SERVICE'"
+check "metaculus env file is optional" \
+  "grep -q '^EnvironmentFile=-/home/ubuntu/truthmachine/.env.metaculus' '$SERVICE'"
+check "bot env file is required and read last (wins)" \
+  "[[ \$(grep '^EnvironmentFile=' '$SERVICE' | tail -1) == 'EnvironmentFile=/home/ubuntu/truthmachine/.env.polymarket-paper' ]]"
+check "installer derives the env file from ORACLE_API_KEYS" \
+  "grep -q 'ORACLE_API_KEYS' '$INSTALLER' && grep -q 'O_EXCL, 0o600' '$INSTALLER'"
+check "installer kicks a first run only when the ledger is empty, without blocking the deploy" \
+  "grep -q 'snapshots.jsonl' '$INSTALLER' && grep -q 'systemctl start --no-block polymarket-paper.service' '$INSTALLER'"
 
-# Ledger where the Oracle API's GET /pm/paper reads it.
 check "ledger dir is under the API's data_dir" \
   "grep -q '^Environment=PAPER_LEDGER_DIR=/home/ubuntu/truthmachine/data/polymarket_paper' '$SERVICE'"
 

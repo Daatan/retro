@@ -16,8 +16,11 @@ Both checkouts read the same `data/` directory — it lives in the pipeline's tr
 ## Sidecar timers on the box
 
 Two systemd oneshots share the Oracul box and are (re)installed by `deploy_oracle.sh` on every
-deploy, each gated on `ConditionPathExists=/home/ubuntu/truthmachine/.env.metaculus` (the relay
-key file), so a box without the key simply never runs them:
+deploy, each gated on a `ConditionPathExists=` credentials file, so a box without the key simply
+never runs them. `metaculus-sync` waits for `/home/ubuntu/truthmachine/.env.metaculus` (never
+provisioned — retro#619 is blocked, so that timer fires and skips). `polymarket-paper` waits for
+`.env.polymarket-paper`, which its installer derives from the box's `ORACLE_API_KEYS` map, so it
+runs as soon as the deploy lands:
 
 | Unit | Cadence | What | Docs |
 |---|---|---|---|

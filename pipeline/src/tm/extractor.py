@@ -2469,6 +2469,29 @@ def audit_named_entity_dyad_mismatch(
 # many characters — "very short" mirrors news-indexer PR#424's short-caption-media threshold,
 # reused here for the text-only shape rather than invented fresh.
 _PUSHED_FRAGMENT_SHORT_CHARS = 100
+# retro#770's own thesis: |stance| this high is almost always a defect, not evidence.
+_PUSHED_FRAGMENT_EXTREME_STANCE = 0.95
+_PUSHED_FRAGMENT_URL_RE = re.compile(r"https?://\S+")
+_PUSHED_FRAGMENT_JOIN = " — "
+
+
+def _pushed_effective_len(stripped: str) -> int:
+    """Length of what the post actually says, for the log line only.
+
+    The 2026-09-18 review of this flag's first 24 events found two ways ``len`` overstates a
+    pushed post: the forecaster's fallback text is ``title — snippet`` and the two are identical
+    for a short Telegram post (5 of 11 URLs), so the post is counted twice; and a bare link
+    counts in full (``mygplanet/39742``: 91 chars, 43 of them a YouTube URL). Neither changes
+    when the flag fires — that stays on the text the extractor was shown.
+    """
+    half = (len(stripped) - len(_PUSHED_FRAGMENT_JOIN)) // 2
+    if (
+        half > 0
+        and stripped[half:half + len(_PUSHED_FRAGMENT_JOIN)] == _PUSHED_FRAGMENT_JOIN
+        and stripped[:half] == stripped[half + len(_PUSHED_FRAGMENT_JOIN):]
+    ):
+        stripped = stripped[:half]
+    return len(_PUSHED_FRAGMENT_URL_RE.sub("", stripped).strip())
 
 
 def audit_pushed_title_fragment(
@@ -2504,11 +2527,17 @@ def audit_pushed_title_fragment(
     very_short = len(stripped) < _PUSHED_FRAGMENT_SHORT_CHARS
     if not (ends_with_colon or very_short):
         return predictions
+    # The review's candidate enforcement rule is `very_short AND extreme_stance` (3 hits, 0 false
+    # positives, but one URL) — logged so it accrues its own numbers instead of being re-derived
+    # by hand from the stance list.
+    extreme_stance = any(
+        abs(p.stance) >= _PUSHED_FRAGMENT_EXTREME_STANCE for p in predictions
+    )
     logger.warning(
-        "event=pushed_title_fragment url=%s len=%d ends_with_colon=%s very_short=%s "
-        "n_preds=%d stance=%r fragment=%r",
-        url, len(stripped), ends_with_colon, very_short,
-        len(predictions), [p.stance for p in predictions], stripped[:120],
+        "event=pushed_title_fragment url=%s len=%d effective_len=%d ends_with_colon=%s "
+        "very_short=%s extreme_stance=%s n_preds=%d stance=%r fragment=%r",
+        url, len(stripped), _pushed_effective_len(stripped), ends_with_colon, very_short,
+        extreme_stance, len(predictions), [p.stance for p in predictions], stripped[:120],
     )
     return predictions
 

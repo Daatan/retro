@@ -396,8 +396,14 @@ and the extractor still emitted >=1 claim for it.
 `event=pushed_title_fragment` fires per article, with the fired claims' stances and the fragment
 text logged for review. Deliberately no `_shadow` summary line (unlike the guards above): this
 is a per-article boolean check, not a per-claim scan with an eligible/fired split to report.
-Precision is unmeasured; whether repeated live fires justify enforcement (dropping the article,
-mirroring the subject gate below) is a follow-up decision once the shadow log has volume.
+Precision was measured once (2026-09-18, first 24 events / 11 URLs, retro#770): 2 of 11 were real
+fragments — a short Telegram headline is usually a complete statement, so `very_short` alone is
+not enforceable. The one harmful hit was also the only one with an extreme stance, so the line
+carries `extreme_stance=` (any fired claim at |stance| >= 0.95) for the candidate rule
+`very_short AND extreme_stance` to accrue its own numbers, and `effective_len=` — the text with a
+doubled `title — title` counted once and bare links removed — beside the raw `len=`. Both are
+report-only: the flag still fires on the text the extractor was shown. Enforcement remains a
+follow-up decision.
 
 **Wired into both `forecaster.py` (live) and `runner.py` (batch/atlas)** — unlike
 `audit_scheduled_deadline_unconfirmed`, this needs only the article's own url/text, which the

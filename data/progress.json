@@ -12211,8 +12211,8 @@
     "H10:axios": {
       "event_id": "H10",
       "source_id": "axios",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "H10:bbc": {
@@ -12260,8 +12260,8 @@
     "H10:guardian": {
       "event_id": "H10",
       "source_id": "guardian",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "H10:haaretz": {
@@ -12274,7 +12274,7 @@
     "H10:israel_hayom": {
       "event_id": "H10",
       "source_id": "israel_hayom",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12330,8 +12330,8 @@
     "H10:ynet": {
       "event_id": "H10",
       "source_id": "ynet",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "I01:aljazeera": {
@@ -12414,7 +12414,7 @@
     "I01:jpost": {
       "event_id": "I01",
       "source_id": "jpost",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -12428,8 +12428,8 @@
     "I01:n12": {
       "event_id": "I01",
       "source_id": "n12",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "I01:nyt": {
@@ -12610,8 +12610,8 @@
     "I03:axios": {
       "event_id": "I03",
       "source_id": "axios",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "I03:bbc": {
@@ -12624,8 +12624,8 @@
     "I03:bloomberg": {
       "event_id": "I03",
       "source_id": "bloomberg",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "I03:calcalist": {
@@ -12666,8 +12666,8 @@
     "I03:haaretz": {
       "event_id": "I03",
       "source_id": "haaretz",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "I03:israel_hayom": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-19T21:21:28.722307"
+  "last_updated": "2026-09-19T21:23:14.838923"
 }

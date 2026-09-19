@@ -286,6 +286,11 @@ Ingest (choose one):
   ingestor.py      — Pluggable DDGIngestor / GDELTIngestor classes
   site_search.py   — Direct site search scraper (no API key)
   All save to: data/raw_ingest/{source}/{event}/article_NN.json
+  A cell with articles is skipped on re-run. gnews_ingest and web_search_ingest also
+  remember a cell that came up EMPTY: `.empty` marker in the cell dir, honoured for
+  EMPTY_CELL_TTL_DAYS (default 30), bypassed by --force, written only for a window
+  closed ≥7 days ago and never on an errored run (retro#836). Not named *.json on
+  purpose — ec2_run.sh and the orchestrator read every *.json there as an article.
   ▼
 orchestrator.py  (local_file mode)
   │  For each (event, source) cell not yet done:

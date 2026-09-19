@@ -54,7 +54,7 @@ from .progress import load_state, update_cell
 from .web_search import search_articles as _web_search
 from .article_text import BROWSER_HEADERS, extract_article_body
 from .net_guard import safe_get, safe_get_async
-from .utils import existing_articles, save_article
+from .utils import cell_marked_empty, existing_articles, mark_cell_empty, save_article
 
 console = Console()
 
@@ -806,14 +806,37 @@ async def ingest_cell(
     existing = existing_articles(cell_dir)
     if existing and not force:
         return len(existing)
+    # A cell that came up empty leaves no article behind, so without this it
+    # re-walked the whole ladder below — paid SERP legs included — every time the
+    # batch offset came round again (retro#836).
+    outcome_dt = datetime.strptime(event["outcome_date"], "%Y-%m-%d")
+    if not force and cell_marked_empty(cell_dir, outcome_dt):
+        return 0
 
     cfg = SOURCES_CONFIG.get(source_id)
     if not cfg:
         return 0
+
+    saved = await _fetch_cell(event, source_id, cfg, cell_dir, outcome_dt)
+    # Reached only when the ladder ran to completion; an exception above
+    # propagates without marking, so an outage is not remembered as "empty".
+    if saved == 0:
+        mark_cell_empty(cell_dir, outcome_dt, ingestor="gnews", source=source_id,
+                        keywords=event.get("search_keywords", []))
+    return saved
+
+
+async def _fetch_cell(
+    event: dict,
+    source_id: str,
+    cfg: dict,
+    cell_dir: Path,
+    outcome_dt: datetime,
+) -> int:
+    """The fetch ladder for one cell: GNews RSS → web search → Newsdata → GDELT → CDX."""
     domain = cfg["domain"]
     lang = cfg.get("lang", "en")
 
-    outcome_dt = datetime.strptime(event["outcome_date"], "%Y-%m-%d")
     window = int(event.get("predictive_window_days", 14))
     start_dt = outcome_dt - timedelta(days=window)
 

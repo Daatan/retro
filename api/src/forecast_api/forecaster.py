@@ -1884,6 +1884,10 @@ async def _process_article(
             gate_result = evaluate_subject_gate(
                 extraction.article_card, text, subject_card,
                 trust_gloss=settings.subject_gate_trust_gloss,
+                # retro#833: a t.me post naming nobody must not skip the gate.
+                fail_closed_without_spans=(
+                    settings.subject_gate_pushed_fail_closed and has_no_article_page(result.url)
+                ),
             )
             subject_gate_fired = gate_result.fired
             logger.info(

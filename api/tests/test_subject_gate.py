@@ -101,6 +101,43 @@ class TestFailOpen:
         assert r.dropped_spans == ["Benny Gantz"]
 
 
+class TestFailClosedWithoutSpans:
+    """retro#833 — pushed sources. The real post: t.me/ben_caspit/18944, whole text below,
+    pooled on 11 forecasts after the extractor supplied the referent from each question."""
+    POST = 'ברצועה מדווחים שהנ"ל חוסל'
+    PUTIN = SubjectCard(actors=[
+        SubjectActor(name_en="Vladimir Putin", type="person",
+                     surface_forms=["Vladimir Putin", "Putin", "פוטין", "Путин"]),
+    ])
+
+    def test_referentless_post_fires(self):
+        r = evaluate_subject_gate(ArticleCard(named_actors=[]), self.POST, self.PUTIN,
+                                  fail_closed_without_spans=True)
+        assert r.evaluated and r.fired and r.matched_via == "none"
+        assert r.verified_spans == [] and r.skip_reason is None
+
+    def test_same_post_still_skips_by_default(self):
+        r = evaluate_subject_gate(ArticleCard(named_actors=[]), self.POST, self.PUTIN)
+        assert not r.evaluated and not r.fired and r.skip_reason == "no_verified_spans"
+
+    def test_surface_form_in_text_clears_it_without_any_span(self):
+        r = evaluate_subject_gate(ArticleCard(named_actors=[]), "דיווח: פוטין אושפז במוסקבה", self.PUTIN,
+                                  fail_closed_without_spans=True)
+        assert r.evaluated and not r.fired
+        assert r.matched_via == "surface_form" and r.matched_form == "פוטין"
+
+    def test_hallucinated_span_is_dropped_then_fires(self):
+        card = ArticleCard(named_actors=[ArticleCardActor(span="פוטין", name_en="Vladimir Putin")])
+        r = evaluate_subject_gate(card, self.POST, self.PUTIN, fail_closed_without_spans=True)
+        assert r.fired and r.dropped_spans == ["פוטין"]
+
+    def test_other_skips_are_untouched(self):
+        assert evaluate_subject_gate(None, self.POST, self.PUTIN,
+                                     fail_closed_without_spans=True).skip_reason == "no_article_card"
+        assert evaluate_subject_gate(ArticleCard(named_actors=[]), self.POST, SubjectCard(actors=[]),
+                                     fail_closed_without_spans=True).skip_reason == "subject_card_empty"
+
+
 class TestSubjectCardModel:
     def test_tidy_dedupes_forms_and_seeds_name_en(self):
         card = SubjectCard.model_validate({"actors": [

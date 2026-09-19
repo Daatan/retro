@@ -36,6 +36,12 @@ Three parts, two of them here:
    says so (``matched_via="skipped"``), never fired. Enforcement (drop the article with
    outcome ``subject_absent``) is the forecaster's call behind ``subject_gate_enforce``,
    shadow-logged first, per the issue's acceptance criteria.
+   One exception (retro#833): ``fail_closed_without_spans=True`` — the forecaster passes it
+   for pushed sources with no article page (t.me) — turns "zero verified spans" from a skip
+   into an evaluation on the deterministic route alone: a subject surface form in the text
+   still clears the gate, otherwise it fires. A post that names nobody ("reports say the
+   above-mentioned was eliminated") cannot be about the question's subject, and the
+   extractor fills the referent in from the question when asked anyway.
 """
 from __future__ import annotations
 
@@ -177,11 +183,15 @@ def evaluate_subject_gate(
     subject_card: Optional[SubjectCard],
     *,
     trust_gloss: bool = False,
+    fail_closed_without_spans: bool = False,
 ) -> SubjectGateResult:
     """Pure: no I/O, no logging beyond the span-verification lines. See the module doc for
     the routes and the fail-open contract. ``trust_gloss=False`` means a gloss-only match is
     reported (``matched_via="gloss"``) but the gate still counts as fired — the shadow
-    period's number for "how often is the gloss the only thing clearing it"."""
+    period's number for "how often is the gloss the only thing clearing it". With
+    ``fail_closed_without_spans`` a card with zero verified spans is evaluated on the
+    surface-form route instead of skipped (retro#833; ``fired`` + empty ``verified_spans``
+    is the log signature — before this flag that combination could not occur)."""
     if subject_card is None:
         return _skipped("no_subject_card")
     subjects = [a.name_en for a in subject_card.actors]
@@ -195,7 +205,7 @@ def evaluate_subject_gate(
         verified_spans=spans, dropped_spans=dropped, subjects=subjects,
         bears_on_question=verified.bears_on_question,
     )
-    if not spans:
+    if not spans and not fail_closed_without_spans:
         return _skipped("no_verified_spans", **base)
 
     norm_text = normalize_for_match(article_text)

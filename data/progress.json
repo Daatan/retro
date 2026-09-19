@@ -13471,8 +13471,8 @@
     "D07:israel_hayom": {
       "event_id": "D07",
       "source_id": "israel_hayom",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "D07:jpost": {
@@ -13499,8 +13499,8 @@
     "D07:nyt": {
       "event_id": "D07",
       "source_id": "nyt",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 5,
       "error": null
     },
     "D07:reuters": {
@@ -13513,7 +13513,7 @@
     "D07:toi": {
       "event_id": "D07",
       "source_id": "toi",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -13527,7 +13527,7 @@
     "D07:ynet": {
       "event_id": "D07",
       "source_id": "ynet",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-19T21:14:02.917532"
+  "last_updated": "2026-09-19T21:15:25.861184"
 }

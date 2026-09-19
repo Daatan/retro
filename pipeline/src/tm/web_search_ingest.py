@@ -280,7 +280,7 @@ DUEL_EVENTS = [
     "C07", "C08", "C09", "E07", "E08",
 ]
 
-from .utils import _is_ascii, existing_articles, save_article
+from .utils import _is_ascii, cell_marked_empty, existing_articles, mark_cell_empty, save_article
 from .article_text import BROWSER_HEADERS, extract_article_body
 from .net_guard import safe_get_async
 
@@ -317,6 +317,9 @@ async def ingest_event(
     outcome_dt = datetime.strptime(event["outcome_date"], "%Y-%m-%d")
     # When t_days > 0, search ends at outcome_date - t_days (not the outcome itself)
     end_dt = outcome_dt - timedelta(days=t_days) if t_days > 0 else outcome_dt
+    # Same hole as gnews_ingest (retro#836): an empty cell leaves nothing on disk.
+    if not force and cell_marked_empty(cell_dir, end_dt):
+        return 0
     window = int(event.get("predictive_window_days", 30))
     start_dt = end_dt - timedelta(days=window)
 
@@ -332,6 +335,7 @@ async def ingest_event(
     # Collect unique URLs across up to 3 keyword queries
     seen_urls: set[str] = set()
     candidates: list[_ws.SearchResult] = []
+    search_errors = 0
 
     for kw in ascii_kws[:3]:
         try:
@@ -347,10 +351,15 @@ async def ingest_event(
                 f"  [dim]{eid} «{kw[:40]}»: {len(results)} hits via {provider}[/dim]"
             )
         except Exception as e:
+            search_errors += 1
             console.print(f"  [dim red]{eid} search error: {e}[/dim red]")
         await asyncio.sleep(1.0)
 
+    # A query that raised is "unknown", not "empty" — never remember it.
+    marker_meta = dict(ingestor="web_search", keywords=ascii_kws[:3], t_days=t_days)
     if not candidates:
+        if not search_errors:
+            mark_cell_empty(cell_dir, end_dt, **marker_meta)
         return 0
 
     saved = 0
@@ -400,6 +409,8 @@ async def ingest_event(
         console.print(f"  [dim yellow]{eid}: dropped {skipped_no_date} articles with no resolvable date[/dim yellow]")
     if skipped_evergreen:
         console.print(f"  [dim yellow]{eid}: dropped {skipped_evergreen} evergreen-domain articles[/dim yellow]")
+    if saved == 0 and not existing and not search_errors:
+        mark_cell_empty(cell_dir, end_dt, **marker_meta)
     return saved
 
 

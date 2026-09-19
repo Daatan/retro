@@ -1,7 +1,8 @@
 """Shared utilities used across tm.* modules."""
 
 import json
-from datetime import datetime
+import os
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -29,6 +30,59 @@ def save_article(cell_dir: Path, idx: int, article: dict) -> Path:
     out = cell_dir / f"article_{idx:02d}.json"
     out.write_text(json.dumps(article, indent=2, ensure_ascii=False))
     return out
+
+
+# Deliberately NOT ``*.json``: ``infra/ec2_run.sh`` and
+# ``Orchestrator.local_file_search`` both glob ``*.json`` in a cell directory to
+# find articles, and pathlib's glob (unlike the shell's) matches dotfiles — a
+# ``.empty.json`` would be counted, and then parsed, as an article.
+EMPTY_MARKER_NAME = ".empty"
+EMPTY_MARKER_TTL_DAYS = 30
+# A window that closed only days ago can still gain results as indexes catch up,
+# so its emptiness is not final yet and is not recorded.
+EMPTY_MARKER_WINDOW_GRACE_DAYS = 7
+
+
+def cell_marked_empty(cell_dir: Path, window_end: datetime, ttl_days: int | None = None) -> bool:
+    """True if a previous run searched this cell, found nothing, and that is still fresh.
+
+    The ``existing_articles`` idiom only remembers cells that *saved* something,
+    so an empty cell re-walked its whole provider ladder — paid SERP legs
+    included — on every batch cycle (retro#836). The marker expires after
+    ``ttl_days`` (env ``EMPTY_CELL_TTL_DAYS``, default 30) so a new provider or a
+    keyword change eventually gets a second look; ``--force`` callers skip this
+    check altogether. A marker written for a different ``window_end`` (an edited
+    ``outcome_date``, another ``--t-days``) answers a different question and is
+    ignored, as is an unreadable one.
+    """
+    if ttl_days is None:
+        ttl_days = int(os.environ.get("EMPTY_CELL_TTL_DAYS", EMPTY_MARKER_TTL_DAYS))
+    marker = cell_dir / EMPTY_MARKER_NAME
+    try:
+        data = json.loads(marker.read_text())
+        checked_at = datetime.fromisoformat(data["checked_at"])
+        if data["window_end"] != window_end.strftime("%Y-%m-%d"):
+            return False
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    return datetime.now() - checked_at < timedelta(days=ttl_days)
+
+
+def mark_cell_empty(cell_dir: Path, window_end: datetime, **meta) -> bool:
+    """Record that a completed search of this cell saved nothing. Returns True if written.
+
+    Call it only on the normal completion path — never from an exception handler,
+    or an outage turns into a month of "nothing to find". Skipped while the search
+    window is still open (or closed less than ``EMPTY_MARKER_WINDOW_GRACE_DAYS``
+    ago): only a historical window's empty answer is final.
+    """
+    if window_end + timedelta(days=EMPTY_MARKER_WINDOW_GRACE_DAYS) > datetime.now():
+        return False
+    cell_dir.mkdir(parents=True, exist_ok=True)
+    payload = {"checked_at": datetime.now().isoformat(timespec="seconds"),
+               "window_end": window_end.strftime("%Y-%m-%d"), **meta}
+    (cell_dir / EMPTY_MARKER_NAME).write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+    return True
 
 
 def _is_number(v) -> bool:

@@ -13352,8 +13352,8 @@
     "C13:maariv": {
       "event_id": "C13",
       "source_id": "maariv",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 7,
       "error": null
     },
     "C13:n12": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-19T21:12:54.906657"
+  "last_updated": "2026-09-19T21:14:02.917532"
 }

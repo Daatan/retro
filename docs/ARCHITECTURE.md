@@ -89,6 +89,7 @@ retro/
 │   ├── ec2_run.sh               # Continuous pipeline loop (runs on EC2; snapshots atlas at tail of cycle)
 │   ├── tests/
 │   │   └── test_ec2_run_guards.sh # CI regression coverage for ec2_run.sh's sync/re-exec guards (retro#557)
+│   ├── logrotate/truthmachine   # logrotate rule for pipeline_log.txt (installed by hand, see file header)
 │   ├── ec2_run_poc.sh           # PoC pipeline run script
 │   ├── snapshot_atlas.sh        # Tar data/atlas + data/vault2 → S3 (per-cycle + latest.tgz)
 │   ├── restore_atlas.sh         # Pull latest.tgz from S3 if data/atlas/ is empty (fresh boot only)
@@ -461,7 +462,7 @@ The instance hosts two independent `git` worktrees with two systemd services:
 
 | Path | Service | Git lifecycle |
 |---|---|---|
-| `/home/ubuntu/truthmachine/` | `truthmachine.service` (batch pipeline loop) | Commits `data/progress.json` + `factum_atlas.html`, rebases on `origin/main`, pushes. May accumulate WIP commits between rebases. |
+| `/home/ubuntu/truthmachine/` | `truthmachine.service` (batch pipeline loop) | Commits `data/progress.json` + `factum_atlas.html`, rebases on `origin/main`, pushes. May accumulate WIP commits between rebases — `sync_to_main` treats an ahead-only tree as current (not stale) and tries to push them. At the top of every cycle the loop reaps a provably-abandoned `.git/index.lock` (retro#553) and `.git/rebase-merge`/`rebase-apply` (retro#838 — one of those blocked every atlas push 2026-08-23 → 09-19), and a failed cycle always sleeps a full interval. |
 | `/home/ubuntu/oracle-api/`   | `oracle-api.service` (FastAPI under gunicorn) | `git reset --hard origin/main` on every deploy. Never diverges. |
 
 Both checkouts read the same `data/` directory — the API's `.env` sets

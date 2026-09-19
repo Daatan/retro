@@ -42,7 +42,7 @@ LOG_LINE="$(grep -m1 '^log() {' "$EC2_RUN")"
 [[ -n "$LOG_LINE" ]] || { echo "FAIL: could not find log() in $EC2_RUN"; exit 1; }
 eval "$LOG_LINE"
 
-for fn in reap_stale_git_lock sync_to_main reexec_if_self_changed; do
+for fn in reap_stale_git_lock reap_stale_rebase_state sync_to_main reexec_if_self_changed; do
   body="$(extract_function "$fn")"
   [[ -n "$body" ]] || { echo "FAIL: could not extract ${fn}() from $EC2_RUN"; exit 1; }
   eval "$body"
@@ -196,6 +196,146 @@ EOF
     pass "stale-lock-live-process: lock left alone"
   else
     fail "stale-lock-live-process: lock was removed despite a live git process — $REAP_OUT"
+  fi
+}
+
+# ── retro#838: gutted rebase-merge (autostash only) — reaped, rebase works again ─
+# The exact shape found on the box: a directory `git rebase --abort` cannot read,
+# which made every later `git rebase` refuse for 27 days.
+{
+  WORKDIR="$TMPROOT/wd-stale-rebase"
+  setup_clone "$WORKDIR"
+
+  rdir="$WORKDIR/.git/rebase-merge"
+  mkdir "$rdir"
+  git -C "$WORKDIR" rev-parse HEAD > "$rdir/autostash"
+  touch -d "-10 minutes" "$rdir"
+
+  # Precondition: this really is the failure — otherwise the test proves nothing.
+  pre_rc=0
+  git -C "$WORKDIR" rebase origin/main >/dev/null 2>&1 || pre_rc=$?
+
+  rc=0
+  OUT="$(run_sync_to_main 2>&1)" || rc=$?
+  post_rc=0
+  git -C "$WORKDIR" rebase origin/main >/dev/null 2>&1 || post_rc=$?
+  rescued="$(git -C "$WORKDIR" for-each-ref refs/rescued | wc -l)"
+
+  if [[ $pre_rc -ne 0 && $rc -eq 0 && ! -d "$rdir" && $post_rc -eq 0 && $rescued -eq 1 ]]; then
+    pass "stale-rebase-merge: reaped, autostash ref rescued, rebase works again"
+  else
+    fail "stale-rebase-merge: pre_rc=$pre_rc rc=$rc dir-exists=$([[ -d "$rdir" ]] && echo yes || echo no) post_rc=$post_rc rescued=$rescued — $OUT"
+  fi
+}
+
+# ── retro#838: fresh rebase-merge — may belong to a rebase still starting up ─
+{
+  WORKDIR="$TMPROOT/wd-fresh-rebase"
+  setup_clone "$WORKDIR"
+  rdir="$WORKDIR/.git/rebase-merge"
+  mkdir "$rdir"
+
+  ( set -euo pipefail; reap_stale_rebase_state ) >/dev/null 2>&1 || true
+
+  if [[ -d "$rdir" ]]; then
+    pass "fresh-rebase-merge: left alone"
+  else
+    fail "fresh-rebase-merge: removed although younger than a cycle"
+  fi
+}
+
+# ── retro#838: ahead-only is not stale — rc=0 and the commits get published ─
+# `merge --ff-only` is a successful no-op when HEAD already contains origin/main,
+# so the reset fallback never ran and the equality check refused every cycle.
+{
+  WORKDIR="$TMPROOT/wd-ahead"
+  setup_clone "$WORKDIR"
+  echo "atlas" > "$WORKDIR/atlas.html"
+  git -C "$WORKDIR" add atlas.html
+  git -C "$WORKDIR" commit -q -m "atlas: local, unpushed"
+
+  rc=0
+  OUT="$(run_sync_to_main 2>&1)" || rc=$?
+  origin_head="$(git -C "$ORIGIN" rev-parse main)"
+  wd_head="$(git -C "$WORKDIR" rev-parse HEAD)"
+
+  if [[ $rc -eq 0 && "$wd_head" == "$origin_head" && "$OUT" != *"REFUSING"* ]]; then
+    pass "ahead-only: rc=0, unpushed commit published, no refusal"
+  else
+    fail "ahead-only: rc=$rc wd=$wd_head origin=$origin_head — $OUT"
+  fi
+  git -C "$PRODUCER" pull -q origin main # keep PRODUCER able to push in later cases
+}
+
+# ── retro#838: ahead-only with an unreachable remote — still not stale, rc=0 ─
+{
+  WORKDIR="$TMPROOT/wd-ahead-nopush"
+  setup_clone "$WORKDIR"
+  echo "atlas" > "$WORKDIR/atlas2.html"
+  git -C "$WORKDIR" add atlas2.html
+  git -C "$WORKDIR" commit -q -m "atlas: local, unpushable"
+  git -C "$WORKDIR" remote set-url --push origin "$TMPROOT/no-such-remote.git"
+
+  rc=0
+  OUT="$(run_sync_to_main 2>&1)" || rc=$?
+
+  if [[ $rc -eq 0 && "$OUT" == *"push of unpushed commits failed"* ]]; then
+    pass "ahead-only-push-fails: rc=0, failure logged, cycle may run"
+  else
+    fail "ahead-only-push-fails: rc=$rc — $OUT"
+  fi
+}
+
+# ── retro#838: diverged (ahead AND behind) — force-syncs to origin/main ────
+{
+  WORKDIR="$TMPROOT/wd-diverged"
+  setup_clone "$WORKDIR"
+  echo "atlas" > "$WORKDIR/atlas3.html"
+  git -C "$WORKDIR" add atlas3.html
+  git -C "$WORKDIR" commit -q -m "atlas: local, will be dropped"
+  advance_origin
+
+  rc=0
+  OUT="$(run_sync_to_main 2>&1)" || rc=$?
+  origin_head="$(git -C "$ORIGIN" rev-parse main)"
+  wd_head="$(git -C "$WORKDIR" rev-parse HEAD)"
+
+  if [[ $rc -eq 0 && "$wd_head" == "$origin_head" ]]; then
+    pass "diverged: force-synced to origin/main, rc=0"
+  else
+    fail "diverged: rc=$rc wd=$wd_head origin=$origin_head — $OUT"
+  fi
+}
+
+# ── retro#838: a failed cycle sleeps, even with failed/pending cells ───────
+# The main loop skipped `sleep` whenever any cell was failed/pending; with six
+# permanently-failed cells a refused sync became ~2 cycles/second. The loop is
+# extracted from the real file; `sleep` is stubbed to record its argument and end it.
+{
+  LOOP="$(awk '/^while true; do$/ { p = 1 } p { print } p && /^done$/ { exit }' "$EC2_RUN")"
+  if [[ -z "$LOOP" ]]; then
+    fail "failed-cycle-sleeps: could not extract the main loop from $EC2_RUN"
+  else
+    LOOP_DATA="$TMPROOT/loop-data"
+    mkdir -p "$LOOP_DATA"
+    echo '{"cells": {"A01|x": {"status": "failed"}}}' > "$LOOP_DATA/progress.json"
+
+    OUT="$( (
+      export DATA_DIR="$LOOP_DATA"
+      # Bounded: on a regression the loop never sleeps, and an unbounded stub
+      # would hang this harness instead of failing it.
+      cycles=0
+      run_pipeline() { cycles=$((cycles + 1)); [[ $cycles -ge 3 ]] && exit 0; return 1; }
+      sleep() { echo "SLEPT $1"; exit 0; }
+      eval "$LOOP"
+    ) 2>&1 )" || true
+    starts="$(grep -c "Cycle start" <<< "$OUT" || true)"
+
+    if [[ "$OUT" == *"SLEPT $SLEEP_INTERVAL"* && "$starts" -eq 1 ]]; then
+      pass "failed-cycle-sleeps: one cycle, then sleep $SLEEP_INTERVAL"
+    else
+      fail "failed-cycle-sleeps: starts=$starts — $OUT"
+    fi
   fi
 }
 

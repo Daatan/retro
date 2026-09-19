@@ -107,11 +107,52 @@ reap_stale_git_lock() {
   rm -f "$lock"
 }
 
+# The same disease in a second organ (retro#838). A `git rebase` that dies between
+# creating its state directory and finishing leaves `.git/rebase-merge` behind, and
+# every later `git rebase` then stops with "there is already a rebase-merge
+# directory". commit_and_push treats that as "skip the push", so the loop kept
+# committing the atlas locally and never published it: 2026-08-23 → 09-19, 27 days,
+# with `progress:` pushes still landing to make it look alive. The directory held a
+# single `autostash` file — nothing `git rebase --abort` could even read.
+#
+# Same proof of abandonment as the lock: no live git process here, older than a cycle.
+reap_stale_rebase_state() {
+  local dir age stash
+  for dir in "$WORKDIR/.git/rebase-merge" "$WORKDIR/.git/rebase-apply"; do
+    [[ -d "$dir" ]] || continue
+
+    if pgrep -a git 2>/dev/null | grep -q "$WORKDIR"; then
+      log "WARNING: ${dir##*/} present but a git process is live here — leaving it"
+      continue
+    fi
+
+    age=$(( $(date +%s) - $(stat -c %Y "$dir") ))
+    if (( age < SLEEP_INTERVAL )); then
+      log "WARNING: ${dir##*/} is only ${age}s old — leaving it for now"
+      continue
+    fi
+
+    log "ERROR: reaping stale ${dir##*/} (age ${age}s, no live git process)"
+    # An intact rebase aborts cleanly and puts HEAD back; a gutted one cannot.
+    git -C "$WORKDIR" rebase --abort 2>/dev/null || true
+    if [[ -d "$dir" ]]; then
+      # Keep whatever the autostash pointed at reachable before the pointer goes.
+      stash="$(cat "$dir/autostash" 2>/dev/null || true)"
+      if [[ -n "$stash" ]] && git -C "$WORKDIR" cat-file -e "$stash" 2>/dev/null; then
+        git -C "$WORKDIR" update-ref "refs/rescued/autostash-$(date +%Y%m%d%H%M%S)" "$stash" || true
+      fi
+      rm -rf "$dir"
+    fi
+  done
+  return 0
+}
+
 # Bring the tree to origin/main and PROVE it landed there. Without the assertion a
 # failed sync is indistinguishable from a successful one — which is exactly how the
 # tree ran two-day-old code while every cycle logged a generic failure.
 sync_to_main() {
   reap_stale_git_lock
+  reap_stale_rebase_state
 
   git fetch origin main
   git merge --ff-only origin/main || {
@@ -124,11 +165,22 @@ sync_to_main() {
     git reset --hard origin/main || log "WARNING: force-sync also failed"
   }
 
-  local head origin behind
+  local head origin behind ahead
   head=$(git rev-parse HEAD)
   origin=$(git rev-parse origin/main)
   if [[ "$head" != "$origin" ]]; then
     behind=$(git rev-list --count "HEAD..origin/main" 2>/dev/null || echo "?")
+    # Ahead-only is not stale: the tree holds all of origin/main plus this loop's own
+    # unpushed atlas/progress commits. `merge --ff-only` is a successful no-op there,
+    # so the reset fallback above never ran, and the equality check then refused with
+    # "0 commit(s) behind" — every cycle, until main happened to move (retro#838).
+    # Try to publish them; whether or not that works, the code is current.
+    if [[ "$behind" == "0" ]]; then
+      ahead=$(git rev-list --count "origin/main..HEAD" 2>/dev/null || echo "?")
+      log "WARNING: batch tree is ${ahead} unpushed commit(s) ahead of origin/main ${origin:0:9} — not stale, pushing them"
+      git push origin main || log "WARNING: push of unpushed commits failed — will retry with the next atlas push"
+      return 0
+    fi
     log "ERROR: batch tree did NOT sync — HEAD ${head:0:9} is ${behind} commit(s) behind origin/main ${origin:0:9}; REFUSING to run on stale code"
     return 1
   fi
@@ -298,7 +350,8 @@ log "Cycle interval: ${SLEEP_INTERVAL}s (5 min)"
 while true; do
   log "─── Cycle start ───────────────────────────────────"
 
-  run_pipeline || log "ERROR: cycle failed, will retry next interval"
+  CYCLE_FAILED=0
+  run_pipeline || { CYCLE_FAILED=1; log "ERROR: cycle failed, will retry next interval"; }
 
   # Skip sleep if there are still failed or pending cells
   OUTSTANDING=$(python3 - <<'PY'
@@ -312,7 +365,14 @@ except Exception:
     print(0)
 PY
 )
-  if [[ "${OUTSTANDING:-0}" -gt 0 ]]; then
+  # "Retry immediately" is for a cycle that RAN and left work behind. A cycle that
+  # failed — a refused sync above all — has nothing new to try a moment later: with 6
+  # permanently-failed cells this spun at ~2 cycles/second, a `git fetch` each, for
+  # most of every day (retro#838). The log line always said "next interval"; now it is.
+  if [[ "$CYCLE_FAILED" -eq 1 ]]; then
+    log "─── Cycle failed. Sleeping ${SLEEP_INTERVAL}s... ────"
+    sleep "$SLEEP_INTERVAL"
+  elif [[ "${OUTSTANDING:-0}" -gt 0 ]]; then
     log "─── Cycle done. ${OUTSTANDING} cells still pending/failed — retrying immediately ────"
   else
     log "─── Cycle done. Sleeping ${SLEEP_INTERVAL}s... ────"

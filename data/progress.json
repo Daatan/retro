@@ -12974,8 +12974,8 @@
     "B14:reuters": {
       "event_id": "B14",
       "source_id": "reuters",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 13,
       "error": null
     },
     "B14:toi": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-19T21:08:57.444178"
+  "last_updated": "2026-09-19T21:10:33.673203"
 }

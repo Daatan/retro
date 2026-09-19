@@ -12673,8 +12673,8 @@
     "I03:israel_hayom": {
       "event_id": "I03",
       "source_id": "israel_hayom",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "I03:jpost": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-19T21:44:53.218062"
+  "last_updated": "2026-09-19T21:46:18.804403"
 }

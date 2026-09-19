@@ -13086,8 +13086,8 @@
     "C10:maariv": {
       "event_id": "C10",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 10,
       "error": null
     },
     "C10:n12": {
@@ -13142,8 +13142,8 @@
     "C11:axios": {
       "event_id": "C11",
       "source_id": "axios",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C11:bbc": {
@@ -13163,8 +13163,8 @@
     "C11:calcalist": {
       "event_id": "C11",
       "source_id": "calcalist",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 3,
       "error": null
     },
     "C11:ch13": {
@@ -13219,8 +13219,8 @@
     "C11:maariv": {
       "event_id": "C11",
       "source_id": "maariv",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null
     },
     "C11:n12": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-19T21:11:05.958115"
+  "last_updated": "2026-09-19T21:12:54.906657"
 }

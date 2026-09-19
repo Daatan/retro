@@ -11574,7 +11574,7 @@
     "H04:ch13": {
       "event_id": "H04",
       "source_id": "ch13",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null
     },
@@ -11665,8 +11665,8 @@
     "H04:ynet": {
       "event_id": "H04",
       "source_id": "ynet",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 11,
       "error": null
     },
     "H05:aljazeera": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-19T21:17:05.279516"
+  "last_updated": "2026-09-19T21:18:53.322632"
 }

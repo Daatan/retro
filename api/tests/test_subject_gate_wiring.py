@@ -79,7 +79,7 @@ def _gate_settings(monkeypatch, tmp_path):
     monkeypatch.setattr(api_settings, "subject_gate_cache_path", tmp_path / "subject_cards")
 
 
-async def _run(n_articles: int = 2):
+async def _run(n_articles: int = 2, url: str | None = None):
     return await forecaster.run_forecast(ForecastRequest(
         question="Benny Gantz's party will run in the 2026 elections without an electoral alliance.",
         resolution_criteria="Resolves Yes if Benny Gantz's party registers without a joint list.",
@@ -87,7 +87,7 @@ async def _run(n_articles: int = 2):
         debug=True,
         articles=[
             ArticleInput(
-                url=f"https://source.example.test/story-{i}",
+                url=url or f"https://source.example.test/story-{i}",
                 title="Fixture headline", snippet="Fixture snippet long enough to be usable.",
                 source="source", published_date=_FRESH, text=_BODY,
             )
@@ -175,6 +175,15 @@ class TestFailOpen:
         line = next(r.message for r in caplog.records if "event=subject_gate " in r.message)
         assert "fired=False" in line and "skip=no_article_card" in line
 
+    async def test_no_verified_spans_web_source_still_skips(self, monkeypatch, caplog):
+        monkeypatch.setattr(api_settings, "subject_gate_enforce", True)
+        _patch(monkeypatch, card=GANTZ, article_card=ArticleCard(named_actors=[]))
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            resp = await _run(1)
+        assert _outcomes(resp) == ["ok"]
+        line = next(r.message for r in caplog.records if "event=subject_gate " in r.message)
+        assert "fired=False" in line and "skip=no_verified_spans" in line
+
     async def test_empty_subject_card_skips_gate_under_enforce(self, monkeypatch):
         monkeypatch.setattr(api_settings, "subject_gate_enforce", True)
         _patch(monkeypatch, card=SubjectCard(actors=[]))
@@ -199,3 +208,37 @@ class TestFailOpen:
             resp = await _run(1)
         assert _outcomes(resp) == ["ok"]
         assert any("event=subject_gate_error" in r.message for r in caplog.records)
+
+
+class TestPushedFailClosed:
+    """retro#833 — a t.me post with zero verified spans is evaluated, not skipped."""
+    TME = "https://t.me/ben_caspit/18944"
+
+    async def test_pushed_no_spans_is_dropped_under_enforce(self, monkeypatch, caplog):
+        monkeypatch.setattr(api_settings, "subject_gate_enforce", True)
+        _patch(monkeypatch, card=GANTZ, article_card=ArticleCard(named_actors=[]))
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            resp = await _run(1, url=self.TME)
+        assert _outcomes(resp) == ["subject_absent"]
+        assert resp.sources == []
+        line = next(r.message for r in caplog.records if "event=subject_gate " in r.message)
+        assert "fired=True" in line and "matched_via=none" in line and "verified_spans=[]" in line
+
+    async def test_pushed_no_spans_shadow_logs_but_keeps_article(self, monkeypatch):
+        _patch(monkeypatch, card=GANTZ, article_card=ArticleCard(named_actors=[]))
+        resp = await _run(1, url=self.TME)
+        assert _outcomes(resp) == ["ok"]
+
+    async def test_pushed_post_naming_the_subject_passes(self, monkeypatch):
+        monkeypatch.setattr(api_settings, "subject_gate_enforce", True)
+        _patch(monkeypatch, card=HENDEL, article_card=ArticleCard(named_actors=[]))
+        resp = await _run(1, url=self.TME)
+        assert _outcomes(resp) == ["ok"]
+
+    async def test_kill_switch_restores_the_skip(self, monkeypatch):
+        monkeypatch.setattr(api_settings, "subject_gate_enforce", True)
+        monkeypatch.setattr(api_settings, "subject_gate_pushed_fail_closed", False)
+        _patch(monkeypatch, card=GANTZ, article_card=ArticleCard(named_actors=[]))
+        resp = await _run(1, url=self.TME)
+        assert _outcomes(resp) == ["ok"]
+

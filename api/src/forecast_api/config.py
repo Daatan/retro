@@ -755,6 +755,15 @@ class ApiSettings(BaseSettings):
     subject_gate_enabled: bool = True
     subject_gate_enforce: bool = False
     subject_gate_trust_gloss: bool = False
+    # retro#833: for pushed sources with no article page (t.me), "zero verified spans" is
+    # evaluated on the surface-form route instead of skipped — fail closed. Measured
+    # 2026-09-19: one referent-less post (t.me/ben_caspit/18944, "the above-mentioned was
+    # eliminated") went through `skip=no_verified_spans` 11 times, the extractor supplied
+    # Putin / Modi / Gukesh / Lukashenko from each question, and the rows carried 6-24 pp
+    # on seven published forecasts. 14 such pushed events with a claim in 11 days; web
+    # sources are untouched (their 6 events were long articles, a different class). Only
+    # bites under `subject_gate_enforce`, like every other fire. Kill switch.
+    subject_gate_pushed_fail_closed: bool = True
     subject_gate_model: Optional[str] = None
     subject_gate_timeout_seconds: int = 20
     # Scripts the pool actually carries (Hebrew, Russian, Arabic sources next to English);

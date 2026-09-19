@@ -468,6 +468,21 @@ is that check, and it is deterministic where it matters.
    card can only cause a false *pass* (it would have to occur in the text), never a false
    drop — the asymmetry is deliberate.
 
+   **One fail-closed exception — pushed sources with zero verified spans (retro#833,
+   `subject_gate_pushed_fail_closed=true`).** For a source with no article page (t.me,
+   `has_no_article_page`), "zero verified spans" is *evaluated* on the `surface_form` route
+   instead of skipped: a subject surface form in the text still clears the gate, otherwise
+   it fires. Log signature: `fired=True matched_via=none verified_spans=[]` — a combination
+   that could not occur before. Why: `t.me/ben_caspit/18944`, whole text "reports from the
+   Strip say the above-mentioned was eliminated", took `skip=no_verified_spans` 11 times;
+   the extractor supplied the referent from each question (`claims_detail`: "Reports
+   indicate that Lukashenko has been eliminated") and the rows carried 6–24 pp on seven
+   published forecasts (leave-one-out, 2026-09-19). Over 11 days of log: 14 pushed
+   `no_verified_spans` events with a claim (that post ×11, `mygplanet/39742` ×2, one other),
+   vs 6 on web sources, which are long articles and stay fail-open. It does **not** cover
+   questions whose subject card is empty by design (no actor to look for) — the third
+   `mygplanet/39742` row went that way. Setting it `false` restores the skip.
+
 **Rollout.** `subject_gate_enabled=true` ships in **shadow**: one `event=subject_gate` line per
 extracted article (`fired= enforce= matched_via= matched_actor= skip= subjects=
 verified_spans= dropped_spans= bears_on_question= n_preds= url= prediction_id=`), nothing

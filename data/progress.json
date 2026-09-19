@@ -12764,15 +12764,15 @@
     "A20:calcalist": {
       "event_id": "A20",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 7,
       "error": null
     },
     "A20:ch13": {
       "event_id": "A20",
       "source_id": "ch13",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 17,
       "error": null
     },
     "A20:ft": {
@@ -12820,8 +12820,8 @@
     "A20:maariv": {
       "event_id": "A20",
       "source_id": "maariv",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 4,
       "error": null
     },
     "A20:n12": {
@@ -12841,8 +12841,8 @@
     "A20:reuters": {
       "event_id": "A20",
       "source_id": "reuters",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null
     },
     "A20:toi": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-19T21:04:18.614747"
+  "last_updated": "2026-09-19T21:06:36.530327"
 }

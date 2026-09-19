@@ -1599,8 +1599,8 @@
     "B05:reuters": {
       "event_id": "B05",
       "source_id": "reuters",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 11,
       "error": null
     },
     "B05:toi": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-19T21:06:36.530327"
+  "last_updated": "2026-09-19T21:07:36.461721"
 }

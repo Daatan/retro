@@ -5877,7 +5877,7 @@
       "event_id": "G08",
       "source_id": "ynet",
       "status": "done",
-      "prediction_count": 5,
+      "prediction_count": 4,
       "error": null
     },
     "A19:kan11": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-09-20T20:41:36.764596"
+  "last_updated": "2026-09-20T20:43:31.667464"
 }

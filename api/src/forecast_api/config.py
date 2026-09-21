@@ -783,6 +783,19 @@ class ApiSettings(BaseSettings):
     premise_verifier_model: Optional[str] = None
     premise_verifier_timeout_seconds: int = 12
 
+    # Jev shadow extraction (retro#840) — shadow/log-only, off by default. After the
+    # Haiku extractor returns, runs TypeSafe's Jev on the same article in the background
+    # (pass 1: one noul per sentence; pass 2: stance/settled/claim_strength on sentences
+    # at noul >= select_bar) and logs `event=jev_shadow` with both sides. Needs BOTH the
+    # flag and a key; with the flag on and no key it does nothing. `select_bar` 0.5
+    # covered 76% of Haiku's quoted sentences offline at ~17 sentences/article;
+    # `max_candidates` caps pass-2 requests per article.
+    jev_shadow_enabled: bool = False
+    typesafe_api_key: str = ""
+    jev_shadow_select_bar: float = 0.5
+    jev_shadow_max_candidates: int = 25
+    jev_shadow_timeout_seconds: float = 30.0
+
     # Precursor candidate-match (retro#608) — shadow/log-only, off by default.
     # Before pricing a v2-playground precursor fresh, checks whether it already
     # matches an open forecast in Daatan's own bank or a live Polymarket market,

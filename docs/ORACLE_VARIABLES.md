@@ -2843,3 +2843,40 @@ following the same multi-domain-alias precedent `_DOMAIN_MAP` already uses for `
 does not map to `mako` — they are different pipeline identities with no existing `_DOMAIN_MAP`
 precedent for merging them, unlike the haaretz case; left as separate, out-of-scope
 `_DOMAIN_MAP` cleanup.
+
+## 2026-09-22 — Jev (TypeSafe System One) shadow extraction, log-only (retro#840)
+
+**Shadow-only. `jev_shadow_enabled` defaults `False` and also needs `typesafe_api_key`;
+nothing reads the result.**
+
+Jev returns typed judgments (`noul` probability, `score` level distributions) instead of
+generated text. The extractor's `quote` is *extracted* — a selection of article sentences —
+so a Jev extractor needs no generation: code segments the article, pass 1 asks one `noul`
+per sentence ("does this bear on the question?"), pass 2 elicits stance (7 levels), claim
+strength (5 levels) and `settled` on each candidate sentence alone. Offline against Haiku
+v15 on 150 real article×question pairs: top Jev sentence hit a Haiku-quoted sentence 63%
+(keyword baseline 39%), stance sign agreed on 84% of Haiku's quotes, settled AUC 0.89, at
+roughly 1/7 of Haiku's per-article cost.
+
+`jev_shadow.py` runs both passes as a background task right after the live Haiku
+extraction and logs one `event=jev_shadow payload=<json>` line per article: Haiku's quotes
+mapped to sentence indices (`haiku`), Jev's candidates (`cand`: sentence index, noul, stance
+expected value, stance argmax, settled, claim_strength), the top-8 nouls, the question's
+negation probability (`neg`) and token/latency cost. It never touches the response; every
+error is logged as `err` and swallowed.
+
+Two gaps the log measures rather than hides: Jev ignores negation *inside* a score but
+detects a negated question reliably, so `neg` is logged for analysis to flip; and the
+expected-value stance never reaches ±1 while argmax over-saturates, so both are logged.
+
+### Config (`api/src/forecast_api/config.py`)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `jev_shadow_enabled` | `False` | Master switch. |
+| `typesafe_api_key` | `""` | TypeSafe API key; empty → never runs even when enabled. |
+| `jev_shadow_select_bar` | `0.5` | Pass-1 noul a sentence needs to become a pass-2 candidate. |
+| `jev_shadow_max_candidates` | `25` | Cap on pass-2 calls per article. |
+| `jev_shadow_timeout_seconds` | `30` | Per-request HTTP timeout. |
+
+Cutover (Jev feeding the pool) is a separate decision on the shadow data, not this slice.

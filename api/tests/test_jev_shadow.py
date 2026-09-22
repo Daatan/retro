@@ -50,10 +50,11 @@ def _score(level: int, n: int) -> dict:
             "probabilities": {str(k): (1.0 if k == level else 0.0) for k in range(n)}}
 
 
-def _transport(calls: list, *, fail: bool = False):
+def _transport(calls: list, *, fail: bool = False, urls: list | None = None):
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         calls.append(body)
+        urls.append(str(request.url)) if urls is not None else None
         assert request.headers["Authorization"] == "Bearer k"
         if fail:
             return httpx.Response(500, json={"error": "boom"})
@@ -71,10 +72,12 @@ def _transport(calls: list, *, fail: bool = False):
 
 
 @pytest.fixture(autouse=True)
-def _clear_neg_cache():
+def _clear_caches():
     js._NEG_CACHE.clear()
+    js._KEY.clear()
     yield
     js._NEG_CACHE.clear()
+    js._KEY.clear()
 
 
 def test_run_selects_scores_and_logs(caplog):
@@ -147,3 +150,34 @@ def test_disabled_by_default():
     from forecast_api.config import ApiSettings
     s = ApiSettings(_env_file=None)
     assert s.jev_shadow_enabled is False and s.typesafe_api_key == ""
+
+
+def test_key_falls_back_to_ssm_once(monkeypatch):
+    import tm.web_search
+    asked = []
+    monkeypatch.setattr(tm.web_search, "_secret", lambda env, name: asked.append(name) or "k")
+    for _ in range(2):
+        calls = []
+        p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[],
+                                          transport=_transport(calls)))
+        assert "err" not in p and calls
+    assert asked == [js.KEY_SSM_NAME]
+
+
+def test_missing_key_skips_loudly(monkeypatch, caplog):
+    import tm.web_search
+    monkeypatch.setattr(tm.web_search, "_secret", lambda env, name: None)
+    calls = []
+    with caplog.at_level(logging.INFO, logger="forecast_api.jev_shadow"):
+        p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[],
+                                          transport=_transport(calls)))
+    assert p["skip"] == "no_key" and calls == []
+    assert '"skip":"no_key"' in caplog.text
+
+
+def test_api_url_is_configurable():
+    calls, urls = [], []
+    asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[], api_key="k",
+                                  api_url="https://openrouter.ai/api/v1/systemone",
+                                  transport=_transport(calls, urls=urls)))
+    assert urls and all(u == "https://openrouter.ai/api/v1/systemone" for u in urls)

@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Added
+- Jev shadow (retro#840): the TypeSafe key now falls back to the SSM SecureString `/retro/prod/secrets/TYPESAFE_API_KEY` (looked up once per process, off the event loop); with no key every article logs `skip=no_key` instead of the shadow staying silently off. New `jev_shadow_api_url` (default TypeSafe; OpenRouter's `/api/v1/systemone` takes the same request)
 - Jev shadow extraction (retro#840): with `JEV_SHADOW_ENABLED` and `TYPESAFE_API_KEY` set, a background task runs TypeSafe Jev (System One) on each article the live Haiku extractor sees — pass 1 selects sentences by `noul`, pass 2 elicits stance/claim_strength/settled per candidate — and logs one `event=jev_shadow` line with both sides. Log-only, never touches the response; both settings default off. Offline vs Haiku v15 on 150 pairs: recall@1 63%, stance sign 84%, ~7x cheaper. See `docs/ORACLE_VARIABLES.md`
 
 ### Changed

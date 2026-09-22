@@ -1743,7 +1743,7 @@ async def _process_article(
         # Jev shadow (retro#840) — background, log-only. Snapshot Haiku's RAW output now,
         # before the enforce_* chain below rewrites stance/settled: raw vs raw is the
         # comparison that says whether Jev can stand in for the model.
-        if settings.jev_shadow_enabled and settings.typesafe_api_key:
+        if settings.jev_shadow_enabled:
             fire_jev_shadow(
                 text=text, question=question, url=result.url or "",
                 haiku_predictions=[
@@ -1752,6 +1752,7 @@ async def _process_article(
                     for p in extraction.predictions
                 ],
                 api_key=settings.typesafe_api_key,
+                api_url=settings.jev_shadow_api_url,
                 select_bar=settings.jev_shadow_select_bar,
                 max_candidates=settings.jev_shadow_max_candidates,
                 timeout_s=settings.jev_shadow_timeout_seconds,

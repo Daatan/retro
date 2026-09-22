@@ -89,13 +89,14 @@ def test_run_selects_scores_and_logs(caplog):
                                           api_key="k", transport=_transport(calls)))
     assert "err" not in p
     assert p["n"] == 3 and p["neg"] == 0.03 and p["max_noul"] == 0.9
-    assert [c[0] for c in p["cand"]] == [0, 2]            # noul >= 0.5, best first
+    assert [c[0] for c in p["cand"]] == [0, 2, 1]         # top-3 by noul, best first
     assert p["cand"][0][2] == pytest.approx(0.7)           # stance expected, level 5
     assert p["cand"][0][3] == 0.7                          # stance argmax
     assert p["cand"][0][5] == pytest.approx(0.7)           # claim_strength level 3
     assert p["haiku"] == [[[0], 0.7, False, 0.6]]
-    assert p["tok_in"] == 400                              # selection + neg + 2 scorings
-    assert len(calls) == 4
+    assert p["cand"][0][6:] == [0.7, 0.0]                  # stance over non-zero levels, p(no signal)
+    assert p["tok_in"] == 500                              # selection + neg + 3 scorings
+    assert len(calls) == 5
     line = next(r.getMessage() for r in caplog.records if "event=jev_shadow" in r.getMessage())
     assert json.loads(line.split("payload=", 1)[1])["cand"] == p["cand"]
 
@@ -111,7 +112,7 @@ def test_negation_verdict_is_cached_per_question():
 def test_select_bar_and_max_candidates_limit_pass_two():
     calls: list = []
     p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[],
-                                      api_key="k", select_bar=0.5, max_candidates=1, transport=_transport(calls)))
+                                      api_key="k", select_bar=0.5, min_top=0, max_candidates=1, transport=_transport(calls)))
     assert [c[0] for c in p["cand"]] == [0]
     assert sum("stance" in c["questions"] for c in calls) == 1
 
@@ -181,3 +182,22 @@ def test_api_url_is_configurable():
                                   api_url="https://openrouter.ai/api/v1/systemone",
                                   transport=_transport(calls, urls=urls)))
     assert urls and all(u == "https://openrouter.ai/api/v1/systemone" for u in urls)
+
+
+def test_bar_adds_below_top_k_and_top_k_floor_applies():
+    calls: list = []
+    p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[],
+                                      api_key="k", select_bar=0.5, min_top=1, transport=_transport(calls)))
+    assert [c[0] for c in p["cand"]] == [0, 2]            # top-1 (s0) plus s2 at 0.8 >= bar; s1 dropped
+    p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[],
+                                      api_key="k", select_bar=0.95, min_top=2, transport=_transport(calls)))
+    assert [c[0] for c in p["cand"]] == [0, 2]            # nothing clears 0.95; top-2 floor still scored
+
+
+def test_nonzero_stance_splits_no_signal_mass():
+    ans = {"probabilities": {"3": 0.5, "5": 0.25, "1": 0.25}}   # half "no signal", rest split +0.7 / -0.7
+    ex, p0 = js._nonzero(ans, js.STANCE_VALUES)
+    assert p0 == 0.5 and ex == pytest.approx(0.0)
+    ex, p0 = js._nonzero({"probabilities": {"3": 0.6, "5": 0.4}}, js.STANCE_VALUES)
+    assert ex == pytest.approx(0.7) and p0 == 0.6
+    assert js._nonzero({"probabilities": {"3": 1.0}}, js.STANCE_VALUES) == (0.0, 1.0)

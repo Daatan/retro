@@ -1754,6 +1754,7 @@ async def _process_article(
                 api_key=settings.typesafe_api_key,
                 api_url=settings.jev_shadow_api_url,
                 select_bar=settings.jev_shadow_select_bar,
+                min_top=settings.jev_shadow_min_top,
                 max_candidates=settings.jev_shadow_max_candidates,
                 timeout_s=settings.jev_shadow_timeout_seconds,
             )

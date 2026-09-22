@@ -785,17 +785,20 @@ class ApiSettings(BaseSettings):
 
     # Jev shadow extraction (retro#840) — shadow/log-only, off by default. After the
     # Haiku extractor returns, runs TypeSafe's Jev on the same article in the background
-    # (pass 1: one noul per sentence; pass 2: stance/settled/claim_strength on sentences
-    # at noul >= select_bar) and logs `event=jev_shadow` with both sides. The key comes
+    # (pass 1: one noul per sentence; pass 2: stance/settled/claim_strength on the top
+    # `min_top` sentences plus any at noul >= select_bar) and logs `event=jev_shadow` with both sides. The key comes
     # from TYPESAFE_API_KEY, else SSM `/retro/prod/secrets/TYPESAFE_API_KEY` (looked up once
     # per process); with neither, every article logs `skip=no_key`. `api_url` also accepts
-    # OpenRouter's identical System One endpoint (with an OpenRouter key). `select_bar` 0.5
-    # covered 76% of Haiku's quoted sentences offline at ~17 sentences/article;
+    # OpenRouter's identical System One endpoint (with an OpenRouter key). Candidates are
+    # rank-based (retro#845): on 165 live pairs the absolute bar 0.5 passed ~3.6 sentences/article
+    # and covered 42% of Haiku's quoted sentences; top-3 ∪ noul >= 0.3 covers 74% at ~10.
+    # Rewording the selection question only rescaled nouls, it did not rank better.
     # `max_candidates` caps pass-2 requests per article.
     jev_shadow_enabled: bool = False
     typesafe_api_key: str = ""
     jev_shadow_api_url: str = "https://api.typesafe.ai/v1/systemone"
-    jev_shadow_select_bar: float = 0.5
+    jev_shadow_select_bar: float = 0.3
+    jev_shadow_min_top: int = 3
     jev_shadow_max_candidates: int = 25
     jev_shadow_timeout_seconds: float = 30.0
 

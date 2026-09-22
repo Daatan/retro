@@ -195,6 +195,12 @@ def _scoring_questions() -> dict:
                      "criteria": STRENGTH_LEVELS},
         "settled": {"type": "noul",
                     "instructions": "Does `sentence` report the outcome of `related_event` as an accomplished fact — it already happened, or became permanently impossible — rather than a prediction or progress toward it?"},
+        # retro#847: Jev's "no signal" conflates "none" with "needed context it cannot see".
+        # These two separated the cases 0.85 / 0.81 AUC offline (15 labelled cases).
+        "topic": {"type": "noul",
+                  "instructions": "Is `sentence` about the same subject as `related_event` — the same actors, institution, place or quantity?"},
+        "refs": {"type": "noul",
+                 "instructions": "Does `sentence` depend on text outside it to be understood — unresolved 'it/this/that', an unnamed speaker, or a condition/plan introduced elsewhere?"},
     }
 
 
@@ -258,6 +264,9 @@ async def run_jev_shadow(
             nouls = [sel["answers"][f"s{i}"]["noul"] for i in range(len(sentences))]
             order = sorted(range(len(nouls)), key=lambda i: (-nouls[i], i))
             cand = [i for k, i in enumerate(order) if k < min_top or nouls[i] >= select_bar][:max_candidates]
+            # Every Haiku-quoted sentence gets a Jev verdict too (outside the cap), so a veto on
+            # Haiku's claims can be measured claim by claim (retro#847).
+            cand += sorted({q[0] for q, *_ in payload["haiku"] if q} - set(cand))
             scored = await asyncio.gather(*[
                 _ask(client, api_key, {"sentence": sentences[i], "related_event": question}, _scoring_questions(), api_url)
                 for i in cand
@@ -276,9 +285,10 @@ async def run_jev_shadow(
                 round(a["settled"]["noul"], 3),
                 round(_expected(a["strength"], STRENGTH_VALUES), 3),
                 round(nz, 3), round(p0, 3),
+                round(a["topic"]["noul"], 3), round(a["refs"]["noul"], 3),
             ])
         # cand rows: [sentence_idx, noul, stance_expected, stance_argmax, settled, claim_strength,
-        #             stance_nonzero, p_no_signal]
+        #             stance_nonzero, p_no_signal, topic, refs]
         payload["cand"] = cands
         payload["tok_in"] = tok_in
     except Exception as exc:  # shadow: never let Jev affect /forecast

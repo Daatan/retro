@@ -63,7 +63,8 @@ def _transport(calls: list, *, fail: bool = False, urls: list | None = None):
             answers = {"neg": {"type": "noul", "noul": 0.03}}
         elif "stance" in qs:
             answers = {"stance": _score(5, 7), "strength": _score(3, 5),
-                       "settled": {"type": "noul", "noul": 0.1}}
+                       "settled": {"type": "noul", "noul": 0.1},
+                       "topic": {"type": "noul", "noul": 0.8}, "refs": {"type": "noul", "noul": 0.2}}
         else:  # selection: sentence 0 and 2 bear on the question, 1 does not
             answers = {k: {"type": "noul", "noul": {"s0": 0.9, "s1": 0.05, "s2": 0.8}[k]} for k in qs}
         return httpx.Response(200, json={"model": "jev-1.13.0", "answers": answers,
@@ -94,7 +95,7 @@ def test_run_selects_scores_and_logs(caplog):
     assert p["cand"][0][3] == 0.7                          # stance argmax
     assert p["cand"][0][5] == pytest.approx(0.7)           # claim_strength level 3
     assert p["haiku"] == [[[0], 0.7, False, 0.6]]
-    assert p["cand"][0][6:] == [0.7, 0.0]                  # stance over non-zero levels, p(no signal)
+    assert p["cand"][0][6:] == [0.7, 0.0, 0.8, 0.2]        # stance over non-zero levels, p(no signal), topic, refs
     assert p["tok_in"] == 500                              # selection + neg + 3 scorings
     assert len(calls) == 5
     line = next(r.getMessage() for r in caplog.records if "event=jev_shadow" in r.getMessage())
@@ -201,3 +202,15 @@ def test_nonzero_stance_splits_no_signal_mass():
     ex, p0 = js._nonzero({"probabilities": {"3": 0.6, "5": 0.4}}, js.STANCE_VALUES)
     assert ex == pytest.approx(0.7) and p0 == 0.6
     assert js._nonzero({"probabilities": {"3": 1.0}}, js.STANCE_VALUES) == (0.0, 1.0)
+
+
+def test_haiku_quoted_sentences_are_scored_beyond_the_cap():
+    calls: list = []
+    haiku = [{"quote": "Analysts expect the Bank of Israel to cut rates in October.", "stance": 0.7,
+              "settled": False, "claim_strength": 0.6},
+             {"quote": "not in the article", "stance": 0.1, "settled": False, "claim_strength": 0.3}]
+    p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=haiku,
+                                      api_key="k", select_bar=0.95, min_top=0, max_candidates=0,
+                                      transport=_transport(calls)))
+    assert [c[0] for c in p["cand"]] == [0]                # only the located Haiku sentence
+    assert sum("stance" in c["questions"] for c in calls) == 1

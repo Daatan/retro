@@ -2861,7 +2861,7 @@ roughly 1/7 of Haiku's per-article cost.
 `jev_shadow.py` runs both passes as a background task right after the live Haiku
 extraction and logs one `event=jev_shadow payload=<json>` line per article: Haiku's quotes
 mapped to sentence indices (`haiku`), Jev's candidates (`cand`: sentence index, noul, stance
-expected value, stance argmax, settled, claim_strength), the top-8 nouls, the question's
+expected value, stance argmax, settled, claim_strength, then — since retro#845 — stance over the non-zero levels and p(no signal)), the top-8 nouls, the question's
 negation probability (`neg`) and token/latency cost. It never touches the response; every
 error is logged as `err` and swallowed.
 
@@ -2876,7 +2876,8 @@ expected-value stance never reaches ±1 while argmax over-saturates, so both are
 | `jev_shadow_enabled` | `False` | Master switch. |
 | `typesafe_api_key` | `""` | TypeSafe API key. Empty → SSM `/retro/prod/secrets/TYPESAFE_API_KEY`, read once per process; neither → `skip=no_key` on every article. |
 | `jev_shadow_api_url` | TypeSafe `/v1/systemone` | OpenRouter's `https://openrouter.ai/api/v1/systemone` takes the identical request (with an OpenRouter key). |
-| `jev_shadow_select_bar` | `0.5` | Pass-1 noul a sentence needs to become a pass-2 candidate. |
+| `jev_shadow_select_bar` | `0.3` | Pass-1 noul that makes a sentence a pass-2 candidate beyond the top `min_top`. |
+| `jev_shadow_min_top` | `3` | The best-ranked sentences always scored, whatever their noul (retro#845: rank is reliable, the absolute noul scale is not). |
 | `jev_shadow_max_candidates` | `25` | Cap on pass-2 calls per article. |
 | `jev_shadow_timeout_seconds` | `30` | Per-request HTTP timeout. |
 

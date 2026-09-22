@@ -143,6 +143,19 @@ def _expected(ans: dict, values: Sequence[float]) -> float:
     return sum(p * values[int(k)] for k, p in ans["probabilities"].items())
 
 
+def _nonzero(ans: dict, values: Sequence[float]) -> tuple[float, float]:
+    """(expectation over the directional levels only, p(no-signal level)). The plain
+    expectation lets the no-signal mass drag every stance toward 0 (Jev |stance| 0.16 vs
+    Haiku 0.42 on live pairs); split, p0 says WHETHER there is a signal and the rest says
+    which way and how hard — same-sign MAE to Haiku 0.27 -> 0.19 (retro#845)."""
+    zero = values.index(0.0)
+    probs = {int(k): p for k, p in ans["probabilities"].items()}
+    p0 = probs.get(zero, 0.0)
+    rest = 1.0 - p0
+    ex = sum(p * values[k] for k, p in probs.items() if k != zero) / rest if rest > 1e-9 else 0.0
+    return ex, p0
+
+
 def _argmax(ans: dict, values: Sequence[float]) -> float:
     probs = ans["probabilities"]
     return values[int(max(probs, key=lambda k: probs[k]))]
@@ -199,7 +212,8 @@ async def run_jev_shadow(
     haiku_predictions: Sequence[dict],
     api_key: str = "",
     api_url: str = API_URL,
-    select_bar: float = 0.5,
+    select_bar: float = 0.3,
+    min_top: int = 3,
     max_candidates: int = 25,
     max_sentences: int = 400,
     timeout_s: float = 30.0,
@@ -243,7 +257,7 @@ async def run_jev_shadow(
             tok_in += sel.get("usage", {}).get("input_tokens", 0)
             nouls = [sel["answers"][f"s{i}"]["noul"] for i in range(len(sentences))]
             order = sorted(range(len(nouls)), key=lambda i: (-nouls[i], i))
-            cand = [i for i in order if nouls[i] >= select_bar][:max_candidates]
+            cand = [i for k, i in enumerate(order) if k < min_top or nouls[i] >= select_bar][:max_candidates]
             scored = await asyncio.gather(*[
                 _ask(client, api_key, {"sentence": sentences[i], "related_event": question}, _scoring_questions(), api_url)
                 for i in cand
@@ -255,13 +269,16 @@ async def run_jev_shadow(
         for i, resp in zip(cand, scored):
             tok_in += resp.get("usage", {}).get("input_tokens", 0)
             a = resp["answers"]
+            nz, p0 = _nonzero(a["stance"], STANCE_VALUES)
             cands.append([
                 i, round(nouls[i], 3),
                 round(_expected(a["stance"], STANCE_VALUES), 3), _argmax(a["stance"], STANCE_VALUES),
                 round(a["settled"]["noul"], 3),
                 round(_expected(a["strength"], STRENGTH_VALUES), 3),
+                round(nz, 3), round(p0, 3),
             ])
-        # cand rows: [sentence_idx, noul, stance_expected, stance_argmax, settled, claim_strength]
+        # cand rows: [sentence_idx, noul, stance_expected, stance_argmax, settled, claim_strength,
+        #             stance_nonzero, p_no_signal]
         payload["cand"] = cands
         payload["tok_in"] = tok_in
     except Exception as exc:  # shadow: never let Jev affect /forecast

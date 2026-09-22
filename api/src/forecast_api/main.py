@@ -432,7 +432,7 @@ async def search(
 async def search_health(_: ApiKeyClient = Depends(verify_api_key)):
     """
     Per-provider search health: key configured, in-process quota flag, and live credit
-    count where the provider exposes a credit API (Serper, SerpAPI, ScrapingBee).
+    count where the provider exposes a credit API (Serper, SerpAPI).
     """
     return await run_search_health()
 

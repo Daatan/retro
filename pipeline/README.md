@@ -15,7 +15,7 @@ pipeline/
     gnews_ingest.py        # GNews RSS → URL resolution → trafilatura + Wayback fallback
     gdelt_ingest.py        # GDELT Doc 2.0 API batch ingestor (sequential, rate-limited)
     site_search.py         # Direct site-search scraper (no API key, high reliability)
-    web_search.py          # Multi-provider search: news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → ScrapingBee → DataForSEO → DDG → trusted-sites
+    web_search.py          # Multi-provider search: news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG → trusted-sites
     polymarket.py          # Polymarket Gamma API: fetch market history per event
     polymarket_harvest.py  # Bulk harvest of all resolved Polymarket political markets
 
@@ -86,7 +86,6 @@ uv sync
 | `BRAVE_API_KEY` | No | Brave News Search (priority 4); also URL resolution fallback in gnews_ingest |
 | `BRIGHTDATA_API_KEY` | No | BrightData SERP API (priority 5) |
 | `NIMBLEWAY_API_KEY` | No | Nimbleway SERP API (priority 6) |
-| `SCRAPINGBEE_API_KEY` | No | ScrapingBee Google Search (priority 7) |
 | `NEWSDATA_API_KEY` | No | Newsdata.io archive search (priority 8) |
 | `DATAFORSEO_API_KEY` | No | DataForSEO — last-resort paid fallback (priority 9) |
 | `GCP_SA_KEY_JSON` | No | GCP service account JSON — enables GDELT BigQuery for historical queries (>90 days) |

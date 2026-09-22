@@ -15,7 +15,6 @@ Fallback order:
   4c. Newsdata.io                   NEWSDATA_API_KEY     (news API w/ dates; ahead of SERP scrapers)
   5. BrightData SERP API            BRIGHTDATA_API_KEY
   6. Nimbleway SERP API             NIMBLEWAY_API_KEY
-  7. ScrapingBee Google Search      SCRAPINGBEE_API_KEY
   9. DataForSEO Google News         DATAFORSEO_API_KEY  (last-resort paid fallback)
  10. DuckDuckGo Lite                (free, no key)
 
@@ -176,7 +175,6 @@ SERPER_API_KEY: Optional[str] = _secret("SERPER_API_KEY", "/retro/prod/secrets/S
 BRAVE_API_KEY: Optional[str] = _secret("BRAVE_API_KEY", "/retro/prod/secrets/BRAVE_API_KEY")
 BRIGHTDATA_API_KEY: Optional[str] = _secret("BRIGHTDATA_API_KEY", "/retro/prod/secrets/BRIGHTDATA_API_KEY")
 NIMBLEWAY_API_KEY: Optional[str] = _secret("NIMBLEWAY_API_KEY", "/retro/prod/secrets/NIMBLEWAY_API_KEY")
-SCRAPINGBEE_API_KEY: Optional[str] = _secret("SCRAPINGBEE_API_KEY", "/retro/prod/secrets/SCRAPINGBEE_API_KEY")
 NEWSDATA_API_KEY: Optional[str] = _secret("NEWSDATA_API_KEY", "/retro/prod/secrets/NEWSDATA_API_KEY")
 TAVILY_API_KEY: Optional[str] = _secret("TAVILY_API_KEY", "/retro/prod/secrets/TAVILY_API_KEY")
 # Google Programmable Search (Custom Search JSON API). Needs BOTH an API key and a
@@ -242,7 +240,7 @@ def _refresh_keys_if_stale() -> None:
     function is called at the top of search_articles() to catch that case.
     """
     global DATAFORSEO_API_KEY, SERPAPI_API_KEY, SERPER_API_KEY, BRAVE_API_KEY
-    global BRIGHTDATA_API_KEY, NIMBLEWAY_API_KEY, SCRAPINGBEE_API_KEY, NEWSDATA_API_KEY
+    global BRIGHTDATA_API_KEY, NIMBLEWAY_API_KEY, NEWSDATA_API_KEY
     global TAVILY_API_KEY, GOOGLE_CSE_API_KEY, GOOGLE_CSE_CX
     global GCP_SA_KEY_JSON, _BQ_CLIENT, _KEY_LOADED_AT
     if time.time() - _KEY_LOADED_AT < _KEY_MAX_AGE_SECONDS:
@@ -254,7 +252,6 @@ def _refresh_keys_if_stale() -> None:
     BRAVE_API_KEY = _secret("BRAVE_API_KEY", "/retro/prod/secrets/BRAVE_API_KEY")
     BRIGHTDATA_API_KEY = _secret("BRIGHTDATA_API_KEY", "/retro/prod/secrets/BRIGHTDATA_API_KEY")
     NIMBLEWAY_API_KEY = _secret("NIMBLEWAY_API_KEY", "/retro/prod/secrets/NIMBLEWAY_API_KEY")
-    SCRAPINGBEE_API_KEY = _secret("SCRAPINGBEE_API_KEY", "/retro/prod/secrets/SCRAPINGBEE_API_KEY")
     NEWSDATA_API_KEY = _secret("NEWSDATA_API_KEY", "/retro/prod/secrets/NEWSDATA_API_KEY")
     TAVILY_API_KEY = _secret("TAVILY_API_KEY", "/retro/prod/secrets/TAVILY_API_KEY")
     GOOGLE_CSE_API_KEY = _secret("GOOGLE_CSE_API_KEY", "/retro/prod/secrets/GOOGLE_CSE_API_KEY")
@@ -372,7 +369,6 @@ _BRAVE_QUOTA_EXHAUSTED: bool = False
 _SERPER_QUOTA_EXHAUSTED: bool = False
 _BRIGHTDATA_QUOTA_EXHAUSTED: bool = False
 _NIMBLEWAY_QUOTA_EXHAUSTED: bool = False
-_SCRAPINGBEE_QUOTA_EXHAUSTED: bool = False
 _NEWSDATA_QUOTA_EXHAUSTED: bool = False
 _TAVILY_QUOTA_EXHAUSTED: bool = False
 _GOOGLE_CSE_QUOTA_EXHAUSTED: bool = False
@@ -387,7 +383,6 @@ _QUOTA_FLAG_GLOBALS: dict[str, str] = {
     "brave":       "_BRAVE_QUOTA_EXHAUSTED",
     "brightdata":  "_BRIGHTDATA_QUOTA_EXHAUSTED",
     "nimbleway":   "_NIMBLEWAY_QUOTA_EXHAUSTED",
-    "scrapingbee": "_SCRAPINGBEE_QUOTA_EXHAUSTED",
     "newsdata":    "_NEWSDATA_QUOTA_EXHAUSTED",
     "tavily":      "_TAVILY_QUOTA_EXHAUSTED",
     "google_cse":  "_GOOGLE_CSE_QUOTA_EXHAUSTED",
@@ -1019,57 +1014,6 @@ def _search_nimbleway(
             url=item.get("url", ""),
             snippet=item.get("snippet", ""),
             source=_clean_source(item.get("cleaned_domain") or "", item.get("url", "")),
-        )
-        for item in items[:limit]
-        if item.get("url")
-    ]
-    return _filter_by_date(results, date_from, date_to)
-
-
-# ──────────────────────────────────────────────
-# Provider: ScrapingBee Google Search
-# ──────────────────────────────────────────────
-
-def _search_scrapingbee(
-    query: str,
-    limit: int,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
-) -> List[SearchResult]:
-    global _SCRAPINGBEE_QUOTA_EXHAUSTED
-    if not SCRAPINGBEE_API_KEY:
-        raise RuntimeError("SCRAPINGBEE_API_KEY not set")
-
-    dated_query = query + _date_query_suffix(date_from, date_to)
-    r = httpx.get(
-        "https://app.scrapingbee.com/api/v1/store/google",
-        params={"api_key": SCRAPINGBEE_API_KEY, "search": dated_query, "nb_results": limit},
-        timeout=20,
-    )
-    if r.status_code == 402:
-        _SCRAPINGBEE_QUOTA_EXHAUSTED = True
-        _persist_quota_state()
-        raise RuntimeError("ScrapingBee quota exhausted (402)")
-    if r.status_code == 401:
-        _SCRAPINGBEE_QUOTA_EXHAUSTED = True
-        _persist_quota_state()
-        raise RuntimeError("ScrapingBee unauthorized (401) — invalid key, disabling for session")
-    r.raise_for_status()
-
-    data = r.json()
-    items = (
-        data.get("news_results")
-        or data.get("top_stories")
-        or data.get("organic_results")
-        or []
-    )
-    results = [
-        SearchResult(
-            title=item.get("title", ""),
-            url=item.get("url", ""),
-            snippet=item.get("description", ""),
-            source=_clean_source(item.get("domain") or "", item.get("url", "")),
-            published_date=item.get("date_utc") or item.get("date") or "",
         )
         for item in items[:limit]
         if item.get("url")
@@ -1846,7 +1790,7 @@ def _search_articles_chain(
 
     Tries providers in order, skipping any without a configured key or with
     an exhausted quota flag set for this process lifetime:
-      GDELT → SerpAPI → Serper.dev → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → ScrapingBee → DataForSEO → DDG
+      GDELT → SerpAPI → Serper.dev → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG
 
     DDG is tried last; if AWS IPs are blocked by DDG/Yahoo it fails and is logged.
 
@@ -2145,20 +2089,6 @@ def _search_articles_chain(
         except Exception as e:
             logger.warning("nimbleway failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
-    # 7. ScrapingBee Google Search
-    if SCRAPINGBEE_API_KEY and not _SCRAPINGBEE_QUOTA_EXHAUSTED:
-        if _past_deadline("scrapingbee"):
-            return []
-        _provider_local.chain.append("scrapingbee")
-        _t0 = time.perf_counter()
-        try:
-            results = _search_scrapingbee(query, limit, date_from, date_to)
-            if results:
-                _provider_local.name = "scrapingbee"
-                return results
-            logger.debug("scrapingbee empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
-            logger.warning("scrapingbee failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 9. DataForSEO (paid — last-resort fallback only)
     if DATAFORSEO_API_KEY and not _DATAFORSEO_QUOTA_EXHAUSTED:

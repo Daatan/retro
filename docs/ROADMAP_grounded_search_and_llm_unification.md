@@ -31,7 +31,7 @@ daatan /api/ibi/search ──▶ Oracul POST /search ──▶ tm.web_search.sea
     oracleClient.ts)                                    news-indexer → GDELT → GDELT BQ
                                                         → Google CSE → SerpAPI → Serper
                                                         → Brave → Tavily → BrightData
-                                                        → Nimbleway → ScrapingBee → Newsdata
+                                                        → Nimbleway → Newsdata
                                                         → DataForSEO → DuckDuckGo
 ```
 

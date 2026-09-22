@@ -136,7 +136,7 @@ async def _check_serper() -> ProviderStatus:
             return ProviderStatus(configured=True, exhausted=False, status="error", error=f"HTTP {r.status_code}")
         credits = r.json().get("balance")
         # Serper reports a *negative* balance once the plan is overdrawn, so "not None"
-        # isn't enough — treat <= 0 as exhausted (same rule as scrapingbee below).
+        # isn't enough — treat <= 0 as exhausted.
         if credits is not None and credits <= 0:
             _ws._SERPER_QUOTA_EXHAUSTED = True
             return ProviderStatus(configured=True, exhausted=True, status="exhausted", credits=credits)
@@ -165,31 +165,6 @@ async def _check_serpapi() -> ProviderStatus:
             _ws._SERPAPI_QUOTA_EXHAUSTED = True
         return ProviderStatus(configured=True, exhausted=exhausted,
                               status="exhausted" if exhausted else "ok", credits=credits)
-    except Exception as e:
-        return ProviderStatus(configured=True, exhausted=False, status="error", error=str(e))
-
-
-async def _check_scrapingbee() -> ProviderStatus:
-    if not _ws.SCRAPINGBEE_API_KEY:
-        return ProviderStatus(configured=False, exhausted=False, status="not_configured")
-    if _ws._SCRAPINGBEE_QUOTA_EXHAUSTED:
-        return ProviderStatus(configured=True, exhausted=True, status="exhausted")
-    try:
-        async with httpx.AsyncClient(timeout=5) as c:
-            r = await c.get(
-                "https://app.scrapingbee.com/api/v1/usage",
-                params={"api_key": _ws.SCRAPINGBEE_API_KEY},
-            )
-        if not r.is_success:
-            return ProviderStatus(configured=True, exhausted=False, status="error", error=f"HTTP {r.status_code}")
-        data = r.json()
-        max_c = data.get("max_api_credit")
-        used_c = data.get("used_api_credit")
-        credits = (max_c - used_c) if (max_c is not None and used_c is not None) else None
-        if credits is not None and credits <= 0:
-            _ws._SCRAPINGBEE_QUOTA_EXHAUSTED = True
-            return ProviderStatus(configured=True, exhausted=True, status="exhausted", credits=credits)
-        return ProviderStatus(configured=True, exhausted=False, status="ok", credits=credits)
     except Exception as e:
         return ProviderStatus(configured=True, exhausted=False, status="error", error=str(e))
 
@@ -249,7 +224,6 @@ async def run_search_health() -> SearchHealthResponse:
         ("brave",      _check_simple(_ws.BRAVE_API_KEY, _ws._BRAVE_QUOTA_EXHAUSTED)),
         ("brightdata", _check_simple(_ws.BRIGHTDATA_API_KEY, _ws._BRIGHTDATA_QUOTA_EXHAUSTED)),
         ("nimbleway",  _check_simple(_ws.NIMBLEWAY_API_KEY, _ws._NIMBLEWAY_QUOTA_EXHAUSTED)),
-        ("scrapingbee", _check_scrapingbee()),
         ("newsdata",   _check_simple(_ws.NEWSDATA_API_KEY, _ws._NEWSDATA_QUOTA_EXHAUSTED)),
         ("gdelt",      _check_gdelt()),
         ("gdelt_bq",   _check_gdelt_bq()),

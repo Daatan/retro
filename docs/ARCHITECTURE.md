@@ -36,7 +36,7 @@ retro/
 │   │   ├── gdelt_ingest.py      # GDELT Doc 2.0 API batch ingestor (sequential, rate-limited)
 │   │   ├── ingestor.py          # Pluggable ingestor classes: DDGIngestor, GDELTIngestor
 │   │   ├── site_search.py       # Direct site-search scraper (no API key, high reliability)
-│   │   ├── web_search.py        # Multi-provider news search: news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → ScrapingBee → DataForSEO → DDG
+│   │   ├── web_search.py        # Multi-provider news search: news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG
 │   │   ├── polymarket.py        # Polymarket Gamma API: fetch market history per event
 │   │   ├── polymarket_harvest.py # Bulk harvest of all resolved Polymarket political markets
 │   │   │
@@ -493,7 +493,6 @@ docs#122 (free `SecureString`, same read pattern via `_secret()`):
 | `/retro/prod/secrets/BRAVE_API_KEY` | Web search — Brave News Search (optional) |
 | `/retro/prod/secrets/BRIGHTDATA_API_KEY` | Web search — BrightData SERP API (optional) |
 | `/retro/prod/secrets/NIMBLEWAY_API_KEY` | Web search — Nimbleway SERP API (optional) |
-| `/retro/prod/secrets/SCRAPINGBEE_API_KEY` | Web search — ScrapingBee Google Search (optional) |
 | `/retro/prod/secrets/NEWSDATA_API_KEY` | Web search — Newsdata.io (optional) |
 | `/retro/prod/secrets/TAVILY_API_KEY` | Web search — Tavily (optional) |
 | `/retro/prod/secrets/GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_CX` | Web search — Google Custom Search (optional) |
@@ -699,7 +698,7 @@ with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
 ### Pipeline
 
 **Stage 1 — Search & Fetch**
-1. `web_search.search_articles(question, limit)` — news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → ScrapingBee → DataForSEO → DDG fallback chain (news-indexer is first-in-chain: the local pgvector index is queried before any paid provider)
+1. `web_search.search_articles(question, limit)` — news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG fallback chain (news-indexer is first-in-chain: the local pgvector index is queried before any paid provider)
 2. Per article: trafilatura full-text fetch (falls back to title+snippet). Caller-supplied articles (`POST /forecast` with `articles[]`) skip the fetch when they carry `text`; **t.me URLs are never fetched at all** (retro#417 — the t.me web preview extracts to nothing, so Telegram evidence uses supplied `text` or title+snippet). t.me-host articles are also exempt from the 20-char fallback floor (a 5-char truly-empty floor remains) and are judged/extracted with the short-form prompt overrides; an optional per-article `language` field is appended to both prompts as a hint. **Degraded-domain hybrid fallback** (retro#520): major publishers (Reuters, NYT, Bloomberg, Le Monde, …, `settings.degraded_fetch_domains`) fail live re-fetch almost always in prod (paywalls/bot-challenges the crawler at ingest wasn't subject to) — measured to starve the extractor of full text on ~18% of fetches and drive confidence-score variance. For those domains the live fetch is skipped up front in favor of news-indexer's archived-S3-text lookup (`GET /articles/text`, news-indexer#277 — same text it crawled at ingest, never a second origin fetch), falling through to a normal live fetch on a miss. Every other domain keeps live-fetch-first, with the same archive lookup tried before giving up to title+snippet on failure.
 
 **Stage 2 — Gatekeeper + Extractor** (parallel per article)

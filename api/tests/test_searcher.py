@@ -151,7 +151,7 @@ class TestHealthIncludesTrustedSites:
         async def _na():
             return ProviderStatus(configured=False, exhausted=False, status="not_configured")
         for fn in ("_check_dataforseo", "_check_serpapi", "_check_serper",
-                   "_check_scrapingbee", "_check_google_cse"):
+                   "_check_google_cse"):
             monkeypatch.setattr(searcher, fn, _na)
         for k in ("TAVILY_API_KEY", "BRAVE_API_KEY", "BRIGHTDATA_API_KEY",
                   "NIMBLEWAY_API_KEY", "NEWSDATA_API_KEY", "GCP_SA_KEY_JSON"):

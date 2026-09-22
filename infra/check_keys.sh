@@ -50,7 +50,7 @@ echo ""
 echo "  SECRET EXISTENCE (names read by pipeline/src/tm/web_search.py, in SSM)"
 MISSING=0
 for S in DATAFORSEO_API_KEY SERPAPI_API_KEY SERPER_API_KEY BRAVE_API_KEY BRIGHTDATA_API_KEY \
-         NIMBLEWAY_API_KEY SCRAPINGBEE_API_KEY NEWSDATA_API_KEY TAVILY_API_KEY \
+         NIMBLEWAY_API_KEY NEWSDATA_API_KEY TAVILY_API_KEY \
          GOOGLE_CSE_API_KEY GOOGLE_CSE_CX NEWS_INDEXER_URL NEWS_INDEXER_API_KEY \
          GCP_SA_KEY_JSON; do
   if aws ssm get-parameter --name "/retro/prod/secrets/$S" --with-decryption --region "$REGION" \

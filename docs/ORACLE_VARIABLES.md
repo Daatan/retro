@@ -2861,7 +2861,7 @@ roughly 1/7 of Haiku's per-article cost.
 `jev_shadow.py` runs both passes as a background task right after the live Haiku
 extraction and logs one `event=jev_shadow payload=<json>` line per article: Haiku's quotes
 mapped to sentence indices (`haiku`), Jev's candidates (`cand`: sentence index, noul, stance
-expected value, stance argmax, settled, claim_strength, then — since retro#845 — stance over the non-zero levels and p(no signal)), the top-8 nouls, the question's
+expected value, stance argmax, settled, claim_strength, then — since retro#845 — stance over the non-zero levels and p(no signal), then — since retro#847 — `topic` and `refs` nouls), the top-8 nouls, the question's
 negation probability (`neg`) and token/latency cost. It never touches the response; every
 error is logged as `err` and swallowed.
 
@@ -2882,3 +2882,13 @@ expected-value stance never reaches ±1 while argmax over-saturates, so both are
 | `jev_shadow_timeout_seconds` | `30` | Per-request HTTP timeout. |
 
 Cutover (Jev feeding the pool) is a separate decision on the shadow data, not this slice.
+
+**retro#847 — veto probe.** Since retro#847 every sentence a Haiku quote maps to is also scored
+in pass 2 (outside `jev_shadow_max_candidates`), and each pass-2 request carries two more
+`noul`s: `topic` ("is the sentence about the same subject as the event?") and `refs` ("does it
+depend on text outside it?"). The candidate use is a veto on Haiku claims Jev confidently rates
+as no-signal — but Jev's "no signal" also covers context it cannot reason across. On 15
+labelled disagreement cases these two nouls separated "no signal" from "needed context" at AUC
+0.85 / 0.81; `p_no_signal >= 0.75 AND topic < 0.8` vetoed 5/9 invented stances and 0/6 correct
+context-dependent ones. Those thresholds were fitted on the same 15 cases — the logged fields
+exist to validate them on a random sample, nothing reads them.

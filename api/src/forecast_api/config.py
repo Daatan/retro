@@ -786,12 +786,15 @@ class ApiSettings(BaseSettings):
     # Jev shadow extraction (retro#840) — shadow/log-only, off by default. After the
     # Haiku extractor returns, runs TypeSafe's Jev on the same article in the background
     # (pass 1: one noul per sentence; pass 2: stance/settled/claim_strength on sentences
-    # at noul >= select_bar) and logs `event=jev_shadow` with both sides. Needs BOTH the
-    # flag and a key; with the flag on and no key it does nothing. `select_bar` 0.5
+    # at noul >= select_bar) and logs `event=jev_shadow` with both sides. The key comes
+    # from TYPESAFE_API_KEY, else SSM `/retro/prod/secrets/TYPESAFE_API_KEY` (looked up once
+    # per process); with neither, every article logs `skip=no_key`. `api_url` also accepts
+    # OpenRouter's identical System One endpoint (with an OpenRouter key). `select_bar` 0.5
     # covered 76% of Haiku's quoted sentences offline at ~17 sentences/article;
     # `max_candidates` caps pass-2 requests per article.
     jev_shadow_enabled: bool = False
     typesafe_api_key: str = ""
+    jev_shadow_api_url: str = "https://api.typesafe.ai/v1/systemone"
     jev_shadow_select_bar: float = 0.5
     jev_shadow_max_candidates: int = 25
     jev_shadow_timeout_seconds: float = 30.0

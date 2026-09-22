@@ -12,7 +12,9 @@ This module runs that design next to the live Haiku extraction and logs one
 `event=jev_shadow` line per article with both sides, so the cutover decision is made on live
 traffic rather than a 150-article sample. It never touches the response: it is fired as a
 background task after the extractor returns, every error is swallowed and logged, and it is
-off unless JEV_SHADOW_ENABLED is set AND a TYPESAFE_API_KEY is configured.
+off unless JEV_SHADOW_ENABLED is set. The key is TYPESAFE_API_KEY or, failing that, the SSM
+SecureString `/retro/prod/secrets/TYPESAFE_API_KEY` (same store and fallback as the search
+providers' keys); a missing key logs `skip=no_key` on every article rather than going quiet.
 
 Two known gaps the log is built to measure, not to paper over:
 - Jev ignores negation INSIDE a score ("X will NOT happen" is scored as X), but detects a
@@ -80,6 +82,19 @@ _TASKS: set[asyncio.Task] = set()
 # Negation verdict per question — one small request per distinct question, not per article.
 _NEG_CACHE: dict[str, float] = {}
 _NEG_CACHE_MAX = 1024
+KEY_SSM_NAME = "/retro/prod/secrets/TYPESAFE_API_KEY"
+# Resolved key per process: SSM is asked once, not per article.
+_KEY: list[Optional[str]] = []
+
+
+def resolve_api_key(configured: str = "") -> Optional[str]:
+    """Configured key, else SSM (blocking boto3 call — run it off the event loop)."""
+    if configured:
+        return configured
+    if not _KEY:
+        from tm.web_search import _secret
+        _KEY.append(_secret("TYPESAFE_API_KEY", KEY_SSM_NAME))
+    return _KEY[0]
 
 
 def _norm(s: str) -> str:
@@ -133,9 +148,10 @@ def _argmax(ans: dict, values: Sequence[float]) -> float:
     return values[int(max(probs, key=lambda k: probs[k]))]
 
 
-async def _ask(client: httpx.AsyncClient, api_key: str, state, questions: dict) -> dict:
+async def _ask(client: httpx.AsyncClient, api_key: str, state, questions: dict,
+               api_url: str = API_URL) -> dict:
     r = await client.post(
-        API_URL,
+        api_url,
         headers={"Authorization": f"Bearer {api_key}"},
         json={"state": state, "model": MODEL, "questions": questions},
     )
@@ -181,7 +197,8 @@ async def run_jev_shadow(
     question: str,
     url: str,
     haiku_predictions: Sequence[dict],
-    api_key: str,
+    api_key: str = "",
+    api_url: str = API_URL,
     select_bar: float = 0.5,
     max_candidates: int = 25,
     max_sentences: int = 400,
@@ -204,14 +221,18 @@ async def run_jev_shadow(
         if not sentences or len(sentences) > max_sentences:
             payload["skip"] = "no_sentences" if not sentences else "too_long"
             return payload
+        api_key = api_key or await asyncio.to_thread(resolve_api_key)
+        if not api_key:
+            payload["skip"] = "no_key"
+            return payload
         tok_in = 0
         async with httpx.AsyncClient(timeout=timeout_s, transport=transport) as client:
             neg = _NEG_CACHE.get(question)
             sel_coro = _ask(client, api_key, {"sentences": sentences, "question": question},
-                            _selection_questions(len(sentences)))
+                            _selection_questions(len(sentences)), api_url)
             if neg is None:
                 sel, neg_resp = await asyncio.gather(
-                    sel_coro, _ask(client, api_key, {"related_event": question}, _NEG_QUESTION))
+                    sel_coro, _ask(client, api_key, {"related_event": question}, _NEG_QUESTION, api_url))
                 tok_in += neg_resp.get("usage", {}).get("input_tokens", 0)
                 neg = neg_resp["answers"]["neg"]["noul"]
                 if len(_NEG_CACHE) >= _NEG_CACHE_MAX:
@@ -224,7 +245,7 @@ async def run_jev_shadow(
             order = sorted(range(len(nouls)), key=lambda i: (-nouls[i], i))
             cand = [i for i in order if nouls[i] >= select_bar][:max_candidates]
             scored = await asyncio.gather(*[
-                _ask(client, api_key, {"sentence": sentences[i], "related_event": question}, _scoring_questions())
+                _ask(client, api_key, {"sentence": sentences[i], "related_event": question}, _scoring_questions(), api_url)
                 for i in cand
             ])
         payload["neg"] = round(neg, 3)

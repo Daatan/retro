@@ -2874,7 +2874,8 @@ expected-value stance never reaches ±1 while argmax over-saturates, so both are
 | Variable | Default | Meaning |
 |---|---|---|
 | `jev_shadow_enabled` | `False` | Master switch. |
-| `typesafe_api_key` | `""` | TypeSafe API key; empty → never runs even when enabled. |
+| `typesafe_api_key` | `""` | TypeSafe API key. Empty → SSM `/retro/prod/secrets/TYPESAFE_API_KEY`, read once per process; neither → `skip=no_key` on every article. |
+| `jev_shadow_api_url` | TypeSafe `/v1/systemone` | OpenRouter's `https://openrouter.ai/api/v1/systemone` takes the identical request (with an OpenRouter key). |
 | `jev_shadow_select_bar` | `0.5` | Pass-1 noul a sentence needs to become a pass-2 candidate. |
 | `jev_shadow_max_candidates` | `25` | Cap on pass-2 calls per article. |
 | `jev_shadow_timeout_seconds` | `30` | Per-request HTTP timeout. |

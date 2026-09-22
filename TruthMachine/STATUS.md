@@ -50,7 +50,7 @@ The pipeline loop (`infra/ec2_run.sh`) runs continuously: it sleeps 300s between
 | `/health` endpoint with version | ✅ Live (`0.1.0`) |
 | daatan secrets (`ORACLE_URL` + `ORACLE_API_KEY`) | ✅ In AWS Secrets Manager (`daatan-env-{prod,staging}`) |
 | daatan integration (`oracle.ts` wired into context + express guess routes) | ✅ Live in daatan v1.9.0 |
-| Search provider expansion (BrightData + Nimbleway + ScrapingBee) | ✅ Live (2026-04-28) — 6 paid providers + DDG |
+| Search provider expansion (BrightData + Nimbleway + ScrapingBee) | ✅ Live (2026-04-28) — 6 paid providers + DDG; ScrapingBee removed 2026-09-22 (#843), never served a search |
 | Secrets Manager read permission (`daatan-secrets-read` on `truthmachine-ec2-role`) | ✅ Applied |
 
 ### Duel: TruthMachine vs Polymarket

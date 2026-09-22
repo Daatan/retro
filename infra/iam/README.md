@@ -50,8 +50,6 @@ aws secretsmanager create-secret --region eu-central-1 \
   --name daatan/brightdata-api-key --secret-string "<VALUE>"
 aws secretsmanager create-secret --region eu-central-1 \
   --name daatan/nimbleway-api-key --secret-string "<VALUE>"
-aws secretsmanager create-secret --region eu-central-1 \
-  --name daatan/scrapingbee-api-key --secret-string "<VALUE>"
 ```
 
 **After applying, reload oracle and restart the pipeline** to pick up the new keys:

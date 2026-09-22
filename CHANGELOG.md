@@ -19,6 +19,9 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 
 ## [Unreleased]
 
+### Added
+- Jev shadow extraction (retro#840): with `JEV_SHADOW_ENABLED` and `TYPESAFE_API_KEY` set, a background task runs TypeSafe Jev (System One) on each article the live Haiku extractor sees — pass 1 selects sentences by `noul`, pass 2 elicits stance/claim_strength/settled per candidate — and logs one `event=jev_shadow` line with both sides. Log-only, never touches the response; both settings default off. Offline vs Haiku v15 on 150 pairs: recall@1 63%, stance sign 84%, ~7x cheaper. See `docs/ORACLE_VARIABLES.md`
+
 ### Changed
 - Subject gate (retro#833): for pushed sources with no article page (t.me), a card with **zero verified spans is no longer a skip** — the gate is evaluated on the deterministic surface-form route, and fires when the text names no subject actor (`subject_gate_pushed_fail_closed`, default on; bites only under `subject_gate_enforce`, as every fire does). Measured 2026-09-19: one referent-less post (`t.me/ben_caspit/18944`) passed `skip=no_verified_spans` 11 times and carried 6–24 pp on seven published forecasts. Web sources unchanged. Log signature: `fired=True matched_via=none verified_spans=[]`.
 - `event=pushed_title_fragment` log line (retro#770) gains `extreme_stance=` (any fired claim at |stance| >= 0.95) and `effective_len=` (a doubled `title — title` counted once, bare links removed) beside the raw `len=`. The 2026-09-18 precision review of the flag's first 24 events found `very_short` alone is 2/11 precise, and that the one harmful hit was the only extreme-stance one; these fields let the candidate rule `very_short AND extreme_stance` accrue its own numbers. Report-only: the firing condition is unchanged and still keys on the text the extractor was shown.

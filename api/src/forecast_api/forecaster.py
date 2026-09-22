@@ -215,6 +215,7 @@ from .settlement_semantic import (
 )
 from .settlement_verifier import SettlementVote, Verdict, build_prompt, verify_settlement
 from .premise_verifier import PremiseResult, premise_check_triggered, verify_premise
+from .jev_shadow import fire_jev_shadow
 from .subject_card import SubjectCard, derive_subject_card, evaluate_subject_gate
 from .subject_card_store import get_subject_card, put_subject_card, subject_card_key
 
@@ -1739,6 +1740,22 @@ async def _process_article(
         )
         if usage_events is not None and extract_usage:
             usage_events.append(extract_usage)
+        # Jev shadow (retro#840) — background, log-only. Snapshot Haiku's RAW output now,
+        # before the enforce_* chain below rewrites stance/settled: raw vs raw is the
+        # comparison that says whether Jev can stand in for the model.
+        if settings.jev_shadow_enabled and settings.typesafe_api_key:
+            fire_jev_shadow(
+                text=text, question=question, url=result.url or "",
+                haiku_predictions=[
+                    {"quote": p.quote, "stance": p.stance, "settled": p.settled,
+                     "claim_strength": p.claim_strength}
+                    for p in extraction.predictions
+                ],
+                api_key=settings.typesafe_api_key,
+                select_bar=settings.jev_shadow_select_bar,
+                max_candidates=settings.jev_shadow_max_candidates,
+                timeout_s=settings.jev_shadow_timeout_seconds,
+            )
         # Observability only (retro#298) — logs claim/stance sign mismatches on the
         # model's raw output, before any of the deterministic corrections below can
         # touch stance or settled. Never mutates.

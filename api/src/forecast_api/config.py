@@ -802,6 +802,24 @@ class ApiSettings(BaseSettings):
     jev_shadow_max_candidates: int = 25
     jev_shadow_timeout_seconds: float = 30.0
 
+    # Jev skip-gate (retro#850) — shadow by default, enforce behind its own flag. 41% of the
+    # articles that reach the extractor yield no claim (173/418 live, 2026-09-20..23) and
+    # Jev's pass-1 `max_noul` predicts that with AUC 0.93; below 0.15 it would have skipped
+    # 31% of Haiku calls and lost 31/746 claims, 26 of them junk by Jev's own topic/no-signal
+    # criteria. With `jev_gate_enabled` pass 1 runs on every article that clears the
+    # gatekeeper and logs `event=jev_gate would_skip=…` next to what Haiku then found (the
+    # threshold is picked from that log, per script); with `jev_gate_enforce` an article
+    # below the threshold is not extracted at all (`outcome=jev_gated`). Fail-open: a Jev
+    # error, timeout or missing key always extracts. The shadow (above) reuses the same
+    # pass-1 call, so enabling both costs one selection request per article, not two.
+    jev_gate_enabled: bool = False
+    jev_gate_threshold: float = 0.15
+    jev_gate_enforce: bool = False
+    jev_gate_timeout_seconds: float = 8.0
+    # Shadow only: how long to wait after Haiku for a pass 1 still in flight before logging
+    # its verdict from a done-callback instead. Keeps shadow at zero added latency.
+    jev_gate_shadow_wait_seconds: float = 0.5
+
     # Precursor candidate-match (retro#608) — shadow/log-only, off by default.
     # Before pricing a v2-playground precursor fresh, checks whether it already
     # matches an open forecast in Daatan's own bank or a live Polymarket market,

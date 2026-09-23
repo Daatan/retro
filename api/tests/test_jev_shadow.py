@@ -214,3 +214,76 @@ def test_haiku_quoted_sentences_are_scored_beyond_the_cap():
                                       transport=_transport(calls)))
     assert [c[0] for c in p["cand"]] == [0]                # only the located Haiku sentence
     assert sum("stance" in c["questions"] for c in calls) == 1
+
+
+# --- retro#850: pass 1 on its own, the skip-gate verdict, and reuse by the shadow ---------
+
+def test_pass1_returns_nouls_and_max_noul():
+    calls: list = []
+    p1 = asyncio.run(js.jev_pass1(text=ARTICLE, question=QUESTION, api_key="k", transport=_transport(calls)))
+    assert "err" not in p1 and "skip" not in p1
+    assert p1["nouls"] == [0.9, 0.05, 0.8] and p1["max_noul"] == 0.9 and p1["neg"] == 0.03
+    assert len(p1["sentences"]) == 3 and p1["tok_in"] == 200 and "ms" in p1
+    assert len(calls) == 2                                  # selection + neg, no scoring
+
+
+def test_pass1_never_raises():
+    p1 = asyncio.run(js.jev_pass1(text=ARTICLE, question=QUESTION, api_key="k", transport=_transport([], fail=True)))
+    assert "err" in p1 and "nouls" not in p1
+    assert asyncio.run(js.jev_pass1(text="ok.", question=QUESTION, api_key="k"))["skip"] == "no_sentences"
+
+
+def test_shadow_reuses_a_precomputed_pass1():
+    calls: list = []
+    p1 = asyncio.run(js.jev_pass1(text=ARTICLE, question=QUESTION, api_key="k", transport=_transport(calls)))
+    before = len(calls)
+    p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[],
+                                      api_key="k", transport=_transport(calls), pass1=p1))
+    assert [c[0] for c in p["cand"]] == [0, 2, 1] and p["max_noul"] == 0.9
+    assert not any("s0" in c["questions"] for c in calls[before:])   # selection asked exactly once
+    assert len(calls) - before == 3                                  # only the three scorings
+
+
+def test_shadow_with_a_failed_pass1_logs_err_without_calls(caplog):
+    calls: list = []
+    with caplog.at_level(logging.INFO, logger="forecast_api.jev_shadow"):
+        p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[],
+                                          api_key="k", transport=_transport(calls),
+                                          pass1={"norm_text": "x", "spans": [], "sentences": [], "err": "boom"}))
+    assert p["err"] == "boom" and calls == []
+
+
+def test_gate_verdict_and_fail_open():
+    assert js.evaluate_jev_gate({"nouls": [0.05, 0.1], "max_noul": 0.1}, 0.15) == (True, 0.1)
+    assert js.evaluate_jev_gate({"nouls": [0.05, 0.9], "max_noul": 0.9}, 0.15) == (False, 0.9)
+    assert js.evaluate_jev_gate({"max_noul": 0.15, "nouls": [0.15]}, 0.15) == (False, 0.15)  # threshold is inclusive
+    assert js.evaluate_jev_gate(None, 0.15) == (False, None)
+    assert js.evaluate_jev_gate({"err": "boom"}, 0.15) == (False, None)
+    assert js.evaluate_jev_gate({"skip": "no_key"}, 0.15) == (False, None)
+
+
+def test_fire_pass1_keeps_a_strong_reference():
+    async def go():
+        t = js.fire_jev_pass1(text=ARTICLE, question=QUESTION, api_key="k", transport=_transport([]))
+        assert t in js._TASKS
+        r = await t
+        assert r["max_noul"] == 0.9
+    asyncio.run(go())
+    assert js.fire_jev_pass1(text=ARTICLE, question=QUESTION, api_key="k") is None   # no loop
+
+
+def test_script_of():
+    assert js.script_of("Analysts expect the Bank of Israel to cut rates.") == "latin"
+    assert js.script_of("הנגיד רמז כי הריבית תרד עוד לפני סוף השנה.") == "he"
+    assert js.script_of("قال المحافظ إن الفائدة ستنخفض قبل نهاية العام.") == "ar"
+    assert js.script_of("Аналитики ожидают снижения ставки в октябре.") == "cyr"
+    assert js.script_of("Reuters: הנגיד רמז כי הריבית תרד עוד לפני סוף השנה (Bank of Israel).") == "he"
+    assert js.script_of("12345 !!!") == "other"
+
+
+def test_gate_flags_off_by_default():
+    from forecast_api.config import ApiSettings
+    s = ApiSettings(_env_file=None)
+    assert s.jev_gate_enabled is False and s.jev_gate_enforce is False
+    assert s.jev_gate_threshold == 0.15 and s.jev_gate_timeout_seconds == 8.0
+    assert s.jev_gate_shadow_wait_seconds == 0.5

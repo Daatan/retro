@@ -215,7 +215,7 @@ from .settlement_semantic import (
 )
 from .settlement_verifier import SettlementVote, Verdict, build_prompt, verify_settlement
 from .premise_verifier import PremiseResult, premise_check_triggered, verify_premise
-from .jev_shadow import fire_jev_shadow
+from .jev_shadow import evaluate_jev_gate, fire_jev_pass1, fire_jev_shadow, script_of
 from .subject_card import SubjectCard, derive_subject_card, evaluate_subject_gate
 from .subject_card_store import get_subject_card, put_subject_card, subject_card_key
 
@@ -1490,6 +1490,27 @@ def _supplied_verdict(result: SearchResult) -> tuple[bool, float] | None:
     return bool(is_pred), float(rel)
 
 
+def _log_jev_gate(
+    pass1: dict, *, would_skip: bool, n_preds: int | None, text: str,
+    language: str | None, url: str | None, prediction_id: str | None,
+) -> None:
+    """One `event=jev_gate` line per article that reached the extractor stage (retro#850):
+    the verdict, the number it was made on, what Haiku then found (`n_preds`, absent when
+    the article was actually skipped), and the script so the threshold can be read per
+    language. `status` is `ok`, or the pass-1 `skip`/`err` reason the gate failed open on;
+    `late=True` marks a shadow verdict logged after the article was already returned."""
+    max_noul = pass1.get("max_noul")
+    logger.info(
+        "event=jev_gate would_skip=%s enforce=%s max_noul=%s threshold=%.2f n_preds=%s "
+        "status=%s late=%s script=%s language=%s n_sents=%d jev_ms=%s url=%s prediction_id=%s",
+        would_skip, settings.jev_gate_enforce,
+        f"{max_noul:.3f}" if max_noul is not None else "none", settings.jev_gate_threshold,
+        n_preds if n_preds is not None else "skipped",
+        pass1.get("skip") or pass1.get("err", "ok")[:80], bool(pass1.get("late")), script_of(text), language or "",
+        len(pass1.get("sentences") or ()), pass1.get("ms", ""), url, prediction_id or "",
+    )
+
+
 async def _process_article(
     result: SearchResult,
     question: str,
@@ -1723,6 +1744,50 @@ async def _process_article(
         # sees byte-identical input to before this existed.
         event_description = f"{event_description}\n{event_decomposition}"
 
+    # Jev skip-gate (retro#850). Pass 1 (one noul per sentence) starts here, before the
+    # extractor; its `max_noul` says whether Haiku would find anything (AUC 0.93 live). In
+    # shadow it runs concurrently with the extractor and the verdict is logged next to what
+    # Haiku found; in enforce it is awaited first and a below-threshold article skips the
+    # extractor. Every failure path — no key, timeout, HTTP error, no sentences — extracts as
+    # before: the gate can only ever save a call, never lose one to Jev being down.
+    jev_pass1_task = None
+    jev_pass1_result: dict | None = None
+    if settings.jev_gate_enabled:
+        jev_pass1_task = fire_jev_pass1(
+            text=text, question=question,
+            api_key=settings.typesafe_api_key, api_url=settings.jev_shadow_api_url,
+            timeout_s=settings.jev_gate_timeout_seconds,
+        )
+    if jev_pass1_task is not None and settings.jev_gate_enforce:
+        try:
+            jev_pass1_result = await asyncio.wait_for(
+                asyncio.shield(jev_pass1_task), timeout=settings.jev_gate_timeout_seconds,
+            )
+        except Exception:  # noqa: BLE001 - fail open, including asyncio.TimeoutError
+            jev_pass1_result = {"err": "gate_timeout"}
+        would_skip, max_noul = evaluate_jev_gate(jev_pass1_result, settings.jev_gate_threshold)
+        if would_skip:
+            _log_jev_gate(jev_pass1_result, would_skip=True, n_preds=None, text=text,
+                          language=language, url=result.url, prediction_id=prediction_id)
+            logger.info(
+                "event=article_outcome outcome=jev_gated url=%s max_noul=%.3f threshold=%.2f prediction_id=%s",
+                result.url, max_noul or 0.0, settings.jev_gate_threshold, prediction_id or "",
+            )
+            jev_ms = float(jev_pass1_result.get("ms", 0.0))
+            timings.append({
+                "url": result.url, "fetch_ms": fetch_ms, "gate_ms": gate_ms,
+                "jev_ms": jev_ms, "outcome": "jev_gated",
+            })
+            article_debugs.append(ArticleDebug(
+                url=result.url, outcome="jev_gated",
+                gate_passed=True,
+                gate_reason=gate.reason,
+                gate_prediction_count_estimate=gate.prediction_count_estimate,
+                gate_tokens=gate_usage.get("total_tokens"),
+                fetch_ms=round(fetch_ms, 1), gate_ms=round(gate_ms, 1),
+            ))
+            return None
+
     extract_start = time.perf_counter()
     try:
         extraction, extract_usage = await extract_predictions(
@@ -1740,6 +1805,33 @@ async def _process_article(
         )
         if usage_events is not None and extract_usage:
             usage_events.append(extract_usage)
+        # Jev skip-gate, shadow verdict (retro#850): pass 1 ran alongside the extractor; log
+        # what it would have done against what Haiku actually found. Shadow must not add
+        # latency, so it waits only `jev_gate_shadow_wait_seconds` for a pass 1 still in
+        # flight (pass 1 alone is far quicker than Haiku, so this is rare) and otherwise logs
+        # the verdict from a done-callback when it lands, with Haiku's count captured now.
+        if jev_pass1_task is not None and jev_pass1_result is None:
+            try:
+                jev_pass1_result = await asyncio.wait_for(
+                    asyncio.shield(jev_pass1_task), timeout=settings.jev_gate_shadow_wait_seconds,
+                )
+            except asyncio.TimeoutError:
+                def _log_late(task: asyncio.Task, *, n_preds=len(extraction.predictions),
+                              text=text, language=language, url=result.url,
+                              prediction_id=prediction_id) -> None:
+                    late = task.result() if not task.cancelled() and task.exception() is None \
+                        else {"err": "pass1_task_failed"}
+                    late = dict(late, late=True)
+                    ws, _ = evaluate_jev_gate(late, settings.jev_gate_threshold)
+                    _log_jev_gate(late, would_skip=ws, n_preds=n_preds, text=text,
+                                  language=language, url=url, prediction_id=prediction_id)
+                jev_pass1_task.add_done_callback(_log_late)
+            except Exception:  # noqa: BLE001
+                jev_pass1_result = {"err": "pass1_task_failed"}
+        if jev_pass1_result is not None:
+            would_skip, _ = evaluate_jev_gate(jev_pass1_result, settings.jev_gate_threshold)
+            _log_jev_gate(jev_pass1_result, would_skip=would_skip, n_preds=len(extraction.predictions),
+                          text=text, language=language, url=result.url, prediction_id=prediction_id)
         # Jev shadow (retro#840) — background, log-only. Snapshot Haiku's RAW output now,
         # before the enforce_* chain below rewrites stance/settled: raw vs raw is the
         # comparison that says whether Jev can stand in for the model.
@@ -1757,6 +1849,8 @@ async def _process_article(
                 min_top=settings.jev_shadow_min_top,
                 max_candidates=settings.jev_shadow_max_candidates,
                 timeout_s=settings.jev_shadow_timeout_seconds,
+                # One selection call per article when both flags are on (retro#850).
+                pass1=jev_pass1_result if jev_pass1_result and "nouls" in jev_pass1_result else None,
             )
         # Observability only (retro#298) — logs claim/stance sign mismatches on the
         # model's raw output, before any of the deterministic corrections below can

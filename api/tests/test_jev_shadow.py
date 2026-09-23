@@ -286,3 +286,4 @@ def test_gate_flags_off_by_default():
     s = ApiSettings(_env_file=None)
     assert s.jev_gate_enabled is False and s.jev_gate_enforce is False
     assert s.jev_gate_threshold == 0.15 and s.jev_gate_timeout_seconds == 8.0
+    assert s.jev_gate_shadow_wait_seconds == 0.5

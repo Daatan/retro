@@ -2913,8 +2913,10 @@ work (retro#851) is a quality lever.
 the gatekeeper, *before* the extractor:
 
 - shadow (`jev_gate_enforce=False`): pass 1 runs concurrently with the extractor; once Haiku
-  returns, the verdict is logged next to what Haiku found. Zero added latency on the article,
-  zero effect on the pool.
+  returns, the verdict is logged next to what Haiku found. The article waits at most
+  `jev_gate_shadow_wait_seconds` (0.5 s) for a pass 1 still in flight — otherwise the line is
+  written from a done-callback when it lands, marked `late=True`, with Haiku's count captured
+  at return time. No added latency on the article, no effect on the pool.
 - enforce (`jev_gate_enforce=True`): pass 1 is awaited first (bounded by
   `jev_gate_timeout_seconds`); an article whose `max_noul` is below `jev_gate_threshold` is
   not extracted, logged as `event=article_outcome outcome=jev_gated` and surfaced in
@@ -2926,11 +2928,12 @@ can only ever save a Haiku call, never lose one to Jev being down. When the retr
 also on, it receives the same pass-1 result (`pass1=`) instead of re-asking the selection
 questions — both features together cost one selection request per article.
 
-**Log line**, one per article that reached the extractor stage:
+**Log line**, one per article the extractor was reached for and returned on (an
+`extract_error` article emits none):
 
 ```
 event=jev_gate would_skip=<bool> enforce=<bool> max_noul=<0.000|none> threshold=<0.00>
-  n_preds=<Haiku claims|skipped> status=<ok|skip/err reason> script=<latin|he|ar|cyr|other>
+  n_preds=<Haiku claims|skipped> status=<ok|skip/err reason> late=<bool> script=<latin|he|ar|cyr|other>
   language=<caller hint> n_sents=<n> jev_ms=<ms> url=<url> prediction_id=<id>
 ```
 
@@ -2948,3 +2951,4 @@ live only after ≥1 week of shadow with a per-script split of `would_skip=True`
 | `jev_gate_threshold` | `0.15` | `max_noul` below this = "Haiku would find nothing". Chosen on the 09-20..23 replay; re-read per script from the shadow log before enforcing. |
 | `jev_gate_enforce` | `False` | Skip the extractor on a below-threshold verdict. Off = shadow. |
 | `jev_gate_timeout_seconds` | `8.0` | Pass-1 HTTP timeout, and the longest enforce waits before failing open (shadow p50 785 ms / p90 1.7 s for both passes). |
+| `jev_gate_shadow_wait_seconds` | `0.5` | Shadow only: how long the article waits after Haiku for a pass 1 still in flight before the verdict is logged late from a callback. |

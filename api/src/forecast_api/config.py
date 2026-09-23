@@ -816,6 +816,9 @@ class ApiSettings(BaseSettings):
     jev_gate_threshold: float = 0.15
     jev_gate_enforce: bool = False
     jev_gate_timeout_seconds: float = 8.0
+    # Shadow only: how long to wait after Haiku for a pass 1 still in flight before logging
+    # its verdict from a done-callback instead. Keeps shadow at zero added latency.
+    jev_gate_shadow_wait_seconds: float = 0.5
 
     # Precursor candidate-match (retro#608) — shadow/log-only, off by default.
     # Before pricing a v2-playground precursor fresh, checks whether it already

@@ -58,11 +58,12 @@ def _fake_pass1(result, *, delay=0.0):
 
 
 async def _process(monkeypatch, *, enabled, enforce, pass1, extractor, threshold=0.15,
-                   timeout=8.0, timings=None, debugs=None):
+                   timeout=8.0, shadow_wait=0.5, timings=None, debugs=None):
     monkeypatch.setattr(api_settings, "jev_gate_enabled", enabled)
     monkeypatch.setattr(api_settings, "jev_gate_enforce", enforce)
     monkeypatch.setattr(api_settings, "jev_gate_threshold", threshold)
     monkeypatch.setattr(api_settings, "jev_gate_timeout_seconds", timeout)
+    monkeypatch.setattr(api_settings, "jev_gate_shadow_wait_seconds", shadow_wait)
     monkeypatch.setattr(api_settings, "jev_shadow_enabled", False)
     monkeypatch.setattr(forecaster, "fire_jev_pass1", pass1)
     monkeypatch.setattr(forecaster, "check_is_prediction", AsyncMock(return_value=(
@@ -103,7 +104,7 @@ class TestJevGate:
         assert out is None                           # no_predictions, as before
         line = _gate_line(caplog)
         assert "would_skip=True enforce=False max_noul=0.050 threshold=0.15 n_preds=0" in line
-        assert "status=ok script=latin" in line and "prediction_id=pid-1" in line
+        assert "status=ok late=False script=latin" in line and "prediction_id=pid-1" in line
         assert fire.seen[0]["question"] == QUESTION and fire.seen[0]["timeout_s"] == 8.0
 
     async def test_shadow_logs_keep_next_to_haiku_count(self, monkeypatch, caplog):
@@ -112,6 +113,23 @@ class TestJevGate:
             out = await _process(monkeypatch, enabled=True, enforce=False, pass1=fire, extractor=_extractor_spy(2))
         assert out is not None and out.predictions
         assert "would_skip=False enforce=False max_noul=0.900 threshold=0.15 n_preds=2" in _gate_line(caplog)
+
+    async def test_shadow_never_waits_for_a_slow_pass1(self, monkeypatch, caplog):
+        # Shadow adds no latency: a pass 1 still in flight after Haiku is logged later,
+        # from a done-callback, with Haiku's count captured at return time.
+        import time
+        ex = _extractor_spy(n_preds=3)
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            t0 = time.perf_counter()
+            out = await _process(monkeypatch, enabled=True, enforce=False, shadow_wait=0.01,
+                                 pass1=_fake_pass1(LOW, delay=0.3), extractor=ex)
+            elapsed = time.perf_counter() - t0
+            assert out is not None and elapsed < 0.25          # returned before pass 1 landed
+            assert not any("event=jev_gate " in r.getMessage() for r in caplog.records)
+            await asyncio.sleep(0.4)                           # let the task finish
+        line = _gate_line(caplog)
+        assert "would_skip=True enforce=False max_noul=0.050 threshold=0.15 n_preds=3" in line
+        assert "status=ok late=True" in line
 
     async def test_enforce_skips_the_extractor_below_threshold(self, monkeypatch, caplog):
         fire = _fake_pass1(LOW)

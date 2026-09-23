@@ -210,41 +210,62 @@ _NEG_QUESTION = {"neg": {
 }}
 
 
-async def run_jev_shadow(
+_SCRIPT_RANGES = (("he", "֐", "׿"), ("ar", "؀", "ۿ"), ("cyr", "Ѐ", "ӿ"))
+
+
+def script_of(text: str) -> str:
+    """Dominant script of the letters in `text` — `he`/`ar`/`cyr`/`latin`/`other`. The gate
+    log carries it so the skip threshold can be read per language (retro#850): Hebrew
+    selection quality is the open question, and the caller's language hint is often absent."""
+    counts = {k: 0 for k, *_ in _SCRIPT_RANGES}
+    latin = total = 0
+    for ch in text:
+        if not ch.isalpha():
+            continue
+        total += 1
+        if ch.isascii():
+            latin += 1
+            continue
+        for k, lo, hi in _SCRIPT_RANGES:
+            if lo <= ch <= hi:
+                counts[k] += 1
+                break
+    if not total:
+        return "other"
+    best = max(counts, key=counts.get)
+    if counts[best] > latin and counts[best] / total >= 0.2:
+        return best
+    return "latin" if latin / total >= 0.5 else "other"
+
+
+async def jev_pass1(
     *,
     text: str,
     question: str,
-    url: str,
-    haiku_predictions: Sequence[dict],
     api_key: str = "",
     api_url: str = API_URL,
-    select_bar: float = 0.3,
-    min_top: int = 3,
-    max_candidates: int = 25,
     max_sentences: int = 400,
     timeout_s: float = 30.0,
     transport: Optional[httpx.AsyncBaseTransport] = None,
-) -> Optional[dict]:
-    """Run both Jev passes on one article and log `event=jev_shadow`. Returns the payload
-    (for tests); never raises."""
+) -> dict:
+    """Pass 1 alone: segment the article and ask one `noul` per sentence (plus the cached
+    per-question negation verdict). Returns a dict with `sentences`, `spans`, `norm_text`,
+    `nouls`, `neg`, `max_noul`, `tok_in`, `ms` — or `skip`/`err` instead of `nouls`. Never
+    raises. `run_jev_shadow` accepts it as `pass1` so the skip-gate (retro#850) and the
+    shadow share one selection call per article."""
     t0 = time.perf_counter()
-    payload: dict = {"url": url}
+    out: dict = {}
     try:
         norm_text, spans = segment(text)
         sentences = [norm_text[s:e] for s, e in spans]
-        payload["n"] = len(sentences)
-        payload["haiku"] = [
-            [locate_quote(norm_text, spans, p.get("quote") or ""),
-             p.get("stance"), p.get("settled"), p.get("claim_strength")]
-            for p in haiku_predictions
-        ]
+        out.update(norm_text=norm_text, spans=spans, sentences=sentences)
         if not sentences or len(sentences) > max_sentences:
-            payload["skip"] = "no_sentences" if not sentences else "too_long"
-            return payload
+            out["skip"] = "no_sentences" if not sentences else "too_long"
+            return out
         api_key = api_key or await asyncio.to_thread(resolve_api_key)
         if not api_key:
-            payload["skip"] = "no_key"
-            return payload
+            out["skip"] = "no_key"
+            return out
         tok_in = 0
         async with httpx.AsyncClient(timeout=timeout_s, transport=transport) as client:
             neg = _NEG_CACHE.get(question)
@@ -260,8 +281,81 @@ async def run_jev_shadow(
                 _NEG_CACHE[question] = neg
             else:
                 sel = await sel_coro
-            tok_in += sel.get("usage", {}).get("input_tokens", 0)
-            nouls = [sel["answers"][f"s{i}"]["noul"] for i in range(len(sentences))]
+        tok_in += sel.get("usage", {}).get("input_tokens", 0)
+        nouls = [sel["answers"][f"s{i}"]["noul"] for i in range(len(sentences))]
+        out.update(nouls=nouls, neg=neg, max_noul=max(nouls), tok_in=tok_in)
+    except Exception as exc:  # never let Jev affect /forecast
+        out["err"] = repr(exc)[:200]
+    finally:
+        out["ms"] = round((time.perf_counter() - t0) * 1000)
+    return out
+
+
+def evaluate_jev_gate(pass1: Optional[dict], threshold: float) -> tuple[bool, Optional[float]]:
+    """(would_skip, max_noul). Fails open: no pass-1 result, a skip or an error → (False, None),
+    so an unreachable Jev never costs an article its Haiku extraction."""
+    if not pass1 or "nouls" not in pass1:
+        return False, None
+    max_noul = float(pass1["max_noul"])
+    return max_noul < threshold, max_noul
+
+
+def fire_jev_pass1(**kwargs) -> Optional[asyncio.Task]:
+    """Schedule jev_pass1 in the background (strong ref held); None outside an event loop."""
+    try:
+        task = asyncio.get_running_loop().create_task(jev_pass1(**kwargs))
+    except RuntimeError:
+        return None
+    _TASKS.add(task)
+    task.add_done_callback(_TASKS.discard)
+    return task
+
+
+async def run_jev_shadow(
+    *,
+    text: str,
+    question: str,
+    url: str,
+    haiku_predictions: Sequence[dict],
+    api_key: str = "",
+    api_url: str = API_URL,
+    select_bar: float = 0.3,
+    min_top: int = 3,
+    max_candidates: int = 25,
+    max_sentences: int = 400,
+    timeout_s: float = 30.0,
+    transport: Optional[httpx.AsyncBaseTransport] = None,
+    pass1: Optional[dict] = None,
+) -> Optional[dict]:
+    """Run both Jev passes on one article and log `event=jev_shadow`. Returns the payload
+    (for tests); never raises. A `pass1` result from `jev_pass1` (same text and question) is
+    reused instead of re-asking the selection questions."""
+    t0 = time.perf_counter()
+    payload: dict = {"url": url}
+    try:
+        if pass1 is None or pass1.get("norm_text") is None:
+            pass1 = await jev_pass1(text=text, question=question, api_key=api_key, api_url=api_url,
+                                    max_sentences=max_sentences, timeout_s=timeout_s, transport=transport)
+        norm_text, spans, sentences = pass1["norm_text"], pass1["spans"], pass1["sentences"]
+        payload["n"] = len(sentences)
+        payload["haiku"] = [
+            [locate_quote(norm_text, spans, p.get("quote") or ""),
+             p.get("stance"), p.get("settled"), p.get("claim_strength")]
+            for p in haiku_predictions
+        ]
+        if "skip" in pass1:
+            payload["skip"] = pass1["skip"]
+            return payload
+        if "err" in pass1:
+            payload["err"] = pass1["err"]
+            return payload
+        api_key = api_key or await asyncio.to_thread(resolve_api_key)
+        if not api_key:
+            payload["skip"] = "no_key"
+            return payload
+        tok_in = pass1["tok_in"]
+        neg, nouls = pass1["neg"], pass1["nouls"]
+        async with httpx.AsyncClient(timeout=timeout_s, transport=transport) as client:
             order = sorted(range(len(nouls)), key=lambda i: (-nouls[i], i))
             cand = [i for k, i in enumerate(order) if k < min_top or nouls[i] >= select_bar][:max_candidates]
             # Every Haiku-quoted sentence gets a Jev verdict too (outside the cap), so a veto on

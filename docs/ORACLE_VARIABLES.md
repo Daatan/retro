@@ -2892,3 +2892,59 @@ labelled disagreement cases these two nouls separated "no signal" from "needed c
 0.85 / 0.81; `p_no_signal >= 0.75 AND topic < 0.8` vetoed 5/9 invented stances and 0/6 correct
 context-dependent ones. Those thresholds were fitted on the same 15 cases — the logged fields
 exist to validate them on a random sample, nothing reads them.
+
+## 2026-09-23 — Jev skip-gate before the extractor, shadow-only (retro#850, umbrella #849)
+
+**Shadow-only. `jev_gate_enabled` defaults `False`; with it on, nothing changes in the
+response until `jev_gate_enforce` is also set — and that is a separate, explicit decision.**
+
+**What it measures.** 41% of the articles that clear the gatekeeper and reach the Haiku
+extractor come back with zero claims (173/418 live articles, 2026-09-20..23): the gatekeeper's
+graded relevance ranks them no better than chance above its own bar (AUC 0.32 on the live
+`article_outcome` window), so the extractor call is spent on them anyway. Jev's pass 1 — one
+`noul` per sentence, the same call the retro#840 shadow already makes — predicts an empty
+extraction from the article's `max_noul` at AUC 0.93 (0.95 on the 181 pushed/Telegram
+articles). Replaying the shadow log with a `max_noul < 0.15` skip: −31% Haiku calls, 31 of 746
+claims lost, 26 of them Jev-junk by its own `topic`/`p_no_signal` criteria. Haiku is billed
+per article, not per field, so the gate is the cost lever the Jev work has; the field-level
+work (retro#851) is a quality lever.
+
+**How it runs.** With `jev_gate_enabled`, `_process_article` starts `jev_pass1` right after
+the gatekeeper, *before* the extractor:
+
+- shadow (`jev_gate_enforce=False`): pass 1 runs concurrently with the extractor; once Haiku
+  returns, the verdict is logged next to what Haiku found. Zero added latency on the article,
+  zero effect on the pool.
+- enforce (`jev_gate_enforce=True`): pass 1 is awaited first (bounded by
+  `jev_gate_timeout_seconds`); an article whose `max_noul` is below `jev_gate_threshold` is
+  not extracted, logged as `event=article_outcome outcome=jev_gated` and surfaced in
+  `ArticleDebug.outcome="jev_gated"` and the per-article timings (`jev_ms`).
+
+**Fail-open, always.** No key, Jev unreachable, HTTP error, timeout, an article with no
+sentences: every one of these extracts exactly as before and logs `status=<reason>`. The gate
+can only ever save a Haiku call, never lose one to Jev being down. When the retro#840 shadow is
+also on, it receives the same pass-1 result (`pass1=`) instead of re-asking the selection
+questions — both features together cost one selection request per article.
+
+**Log line**, one per article that reached the extractor stage:
+
+```
+event=jev_gate would_skip=<bool> enforce=<bool> max_noul=<0.000|none> threshold=<0.00>
+  n_preds=<Haiku claims|skipped> status=<ok|skip/err reason> script=<latin|he|ar|cyr|other>
+  language=<caller hint> n_sents=<n> jev_ms=<ms> url=<url> prediction_id=<id>
+```
+
+`script` is derived from the text itself because the caller's language hint is often absent,
+and the threshold is meant to be read per script: Hebrew selection quality is the open
+question (first live Hebrew article: `max_noul` 0.42, zero candidates). The threshold goes
+live only after ≥1 week of shadow with a per-script split of `would_skip=True` against
+`n_preds>0` (claims the gate would have lost) — and that turn is Mark's, not this PR's.
+
+### Config (`api/src/forecast_api/config.py`)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `jev_gate_enabled` | `False` | Run pass 1 before the extractor and log `event=jev_gate`. Needs `typesafe_api_key` (or the SSM fallback) like the shadow. |
+| `jev_gate_threshold` | `0.15` | `max_noul` below this = "Haiku would find nothing". Chosen on the 09-20..23 replay; re-read per script from the shadow log before enforcing. |
+| `jev_gate_enforce` | `False` | Skip the extractor on a below-threshold verdict. Off = shadow. |
+| `jev_gate_timeout_seconds` | `8.0` | Pass-1 HTTP timeout, and the longest enforce waits before failing open (shadow p50 785 ms / p90 1.7 s for both passes). |

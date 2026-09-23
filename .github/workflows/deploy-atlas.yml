@@ -10,6 +10,8 @@ on:
       - oracle-mcp-test.html
       - duel.html
       - 'bayesoracle/**'
+      - 'studies/**'
+      - .github/workflows/deploy-atlas.yml
 
   # Allow manual trigger from GitHub UI
   workflow_dispatch:
@@ -57,6 +59,9 @@ jobs:
             cp -r bayesoracle/pm_analysis _site/bayesoracle/ 2>/dev/null || true
             cp -r bayesoracle/node_history _site/bayesoracle/ 2>/dev/null || true
           fi
+
+          # Hand-built retro case studies (studies/<slug>/index.html + CSV)
+          if [ -d studies ]; then cp -r studies _site/studies && rm -f _site/studies/README.md; fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v6

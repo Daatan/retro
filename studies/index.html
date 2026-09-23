@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Daatan · ретро-разборы</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Literata:opsz,wght@7..72,600;7..72,700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#f4f6f8;--surface:#fff;--ink:#141a21;--ink2:#3d4753;--muted:#687382;--rule:#d7dde3;--hit:#a23b2a;
+  --serif:"Literata",Georgia,serif;--sans:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0e1318;--surface:#151b22;--ink:#e8edf2;--ink2:#b3bcc6;--muted:#8391a0;--rule:#2b343e;--hit:#e27a64}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--sans);padding:0 16px}
+.wrap{max-width:880px;margin:0 auto;padding-block:48px 80px}
+.k{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font:700 clamp(34px,5vw,52px)/1.05 var(--serif);letter-spacing:-.02em;margin:14px 0 12px}
+.lede{color:var(--ink2);max-width:62ch;margin:0 0 36px}
+a.card{display:block;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:22px 24px;transition:border-color .15s}
+a.card:hover{border-color:var(--ink2)}
+.card .m{font:12px var(--mono);color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 16px}
+.card .m b{color:var(--hit);font-weight:500}
+.card h2{font:600 24px/1.2 var(--serif);margin:8px 0 6px}
+.card p{margin:0;color:var(--ink2)}
+.list{display:grid;gap:14px}
+footer{margin-top:48px;font:12px var(--mono);color:var(--muted)}
+footer a{color:inherit}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="k">Daatan · ретро-анализ</div>
+  <h1>Ретро-разборы</h1>
+  <p class="lede">Событие уже произошло. Мы собираем то, что писали о нём до того, оцениваем каждое высказывание на дату публикации и смотрим, кто его предвидел, а кто нет.</p>
+  <div class="list">
+    <a class="card" href="ukraine-2022/">
+      <div class="m"><span>E01</span><b>24.02.2022</b><span>913 высказываний · 200 в таблице</span></div>
+      <h2>Кто видел 24 февраля</h2>
+      <p>Вторжение России в Украину: западные власти, Кремль, Киев и аналитики за три месяца до события.</p>
+    </a>
+  </div>
+  <footer>Прогнозный атлас: <a href="../">Factum Atlas</a> · исходники: <a href="https://github.com/Daatan/retro/tree/main/studies">Daatan/retro/studies</a></footer>
+</div>
+</body>
+</html>

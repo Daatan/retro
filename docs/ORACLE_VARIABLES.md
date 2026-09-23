@@ -2947,7 +2947,7 @@ live only after ≥1 week of shadow with a per-script split of `would_skip=True`
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `jev_gate_enabled` | `False` | Run pass 1 before the extractor and log `event=jev_gate`. Needs `typesafe_api_key` (or the SSM fallback) like the shadow. |
+| `jev_gate_enabled` | `False` | Run pass 1 before the extractor and log `event=jev_gate`. Needs `typesafe_api_key` (or the SSM fallback) like the shadow. Prod enable = sync the committed drop-in `infra/oracle-api.service.d/jev-gate-enabled.conf` to the box (manual, like the other drop-ins). |
 | `jev_gate_threshold` | `0.15` | `max_noul` below this = "Haiku would find nothing". Chosen on the 09-20..23 replay; re-read per script from the shadow log before enforcing. |
 | `jev_gate_enforce` | `False` | Skip the extractor on a below-threshold verdict. Off = shadow. |
 | `jev_gate_timeout_seconds` | `8.0` | Pass-1 HTTP timeout, and the longest enforce waits before failing open (shadow p50 785 ms / p90 1.7 s for both passes). |

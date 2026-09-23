@@ -328,6 +328,7 @@ git push → GitHub Actions → GitHub Pages
 | Extractor | `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0` (config default since retro#778, 2026-09-08 — was Nova Lite on batch) | Structured extraction of up to 5 predictions per article (14 requested fields — see "Prediction (extracted by LLM)" above) |
 | Article Aggregator | `bedrock/amazon.nova-lite-v1:0` | Collapses high-spread (>0.4) predictions within a single article into one editorial signal |
 | Keywords | `bedrock/amazon.nova-micro-v1:0` | One-time: generate search keywords per event (via `tm.llm`) |
+| Jev skip-gate + shadow (live lane only) | TypeSafe System One `jev-latest` (`api/src/forecast_api/jev_shadow.py`, not Bedrock, not LiteLLM) | Typed judgments, no generation: one `noul` per sentence. Shadow extraction next to Haiku (retro#840, `JEV_SHADOW_ENABLED`) and, since retro#850, a skip-gate in front of the extractor — `max_noul` predicts an empty Haiku extraction at AUC 0.93; `JEV_GATE_ENABLED` logs the verdict, `JEV_GATE_ENFORCE` (off) would skip the call. Key in SSM `/retro/prod/secrets/TYPESAFE_API_KEY`. See `docs/ORACLE_VARIABLES.md` 2026-09-22/23 sections. |
 
 All defaults via AWS Bedrock. Override via env vars in `pipeline/src/tm/config.py`. The `model_api_base` and `model_api_key` settings allow routing through any LiteLLM-compatible provider (OpenRouter, etc.).
 

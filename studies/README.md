@@ -24,7 +24,7 @@ rated article table as CSV. Add a new study as `studies/<slug>/` and a card in
   strength, expected scope and a verbatim quote. `P = 0.5 + 0.5·stance`, capped at 0.35
   for Donbas-only and 0.45 for limited strikes.
 - **Table.** 200 balanced rows, at most 8 per domain and 2 per speaker, with sceptics
-  raised to 35%. The aggregates on the page use the full 913-row pool.
+  raised to 35%. The aggregates on the page use the full 910-row pool.
 - **Gaps.** FT, WSJ and Bloomberg are missing. Metaculus and Telegram are not covered.
   25 quotes are model paraphrases and are flagged.
 

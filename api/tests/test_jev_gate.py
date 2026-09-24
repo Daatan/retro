@@ -107,6 +107,22 @@ class TestJevGate:
         assert "status=ok late=False script=latin" in line and "prediction_id=pid-1" in line
         assert fire.seen[0]["question"] == QUESTION and fire.seen[0]["timeout_s"] == 8.0
 
+    async def test_gate_line_carries_stable_question_fingerprint(self, monkeypatch, caplog):
+        """retro#849: `prediction_id` is empty on most lines, so the per-article question
+        fan-out could not be measured. `q8` is derived from the question text, which is
+        always present, and is stable for the same question."""
+        import hashlib
+        expected = hashlib.sha256(QUESTION.encode("utf-8")).hexdigest()[:8]
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            await _process(monkeypatch, enabled=True, enforce=False,
+                           pass1=_fake_pass1(HIGH), extractor=_extractor_spy(2))
+        assert f"q8={expected} url=" in _gate_line(caplog)
+        caplog.clear()
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            await _process(monkeypatch, enabled=True, enforce=False,
+                           pass1=_fake_pass1(HIGH), extractor=_extractor_spy(2))
+        assert f"q8={expected} url=" in _gate_line(caplog)   # same question -> same fingerprint
+
     async def test_shadow_logs_keep_next_to_haiku_count(self, monkeypatch, caplog):
         fire = _fake_pass1(HIGH)
         with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):

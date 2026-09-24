@@ -1493,21 +1493,26 @@ def _supplied_verdict(result: SearchResult) -> tuple[bool, float] | None:
 def _log_jev_gate(
     pass1: dict, *, would_skip: bool, n_preds: int | None, text: str,
     language: str | None, url: str | None, prediction_id: str | None,
+    question: str = "",
 ) -> None:
     """One `event=jev_gate` line per article that reached the extractor stage (retro#850):
     the verdict, the number it was made on, what Haiku then found (`n_preds`, absent when
     the article was actually skipped), and the script so the threshold can be read per
     language. `status` is `ok`, or the pass-1 `skip`/`err` reason the gate failed open on;
-    `late=True` marks a shadow verdict logged after the article was already returned."""
+    `late=True` marks a shadow verdict logged after the article was already returned.
+    `q8` is a stable 8-hex fingerprint of the question text: `prediction_id` is only set by
+    callers that send one (empty on ~83% of lines, which left the per-article question fan-out
+    unmeasurable), while the question itself is always present here."""
     max_noul = pass1.get("max_noul")
+    q8 = hashlib.sha256(question.encode("utf-8")).hexdigest()[:8] if question else ""
     logger.info(
         "event=jev_gate would_skip=%s enforce=%s max_noul=%s threshold=%.2f n_preds=%s "
-        "status=%s late=%s script=%s language=%s n_sents=%d jev_ms=%s url=%s prediction_id=%s",
+        "status=%s late=%s script=%s language=%s n_sents=%d jev_ms=%s q8=%s url=%s prediction_id=%s",
         would_skip, settings.jev_gate_enforce,
         f"{max_noul:.3f}" if max_noul is not None else "none", settings.jev_gate_threshold,
         n_preds if n_preds is not None else "skipped",
         pass1.get("skip") or pass1.get("err", "ok")[:80], bool(pass1.get("late")), script_of(text), language or "",
-        len(pass1.get("sentences") or ()), pass1.get("ms", ""), url, prediction_id or "",
+        len(pass1.get("sentences") or ()), pass1.get("ms", ""), q8, url, prediction_id or "",
     )
 
 
@@ -1768,7 +1773,8 @@ async def _process_article(
         would_skip, max_noul = evaluate_jev_gate(jev_pass1_result, settings.jev_gate_threshold)
         if would_skip:
             _log_jev_gate(jev_pass1_result, would_skip=True, n_preds=None, text=text,
-                          language=language, url=result.url, prediction_id=prediction_id)
+                          language=language, url=result.url, prediction_id=prediction_id,
+                          question=question)
             logger.info(
                 "event=article_outcome outcome=jev_gated url=%s max_noul=%.3f threshold=%.2f prediction_id=%s",
                 result.url, max_noul or 0.0, settings.jev_gate_threshold, prediction_id or "",
@@ -1824,14 +1830,16 @@ async def _process_article(
                     late = dict(late, late=True)
                     ws, _ = evaluate_jev_gate(late, settings.jev_gate_threshold)
                     _log_jev_gate(late, would_skip=ws, n_preds=n_preds, text=text,
-                                  language=language, url=url, prediction_id=prediction_id)
+                                  language=language, url=url, prediction_id=prediction_id,
+                                  question=question)
                 jev_pass1_task.add_done_callback(_log_late)
             except Exception:  # noqa: BLE001
                 jev_pass1_result = {"err": "pass1_task_failed"}
         if jev_pass1_result is not None:
             would_skip, _ = evaluate_jev_gate(jev_pass1_result, settings.jev_gate_threshold)
             _log_jev_gate(jev_pass1_result, would_skip=would_skip, n_preds=len(extraction.predictions),
-                          text=text, language=language, url=result.url, prediction_id=prediction_id)
+                          text=text, language=language, url=result.url, prediction_id=prediction_id,
+                          question=question)
         # Jev shadow (retro#840) — background, log-only. Snapshot Haiku's RAW output now,
         # before the enforce_* chain below rewrites stance/settled: raw vs raw is the
         # comparison that says whether Jev can stand in for the model.

@@ -10,6 +10,7 @@ rated article table as CSV. Add a new study as `studies/<slug>/` and a card in
 | Study | Event | Built |
 |---|---|---|
 | [`ukraine-2022/`](ukraine-2022/) | E01, Russia's full-scale invasion of Ukraine, 2022-02-24 | 2026-09-23 |
+| [`israel-2022/`](israel-2022/) | E02, 25th Knesset election: does Netanyahu's bloc reach 61? 2022-11-01 | 2026-09-24 |
 
 ## ukraine-2022 method, in short
 
@@ -26,5 +27,23 @@ rated article table as CSV. Add a new study as `studies/<slug>/` and a card in
   raised to 35%. The aggregates on the page use the full 913-row pool.
 - **Gaps.** FT, WSJ and Bloomberg are missing. Metaculus and Telegram are not covered.
   25 quotes are model paraphrases and are flagged.
+
+## israel-2022 method, in short
+
+- **Question.** Will the Likud + Religious Zionism + Shas + UTJ bloc win 61+ seats?
+  Outcome: yes, 64.
+- **Source.** 326 seed domains (Hebrew, English, Russian and Arabic Israeli press, world
+  outlets, think tanks, pollsters). GDELT GKG via BigQuery for 2022-05-01 to 2022-10-31
+  matched 157 of them. Wayback CDX added Israel Hayom, Haaretz English, NewsRu.co.il,
+  INSS, JPPI and others.
+- **Filter.** Keywords in four languages, Haiku title triage (8,780 → 2,261), full-text
+  relevance, dedupe per speaker and day and per pollster and week, hindsight check.
+- **Rating.** Same `P = 0.5 + 0.5·stance`. For seat polls, stance follows a fixed rule
+  on the bloc total (≤58 −0.6, 59 −0.4, 60 −0.2, 61–62 +0.3, ≥63 +0.6), and the
+  article's framing may shift it by up to ±0.2.
+- **Table.** 300 rows, at most 15 per domain and 3 per speaker. Polls are capped at 30%
+  and sceptics raised to 35%. The aggregates use the full 1,170-row pool.
+- **Gaps.** N12, Kan and Channel 13 are barely covered, and TV is not covered.
+  17 quotes are model paraphrases and are flagged.
 
 Working files (fetch lists, raw texts, rating JSONL) are kept outside the repo.

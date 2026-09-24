@@ -3,9 +3,9 @@
 Hand-built retro case studies, one directory per event, published to GitHub Pages at
 `https://daatan.github.io/retro/studies/` by `.github/workflows/deploy-atlas.yml`.
 
-Each study is a self-contained `index.html` (data inlined, no build step) plus the
-rated article table as CSV. Add a new study as `studies/<slug>/` and a card in
-`studies/index.html`.
+Each study is a self-contained `index.html` (Russian) and `en.html` (English), data
+inlined, no build step, plus the rated article table as CSV. Add a new study as
+`studies/<slug>/` and a card in both `studies/index.html` and `studies/en.html`.
 
 | Study | Event | Built |
 |---|---|---|

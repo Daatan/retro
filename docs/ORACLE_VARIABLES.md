@@ -2952,3 +2952,39 @@ live only after ≥1 week of shadow with a per-script split of `would_skip=True`
 | `jev_gate_enforce` | `False` | Skip the extractor on a below-threshold verdict. Off = shadow. |
 | `jev_gate_timeout_seconds` | `8.0` | Pass-1 HTTP timeout, and the longest enforce waits before failing open (shadow p50 785 ms / p90 1.7 s for both passes). |
 | `jev_gate_shadow_wait_seconds` | `0.5` | Shadow only: how long the article waits after Haiku for a pass 1 still in flight before the verdict is logged late from a callback. |
+
+
+## 2026-09-24 — Jev pass-1 question-text A/B, log only (retro#849)
+
+The skip-gate's blind spot is per **question**, not per article and not per language. For
+compound or negated questions the whole pass-1 score distribution collapses: subject Iran had a
+median `max_noul` of 0.10 with claims in 7 of its 8 articles, against Likud's 0.80 with 1 miss in
+55. Prompt instruction wording, aggregation, within-article normalisation, per-question quantile
+calibration and a multi-feature logistic model were all measured and none moved the frontier.
+
+Rewriting the **question text** to its core event does, and only where it should: on 165 offline
+pairs, discrimination on the collapsing questions rises from 0.856 to 0.908 while costing a
+little on healthy ones (0.837 to 0.803), and claim loss roughly halves at a matched skip count.
+The rewrite drops deadlines, parentheticals and subordinate clauses, and removes negation, since
+polarity is irrelevant to a relevance filter.
+
+This runs a second pass 1 on the rewritten question and logs both scores. The gate still decides
+on the live question; nothing about its behaviour changes.
+
+| variable | default | meaning |
+|---|---|---|
+| `JEV_GATE_AB_ENABLED` | `false` | run the second pass 1 and log `event=jev_gate_ab` |
+| `JEV_GATE_AB_MODEL` | `bedrock/us.amazon.nova-micro-v1:0` | model that rewrites the question |
+| `JEV_GATE_AB_REWRITE_TIMEOUT_SECONDS` | `15.0` | cap on one rewrite call |
+
+Cost is one extra pass-1 call per article while the A/B runs, plus one cheap rewrite the first
+time a question is seen; rewrites are cached per question in-process. Every failure path is
+quiet: a rewrite that errors, times out, comes back empty or absurdly long simply logs nothing
+for that article. The A/B never touches the request path, so it adds no latency.
+
+Enable with the `infra/oracle-api.service.d/jev-gate-ab-enabled.conf` drop-in, which is committed
+but deliberately not synced by the deploy script.
+
+`event=jev_gate` also carries `q8`, an 8-hex fingerprint of the question text, since
+`prediction_id` is empty on most lines and the per-article question fan-out was unmeasurable
+without it.

@@ -9,6 +9,7 @@ off — extracts exactly as before.
 
 import asyncio
 import logging
+import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -217,3 +218,73 @@ class TestJevGate:
         monkeypatch.setattr(forecaster, "enforce_deadline_arithmetic", lambda preds, dl, direction: preds)
         await forecaster._process_article(_sr(), QUESTION, max_article_chars=4000, timings=[], article_debugs=[])
         assert captured["pass1"] is HIGH
+
+
+class TestJevGateAB:
+    """retro#849: the second pass 1 on a rewritten question, log-only."""
+
+    @staticmethod
+    def _patch_ab(monkeypatch, *, enabled, simple="Likud wins the election", alt_max=0.62):
+        monkeypatch.setattr(api_settings, "jev_gate_ab_enabled", enabled)
+
+        async def fake_simplify(question, *, model, timeout_s=15.0, completer=None):
+            return simple
+
+        async def fake_pass1(**kwargs):
+            fake_pass1.seen.append(kwargs["question"])
+            return {"max_noul": alt_max, "nouls": [alt_max], "sentences": ["s"], "ms": 11}
+
+        fake_pass1.seen = []
+        monkeypatch.setattr(forecaster, "simplify_question", fake_simplify)
+        monkeypatch.setattr(forecaster, "jev_pass1", fake_pass1)
+        return fake_pass1
+
+    async def test_logs_both_scores_next_to_haiku_count(self, monkeypatch, caplog):
+        alt = self._patch_ab(monkeypatch, enabled=True)
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            await _process(monkeypatch, enabled=True, enforce=False,
+                           pass1=_fake_pass1(HIGH), extractor=_extractor_spy(2))
+            for _ in range(8):
+                await asyncio.sleep(0)               # let the background A/B run
+        line = next(r.getMessage() for r in caplog.records if "event=jev_gate_ab " in r.getMessage())
+        assert "live_max_noul=0.900 simp_max_noul=0.620 n_preds=2" in line
+        assert "Likud wins the election" in line
+        assert alt.seen == ["Likud wins the election"]   # the SIMPLIFIED question, not the live one
+
+    async def test_disabled_fires_nothing(self, monkeypatch, caplog):
+        alt = self._patch_ab(monkeypatch, enabled=False)
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            await _process(monkeypatch, enabled=True, enforce=False,
+                           pass1=_fake_pass1(HIGH), extractor=_extractor_spy(2))
+            for _ in range(8):
+                await asyncio.sleep(0)
+        assert alt.seen == []
+        assert not any("event=jev_gate_ab" in r.getMessage() for r in caplog.records)
+
+    async def test_empty_rewrite_logs_nothing_and_skips_the_second_call(self, monkeypatch, caplog):
+        alt = self._patch_ab(monkeypatch, enabled=True, simple="")
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            await _process(monkeypatch, enabled=True, enforce=False,
+                           pass1=_fake_pass1(HIGH), extractor=_extractor_spy(2))
+            for _ in range(8):
+                await asyncio.sleep(0)
+        assert alt.seen == []
+        assert not any("event=jev_gate_ab" in r.getMessage() for r in caplog.records)
+
+    async def test_adds_no_latency(self, monkeypatch):
+        """The A/B must never be on the request path."""
+        monkeypatch.setattr(api_settings, "jev_gate_ab_enabled", True)
+
+        async def slow_simplify(question, *, model, timeout_s=15.0, completer=None):
+            await asyncio.sleep(0.3)
+            return "slow rewrite"
+
+        async def fake_pass1(**kwargs):
+            return {"max_noul": 0.5, "nouls": [0.5], "sentences": ["s"], "ms": 1}
+
+        monkeypatch.setattr(forecaster, "simplify_question", slow_simplify)
+        monkeypatch.setattr(forecaster, "jev_pass1", fake_pass1)
+        start = time.perf_counter()
+        await _process(monkeypatch, enabled=True, enforce=False,
+                       pass1=_fake_pass1(HIGH), extractor=_extractor_spy(2))
+        assert time.perf_counter() - start < 0.25

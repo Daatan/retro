@@ -820,6 +820,22 @@ class ApiSettings(BaseSettings):
     # its verdict from a done-callback instead. Keeps shadow at zero added latency.
     jev_gate_shadow_wait_seconds: float = 0.5
 
+    # retro#849: A/B of the pass-1 QUESTION TEXT. The gate's blind spot is per question, not
+    # per article and not per language: for compound or negated questions the whole noul
+    # distribution collapses (subject Iran median max_noul 0.10 with claims in 7 of 8 articles,
+    # against Likud 0.80 with 1 miss in 55). Offline on 165 pairs, rewriting the question to its
+    # core event - subject plus event, no deadline, no parenthetical, no subordinate clause,
+    # negation dropped because polarity is irrelevant to a relevance filter - lifts
+    # discrimination on exactly that class (AUC 0.856 -> 0.908) and roughly halves the claim
+    # loss at a matched skip count, while costing a little on healthy questions (0.837 -> 0.803).
+    # When enabled a SECOND pass 1 runs on the rewritten question and both scores are logged
+    # (`event=jev_gate_ab`). The gate itself keeps deciding on the live question: this is
+    # measurement only. The rewrite is cached per question, so it costs one cheap call the
+    # first time a question is seen and nothing afterwards.
+    jev_gate_ab_enabled: bool = False
+    jev_gate_ab_model: str = "bedrock/us.amazon.nova-micro-v1:0"
+    jev_gate_ab_rewrite_timeout_seconds: float = 15.0
+
     # Precursor candidate-match (retro#608) — shadow/log-only, off by default.
     # Before pricing a v2-playground precursor fresh, checks whether it already
     # matches an open forecast in Daatan's own bank or a live Polymarket market,

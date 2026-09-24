@@ -26,6 +26,7 @@ Two known gaps the log is built to measure, not to paper over:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -298,6 +299,54 @@ def evaluate_jev_gate(pass1: Optional[dict], threshold: float) -> tuple[bool, Op
         return False, None
     max_noul = float(pass1["max_noul"])
     return max_noul < threshold, max_noul
+
+
+_SIMPLIFY_SYSTEM = (
+    "Rewrite the forecasting question into its CORE EVENT form, for use as the target of a "
+    "sentence-relevance filter. Keep the subject (actors, place, quantity) and the event. Drop "
+    "deadlines and dates, hedges, parenthetical qualifications and subordinate conditions. "
+    "Remove negation: 'X will not pass the threshold' becomes 'X passes the threshold', because "
+    "polarity is irrelevant to a relevance filter. Answer with the rewrite alone, 4 to 10 words, "
+    "no quotes, no preamble, no explanation."
+)
+_SIMPLIFIED: dict[str, str] = {}
+
+
+def question_fingerprint(question: str) -> str:
+    """Stable 8-hex id for a question, the `q8` field of `event=jev_gate` (retro#849)."""
+    return hashlib.sha256(question.encode("utf-8")).hexdigest()[:8] if question else ""
+
+
+async def simplify_question(question: str, *, model: str, timeout_s: float = 15.0,
+                            completer=None) -> str:
+    """Question rewritten to its core event, cached per question. `""` on any failure.
+
+    Never raises: the A/B it feeds is measurement, so a rewrite that errors, times out or
+    comes back empty simply means no comparison is logged for that article. Questions are
+    few and long-lived, so in practice this is one cheap call per question, ever.
+    """
+    q = (question or "").strip()
+    if not q:
+        return ""
+    key = question_fingerprint(q)
+    if key in _SIMPLIFIED:
+        return _SIMPLIFIED[key]
+    try:
+        if completer is None:                       # imported lazily: keeps this module importable alone
+            from tm.llm import complete_text_once_with_usage as completer  # type: ignore
+        text, _usage = await asyncio.wait_for(
+            completer(model, q, system=_SIMPLIFY_SYSTEM, max_tokens=60, temperature=0.0),
+            timeout=timeout_s,
+        )
+    except Exception:                               # noqa: BLE001 - measurement only, fail quiet
+        return ""
+    first = (text or "").strip().splitlines()[0] if (text or "").strip() else ""
+    out = first.strip().strip('"').strip()      # first line, then quotes: a quote can sit mid-text
+    out = out.strip("'").strip()
+    if not out or len(out) > 300:
+        return ""
+    _SIMPLIFIED[key] = out
+    return out
 
 
 def fire_jev_pass1(**kwargs) -> Optional[asyncio.Task]:

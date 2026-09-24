@@ -287,3 +287,54 @@ def test_gate_flags_off_by_default():
     assert s.jev_gate_enabled is False and s.jev_gate_enforce is False
     assert s.jev_gate_threshold == 0.15 and s.jev_gate_timeout_seconds == 8.0
     assert s.jev_gate_shadow_wait_seconds == 0.5
+
+
+class TestSimplifyQuestion:
+    """retro#849: the question rewrite that feeds the pass-1 A/B."""
+
+    async def test_caches_per_question_and_strips(self):
+        from forecast_api import jev_shadow as js
+        js._SIMPLIFIED.clear()
+        calls = []
+
+        async def fake(model, prompt, *, system, max_tokens, temperature):
+            calls.append(prompt)
+            return ('  "Likud wins fewer than 20 Knesset seats"  \nignored second line', {})
+
+        q = "Will Likud win fewer than 20 seats in the 2026 Israeli legislative election?"
+        out = await js.simplify_question(q, model="m", completer=fake)
+        assert out == "Likud wins fewer than 20 Knesset seats"
+        again = await js.simplify_question(q, model="m", completer=fake)
+        assert again == out and len(calls) == 1          # one cheap call per question, ever
+
+    async def test_failures_return_empty_and_are_not_cached(self):
+        from forecast_api import jev_shadow as js
+        js._SIMPLIFIED.clear()
+
+        async def boom(*a, **k):
+            raise RuntimeError("bedrock down")
+
+        async def empty(*a, **k):
+            return ("", {})
+
+        async def huge(*a, **k):
+            return ("x" * 400, {})
+
+        q = "Will Ra'am win a seat in the 2026 Knesset elections?"
+        assert await js.simplify_question(q, model="m", completer=boom) == ""
+        assert await js.simplify_question(q, model="m", completer=empty) == ""
+        assert await js.simplify_question(q, model="m", completer=huge) == ""
+        assert js._SIMPLIFIED == {}
+
+    async def test_blank_question_short_circuits(self):
+        from forecast_api import jev_shadow as js
+
+        async def never(*a, **k):
+            raise AssertionError("should not be called")
+
+        assert await js.simplify_question("   ", model="m", completer=never) == ""
+
+    def test_fingerprint_is_stable_and_distinct(self):
+        from forecast_api.jev_shadow import question_fingerprint as fp
+        assert fp("a") == fp("a") and len(fp("a")) == 8
+        assert fp("a") != fp("b") and fp("") == ""

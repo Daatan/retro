@@ -215,7 +215,8 @@ from .settlement_semantic import (
 )
 from .settlement_verifier import SettlementVote, Verdict, build_prompt, verify_settlement
 from .premise_verifier import PremiseResult, premise_check_triggered, verify_premise
-from .jev_shadow import evaluate_jev_gate, fire_jev_pass1, fire_jev_shadow, script_of
+from .jev_shadow import (evaluate_jev_gate, fire_jev_pass1, fire_jev_shadow, jev_pass1,
+                         question_fingerprint, script_of, simplify_question)
 from .subject_card import SubjectCard, derive_subject_card, evaluate_subject_gate
 from .subject_card_store import get_subject_card, put_subject_card, subject_card_key
 
@@ -1504,7 +1505,7 @@ def _log_jev_gate(
     callers that send one (empty on ~83% of lines, which left the per-article question fan-out
     unmeasurable), while the question itself is always present here."""
     max_noul = pass1.get("max_noul")
-    q8 = hashlib.sha256(question.encode("utf-8")).hexdigest()[:8] if question else ""
+    q8 = question_fingerprint(question)
     logger.info(
         "event=jev_gate would_skip=%s enforce=%s max_noul=%s threshold=%.2f n_preds=%s "
         "status=%s late=%s script=%s language=%s n_sents=%d jev_ms=%s q8=%s url=%s prediction_id=%s",
@@ -1514,6 +1515,51 @@ def _log_jev_gate(
         pass1.get("skip") or pass1.get("err", "ok")[:80], bool(pass1.get("late")), script_of(text), language or "",
         len(pass1.get("sentences") or ()), pass1.get("ms", ""), q8, url, prediction_id or "",
     )
+
+
+_AB_TASKS: set[asyncio.Task] = set()
+
+
+def _fire_jev_gate_ab(*, text: str, question: str, url: str | None, n_preds: int,
+                      live_max_noul: float | None) -> None:
+    """Background A/B of the pass-1 question text (retro#849). Never awaited, never raises.
+
+    Rewrites the question to its core event, runs a second pass 1 on it and logs both scores
+    next to what Haiku found, so the two wordings can be compared on live traffic instead of
+    165 offline pairs. The gate keeps deciding on the live question; this only measures.
+    A failed rewrite or a failed second pass 1 logs nothing and costs nothing else.
+    """
+    async def go() -> None:
+        try:
+            simple = await simplify_question(
+                question, model=settings.jev_gate_ab_model,
+                timeout_s=settings.jev_gate_ab_rewrite_timeout_seconds,
+            )
+            if not simple:
+                return
+            alt = await jev_pass1(
+                text=text, question=simple,
+                api_key=settings.typesafe_api_key, api_url=settings.jev_shadow_api_url,
+                timeout_s=settings.jev_gate_timeout_seconds,
+            )
+            if not alt or "max_noul" not in alt:
+                return
+            logger.info(
+                "event=jev_gate_ab q8=%s live_max_noul=%s simp_max_noul=%.3f n_preds=%d "
+                "script=%s n_sents=%d jev_ms=%s url=%s simp=%r",
+                question_fingerprint(question),
+                f"{live_max_noul:.3f}" if live_max_noul is not None else "none",
+                float(alt["max_noul"]), n_preds, script_of(text),
+                len(alt.get("sentences") or ()), alt.get("ms", ""), url, simple,
+            )
+        except Exception:  # noqa: BLE001 - measurement only
+            logger.debug("jev gate A/B failed", exc_info=True)
+    try:
+        task = asyncio.get_running_loop().create_task(go())
+    except RuntimeError:
+        return
+    _AB_TASKS.add(task)
+    task.add_done_callback(_AB_TASKS.discard)
 
 
 async def _process_article(
@@ -1840,6 +1886,10 @@ async def _process_article(
             _log_jev_gate(jev_pass1_result, would_skip=would_skip, n_preds=len(extraction.predictions),
                           text=text, language=language, url=result.url, prediction_id=prediction_id,
                           question=question)
+            if settings.jev_gate_ab_enabled:
+                _fire_jev_gate_ab(text=text, question=question, url=result.url,
+                                  n_preds=len(extraction.predictions),
+                                  live_max_noul=jev_pass1_result.get("max_noul"))
         # Jev shadow (retro#840) — background, log-only. Snapshot Haiku's RAW output now,
         # before the enforce_* chain below rewrites stance/settled: raw vs raw is the
         # comparison that says whether Jev can stand in for the model.

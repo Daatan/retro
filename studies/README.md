@@ -38,12 +38,15 @@ rated article table as CSV. Add a new study as `studies/<slug>/` and a card in
   INSS, JPPI and others.
 - **Filter.** Keywords in four languages, Haiku title triage (8,780 → 2,261), full-text
   relevance, dedupe per speaker and day and per pollster and week, hindsight check.
+  Articles whose page date falls in an earlier campaign (2019–2021) are dropped (37).
+  A second Haiku pass on spring-2022 articles drops 33 where "61" is about the current
+  Knesset (no-confidence votes, defections, an alternative government), not the election.
 - **Rating.** Same `P = 0.5 + 0.5·stance`. For seat polls, stance follows a fixed rule
   on the bloc total (≤58 −0.6, 59 −0.4, 60 −0.2, 61–62 +0.3, ≥63 +0.6), and the
   article's framing may shift it by up to ±0.2.
 - **Table.** 300 rows, at most 15 per domain and 3 per speaker. Polls are capped at 30%
-  and sceptics raised to 35%. The aggregates use the full 1,170-row pool.
+  and sceptics raised to 35%. The aggregates use the full 1,100-row pool.
 - **Gaps.** N12, Kan and Channel 13 are barely covered, and TV is not covered.
-  17 quotes are model paraphrases and are flagged.
+  15 quotes are model paraphrases and are flagged.
 
 Working files (fetch lists, raw texts, rating JSONL) are kept outside the repo.

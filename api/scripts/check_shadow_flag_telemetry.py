@@ -23,8 +23,8 @@ must never read as a pass when it measured "not yet"). That makes this
 composable as a CI/cron check, not just a human-read report — see the
 `/audit` skill, which runs it against the Oracle box's log via SSM.
 
-Adding a new shadow flag later needs one more ``ShadowFlag`` entry in
-``FLAG_REGISTRY``, not a new script.
+The registry is ``forecast_api.stages.STAGES`` filtered on ``expect_telemetry``
+(retro#866); a new shadow flag needs one ``Stage`` entry there and nothing here.
 """
 from __future__ import annotations
 
@@ -33,7 +33,6 @@ import json
 import os
 import re
 import sys
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, Optional
@@ -47,6 +46,7 @@ os.environ.setdefault("ORACLE_API_KEY", "dummy")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from forecast_api.config import ApiSettings  # noqa: E402
+from forecast_api.stages import STAGES, Stage  # noqa: E402
 
 
 # main.py's logging.basicConfig sets format
@@ -57,43 +57,9 @@ from forecast_api.config import ApiSettings  # noqa: E402
 _TIMESTAMP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d{3}")
 
 
-@dataclass(frozen=True)
-class ShadowFlag:
-    """One shadow-only flag: its ``ApiSettings`` attribute and the
-    ``event=<name>`` log line(s) it is expected to emit whenever it fires."""
-
-    settings_attr: str
-    events: tuple[str, ...]
-    issue: str = ""
-
-
-# Start here. A new shadow flag needs one more entry, not a new script.
-# resolution_shadow_credibility_enabled and hazard_shadow_enabled are
-# deliberately NOT here — those are promotion gates with their own dedicated
-# scripts (check_resolution_shadow_gate.py); this registry is specifically
-# for the "believed to be shadow-logging but silently isn't" failure mode.
-FLAG_REGISTRY: tuple[ShadowFlag, ...] = (
-    ShadowFlag(
-        settings_attr="premise_verifier_enabled",
-        events=("event=premise_verifier", "event=premise_verifier_error"),
-        issue="retro#575 / retro#601",
-    ),
-    ShadowFlag(
-        settings_attr="precursor_match_enabled",
-        events=("event=precursor_match", "event=precursor_match_crash"),
-        issue="retro#608",
-    ),
-    ShadowFlag(
-        settings_attr="settled_grounding_enabled",
-        events=("event=settled_grounding", "event=settled_grounding_crash"),
-        issue="retro#609",
-    ),
-    ShadowFlag(
-        settings_attr="retry_relaxed_search_enabled",
-        events=("event=retry_relaxed_search",),
-        issue="retro#621",
-    ),
-)
+# Which stages are checked is `Stage.expect_telemetry` — see its docstring in
+# stages.py for the rule and why three stages are deliberately out.
+FLAG_REGISTRY: tuple[Stage, ...] = tuple(s for s in STAGES if s.expect_telemetry)
 
 
 def _parse_timestamp(line: str) -> Optional[datetime]:
@@ -126,27 +92,29 @@ def count_events(log_lines: Iterable[str], events: tuple[str, ...], since: datet
 
 
 def check_flags(settings, log_lines: Iterable[str], since: datetime,
-                 registry: tuple[ShadowFlag, ...] = FLAG_REGISTRY) -> list[dict]:
+                 registry: tuple[Stage, ...] = FLAG_REGISTRY) -> list[dict]:
     """Per-flag verdicts: OFF (not enabled, nothing to check), SILENT (enabled
     but zero matching events in the window — the retro#601 failure mode), or
     PASS (enabled and telemetry showed up)."""
     log_lines = list(log_lines)
     results = []
-    for flag in registry:
-        enabled = bool(getattr(settings, flag.settings_attr, False))
-        n = count_events(log_lines, flag.events, since) if enabled else 0
+    for stage in registry:
+        enabled = bool(getattr(settings, stage.enabled_attr, False))
+        n = count_events(log_lines, stage.events, since) if enabled else 0
         if not enabled:
             verdict = "OFF"
         elif n > 0:
             verdict = "PASS"
         else:
             verdict = "SILENT"
+        # Key stays "flag" (the settings attribute), not stage.name: the /audit
+        # skill parses this JSON.
         results.append({
-            "flag": flag.settings_attr,
+            "flag": stage.enabled_attr,
             "enabled": enabled,
             "event_count": n,
             "verdict": verdict,
-            "issue": flag.issue,
+            "issue": stage.issue,
         })
     return results
 

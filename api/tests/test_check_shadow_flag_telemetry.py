@@ -22,7 +22,7 @@ from check_shadow_flag_telemetry import (  # noqa: E402
 
 
 def _settings(**overrides) -> SimpleNamespace:
-    base = {flag.settings_attr: False for flag in FLAG_REGISTRY}
+    base = {stage.enabled_attr: False for stage in FLAG_REGISTRY}
     base.update(overrides)
     return SimpleNamespace(**base)
 
@@ -116,11 +116,8 @@ class TestCheckFlags:
         assert by_flag["settled_grounding_enabled"]["verdict"] == "OFF"
         assert by_flag["retry_relaxed_search_enabled"]["verdict"] == "OFF"
 
-    def test_registry_covers_the_four_known_shadow_flags(self):
-        names = {flag.settings_attr for flag in FLAG_REGISTRY}
-        assert names == {
-            "premise_verifier_enabled",
-            "precursor_match_enabled",
-            "settled_grounding_enabled",
-            "retry_relaxed_search_enabled",
-        }
+    def test_registry_is_exactly_the_stages_that_opted_into_telemetry(self):
+        """Which stages those are is pinned once, in tests/test_stages.py."""
+        from forecast_api.stages import STAGES
+
+        assert FLAG_REGISTRY == tuple(s for s in STAGES if s.expect_telemetry)

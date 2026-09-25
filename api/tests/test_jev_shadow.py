@@ -64,7 +64,10 @@ def _transport(calls: list, *, fail: bool = False, urls: list | None = None):
         elif "stance" in qs:
             answers = {"stance": _score(5, 7), "strength": _score(3, 5),
                        "settled": {"type": "noul", "noul": 0.1},
-                       "topic": {"type": "noul", "noul": 0.8}, "refs": {"type": "noul", "noul": 0.2}}
+                       "topic": {"type": "noul", "noul": 0.8}, "refs": {"type": "noul", "noul": 0.2},
+                       "evidence_class": {"type": "choice", "probabilities": {
+                           "reported_fact": 0.1, "cited_probability": 0.05, "cited_share": 0.05,
+                           "reporting": 0.7, "opinion": 0.1}}}
         else:  # selection: sentence 0 and 2 bear on the question, 1 does not
             answers = {k: {"type": "noul", "noul": {"s0": 0.9, "s1": 0.05, "s2": 0.8}[k]} for k in qs}
         return httpx.Response(200, json={"model": "jev-1.13.0", "answers": answers,
@@ -84,7 +87,7 @@ def _clear_caches():
 def test_run_selects_scores_and_logs(caplog):
     calls: list = []
     haiku = [{"quote": "Analysts expect the Bank of Israel to cut rates in October.",
-              "stance": 0.7, "settled": False, "claim_strength": 0.6}]
+              "stance": 0.7, "settled": False, "claim_strength": 0.6, "evidence_class": "reporting"}]
     with caplog.at_level(logging.INFO, logger="forecast_api.jev_shadow"):
         p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=haiku,
                                           api_key="k", transport=_transport(calls)))
@@ -94,8 +97,9 @@ def test_run_selects_scores_and_logs(caplog):
     assert p["cand"][0][2] == pytest.approx(0.7)           # stance expected, level 5
     assert p["cand"][0][3] == 0.7                          # stance argmax
     assert p["cand"][0][5] == pytest.approx(0.7)           # claim_strength level 3
-    assert p["haiku"] == [[[0], 0.7, False, 0.6]]
-    assert p["cand"][0][6:] == [0.7, 0.0, 0.8, 0.2]        # stance over non-zero levels, p(no signal), topic, refs
+    assert p["haiku"] == [[[0], 0.7, False, 0.6, "reporting"]]
+    assert p["cand"][0][6:10] == [0.7, 0.0, 0.8, 0.2]      # stance over non-zero levels, p(no signal), topic, refs
+    assert p["cand"][0][10:] == ["reporting", 0.7]         # Jev evidence_class + its probability (retro#851)
     assert p["tok_in"] == 500                              # selection + neg + 3 scorings
     assert len(calls) == 5
     line = next(r.getMessage() for r in caplog.records if "event=jev_shadow" in r.getMessage())
@@ -338,3 +342,13 @@ class TestSimplifyQuestion:
         from forecast_api.jev_shadow import question_fingerprint as fp
         assert fp("a") == fp("a") and len(fp("a")) == 8
         assert fp("a") != fp("b") and fp("") == ""
+
+
+def test_evidence_class_question_and_missing_answer():
+    """retro#851: the class question rides the existing pass-2 call (no extra request), with
+    the offline-measured wording; a response lacking it logs (None, 0.0) instead of failing."""
+    q = js._scoring_questions()["evidence_class"]
+    assert q["type"] == "choice" and set(q["criteria"]) == {
+        "reported_fact", "cited_probability", "cited_share", "reporting", "opinion"}
+    assert js._top_choice(None) == (None, 0.0)
+    assert js._top_choice({"probabilities": {"opinion": 0.6, "reporting": 0.4}}) == ("opinion", 0.6)

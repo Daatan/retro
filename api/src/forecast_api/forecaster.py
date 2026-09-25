@@ -1898,7 +1898,7 @@ async def _process_article(
                 text=text, question=question, url=result.url or "",
                 haiku_predictions=[
                     {"quote": p.quote, "stance": p.stance, "settled": p.settled,
-                     "claim_strength": p.claim_strength}
+                     "claim_strength": p.claim_strength, "evidence_class": p.evidence_class}
                     for p in extraction.predictions
                 ],
                 api_key=settings.typesafe_api_key,

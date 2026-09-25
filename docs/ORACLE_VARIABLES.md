@@ -412,7 +412,7 @@ Haiku only (Nova's gate did not survive re-measurement at 15 runs), so `runner.p
 lane is exactly where this fragment shape is least likely to have been caught — this flag is the
 only production check either lane has.
 
-#### The article never names the question's subject — the subject gate (`article_card` + `subject_card.py`; shadow, enforce off)
+#### The article never names the question's subject — the subject gate (`article_card` + `subject_card.py`)
 
 retro#805, slice 1 of the verified-article-card design (child of retro#545). **Measured
 2026-09-07 on prod: 38 of 310 strong, usable pool rows in 14 gated election forecasts came
@@ -483,16 +483,24 @@ is that check, and it is deterministic where it matters.
    questions whose subject card is empty by design (no actor to look for) — the third
    `mygplanet/39742` row went that way. Setting it `false` restores the skip.
 
-**Rollout.** `subject_gate_enabled=true` ships in **shadow**: one `event=subject_gate` line per
-extracted article (`fired= enforce= matched_via= matched_actor= skip= subjects=
-verified_spans= dropped_spans= bears_on_question= n_preds= url= prediction_id=`), nothing
-dropped. `subject_gate_enforce=true` turns a fired gate into a dropped article — outcome
-`subject_absent` in `ArticleDebug`/timings, the article never reaches the pool — and stays
-off until ≥1 day of shadow shows the fires are W1/W3/W4-shaped and no control fires (issue
-acceptance criteria). `prediction_id` + `url` on the log line are what the retroactive pool
-cleanup Mark accepted will key on. **Live path only**, like `audit_scheduled_deadline_unconfirmed`:
-`runner.py`'s batch schema has no resolution criteria to derive a subject card from, so the
-batch extractor emits the card and nothing reads it.
+**Rollout (as shipped — for live state see below).** `subject_gate_enabled=true` ships in
+**shadow**: one `event=subject_gate` line per extracted article (`fired= enforce=
+matched_via= matched_actor= skip= subjects= verified_spans= dropped_spans=
+bears_on_question= n_preds= url= prediction_id=`), nothing dropped.
+`subject_gate_enforce=true` turns a fired gate into a dropped article — outcome
+`subject_absent` in `ArticleDebug`/timings, the article never reaches the pool — and shipped
+off, to be flipped only once ≥1 day of shadow showed the fires were W1/W3/W4-shaped with no
+control fires (issue acceptance criteria). `prediction_id` + `url` on the log line are what
+the retroactive pool cleanup Mark accepted will key on. **Live path only**, like
+`audit_scheduled_deadline_unconfirmed`: `runner.py`'s batch schema has no resolution criteria
+to derive a subject card from, so the batch extractor emits the card and nothing reads it.
+
+> **Prod has moved past this paragraph.** `event=stage_modes` read `subject_gate=enforce` on
+> the Oracul box on 2026-09-25 — the gate is dropping articles in production, and the
+> defaults above describe what ships, not what runs. Everything about *how* enforce behaves
+> still holds; only "shipped off" is no longer the live state. Read the live state rather
+> than inferring it from any default in this document — see
+> *2026-09-25 — the rollout state of every stage is one log line* below.
 
 **Fixture (both test files, real Walla/Kikar HaShabbat text from the A/B):** W1/W3/W4 fire,
 every control passes, a party-only mention passes a person+party card, the gloss-only case is
@@ -2988,3 +2996,80 @@ but deliberately not synced by the deploy script.
 `event=jev_gate` also carries `q8`, an 8-hex fingerprint of the question text, since
 `prediction_id` is empty on most lines and the per-article question fan-out was unmeasurable
 without it.
+
+
+## 2026-09-25 — the rollout state of every stage is one log line (retro#866)
+
+Eleven features ship behind the same shape: compute alongside the live path, log it, promote
+later. Each has an `<name>_enabled` flag, nine of them an `<name>_enforce` beside it. Answering
+"what is actually shadow and what is enforcing right now" meant reading two booleans per feature
+out of `config.py`, then checking each against the systemd drop-ins on the box, because prod runs
+on env overrides. Nobody did that routinely, so this document — like everything else — quoted the
+shipped defaults and called them the rollout.
+
+`forecast_api/stages.py` is now the one registry of those eleven (name, settings attributes,
+`event=` tokens, issue). `main.py` logs every mode once per worker at startup:
+
+```
+event=stage_modes conditional_attenuation=shadow jev_gate=shadow jev_gate_ab=shadow
+  jev_shadow=shadow precursor_match=shadow premise_verifier=shadow retry_relaxed_search=shadow
+  settled_grounding=off settlement_semantic_gates=shadow settlement_verifier=enforce
+  subject_gate=enforce
+```
+
+Read it on the box with:
+
+```
+grep 'event=stage_modes' /home/ubuntu/truthmachine/oracle_log.txt | tail -5
+```
+
+Deliberately not on `/health`, which is unauthenticated: this is the rollout state of the gates.
+
+### First reading, 2026-09-25 08:52 UTC
+
+| stage | declared default | prod |
+|---|---|---|
+| `conditional_attenuation` | shadow | shadow |
+| `settlement_semantic_gates` | shadow | shadow |
+| `settlement_verifier` | enforce | enforce |
+| `settled_grounding` | off | off |
+| `subject_gate` | shadow | **enforce** |
+| `premise_verifier` | off | **shadow** |
+| `precursor_match` | off | **shadow** |
+| `retry_relaxed_search` | off | **shadow** |
+| `jev_shadow` | off | **shadow** |
+| `jev_gate` | off | **shadow** |
+| `jev_gate_ab` | off | **shadow** |
+
+Seven of eleven differ from the declared defaults. Six differ in the harmless direction — a
+shadow lane switched on, logging and changing nothing. The seventh is `subject_gate`, which is
+**enforcing**: a fired gate drops the article before it reaches the pool. The rollout paragraph under *The article never names the
+question's subject — the subject gate* still described it as shipped-off, which is true of
+the default and false of prod; it now says so. That heading also carried "shadow, enforce
+off" and no longer does: a heading is the worst place to pin a value that changes by env
+override.
+
+The lesson is the general one, not the one flag: **a default in this document is not the live
+state, and seven times out of eleven it was not even close.** Statements about what is live
+belong to the log line.
+
+### The startup line survives a deploy
+
+Not obvious in advance, so recorded: `infra/deploy_oracle.sh` SIGHUPs the workers rather than
+restarting the unit, which left it an open question whether `lifespan()` re-runs and the line
+refreshes or goes stale at the last full restart. It refreshes. On the 2026-09-25 deploy the
+unit's `ActiveEnterTimestamp` stayed at 06:45 UTC — no restart — and both workers logged the
+line at 08:52, immediately after. So the newest line always reflects the running config.
+
+### What the registry does not do
+
+A `Stage` describes a feature's configured state; it does not execute it. Call sites keep their
+own enforcement branches, because the eleven share a naming convention and not a behaviour —
+`settlement_semantic_gates_fallback_enforce` is a fail-open backstop scoped to one
+all-samples-errored branch, `subject_gate_enforce` drops an article, `conditional_attenuation_enforce`
+substitutes a shadow-computed number, `settlement_verifier_enforce` vetoes a settlement pin.
+Routing those through one accessor would read as a uniformity that does not exist.
+
+Which stages the daily silent-flag check (`scripts/check_shadow_flag_telemetry.py`) watches is
+`Stage.expect_telemetry`; the rule, and why three stages are deliberately out of it, is in that
+field's docstring and not repeated here.

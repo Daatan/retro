@@ -8,8 +8,7 @@ Two kinds of test here, and the distinction matters:
   existing flags already do.
 * **Completeness** — every ``*_enabled`` field in ``ApiSettings`` that belongs to a
   shadow-then-promote feature has a ``Stage``. This is the part that stops the drift
-  that produced two registries in the first place (retro#806's ``FLAG_REGISTRY``
-  knew four of the ten), modelled on
+  ``stages.py`` describes, modelled on
   ``pipeline/tests/test_extraction_field_consumers.py`` (retro#808).
 """
 from __future__ import annotations
@@ -197,10 +196,10 @@ def test_the_suite_runs_with_settlement_verifier_disabled():
 
 
 def test_telemetry_registry_is_derived_from_stages():
-    """retro#806's FLAG_REGISTRY was a second hand-maintained list and drifted.
+    """Pinned so a future edit that reintroduces a hand-kept list there fails loudly.
 
-    Pinned so a future edit that reintroduces a literal list here fails loudly
-    rather than quietly covering a subset again.
+    That is what happened before retro#866: the script kept its own registry and it
+    drifted to four of the eleven stages.
     """
     import sys
     from pathlib import Path
@@ -208,27 +207,14 @@ def test_telemetry_registry_is_derived_from_stages():
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
     from check_shadow_flag_telemetry import FLAG_REGISTRY  # noqa: PLC0415
 
-    by_attr = {s.enabled_attr: s for s in STAGES}
-    assert FLAG_REGISTRY, "telemetry registry is empty"
-    for flag in FLAG_REGISTRY:
-        stage = by_attr.get(flag.settings_attr)
-        assert stage is not None, f"{flag.settings_attr} is not a Stage"
-        assert stage.expect_telemetry, f"{stage.name} is checked but not opted in"
-        assert flag.events == stage.events
-        assert flag.issue == stage.issue
-    assert {f.settings_attr for f in FLAG_REGISTRY} == {
-        s.enabled_attr for s in STAGES if s.expect_telemetry
-    }
+    assert FLAG_REGISTRY == tuple(s for s in STAGES if s.expect_telemetry)
 
 
 def test_telemetry_coverage_is_the_stages_that_log_per_request():
-    """Opt-in is by firing pattern, not by convenience.
+    """The one literal pin of who is checked — see `Stage.expect_telemetry` for the rule.
 
-    In: stages whose event fires on every article/forecast they handle, so silence
-    over the window really is a dead flag. Out: stages gated on a rare property of
-    the input, where silence is a quiet window and checking would raise false
-    alarms in the daily audit — `conditional_attenuation` needs a claim marked
-    conditional (~5%), the two settlement stages only run on settlement candidates.
+    Both halves are asserted: a stage silently dropping out of the daily check is as
+    much a regression as one silently joining it.
     """
     assert {s.name for s in STAGES if s.expect_telemetry} == {
         # already covered before retro#866

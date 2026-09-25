@@ -165,6 +165,9 @@ class Settings(BaseSettings):
         "Polymarket", "Kalshi", "Metaculus", "PredictIt", "Betfair", "Smarkets",
         # named forecasting models / stats providers
         "Opta", "FiveThirtyEight", "538", "Silver Bulletin", "Elo",
+        # market-implied rate-decision odds (retro#870). The tool name only:
+        # bare "CME" or "futures pricing" names no checkable figure.
+        "FedWatch",
         # named pollsters
         "Gallup", "Ipsos", "YouGov", "Siena", "Quinnipiac", "Marist",
         "Rasmussen", "Morning Consult", "Pew", "Datafolha", "Angus Reid",

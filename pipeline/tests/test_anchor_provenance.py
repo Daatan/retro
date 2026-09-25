@@ -186,3 +186,14 @@ def test_the_two_integrated_markets_are_allowlisted():
     checkable — if either ever falls out of the list, that is a bug."""
     for name in ("Polymarket", "Kalshi"):
         assert name in settings.cited_probability_source_allowlist
+
+
+def test_fedwatch_is_allowlisted_but_bare_cme_is_not():
+    """retro#870: CME FedWatch publishes a checkable market-implied probability;
+    an unnamed "futures market" or bare exchange name does not."""
+    assert _names_allowlisted_source(
+        "traders price in a 92% chance of a Fed rate hike, according to CME Group's FedWatch tool"
+    ) == "FedWatch"
+    assert _names_allowlisted_source("CME FedWatch now puts the odds at 85.6%") == "FedWatch"
+    assert _names_allowlisted_source("CME futures imply a 90% chance of a hike") is None
+    assert _names_allowlisted_source("markets had priced in a better than 90% chance") is None

@@ -33,6 +33,7 @@ from .leaderboard import (
 from .resolution_feedback import ingest_resolution
 from .resolution_scorer import load_shadow_leaderboard, rescore_authors_from_disk, rescore_from_disk
 from .settlement_pin_ledger import load_ledger, record_settlement_pin
+from .stages import describe_stages
 from .pm_paper import build_report as build_pm_paper_report, render_markdown as render_pm_paper_markdown
 from tm.config import settings as _pipeline_settings
 from tm.gatekeeper import check_is_prediction
@@ -61,6 +62,13 @@ async def lifespan(app: FastAPI):
     path = settings.resolved_leaderboard_path
     await refresh_cache(path)
     logger.info("Oracul API starting — leaderboard: %d sources, port: %d", leaderboard_size(), settings.port)
+    # One line stating every shadow-then-promote stage's mode (retro#866). Deliberately
+    # here and not on /health, which is unauthenticated: this is the rollout state of
+    # the gates, and the log is where the daily audit already looks.
+    logger.info(
+        "event=stage_modes %s",
+        " ".join(f"{name}={mode}" for name, mode in sorted(describe_stages(settings).items())),
+    )
     # The resolution-shadow board only feeds credibility when the cutover flag
     # is on, so skip the extra disk reads entirely when it isn't.
     shadow_board = shadow_feedback = None

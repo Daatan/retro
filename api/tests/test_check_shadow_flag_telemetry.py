@@ -116,11 +116,24 @@ class TestCheckFlags:
         assert by_flag["settled_grounding_enabled"]["verdict"] == "OFF"
         assert by_flag["retry_relaxed_search_enabled"]["verdict"] == "OFF"
 
-    def test_registry_covers_the_four_known_shadow_flags(self):
+    def test_registry_covers_the_stages_that_log_per_request(self):
+        """Widened from four to eight by retro#866.
+
+        The registry is now derived from `forecast_api.stages.STAGES` rather than
+        kept here, which closed the blind spot the original four left: `subject_gate`
+        and the three `jev_*` stages were shadow-logging (or about to) with nothing
+        watching whether their flags were live. Membership is decided by
+        `Stage.expect_telemetry` — see `tests/test_stages.py` for the rule and for
+        why the three settlement/conditional stages stay out.
+        """
         names = {flag.settings_attr for flag in FLAG_REGISTRY}
         assert names == {
             "premise_verifier_enabled",
             "precursor_match_enabled",
             "settled_grounding_enabled",
             "retry_relaxed_search_enabled",
+            "subject_gate_enabled",
+            "jev_shadow_enabled",
+            "jev_gate_enabled",
+            "jev_gate_ab_enabled",
         }

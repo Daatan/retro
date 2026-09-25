@@ -23,8 +23,9 @@ must never read as a pass when it measured "not yet"). That makes this
 composable as a CI/cron check, not just a human-read report — see the
 `/audit` skill, which runs it against the Oracle box's log via SSM.
 
-Adding a new shadow flag later needs one more ``ShadowFlag`` entry in
-``FLAG_REGISTRY``, not a new script.
+``FLAG_REGISTRY`` is derived from ``forecast_api.stages.STAGES`` (retro#866), so
+adding a shadow flag needs one ``Stage`` entry there and nothing here. This file
+used to keep its own list and the two forked — see the comment above the registry.
 """
 from __future__ import annotations
 
@@ -47,6 +48,7 @@ os.environ.setdefault("ORACLE_API_KEY", "dummy")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from forecast_api.config import ApiSettings  # noqa: E402
+from forecast_api.stages import STAGES  # noqa: E402
 
 
 # main.py's logging.basicConfig sets format
@@ -67,32 +69,25 @@ class ShadowFlag:
     issue: str = ""
 
 
-# Start here. A new shadow flag needs one more entry, not a new script.
-# resolution_shadow_credibility_enabled and hazard_shadow_enabled are
-# deliberately NOT here — those are promotion gates with their own dedicated
-# scripts (check_resolution_shadow_gate.py); this registry is specifically
-# for the "believed to be shadow-logging but silently isn't" failure mode.
-FLAG_REGISTRY: tuple[ShadowFlag, ...] = (
-    ShadowFlag(
-        settings_attr="premise_verifier_enabled",
-        events=("event=premise_verifier", "event=premise_verifier_error"),
-        issue="retro#575 / retro#601",
-    ),
-    ShadowFlag(
-        settings_attr="precursor_match_enabled",
-        events=("event=precursor_match", "event=precursor_match_crash"),
-        issue="retro#608",
-    ),
-    ShadowFlag(
-        settings_attr="settled_grounding_enabled",
-        events=("event=settled_grounding", "event=settled_grounding_crash"),
-        issue="retro#609",
-    ),
-    ShadowFlag(
-        settings_attr="retry_relaxed_search_enabled",
-        events=("event=retry_relaxed_search",),
-        issue="retro#621",
-    ),
+# Derived from `forecast_api.stages.STAGES` (retro#866) — this file no longer keeps
+# its own list. It used to, and the two drifted: the registry here knew four of the
+# ten shadow-then-promote features, so the check written to catch silently-inert
+# shadow flags was blind to `jev_*`, `subject_gate_*`, `conditional_attenuation_*`
+# and `settlement_semantic_gates_*`.
+#
+# `expect_telemetry` on a Stage is what opts it in, and the rule is firing pattern:
+# a stage whose event fires on every article/forecast it handles is in, because
+# silence over the window really is a dead flag. That took coverage from four to
+# eight — `subject_gate` and the three `jev_*` stages were the blind spots.
+#
+# Out: `conditional_attenuation` (needs a claim marked conditional, ~5%) and the two
+# settlement stages (only run on settlement candidates). Those fire on a rare property
+# of the input, so a quiet window would report SILENT — a false alarm in the daily
+# audit, not a dead flag. Widening them needs firing-rate data first.
+FLAG_REGISTRY: tuple[ShadowFlag, ...] = tuple(
+    ShadowFlag(settings_attr=stage.enabled_attr, events=stage.events, issue=stage.issue)
+    for stage in STAGES
+    if stage.expect_telemetry
 )
 
 

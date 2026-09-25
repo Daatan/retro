@@ -77,6 +77,17 @@ STRENGTH_LEVELS = [
     "Absolute: reported as an accomplished, unhedged fact",
 ]
 
+# retro#851: evidence_class as a Jev `choice`, shadow only. Wording is verbatim from the
+# offline blind-gold run (Jev 30/40 vs Haiku 26/40, sentence-only state) — rewording was 0 for 4
+# on the stance side, so these words are the measured artefact and must not be tuned in place.
+EVIDENCE_CLASSES = {
+    "reported_fact": "reports a concrete event, action, decision or result as having happened",
+    "cited_probability": "cites an explicit probability of the event from a model, market or poll",
+    "cited_share": "cites a vote share, seat count, price or other measured figure",
+    "reporting": "sourced reporting about intentions, plans, talks or expectations (not yet a fact)",
+    "opinion": "someone's opinion, prediction or assessment with no privileged access",
+}
+
 # Strong refs to in-flight tasks: asyncio keeps only weak references, so an unreferenced
 # fire-and-forget task can be garbage-collected mid-flight.
 _TASKS: set[asyncio.Task] = set()
@@ -157,6 +168,15 @@ def _nonzero(ans: dict, values: Sequence[float]) -> tuple[float, float]:
     return ex, p0
 
 
+def _top_choice(ans: dict) -> tuple[Optional[str], float]:
+    """(label, probability) of a `choice` answer's most likely option; (None, 0.0) if absent."""
+    probs = (ans or {}).get("probabilities") or {}
+    if not probs:
+        return None, 0.0
+    label = max(probs, key=probs.get)
+    return label, float(probs[label])
+
+
 def _argmax(ans: dict, values: Sequence[float]) -> float:
     probs = ans["probabilities"]
     return values[int(max(probs, key=lambda k: probs[k]))]
@@ -202,6 +222,9 @@ def _scoring_questions() -> dict:
                   "instructions": "Is `sentence` about the same subject as `related_event` — the same actors, institution, place or quantity?"},
         "refs": {"type": "noul",
                  "instructions": "Does `sentence` depend on text outside it to be understood — unresolved 'it/this/that', an unnamed speaker, or a condition/plan introduced elsewhere?"},
+        "evidence_class": {"type": "choice",
+                           "instructions": "Which evidence class is the claim in `sentence`?",
+                           "criteria": EVIDENCE_CLASSES},
     }
 
 
@@ -389,7 +412,7 @@ async def run_jev_shadow(
         payload["n"] = len(sentences)
         payload["haiku"] = [
             [locate_quote(norm_text, spans, p.get("quote") or ""),
-             p.get("stance"), p.get("settled"), p.get("claim_strength")]
+             p.get("stance"), p.get("settled"), p.get("claim_strength"), p.get("evidence_class")]
             for p in haiku_predictions
         ]
         if "skip" in pass1:
@@ -422,6 +445,7 @@ async def run_jev_shadow(
             tok_in += resp.get("usage", {}).get("input_tokens", 0)
             a = resp["answers"]
             nz, p0 = _nonzero(a["stance"], STANCE_VALUES)
+            ec, ec_p = _top_choice(a.get("evidence_class"))
             cands.append([
                 i, round(nouls[i], 3),
                 round(_expected(a["stance"], STANCE_VALUES), 3), _argmax(a["stance"], STANCE_VALUES),
@@ -429,9 +453,13 @@ async def run_jev_shadow(
                 round(_expected(a["strength"], STRENGTH_VALUES), 3),
                 round(nz, 3), round(p0, 3),
                 round(a["topic"]["noul"], 3), round(a["refs"]["noul"], 3),
+                ec, round(ec_p, 3),
             ])
         # cand rows: [sentence_idx, noul, stance_expected, stance_argmax, settled, claim_strength,
-        #             stance_nonzero, p_no_signal, topic, refs]
+        #             stance_nonzero, p_no_signal, topic, refs, evidence_class, evidence_class_p]
+        # haiku rows: [sentence_idxs, stance, settled, claim_strength, evidence_class] — Haiku's
+        # RAW class, snapshotted before enforce_anchor_provenance can demote cited_probability;
+        # the shipped class is recoverable offline with tm.extractor._names_allowlisted_source.
         payload["cand"] = cands
         payload["tok_in"] = tok_in
     except Exception as exc:  # shadow: never let Jev affect /forecast

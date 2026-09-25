@@ -1,8 +1,9 @@
 """Single source of truth for the shadow-then-promote stages (retro#866).
 
-Ten features in :mod:`forecast_api.config` ship behind the same rollout shape:
+Eleven features in :mod:`forecast_api.config` ship behind the same rollout shape:
 compute something alongside the live path, log it, and only later let it change
-an outcome. Each one grew its own ``<name>_enabled`` / ``<name>_enforce`` pair,
+an outcome. Each one grew its own ``<name>_enabled`` flag (nine of them with an
+``<name>_enforce`` beside it),
 its own ``event=<name>`` log line, and its own prose comment re-explaining the
 contract — several literally say "same shadow-then-promote shape as
 ``premise_verifier_enforce``".
@@ -22,16 +23,16 @@ it. :meth:`Stage.mode` is derived from the existing settings attributes rather
 than replacing them, so every field, env override and systemd drop-in keeps
 working exactly as before.
 
-Deliberately, call sites keep their own enforcement branches. The ten features
-share a naming convention, not a behaviour: ``settlement_semantic_gates_fallback_enforce``
+Deliberately, call sites keep their own enforcement branches. They share a naming
+convention, not a behaviour: ``settlement_semantic_gates_fallback_enforce``
 is a fail-open fallback scoped to one all-samples-errored branch,
 ``subject_gate_enforce`` turns a fired gate into a dropped article,
 ``conditional_attenuation_enforce`` substitutes a shadow-computed number, and
 ``settlement_verifier_enforce`` vetoes settlement pins. Routing those through
 one ``is_enforcing()`` accessor would read as uniformity that does not exist and
 would flatten exactly the differences a reader needs to see. ``mode()`` is for
-reporting — the startup ``event=stage_modes`` line and the daily audit — not for
-gating. Deliberately not exposed on ``/health``, which is unauthenticated.
+reporting — the startup ``event=stage_modes`` line — not for gating. The daily audit
+reads ``enabled_attr`` and ``events``, not ``mode()``. Deliberately not exposed on ``/health``, which is unauthenticated.
 """
 from __future__ import annotations
 

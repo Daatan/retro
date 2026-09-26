@@ -197,3 +197,13 @@ def test_fedwatch_is_allowlisted_but_bare_cme_is_not():
     assert _names_allowlisted_source("CME FedWatch now puts the odds at 85.6%") == "FedWatch"
     assert _names_allowlisted_source("CME futures imply a 90% chance of a hike") is None
     assert _names_allowlisted_source("markets had priced in a better than 90% chance") is None
+
+
+def test_native_script_market_names_count_as_named_sources():
+    """retro#878: the quote is in the article's language, so the English allowlist never
+    matched a Hebrew/Russian citation — prefixes and case endings included."""
+    from tm.extractor import _names_allowlisted_source
+    assert _names_allowlisted_source("לפי בפולימרקט הסיכוי 62%") == "Polymarket"
+    assert _names_allowlisted_source("по данным Полимаркета — 62%") == "Polymarket"
+    assert _names_allowlisted_source("בקלשי מעריכים 30%") == "Kalshi"
+    assert _names_allowlisted_source("שוק הימורים מעריך 62%") is None

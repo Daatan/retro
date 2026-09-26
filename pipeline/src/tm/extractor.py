@@ -1492,6 +1492,23 @@ def _resolve_relative_reference(reference: str, article: date) -> Optional[date]
     return article + timedelta(days=(target - article.weekday()) % 7)
 
 
+def _relative_candidates(reference: str, article: date) -> list[date]:
+    """Every date ``reference`` can denote. A bare, "on" or "this" weekday carries no tense
+    of its own — "transited on Tuesday" in a Wednesday paper is yesterday, "votes on
+    Tuesday" is next week — so it yields both the previous and the coming occurrence
+    (same-day allowed in each). "last"/"coming" weekdays and day words are unambiguous.
+    Empty when out of vocabulary (retro#878)."""
+    resolved = _resolve_relative_reference(reference, article)
+    if resolved is None:
+        return []
+    text = re.sub(r"\s+", " ", re.sub(r"[.,;:!?\"'«»]+", " ", reference.lower())).strip()
+    m = _WEEKDAY_REFERENCE.match(text)
+    if not m or text.startswith(("last ", "coming ", "the coming ")):
+        return [resolved]
+    previous = article - timedelta(days=(article.weekday() - _WEEKDAYS[m.group(1)]) % 7)
+    return sorted({previous, resolved})
+
+
 def enforce_relative_date_resolution(
     predictions: list[PredictionExtraction],
     article_date: Optional[str],
@@ -1500,7 +1517,8 @@ def enforce_relative_date_resolution(
 
     The prompt asks the extractor to resolve "on Friday" against the article's date AND
     to copy the verbatim expression into ``event_date_reference``. The resolution step is
-    exactly what LLMs get wrong with confidence: the Knesset incident's extractor mapped
+    exactly what LLMs get wrong with confidence (retro#878: a bare weekday may be either the
+    previous or the coming occurrence — a model date on either stands): the Knesset incident's extractor mapped
     "Friday" (article dated Monday 2026-07-13) to the deadline itself on 5 of 5 runs, and
     post-fix still offered 2026-07-18 — a Saturday. When the copied expression is in our
     small vocabulary, this walks the calendar itself and overrides a disagreeing
@@ -1519,12 +1537,16 @@ def enforce_relative_date_resolution(
     for p in predictions:
         if not p.event_date_reference or not p.event_date:
             continue
-        resolved = _resolve_relative_reference(p.event_date_reference, article)
-        if resolved is None:
+        candidates = _relative_candidates(p.event_date_reference, article)
+        if not candidates:
             continue
         model_date = _parse_iso_date(p.event_date)
-        if model_date == resolved:
-            continue
+        if model_date in candidates:
+            continue    # a tenseless weekday: the model's past-or-future reading stands
+        # Otherwise snap to the occurrence nearest the model's own date (ties → the later):
+        # it knew roughly when, it got the calendar wrong (the Knesset "Friday" → 07-18).
+        resolved = (candidates[-1] if model_date is None else
+                    min(reversed(candidates), key=lambda c: abs((c - model_date).days)))
         logger.warning(
             "event=relative_date_override reference=%r article_date=%s "
             "event_date=%s -> %s claim=%r",
@@ -1554,7 +1576,8 @@ def enforce_deadline_arithmetic(
     So: the model reports the date (``event_date``), and we do the comparison here.
 
         arrival  ("X happens BY D"):     event_date <= D → supports (+) ; after D → contradicts (−)
-        survival ("X does NOT happen by D"): mirrored.
+        survival ("X does NOT happen by D"): mirrored — but only for a NEGATIVE stance (X
+        occurred, event_date is X's date); a positive one has no X to date (retro#878).
 
     Only *confident* signals are corrected (|stance| >= 0.9 or settled) — those are the ones
     that pin an estimate, and a hedged "might slip past the deadline" is a genuine judgement
@@ -1583,6 +1606,13 @@ def enforce_deadline_arithmetic(
             continue
         if p.settled and p.stance < 0 and claim_direction == "arrival":
             # Dated foreclosure, not a dated occurrence — see docstring.
+            continue
+        if p.stance > 0 and claim_direction == "survival":
+            # retro#878: a positive survival stance says X did NOT happen, so there is no
+            # occurrence of X to date — the model's event_date dates the reported fact
+            # ("the joint list was finalized", 09-06). Reading it as X's date flipped such
+            # facts to −1 (34 on prod 08-21→09-26). Only a negative stance (X occurred) is
+            # dated by X.
             continue
 
         within = event_date <= deadline
@@ -1929,6 +1959,13 @@ def enforce_decider_intent_stance_cap(
     return predictions
 
 
+_NATIVE_SOURCE_NAMES = {
+    "Polymarket": ("פולימרקט", "פולי מרקט", "полимаркет", "بوليماركت", "بولي ماركت"),
+    "Kalshi": ("קלשי", "калши", "كالشي"),
+    "Metaculus": ("מטקולוס", "метакулус"),
+}
+
+
 def _names_allowlisted_source(text: str) -> Optional[str]:
     """The allowlisted source named in ``text``, or None. Word-boundary and
     case-insensitive; internal spaces match any run of whitespace so a name
@@ -1936,6 +1973,13 @@ def _names_allowlisted_source(text: str) -> Optional[str]:
     for name in settings.cited_probability_source_allowlist:
         pattern = r"\b" + re.escape(name).replace(r"\ ", r"\s+") + r"\b"
         if re.search(pattern, text, re.IGNORECASE):
+            return name
+    # The quote is in the article's language (retro#878): native-script names match as
+    # substrings, since Hebrew prefixes (בפולימרקט) and Russian case endings
+    # (Полимаркета) break word boundaries.
+    low = text.lower()
+    for name, forms in _NATIVE_SOURCE_NAMES.items():
+        if name in settings.cited_probability_source_allowlist and any(f in low for f in forms):
             return name
     return None
 

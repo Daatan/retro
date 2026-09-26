@@ -43,10 +43,14 @@ def test_the_deadline_day_itself_counts_as_within():
     assert out.stance == 1.0
 
 
-def test_a_confident_no_on_a_date_within_the_deadline_is_also_corrected():
-    """The override is symmetric — it is arithmetic, not a thumb on the scale toward NO."""
-    [out] = enforce_deadline_arithmetic([pred(-1.0, "2026-07-14")], DEADLINE, "arrival")
-    assert out.stance == 1.0
+def test_a_confident_no_is_never_flipped_even_unsettled():
+    """retro#880: a NO says X has not happened, so its date is the reported fact's, not X's.
+    The old symmetric branch (a dated NO inside the deadline → YES) was wrong on 11 of 11
+    prod flips 08-21→09-26 — "a poll gives Likud 20 seats" −0.95 → +0.95 on "Likud > 33
+    seats", "Houthis took Mocha" −1 → +1 on "Houthis lose territory"."""
+    for stance in (-1.0, -0.95, -0.9):
+        [out] = enforce_deadline_arithmetic([pred(stance, "2026-07-14")], DEADLINE, "arrival")
+        assert out.stance == stance
 
 
 def test_a_settled_negative_on_an_arrival_claim_is_exempt():

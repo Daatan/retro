@@ -1583,7 +1583,8 @@ def enforce_deadline_arithmetic(
     that pin an estimate, and a hedged "might slip past the deadline" is a genuine judgement
     we have no business overriding. Magnitude and certainty are preserved; only the sign moves.
 
-    One carve-out: a SETTLED NEGATIVE on an ARRIVAL claim is exempt. Its ``event_date`` is
+    Carve-out (widened by retro#878/#880 to every stance that denies X occurred — arrival
+    negatives settled or not, survival positives): a SETTLED NEGATIVE on an ARRIVAL claim is exempt. Its ``event_date`` is
     the FORECLOSING event's (the rival's win, the elimination — see the SETTLED prompt
     section), not this claim's own occurrence, so the comparison above would read a correct
     impossibility verdict dated within the deadline as "the event occurred in time" and flip
@@ -1604,15 +1605,13 @@ def enforce_deadline_arithmetic(
             continue
         if abs(p.stance) < 0.9 and not p.settled:
             continue
-        if p.settled and p.stance < 0 and claim_direction == "arrival":
-            # Dated foreclosure, not a dated occurrence — see docstring.
-            continue
-        if p.stance > 0 and claim_direction == "survival":
-            # retro#878: a positive survival stance says X did NOT happen, so there is no
-            # occurrence of X to date — the model's event_date dates the reported fact
-            # ("the joint list was finalized", 09-06). Reading it as X's date flipped such
-            # facts to −1 (34 on prod 08-21→09-26). Only a negative stance (X occurred) is
-            # dated by X.
+        # Only a stance asserting that X OCCURRED is dated by X: arrival positive, survival
+        # negative. The other sign says X did not happen, so its event_date dates the
+        # foreclosure or the reported fact ("the joint list was finalized", "a poll gives
+        # Likud 20 seats") — read as X's date it flipped correct verdicts: 32/33 survival
+        # positives (retro#878) and 11/11 unsettled arrival negatives (retro#880) on prod
+        # 08-21→09-26, on top of the settled-negative France trap.
+        if (p.stance < 0) == (claim_direction == "arrival"):
             continue
 
         within = event_date <= deadline

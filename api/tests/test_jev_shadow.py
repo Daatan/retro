@@ -413,3 +413,24 @@ def test_date_pick_none_and_failed_date_call_do_not_break_the_shadow():
         js._ask = real
     assert "err" not in p and p["cand"]                    # pass 2 survives a failed date call
     assert p["dates"][0][4] == "err:ReadTimeout"
+
+
+def test_one_failed_scoring_call_drops_only_its_row():
+    calls: list = []
+    real = js._ask
+    seen = {"n": 0}
+
+    async def flaky(client, api_key, state, questions, api_url):
+        if "stance" in questions:
+            seen["n"] += 1
+            if seen["n"] == 1:
+                raise httpx.HTTPStatusError("429", request=None, response=None)
+        return await real(client, api_key, state, questions, api_url)
+    js._ask = flaky
+    try:
+        p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[SETTLED],
+                                          api_key="k", transport=_transport(calls), article_date="2026-09-16"))
+    finally:
+        js._ask = real
+    assert "err" not in p and p["score_err"] == 1
+    assert len(p["cand"]) == 2 and p["dates"]

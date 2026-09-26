@@ -72,9 +72,20 @@ def test_survival_claim_event_after_deadline_supports_the_claim():
     assert out.stance == 1.0
 
 
-def test_survival_claim_event_within_deadline_contradicts_the_claim():
-    [out] = enforce_deadline_arithmetic([pred(1.0, "2026-07-14", settled=True)], DEADLINE, "survival")
+def test_survival_claim_x_occurring_within_deadline_stays_negative():
+    [out] = enforce_deadline_arithmetic([pred(-1.0, "2026-07-14", settled=True)], DEADLINE, "survival")
     assert out.stance == -1.0
+
+
+def test_a_positive_survival_stance_is_never_flipped():
+    """retro#878: a positive stance says X did NOT happen, so its event_date dates the
+    reported fact, not X. Prod 08-21→09-26: ~32 of 33 such flips were wrong — "Netanyahu
+    was sworn in on 2022-12-29" flipped +1 → −1 on "Netanyahu will be PM on 2026-12-31",
+    "Israel captured the Ali al-Taher ridge" +0.8 → −0.8 on "the army will stay in
+    Lebanon until 2026-12-31"."""
+    for stance, settled in ((1.0, True), (0.95, False), (0.3, True)):
+        [out] = enforce_deadline_arithmetic([pred(stance, "2026-07-14", settled=settled)], DEADLINE, "survival")
+        assert out.stance == stance
 
 
 # ── only confident signals are overridden ─────────────────────────────────────

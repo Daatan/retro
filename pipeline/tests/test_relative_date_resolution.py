@@ -120,3 +120,27 @@ def test_unparseable_article_date_fails_open():
 def test_missing_article_date_fails_open():
     [out] = enforce_relative_date_resolution([pred("2026-07-18", "on Friday")], None)
     assert out.event_date == "2026-07-18"
+
+
+# ── retro#878: a bare weekday has no tense ───────────────────────────────────
+
+
+def test_a_past_bare_weekday_is_not_pushed_into_next_week():
+    # Wednesday 2026-09-16 paper: "transited the Strait of Hormuz on Tuesday" = 09-15.
+    [out] = enforce_relative_date_resolution([pred("2026-09-15", "on Tuesday")], "2026-09-16")
+    assert out.event_date == "2026-09-15"
+    [out] = enforce_relative_date_resolution([pred("2026-09-22", "Tuesday")], "2026-09-16")
+    assert out.event_date == "2026-09-22"          # the future reading stands too
+
+
+def test_a_date_matching_neither_occurrence_snaps_to_the_nearer():
+    # Saturday paper, "Friday", model says the article date → yesterday, not next week.
+    [out] = enforce_relative_date_resolution([pred("2026-09-12", "Friday")], "2026-09-12")
+    assert out.event_date == "2026-09-11"
+
+
+def test_last_and_coming_stay_one_directional():
+    [out] = enforce_relative_date_resolution([pred("2026-09-22", "last Tuesday")], "2026-09-16")
+    assert out.event_date == "2026-09-15"
+    [out] = enforce_relative_date_resolution([pred("2026-09-15", "coming Tuesday")], "2026-09-16")
+    assert out.event_date == "2026-09-22"

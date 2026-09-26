@@ -1397,10 +1397,17 @@ async def extract_predictions(
     if include_conditional_block:
         prompt += _CONDITIONAL_BLOCK
 
+    # Single-article requests skip the cache block (retro#564: a write nobody reads) but
+    # must still send the instructions — passing cached_prefix=None alone dropped the whole
+    # PROMPT_PREFIX from ~2/3 of live calls for five weeks (retro#876).
+    cached_prefix: Optional[str] = PROMPT_PREFIX
+    if is_single_article:
+        prompt, cached_prefix = PROMPT_PREFIX + prompt, None
+
     async def _call_extractor():
         return await complete_structured(
             model or settings.extractor_model, ExtractionOutput, prompt, max_tokens=2200, timeout=180,
-            cached_prefix=None if is_single_article else PROMPT_PREFIX,
+            cached_prefix=cached_prefix,
         )
 
     if cache_coordinator is not None:

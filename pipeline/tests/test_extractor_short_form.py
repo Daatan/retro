@@ -35,7 +35,7 @@ async def _capture_prompt(**kwargs) -> str:
     with patch("tm.extractor.complete_structured", new=AsyncMock(return_value=(None, {}))) as cs:
         await extractor.extract_predictions(**_ARGS, **kwargs)
     prompt = cs.await_args.args[2]
-    cached_prefix = cs.await_args.kwargs.get("cached_prefix", "")
+    cached_prefix = cs.await_args.kwargs.get("cached_prefix") or ""
     return cached_prefix + prompt
 
 
@@ -89,3 +89,15 @@ async def test_short_form_and_language_stack():
 
     assert both.startswith(short)
     assert "The article text is in Hebrew" in both
+
+
+@pytest.mark.asyncio
+async def test_single_article_sends_the_instructions_uncached():
+    """retro#876: skipping the cache block for a single-article request must not skip the
+    instructions. The model must see exactly the multi-article text, with no cache marker."""
+    with patch("tm.extractor.complete_structured", new=AsyncMock(return_value=(None, {}))) as cs:
+        await extractor.extract_predictions(**_ARGS, is_single_article=True)
+    assert cs.await_args.kwargs.get("cached_prefix") is None
+    sent = cs.await_args.args[2]
+    assert "## SETTLED" in extractor.PROMPT_PREFIX and "## SETTLED" in sent
+    assert sent == await _capture_prompt()

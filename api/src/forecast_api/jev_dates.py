@@ -25,7 +25,7 @@ from datetime import date, timedelta
 
 MONTHS = {}
 for i, names in enumerate([
-    "january jan januar janvier enero январь января ינואר يناير كانون الثاني",
+    "january jan januar janvier enero январь января ינואר يناير كانون_الثاني",
     "february feb februar février febrero февраль февраля פברואר فبراير شباط",
     "march mar märz mars marzo март марта מרץ مارس آذار",
     "april apr avril abril апрель апреля אפריל أبريل نيسان",
@@ -34,11 +34,14 @@ for i, names in enumerate([
     "july jul juli juillet julio июль июля יולי يوليو تموز",
     "august aug août agosto август августа אוגוסט أغسطس آب",
     "september sep sept septembre septiembre сентябрь сентября ספטמבר سبتمبر أيلول",
-    "october oct oktober octobre octubre октябрь октября אוקטובר أكتوبر تشرين الأول",
-    "november nov novembre noviembre ноябрь ноября נובמבר نوفمبر تشرين الثاني",
-    "december dec dez dezember décembre diciembre декабрь декабря דצמבר ديسمبر كانون الأول"], 1):
-    for n in names.split():
-        MONTHS.setdefault(n, i)
+    "october oct oktober octobre octubre октябрь октября אוקטובר أكتوبر تشرين_الأول",
+    "november nov novembre noviembre ноябрь ноября נובמבר نوفمبر تشرين_الثاني",
+    "december dec dez dezember décembre diciembre декабрь декабря דצמבר ديسمبر كانون_الأول"], 1):
+    for n in names.split():                      # "_" joins a two-word (Levantine Arabic) name
+        MONTHS.setdefault(n.replace("_", " "), i)
+# Lower-case English month abbreviations are ordinary words ("may", "mar", "dec"): only a
+# capitalised or dotted form counts as a month.
+_AMBIGUOUS = {"may", "mar", "jan", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec"}
 WEEKDAYS = {}
 for i, names in enumerate([
     "monday montag lundi lunes понедельник שני الاثنين الإثنين",
@@ -50,13 +53,15 @@ for i, names in enumerate([
     "sunday sonntag dimanche domingo воскресенье ראשון الأحد الاحد"]):
     for n in names.split():
         WEEKDAYS[n] = i
+# Not listed: French "hier" (it is also German "here"). German "morgen" counts only in
+# lower case: capitalised "Morgen" is "morning" ("heute Morgen").
 RELATIVE = {"today": 0, "tonight": 0, "heute": 0, "aujourd'hui": 0, "hoy": 0, "сегодня": 0, "היום": 0, "הלילה": 0, "اليوم": 0,
-            "yesterday": -1, "gestern": -1, "hier": -1, "ayer": -1, "вчера": -1, "אתמול": -1, "أمس": -1, "امس": -1, "البارحة": -1,
+            "yesterday": -1, "gestern": -1, "ayer": -1, "вчера": -1, "אתמול": -1, "أمس": -1, "امس": -1, "البارحة": -1,
             "tomorrow": 1, "morgen": 1, "demain": 1, "mañana": 1, "завтра": 1, "מחר": 1, "غدا": 1, "غداً": 1}
-HE_PREFIX = re.compile(r"^[ובלכהמש]{1,2}(?=[א-ת]{2,})")
-MNAMES = "|".join(sorted((re.escape(m) for m in MONTHS), key=len, reverse=True))
-MD = re.compile(rf"(?<![\w])({MNAMES})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?(?:,?\s+(\d{{4}}))?(?!\d)", re.I)
-DM = re.compile(rf"(?<!\d)(\d{{1,2}})(?:st|nd|rd|th|\.|-?ה?ב?)?\s*(?:of\s+|de\s+|ב-?|ב)?({MNAMES})(?:,?\s+(\d{{4}}))?", re.I)
+HE_PREFIXES = "ובלכהמש"
+MNAMES = "|".join(sorted((re.escape(m).replace(r"\ ", r"\s+") for m in MONTHS), key=len, reverse=True))
+MD = re.compile(rf"(?<![\w])({MNAMES})(?![\w])\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?(?:,?\s+(\d{{4}}))?(?!\d)", re.I)
+DM = re.compile(rf"(?<!\d)(\d{{1,2}})(?:st|nd|rd|th|\.|-?ה?ב?)?\s*(?:of\s+|de\s+|ב-?|ב)?({MNAMES})(?![\w])(?:,?\s+(\d{{4}}))?", re.I)
 ISO = re.compile(r"(?<!\d)(20\d\d)-(\d\d)-(\d\d)(?!\d)")
 NUM = re.compile(r"(?<![\d.])(\d{1,2})[./](\d{1,2})[./](20\d\d|\d\d)(?![\d.])")
 WORD = re.compile(r"[\w'׳״-]+", re.U)
@@ -67,6 +72,20 @@ WEEK_REL = [(re.compile(p, re.I), k) for p, k in [
     (r"\bnext week\b|\bnächste[rn]? woche\b|на следующей неделе|בשבוע הבא|الأسبوع (?:المقبل|القادم)", 1)]]
 MONTH_ONLY = re.compile(rf"(?<![\w])(?:(?:end|beginning|start|early|late|mid)[- ](?:of )?)?({MNAMES})\b\.?(?:\s+(20\d\d))?(?!\.?\s*\d)", re.I)
 YEAR_END = re.compile(r"\b(?:end|close) of (20\d\d)\b|סוף (20\d\d)|конц[ае] (20\d\d)", re.I)
+
+def _month_key(name: str) -> str:
+    return " ".join(name.lower().split())
+
+
+def _he_bases(tok: str) -> set[str]:
+    """`tok` with 0, 1 or 2 leading Hebrew prefix letters stripped. Every length is tried
+    because ש/ה/מ/ל also start the words themselves (בשבת → שבת, not בת)."""
+    out = {tok}
+    for k in (1, 2):
+        if len(tok) - k >= 2 and all(c in HE_PREFIXES for c in tok[:k]):
+            out.add(tok[k:])
+    return out
+
 
 def _month_iv(y, m):
     return date(y, m, 1), date(y, m, calendar.monthrange(y, m)[1])
@@ -87,13 +106,22 @@ def intervals(text: str, pub: date) -> list[tuple[date, date, str]]:
     for rx, kind in ((MD, "md"), (DM, "dm")):
         for m in rx.finditer(text):
             g = m.groups()
-            mon, day = (MONTHS[g[0].lower()], int(g[1])) if kind == "md" else (MONTHS[g[1].lower()], int(g[0]))
+            name = g[0] if kind == "md" else g[1]
+            if name in _AMBIGUOUS:                     # lower case: "30 may be killed", "10 dec"
+                continue
+            mon, day = MONTHS[_month_key(name)], (int(g[1]) if kind == "md" else int(g[0]))
             if not 1 <= day <= 31:
                 continue
             try:
-                add(date(int(g[2]), mon, day), m.group(0)) if g[2] else add_md(mon, day, m.group(0))
+                dated = date(int(g[2]), mon, day) if g[2] else None
             except ValueError:
-                pass
+                dated = None
+            if dated and abs((dated - pub).days) < 3660:
+                add(dated, m.group(0))
+            else:   # no year, or a following number that isn't one ("May 5, 2000 soldiers")
+                expr = m.group(0)[:m.start(3) - m.start(0)].rstrip(" ,") if g[2] else m.group(0)
+                try: add_md(mon, day, expr)
+                except ValueError: pass
     for m in ISO.finditer(text):
         try: add(date(int(m[1]), int(m[2]), int(m[3])), m.group(0))
         except ValueError: pass
@@ -102,22 +130,25 @@ def intervals(text: str, pub: date) -> list[tuple[date, date, str]]:
         try: add(date(y, int(m[2]), int(m[1])), m.group(0))
         except ValueError: pass
     for w in WORD.finditer(text):
-        tok = w.group(0).lower()
-        base = HE_PREFIX.sub("", tok) if re.match(r"[א-ת]", tok) else tok
-        for t in {tok, base}:
-            if t in RELATIVE:
-                add(pub + timedelta(days=RELATIVE[t]), w.group(0))
-            if t in WEEKDAYS and t not in ("שני", "ראשון", "שבת") or (t in ("שני", "ראשון", "שבת") and re.search(r"ביום\s+" + t, text)):
+        raw = re.sub(r"'s$", "", w.group(0))           # "Friday's vote", "today's ruling"
+        tok = raw.lower()
+        for t in (_he_bases(tok) if re.match(r"[א-ת]", tok) else {tok}):
+            if t in RELATIVE and not (t == "morgen" and raw[0].isupper()):
+                add(pub + timedelta(days=RELATIVE[t]), raw)
+            if t in WEEKDAYS and t not in ("שני", "ראשון", "שבת") or (t in ("שני", "ראשון", "שבת") and (re.search(r"ביום\s+" + t, text) or tok == "ב" + t == "בשבת")):
                 wd = WEEKDAYS[t]
-                add(pub - timedelta(days=(pub.weekday() - wd) % 7), w.group(0) + " (past)")
-                add(pub + timedelta(days=(wd - pub.weekday()) % 7), w.group(0) + " (upcoming)")
+                back = (pub.weekday() - wd) % 7
+                add(pub - timedelta(days=back), raw + " (past)")
+                if back == 0:   # "last Friday" in a Friday paper is a week back (cf. extractor)
+                    add(pub - timedelta(days=7), raw + " (a week earlier)")
+                add(pub + timedelta(days=(wd - pub.weekday()) % 7), raw + " (upcoming)")
     for rx, k in WEEK_REL:
         for m in rx.finditer(text):
             mon0 = pub - timedelta(days=pub.weekday()) + timedelta(weeks=k)
             add(mon0, m.group(0), mon0 + timedelta(days=6))
     for m in MONTH_ONLY.finditer(text):
-        mon = MONTHS[m.group(1).lower()]
-        if m.group(1).lower() in ("may", "mar", "jan", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "mai", "hier") and not m.group(2) \
+        mon = MONTHS[_month_key(m.group(1))]
+        if m.group(1).lower() in _AMBIGUOUS | {"mai"} and not m.group(2) \
                 and not re.match(r"(?i)(end|beginning|start|early|late|mid)", m.group(0)) and m.group(1)[0].islower():
             continue                                 # "may" the verb, etc.
         if m.group(2):

@@ -34,3 +34,41 @@ def test_relative_words_weeks_and_hebrew():
 
 def test_modal_may_is_not_a_month():
     assert intervals("Rates may fall.", PUB) == []
+
+
+# --- review fixes (retro#873 follow-up) ------------------------------------------------
+
+def test_levantine_two_word_months_are_one_name():
+    iv = _by_expr("في 5 كانون الأول")
+    assert iv["5 كانون الأول (past)"] == (date(2025, 12, 5),) * 2
+    assert intervals("المرحلة الثانية", PUB) == []           # "the second", not January
+
+
+def test_lowercase_month_abbreviations_and_word_prefixes_are_not_dates():
+    for t in ("about 30 may be killed", "5 mayors met", "10 decades ago", "3 marines"):
+        assert intervals(t, PUB) == [], t
+    assert "5 de mayo (past)" in _by_expr("5 de mayo")
+
+
+def test_hebrew_prefix_tries_every_strip_length():
+    assert _by_expr("ומחר")["ומחר"] == (date(2026, 9, 17),) * 2
+    assert _by_expr("והיום")["והיום"] == (PUB, PUB)
+    assert "בשבת (past)" in _by_expr("בשבת")
+    assert intervals("בשני שלבים", PUB) == []                  # "in two stages"
+
+
+def test_possessive_and_a_following_number_that_is_not_a_year():
+    assert "Friday (past)" in _by_expr("Friday's vote")
+    assert _by_expr("On May 5, 2000 soldiers marched")["May 5 (past)"] == (date(2026, 5, 5),) * 2
+    assert _by_expr("May 5, 2026")["May 5, 2026"] == (date(2026, 5, 5),) * 2
+
+
+def test_same_weekday_also_offers_a_week_earlier():
+    iv = _by_expr("last Wednesday the vote passed")          # PUB is a Wednesday
+    assert iv["Wednesday (a week earlier)"] == (date(2026, 9, 9),) * 2
+
+
+def test_german_hier_and_capitalised_morgen_are_not_relative_days():
+    assert intervals("hier ist es", PUB) == []
+    assert [e for *_, e in intervals("heute Morgen", PUB)] == ["heute"]
+    assert _by_expr("morgen früh")["morgen"] == (date(2026, 9, 17),) * 2

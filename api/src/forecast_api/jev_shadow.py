@@ -489,14 +489,23 @@ async def run_jev_shadow(
                 asyncio.gather(*[
                     _ask(client, api_key, {"sentence": sentences[i], "related_event": question}, _scoring_questions(), api_url)
                     for i in cand
-                ]),
+                ], return_exceptions=True),
                 asyncio.gather(*[job for _, _, job in date_jobs], return_exceptions=True),
             )
         payload["neg"] = round(neg, 3)
         payload["max_noul"] = round(max(nouls), 3)
         payload["top"] = [[i, round(nouls[i], 3)] for i in order[:8]]
         cands = []
+        # One failed scoring call (e.g. a 429 among ~30 concurrent) drops that row only, not
+        # the article: counted in `score_err`, the rest of the payload is still logged.
+        score_err = sum(isinstance(r, BaseException) for r in scored)
+        if score_err == len(scored) and scored:
+            raise next(r for r in scored if isinstance(r, BaseException))
+        if score_err:
+            payload["score_err"] = score_err
         for i, resp in zip(cand, scored):
+            if isinstance(resp, BaseException):
+                continue
             tok_in += resp.get("usage", {}).get("input_tokens", 0)
             a = resp["answers"]
             nz, p0 = _nonzero(a["stance"], STANCE_VALUES)

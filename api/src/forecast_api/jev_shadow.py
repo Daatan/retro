@@ -32,9 +32,12 @@ import logging
 import re
 import time
 import unicodedata
+from datetime import date
 from typing import Optional, Sequence
 
 import httpx
+
+from .jev_dates import intervals as date_intervals
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +169,35 @@ def _nonzero(ans: dict, values: Sequence[float]) -> tuple[float, float]:
     rest = 1.0 - p0
     ex = sum(p * values[k] for k, p in probs.items() if k != zero) / rest if rest > 1e-9 else 0.0
     return ex, p0
+
+
+_WD = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+def _fmt_interval(a, b) -> str:
+    return f"{a.isoformat()} ({_WD[a.weekday()]})" if a == b else f"{a.isoformat()} to {b.isoformat()}"
+
+
+def _parse_day(value) -> Optional[date]:
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def date_questions(cands: Sequence[tuple], pub: date) -> dict:
+    """retro#873: `dated` noul + a `when` choice over code-found candidates, the publication
+    date and `none`. Wording as measured offline (settled claims: Jev = Haiku 35/37, both
+    disagreements Haiku's pub-date substitution)."""
+    crit = {f"c{k}": f'"{e}" in the text = {_fmt_interval(a, b)}' for k, (a, b, e) in enumerate(cands)}
+    crit["pub"] = (f"the publication date {_fmt_interval(pub, pub)}: the text reports the event as "
+                   "today's news without naming another date")
+    crit["none"] = "the text gives no date or time for this event"
+    return {
+        "dated": {"type": "noul", "instructions": "Does `context` say WHEN the event reported in `sentence` happened or is scheduled to happen — a date, a weekday, a month, or a relative time such as 'yesterday' or 'last week'?"},
+        "when": {"type": "choice", "instructions": "When did (or will) the event reported in `sentence` happen? `publication_date` is when the article was published. Pick the option that dates THIS event, not another event mentioned nearby.",
+                 "criteria": crit},
+    }
 
 
 def _top_choice(ans: dict) -> tuple[Optional[str], float]:
@@ -398,6 +430,7 @@ async def run_jev_shadow(
     timeout_s: float = 30.0,
     transport: Optional[httpx.AsyncBaseTransport] = None,
     pass1: Optional[dict] = None,
+    article_date: Optional[str] = None,
 ) -> Optional[dict]:
     """Run both Jev passes on one article and log `event=jev_shadow`. Returns the payload
     (for tests); never raises. A `pass1` result from `jev_pass1` (same text and question) is
@@ -412,7 +445,8 @@ async def run_jev_shadow(
         payload["n"] = len(sentences)
         payload["haiku"] = [
             [locate_quote(norm_text, spans, p.get("quote") or ""),
-             p.get("stance"), p.get("settled"), p.get("claim_strength"), p.get("evidence_class")]
+             p.get("stance"), p.get("settled"), p.get("claim_strength"), p.get("evidence_class"),
+             p.get("event_date")]
             for p in haiku_predictions
         ]
         if "skip" in pass1:
@@ -433,10 +467,31 @@ async def run_jev_shadow(
             # Every Haiku-quoted sentence gets a Jev verdict too (outside the cap), so a veto on
             # Haiku's claims can be measured claim by claim (retro#847).
             cand += sorted({q[0] for q, *_ in payload["haiku"] if q} - set(cand))
-            scored = await asyncio.gather(*[
-                _ask(client, api_key, {"sentence": sentences[i], "related_event": question}, _scoring_questions(), api_url)
-                for i in cand
-            ])
+            # retro#873: date shadow on Haiku-SETTLED claims only — on unsettled claims Jev
+            # dates the utterance ("X said on Thursday"), not the event. Context = quote ±2
+            # sentences (the whole article added nothing offline); candidates are found and
+            # resolved in code against the publication date, Jev only picks.
+            pub = _parse_day(article_date)
+            date_jobs = []
+            for h, row in enumerate(payload["haiku"]):
+                idx = row[0]
+                if pub is None or not idx or row[2] is not True:
+                    continue
+                lo, hi = max(0, min(idx) - 2), min(len(sentences), max(idx) + 3)
+                window = " ".join(sentences[lo:hi])
+                dcands = date_intervals(window, pub)
+                date_jobs.append((h, dcands, _ask(
+                    client, api_key,
+                    {"sentence": " ".join(sentences[i] for i in idx), "context": window,
+                     "publication_date": pub.isoformat()},
+                    date_questions(dcands, pub), api_url)))
+            scored, dated = await asyncio.gather(
+                asyncio.gather(*[
+                    _ask(client, api_key, {"sentence": sentences[i], "related_event": question}, _scoring_questions(), api_url)
+                    for i in cand
+                ]),
+                asyncio.gather(*[job for _, _, job in date_jobs], return_exceptions=True),
+            )
         payload["neg"] = round(neg, 3)
         payload["max_noul"] = round(max(nouls), 3)
         payload["top"] = [[i, round(nouls[i], 3)] for i in order[:8]]
@@ -457,10 +512,33 @@ async def run_jev_shadow(
             ])
         # cand rows: [sentence_idx, noul, stance_expected, stance_argmax, settled, claim_strength,
         #             stance_nonzero, p_no_signal, topic, refs, evidence_class, evidence_class_p]
-        # haiku rows: [sentence_idxs, stance, settled, claim_strength, evidence_class] — Haiku's
+        # haiku rows: [sentence_idxs, stance, settled, claim_strength, evidence_class, event_date]
+        # (event_date raw, before enforce_relative_date_resolution) — evidence_class is Haiku's
         # RAW class, snapshotted before enforce_anchor_provenance can demote cited_probability;
         # the shipped class is recoverable offline with tm.extractor._names_allowlisted_source.
         payload["cand"] = cands
+        # dates rows: [haiku_row, haiku_event_date, jev_start, jev_end, jev_pick, jev_pick_p,
+        #              dated_noul, n_candidates] — jev_start/end null for pick "none"; a failed
+        #              date call logs its error string in place of jev_pick.
+        date_rows = []
+        for (h, cands_h, _), resp in zip(date_jobs, dated):
+            if isinstance(resp, BaseException):
+                date_rows.append([h, payload["haiku"][h][5], None, None, "err:" + type(resp).__name__, 0.0, None, len(cands_h)])
+                continue
+            tok_in += resp.get("usage", {}).get("input_tokens", 0)
+            a = resp["answers"]
+            pick, pick_p = _top_choice(a.get("when"))
+            if pick == "pub":
+                iv = (pub, pub)
+            elif pick and pick.startswith("c") and pick[1:].isdigit() and int(pick[1:]) < len(cands_h):
+                iv = cands_h[int(pick[1:])][:2]
+            else:
+                iv = (None, None)
+            date_rows.append([h, payload["haiku"][h][5],
+                              iv[0].isoformat() if iv[0] else None, iv[1].isoformat() if iv[1] else None,
+                              pick, round(pick_p, 3), round(a["dated"]["noul"], 3), len(cands_h)])
+        if date_rows:
+            payload["dates"] = date_rows
         payload["tok_in"] = tok_in
     except Exception as exc:  # shadow: never let Jev affect /forecast
         payload["err"] = repr(exc)[:200]

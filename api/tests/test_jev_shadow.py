@@ -61,6 +61,10 @@ def _transport(calls: list, *, fail: bool = False, urls: list | None = None):
         qs = body["questions"]
         if "neg" in qs:
             answers = {"neg": {"type": "noul", "noul": 0.03}}
+        elif "when" in qs:  # retro#873: pick the past-Monday candidate if offered, else "none"
+            pick = next((k for k, v in qs["when"]["criteria"].items() if "Monday (past)" in v), "none")
+            answers = {"dated": {"type": "noul", "noul": 0.9},
+                       "when": {"type": "choice", "probabilities": {pick: 0.8, "pub": 0.2}}}
         elif "stance" in qs:
             answers = {"stance": _score(5, 7), "strength": _score(3, 5),
                        "settled": {"type": "noul", "noul": 0.1},
@@ -97,7 +101,8 @@ def test_run_selects_scores_and_logs(caplog):
     assert p["cand"][0][2] == pytest.approx(0.7)           # stance expected, level 5
     assert p["cand"][0][3] == 0.7                          # stance argmax
     assert p["cand"][0][5] == pytest.approx(0.7)           # claim_strength level 3
-    assert p["haiku"] == [[[0], 0.7, False, 0.6, "reporting"]]
+    assert p["haiku"] == [[[0], 0.7, False, 0.6, "reporting", None]]
+    assert "dates" not in p                                # unsettled: no date call
     assert p["cand"][0][6:10] == [0.7, 0.0, 0.8, 0.2]      # stance over non-zero levels, p(no signal), topic, refs
     assert p["cand"][0][10:] == ["reporting", 0.7]         # Jev evidence_class + its probability (retro#851)
     assert p["tok_in"] == 500                              # selection + neg + 3 scorings
@@ -352,3 +357,59 @@ def test_evidence_class_question_and_missing_answer():
         "reported_fact", "cited_probability", "cited_share", "reporting", "opinion"}
     assert js._top_choice(None) == (None, 0.0)
     assert js._top_choice({"probabilities": {"opinion": 0.6, "reporting": 0.4}}) == ("opinion", 0.6)
+
+
+# --- retro#873: event_date shadow on Haiku-settled claims ---------------------------------
+
+SETTLED = {"quote": "The weather in Tel Aviv was sunny on Monday.", "stance": 0.0, "settled": True,
+           "claim_strength": 0.9, "event_date": "2026-09-16"}
+
+
+def test_settled_claim_gets_a_jev_date_beside_haikus():
+    calls: list = []
+    p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[SETTLED],
+                                      api_key="k", transport=_transport(calls), article_date="2026-09-16T08:00:00Z"))
+    assert "err" not in p
+    date_calls = [c for c in calls if "when" in c["questions"]]
+    assert len(date_calls) == 1
+    state = date_calls[0]["state"]
+    assert state["sentence"] == SETTLED["quote"] and state["publication_date"] == "2026-09-16"
+    assert set(date_calls[0]["questions"]["when"]["criteria"]) >= {"pub", "none"}
+    [row] = p["dates"]
+    # Haiku said the publication date (a Wednesday); Jev picks the Monday before it.
+    assert row[:4] == [0, "2026-09-16", "2026-09-14", "2026-09-14"]
+    assert row[5:7] == [0.8, 0.9] and row[7] >= 2
+    assert p["tok_in"] == 600                              # the date call is counted
+
+
+def test_date_shadow_needs_a_publication_date_and_a_located_quote():
+    for kw, haiku in (({}, [SETTLED]), ({"article_date": "2026-09-16"}, [dict(SETTLED, quote="not in the article")]),
+                      ({"article_date": "garbage"}, [SETTLED])):
+        calls: list = []
+        p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=haiku,
+                                          api_key="k", transport=_transport(calls), **kw))
+        assert "dates" not in p and not any("when" in c["questions"] for c in calls)
+
+
+def test_date_pick_none_and_failed_date_call_do_not_break_the_shadow():
+    calls: list = []
+    text = "Rates rose. The Bank of Israel cut rates."
+    p = asyncio.run(js.run_jev_shadow(text=text, question=QUESTION, url="u", api_key="k", article_date="2026-09-16",
+                                      haiku_predictions=[dict(SETTLED, quote="The Bank of Israel cut rates.")],
+                                      transport=_transport(calls)))
+    assert p["dates"][0][2:5] == [None, None, "none"]
+
+    real = js._ask
+
+    async def flaky(client, api_key, state, questions, api_url):
+        if "when" in questions:
+            raise httpx.ReadTimeout("slow")
+        return await real(client, api_key, state, questions, api_url)
+    js._ask, calls = flaky, []
+    try:
+        p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[SETTLED],
+                                          api_key="k", transport=_transport(calls), article_date="2026-09-16"))
+    finally:
+        js._ask = real
+    assert "err" not in p and p["cand"]                    # pass 2 survives a failed date call
+    assert p["dates"][0][4] == "err:ReadTimeout"

@@ -1898,7 +1898,8 @@ async def _process_article(
                 text=text, question=question, url=result.url or "",
                 haiku_predictions=[
                     {"quote": p.quote, "stance": p.stance, "settled": p.settled,
-                     "claim_strength": p.claim_strength, "evidence_class": p.evidence_class}
+                     "claim_strength": p.claim_strength, "evidence_class": p.evidence_class,
+                     "event_date": p.event_date}
                     for p in extraction.predictions
                 ],
                 api_key=settings.typesafe_api_key,
@@ -1909,6 +1910,7 @@ async def _process_article(
                 timeout_s=settings.jev_shadow_timeout_seconds,
                 # One selection call per article when both flags are on (retro#850).
                 pass1=jev_pass1_result if jev_pass1_result and "nouls" in jev_pass1_result else None,
+                article_date=article_date,
             )
         # Observability only (retro#298) — logs claim/stance sign mismatches on the
         # model's raw output, before any of the deterministic corrections below can

@@ -8,12 +8,12 @@ See setup in [`docs/ORACLE_DEPLOY.md`](../../docs/ORACLE_DEPLOY.md#one-time-iam-
 
 | File | Purpose |
 |------|---------|
-| `gha-deploy-oracle-trust.json` | Who can assume the role — scoped to GitHub Actions runs from this repo on `main` (plus manual `workflow_dispatch`). |
+| `gha-deploy-oracle-trust.json` | Who can assume the role — scoped to GitHub Actions runs from this repo on `main` (a manual `workflow_dispatch` works only when dispatched from `main`). |
 | `gha-deploy-oracle-policy.json` | What the role can do — `ssm:SendCommand` scoped to the one oracle instance *and* only the `AWS-RunShellScript` document, plus read-only `ssm:Get*/List*Command*` for polling results. See "Why `SendCommand` is two separate statements" below. |
 
 ## 2. TruthMachine EC2 → S3 (snapshot/restore atlas state)
 
-Inline policy for the existing `truthmachine-ec2-role` (attached to the batch-pipeline EC2 instance). Grants Get/Put/Delete on the snapshot bucket only. See setup in [`docs/ATLAS_SNAPSHOTS.md`](../../docs/ATLAS_SNAPSHOTS.md#one-time-iam-setup).
+Inline policy for the existing `truthmachine-ec2-role` (attached to the batch-pipeline EC2 instance). Grants Get/Put/Delete on the snapshot bucket only. See setup in [`docs/ATLAS_SNAPSHOTS.md`](../../docs/ATLAS_SNAPSHOTS.md#2-one-time-iam-setup).
 
 | File | Purpose |
 |------|---------|
@@ -21,7 +21,7 @@ Inline policy for the existing `truthmachine-ec2-role` (attached to the batch-pi
 
 ## 3. TruthMachine EC2 → Secrets Manager (legacy `daatan/*` secrets)
 
-Inline policy for the existing `truthmachine-ec2-role`. Grants read-only access to the `daatan/*` secret namespace.
+Inline policy for the existing `truthmachine-ec2-role`. Grants read-only access to the `daatan/*`, `openclaw/*` and `metaculus/*` secret namespaces.
 
 **Search-provider keys moved off this namespace to SSM Parameter Store per docs#122** — see
 `/retro/prod/secrets/*` in section 4 below and `docs/ARCHITECTURE.md`'s Required Secrets
@@ -32,7 +32,7 @@ SSM parameter instead (docs#122 group 3; see section 4's SSM resource list).
 
 | File | Purpose |
 |------|---------|
-| `truthmachine-ec2-secrets-policy.json` | `secretsmanager:GetSecretValue` on `arn:aws:secretsmanager:eu-central-1:<ACCOUNT_ID>:secret:daatan/*`. No write, no list, no other namespaces. |
+| `truthmachine-ec2-secrets-policy.json` | `secretsmanager:GetSecretValue` on `arn:aws:secretsmanager:eu-central-1:<ACCOUNT_ID>:secret:daatan/*`, `secret:openclaw/*` and `secret:metaculus/*` (the Metaculus bot keys, retro#725). No write, no list. |
 
 **Apply:**
 ```bash
@@ -44,13 +44,7 @@ aws iam put-role-policy \
   --policy-document file:///tmp/secrets-policy.json
 ```
 
-**Before applying, also store the new keys in Secrets Manager** (values come from daatan's env bundle):
-```bash
-aws secretsmanager create-secret --region eu-central-1 \
-  --name daatan/brightdata-api-key --secret-string "<VALUE>"
-aws secretsmanager create-secret --region eu-central-1 \
-  --name daatan/nimbleway-api-key --secret-string "<VALUE>"
-```
+New search-provider keys do **not** go here: `web_search.py`'s `_secret()` reads only the env and SSM `/retro/prod/secrets/*` (section 4). Run `bash infra/check_keys.sh` after adding one.
 
 **After applying, reload oracle and restart the pipeline** to pick up the new keys:
 ```bash
@@ -62,8 +56,8 @@ sudo systemctl restart truthmachine
 ## 4. TruthMachine EC2 → Bedrock (LLM invocation, `truthmachine-pipeline-policy`)
 
 Inline policy for the existing `truthmachine-ec2-role` — the live source of truth for
-which Bedrock models the Oracul/pipeline may invoke. Nova (gatekeeper/extractor default)
-plus Claude Haiku 4.5 (extractor override; both the cross-region inference profiles and
+which Bedrock models the Oracul/pipeline may invoke. Nova (gatekeeper)
+plus Claude Haiku 4.5 (extractor; both the cross-region inference profiles and
 the underlying foundation-model ARN, which cross-region routing requires in every member
 region — hence the `*` region). Adding a new extractor model = add its ARNs here and
 re-apply, or the host gets `AccessDenied` and every extraction fails (`reason:
@@ -93,7 +87,7 @@ both lanes onto one model/prompt once the cost gap (batch is ~2-3% of live's cal
 volume) was measured as immaterial. The drop-in above is now redundant with the shared
 default but stays as an explicit pin for the live service, independent of any future
 default change. `infra/deploy_oracle.sh` does not sync drop-in files automatically (see
-that file's header for the manual apply command). Rollback (live only) = delete the
+`extractor-model.conf`'s header, or `docs/ORACLE_DEPLOY.md` § systemd drop-ins, for the manual apply command). Rollback (live only) = delete the
 drop-in on the host, `daemon-reload`, restart `oracle-api`; rolling back the shared
 default is a `tm/config.py` revert.
 
@@ -109,8 +103,8 @@ Before applying:
 
 ## Scope rationale
 
-- **Trust**: `token.actions.githubusercontent.com` pinned to this repo by its immutable `repository_id` (`1184236342`, stable across org transfer / rename) plus a `sub` restricted to `ref:refs/heads/main` and `environment:*` — so only workflow runs on `main` (and `workflow_dispatch`, which still runs from whatever branch you pick) can assume the role. A PR branch cannot. This matches our deploy trigger.
-- **Permissions**: `ssm:SendCommand` is the sharp tool — anyone with it can run arbitrary shell as root on the target instance. We scope it two ways: the instance ARN is restricted to the one oracle box, and the document ARN is restricted to `AWS-RunShellScript` (blocks e.g. `AWS-RunPowerShellScript` or custom documents). `ssm:GetCommandInvocation` / `ssm:ListCommandInvocations` are scoped to the region but not per-command (the command-id is only known after `SendCommand` returns).
+- **Trust**: `token.actions.githubusercontent.com` pinned to this repo by its immutable `repository_id` (`1184236342`, stable across org transfer / rename) plus a `sub` restricted to `ref:refs/heads/main` and `environment:*` — so only workflow runs on `main` (including a `workflow_dispatch` dispatched from `main`; one dispatched from another branch carries that branch's `sub` and is refused) can assume the role. A PR branch cannot. This matches our deploy trigger.
+- **Permissions**: `ssm:SendCommand` is the sharp tool — anyone with it can run arbitrary shell as root on the target instance. We scope it two ways: the instance ARN is restricted to the one oracle box, and the document ARN is restricted to `AWS-RunShellScript` (blocks e.g. `AWS-RunPowerShellScript` or custom documents). `ssm:GetCommandInvocation` / `ssm:ListCommandInvocations` / `ssm:ListCommands` use `Resource: "*"` — not per-command (the command-id is only known after `SendCommand` returns).
 
 ### Why `SendCommand` is two separate statements
 

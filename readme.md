@@ -96,7 +96,7 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 
 **Orchestration:** `truthmachine.service` (batch pipeline loop) + `oracle-api.service` (FastAPI forecast API at `oracle.daatan.com`).
 
-**LLM:** AWS Bedrock — Nova Micro (gatekeeper) + Nova Lite (aggregator only, as of retro#778) + Claude Haiku 4.5 (extractor, shared default for both the batch pipeline and the live Oracul API since 2026-09-08 — see `docs/PROMPT_CACHING.md`).
+**LLM:** AWS Bedrock — Nova Micro (gatekeeper) + Claude Haiku 4.5 (extractor, shared default for both the batch pipeline and the live Oracul API since 2026-09-08 — see `docs/PROMPT_CACHING.md`; the batch aggregator calls the same `extractor_model`). The live Oracul API additionally calls Jev (TypeSafe System One, not Bedrock) for shadow/gate/`evidence_class` stages — see `CLAUDE.md`.
 
 **Live pages:**
 - Factum Atlas: https://daatan.github.io/retro/
@@ -104,5 +104,6 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 - Oracul MCP Test Console: https://daatan.github.io/retro/oracle-mcp-test.html
 - Oracle 2.0 Playground (v2 query path, paste your own key): https://daatan.github.io/retro/oracle-v2-test.html
 - TruthMachine vs Polymarket Duel: https://daatan.github.io/retro/duel.html
+- Retro case studies (see `studies/README.md`): https://daatan.github.io/retro/studies/
 - BayesOracle — Israeli Politics DAG (what-if slider): https://daatan.github.io/retro/bayesoracle/graph.html
 - BayesOracle — PM × Bayes Divergence: https://daatan.github.io/retro/bayesoracle/pm_analysis/index.html

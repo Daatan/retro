@@ -30,7 +30,7 @@ consequences of that redundancy, not of any single bug.
 | `voice` | `{kind: byline\|quoted_person\|institution\|wire\|unattributed, attributed_to?}`, optional | **whose assertion** the quote is | **EXPERIMENTAL, shadow** (Oracle 1.5 Phase 1, retro#684): populated, persisted, read by nothing. A wire report reprinted in thirty outlets is ONE observation, not thirty, and a minister quoted in an op-ed is the minister's claim rather than the columnist's — without this the Phase 3 S2 reception matrix has the wrong columns and counts outlets where it means to count sources. `attributed_to` is the half that makes a wire collapsible: it is the name the column keys on. The test is whose ASSERTION it is and not who it is ABOUT — a reporter's sentence describing a minister is `byline`. Deliberately **no cross-field validator** (unlike `quantity`): rejecting an `attributed_to` beside a `byline` would hand the drop guard a raise, and the guard nulls the whole object, trading a stray string for a lost `kind`. Rolls up to `SourceSignal` as the **dominant claim's**, the same claim `facet` and `verified` ride from. Kill criterion: >90% one `kind` |
 | `grounds` | `{kind: event_observed\|authority_asserted\|market_or_poll_number\|expert_inference\|historical_base_rate\|writer_assertion, basis?}`, optional | what the quote's position **rests on** — the reason, not the direction | **ELICITATION WITHDRAWN v14 (retro#774).** The model is no longer asked for this and nothing extracted after 2026-09-02 carries it; the wire field and the stored values from 2026-08-31→09-02 remain readable. Withdrawn because asking for it cost `evidence_class`. Measured on prod over pool rows that carry an `extractor_prompt_version` — rows without one come from another lane and are 95% unclassified for unrelated reasons, so comparing by DATE rather than by version mixes them in and inflates the effect ~10x: **0.32% unclassified (35/10,945) pre-grounds → 4.26% (10/235) on v12+v13, ~13x**. Every unclassified claim falls back to `evidence_class_weight_unclassified_cap` (0.25, 4x below `reported_fact`). That 4.26% lands almost exactly on the **3.4% (Haiku) the v12 A/B itself predicted** — the number was known before v12d shipped, and clearing it was v12d's own stated success criterion, never measured. All 18 hard leaks logged in that window were `grounds.kind` members (13 `authority_asserted`, 5 `expert_inference`) against **zero** in the preceding 4.5 months, so v12d's rename to a non-colliding vocabulary was never the thing under test — prod had nothing to leak until the field shipped. The larger effect is silent **omission**, not the leak: the model answers the grounds question and drops the class one. Re-add only with (a) the `n_eff`-over-reasons consumer that justifies the cost and (b) a non-lexical fix for the collision — wording (v12a-c) and renaming (v12d) both failed. |
 | *(no per-claim entry)* | — | the WHO / WHAT / SCOPE decomposition is **question-level**, not per-claim | retro#697's `claim_actor` / `claim_predicate` / `claim_scope` deliberately have no `ClaimDetail` counterpart, and the asymmetry against `tone`/`voice` above is the point: those are properties of a quote and so are per-claim with an article rollup, while these describe the event the question names — identical for every claim in the article and every article in the forecast. A per-claim copy would be N identical strings billed on every claim, and `settlement_semantic.ClaimSubject`, the consumer, wants exactly one per question. See the article-level table in §2.3 |
-| `quantitative_estimate` | 0..1, optional | cited model/market probability of the event itself (never a vote share/seat count — those are `cited_share`) | overrides stance+certainty via `resolve_stance_certainty` ONLY when `evidence_class=cited_probability` (retro#362); that class carries the 4× premium — and, since retro#369, only if the claim's `quote` names a source on `cited_probability_source_allowlist` (`tm/config.py`); an unattributed figure is demoted by `enforce_anchor_provenance`, which also costs it the rewrite. **Shadow until `anchor_provenance_enforced`.** |
+| `quantitative_estimate` | 0..1, optional | cited model/market probability of the event itself (never a vote share/seat count — those are `cited_share`) | overrides stance+certainty via `resolve_stance_certainty` ONLY when `evidence_class=cited_probability` (retro#362); that class carries the 4× premium — and, since retro#369, only if the claim's `quote` names a source on `cited_probability_source_allowlist` (`tm/config.py`); an unattributed figure is demoted by `enforce_anchor_provenance`, which also costs it the rewrite. **Enforced since 2026-08-01 (`anchor_provenance_enforced=True`, demotion target `reporting`).** |
 | `settled` | bool | outcome reported as accomplished fact | feeds the ±0.94 settlement pin; a POSITIVE settlement is demoted unless dated — see `enforce_settlement_event_date` below; and a settlement whose `fact_signal` opposes its own stance is neutralised — see `enforce_settlement_fact_signal_agreement` |
 | `event_date` | ISO date, optional | when the article says the event itself occurs/occurred | compared against `claim_deadline` by `enforce_deadline_arithmetic`; REQUIRED for a positive `settled`; for a NEGATIVE `settled` it carries the FORECLOSING event's date when the article dates it (the rival's win, the elimination — optional: time-expiry impossibilities stay undated) — see below |
 | `event_date_reference` | text, optional | the article's verbatim relative expression behind `event_date` ("on Friday", "yesterday") | code redoes the calendar walk from it and overrides a disagreeing `event_date` (`enforce_relative_date_resolution`) — see below |
@@ -442,7 +442,8 @@ is that check, and it is deterministic where it matters.
    derived **once per question** from `event_name` + `resolution_criteria` by a structured
    call (`subject_gate_model` → `settlement_verifier_model` → the live extractor), with
    surface forms in English, Hebrew, Russian and Arabic (`subject_gate_languages`), and
-   cached under `data_dir/subject_card_cache` (`subject_card_store.py`, keyed on prompt
+   cached under `data_dir/subject_card_cache` (`subject_gate_cache_enabled` / `subject_gate_cache_path`;
+   call timeout `subject_gate_timeout_seconds`, 20) (`subject_card_store.py`, keyed on prompt
    version + model + question + criteria). Option B of the 2026-09-07 dilemma: retro-only, no
    daatan schema change; a curated daatan-side field is the deferred Option A. An empty card
    (the question names nobody: "the next PM serves less than a full term") is a real,
@@ -865,7 +866,7 @@ Config constants (16): `recency_half_life_days=7`, `recency_floor=0.02`,
 `decisiveness_floor=0.5`, `thin_evidence_ci_inflation=0.45`,
 `defer_on_thin_evidence=False`, `pool_dispersion_floor=0.05`,
 `settlement_min_sources=2`,
-`settlement_stance=0.94`, `min_certainty=0.9`.
+`settlement_stance=0.94`, `min_certainty=0.9` (the setting is `settlement_min_claim_certainty`).
 `logit_clamp` is not only the per-source log-odds guard: it also bounds the
 pooled CI endpoints and (since F16) the thin-evidence widening term.
 
@@ -1964,6 +1965,10 @@ applies to an undated positive settlement: an unverifiable premium is the exposu
 itself, so absence of provenance costs the premium. The claim keeps its stance and
 certainty and still votes as ordinary evidence.
 
+> **Note 2026-09-27:** flipped the same day — `anchor_provenance_enforced` is `True` in
+> `tm/config.py` and the demotion target was decided as `reporting` (retro#369). The paragraph
+> below describes the PR#376 shadow ship.
+
 **Shipped in shadow.** `anchor_provenance_enforced` defaults **off**: the check
 runs and logs `event=anchor_provenance_unattributed` on every claim it would
 demote, but changes nothing — so prod behaviour and every R8 snapshot are
@@ -2718,6 +2723,11 @@ article), cached by `hash(question, resolution_criteria, model)` in
 broken cache or an unreachable model degrades to "no decomposition appended",
 byte-identical to before this existed.
 
+Companion settings (`api/src/forecast_api/config.py`): `event_decomposition_model` (`None` →
+`settlement_verifier_model`), `event_decomposition_timeout_seconds` (`15`),
+`event_decomposition_cache_enabled` (`True`), `event_decomposition_cache_path` (empty →
+`data_dir/event_decomposition_cache`).
+
 **Why it ships off rather than on.** The sentinel result is one case; retro#758's
 own proposal calls for measuring adjacency on the retro#691 387-pair labelled
 set (`docs/SETTLED_DECISION_AB.md`) before wider rollout — that is the number
@@ -2890,6 +2900,27 @@ expected-value stance never reaches ±1 while argmax over-saturates, so both are
 | `jev_shadow_timeout_seconds` | `30` | Per-request HTTP timeout. |
 
 Cutover (Jev feeding the pool) is a separate decision on the shadow data, not this slice.
+
+**Later fields on the same line (log only, ride `jev_shadow_enabled`, no extra flag):**
+
+- **retro#851 (PR#872) — `evidence_class`.** Pass 2 also asks a five-way `choice` over the
+  evidence classes (`EVIDENCE_CLASSES` in `jev_shadow.py`, sentence alone). Each `cand` row
+  gains `evidence_class, evidence_class_p`; each `haiku` row gains Haiku's raw class,
+  snapshotted before `enforce_anchor_provenance`. The corrector that acts on a class is
+  `jev_class.py` — see the 2026-09-27 section.
+- **retro#873 (PR#874/#875) — `event_date`.** For each Haiku-**settled** claim with a located
+  quote and a parseable article date, `jev_dates.intervals()` finds the date expressions in
+  the quote ±2 sentences and resolves them against the publication date (weekdays and
+  year-less dates offered as both the past and the next occurrence); one Jev call picks a
+  candidate, `pub` or `none`. `haiku` rows gain Haiku's raw `event_date` (before
+  `enforce_relative_date_resolution`), and a top-level `dates` array carries
+  `[haiku_row, haiku_event_date, jev_start, jev_end, jev_pick, jev_pick_p, dated_noul,
+  n_candidates]`. Unsettled claims are skipped: there Jev dates the utterance, not the event.
+- `score_err` (PR#875) counts failed pass-2 calls; a failed call drops its row, not the line.
+
+Row layouts today: `cand` = `[sentence_idx, noul, stance_expected, stance_argmax, settled,
+claim_strength, stance_nonzero, p_no_signal, topic, refs, evidence_class, evidence_class_p]`;
+`haiku` = `[sentence_idxs, stance, settled, claim_strength, evidence_class, event_date]`.
 
 **retro#847 — veto probe.** Since retro#847 every sentence a Haiku quote maps to is also scored
 in pass 2 (outside `jev_shadow_max_candidates`), and each pass-2 request carries two more
@@ -3073,3 +3104,49 @@ Routing those through one accessor would read as a uniformity that does not exis
 Which stages the daily silent-flag check (`scripts/check_shadow_flag_telemetry.py`) watches is
 `Stage.expect_telemetry`; the rule, and why three stages are deliberately out of it, is in that
 field's docstring and not repeated here.
+
+## 2026-09-27 — Jev `evidence_class` corrector (retro#851, PR#882)
+
+**Default off in `config.py`. The committed drop-in
+`infra/oracle-api.service.d/jev-class-enabled.conf` sets both `JEV_CLASS_ENABLED=true` and
+`JEV_CLASS_ENFORCE=true`; like every drop-in it is hand-synced, so whether it runs is the
+`jev_class=` token on the `event=stage_modes` line, not this paragraph.**
+
+The shadow above already asks Jev for a class, but on the sentence alone, and a sentence cut out
+of its article is misread (an unnamed poll figure reads as a plain fact, an official's boast as
+reporting). `api/src/forecast_api/jev_class.py` makes one Jev call per Haiku claim with the
+claim's quote as `sentence` **and the whole article** in state, using the shadow's class
+criteria unchanged. Measured against a blind two-labeler gold on post-retro#876 live claims:
+Haiku 157/205, Jev sentence-only 171/205, Jev + article 183/205; on the 2026-09-22 held-out 40:
+26 / 30 / 34.
+
+**Where it runs.** In `_process_article`, after the Haiku extraction and the `jev_shadow`
+snapshot (which keeps Haiku's raw class) and **before** `enforce_anchor_provenance` and the
+class weights read `evidence_class`.
+
+- shadow (`jev_class_enforce=False`): a background task; changes nothing.
+- enforce (`jev_class_enforce=True`): the calls are awaited (in parallel, capped at
+  `jev_class_timeout_seconds`) and Jev's class replaces Haiku's wherever both have one.
+
+**Fail-open.** A quote not found in the text, a Jev error, a timeout or no key keeps Haiku's
+class. A claim Haiku left **unclassified stays unclassified** (it is weight-capped at
+`evidence_class_weight_unclassified_cap`, and that case was not in the measured gold).
+
+Each article logs one line:
+
+```
+event=jev_class payload={"url":…,"mode":"shadow|enforce","changed":<n>,
+  "rows":[[haiku_class, jev_class, jev_p], …],"ms":…,"tok_in":…,"err_n":…}
+```
+
+(`skip` = `no_sentences` | `too_long` | `no_key` | `no_quotes`, or `err`, replaces the counts
+when the whole article fails.)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `jev_class_enabled` | `False` | Run the corrector and log `event=jev_class`. Needs `typesafe_api_key` or the SSM fallback, like the shadow. |
+| `jev_class_enforce` | `False` | Await the calls and replace Haiku's class before anchor provenance and the class weights. Off = log only. |
+| `jev_class_timeout_seconds` | `1.5` | Cap on the article's Jev calls (median call ~0.5 s); bounds what a rate-limited Jev can add to an article. |
+
+`jev_class` is the twelfth entry in `stages.py` (the 2026-09-25 section above lists the eleven
+that existed then).

@@ -18,6 +18,13 @@ is brought under terraform here to make it auditable and rebuildable.
   guards the box against accidental replacement.
 - The security group `sg-0c9c7cee5ebcf853d` ("openclaw-sg") is **referenced by id**, not
   managed here — it predates this stack.
+- `eip.tf` — Elastic IP + Route53 records (below).
+- `cognito.tf` — the Oracul MCP Cognito user pool, domain, resource server, Google IdP and
+  the `claude` / `m2m` app clients (see `docs/ORACLE_MCP.md`). Reads the Google OAuth client
+  from SSM `/retro/prod/secrets/COGNITO_GOOGLE_OAUTH`; `plan` fails if that parameter is missing.
+- `monitoring.tf` — the Bedrock extractor CloudWatch alarms
+  (`extractor_invocation_client_errors`, `extractor_invocations_zero`), notifying an existing
+  SNS topic looked up by name.
 
 ## Usage
 ```bash

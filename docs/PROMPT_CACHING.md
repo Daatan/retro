@@ -26,18 +26,31 @@ NOT change what gets asked or answered.
 - `pipeline/src/tm/llm.py::complete_structured` gained an optional `cached_prefix`
   param. When given AND `settings.enable_prompt_cache` is on, the message content
   becomes two blocks — the prefix marked `cache_control: {"type": "ephemeral"}`, then
-  the per-call prompt. When the flag is off (the default) or no prefix is given,
+  the per-call prompt. When the flag is off (its original default; `True` since the rollout
+  below) or no prefix is given,
   content is the same flat concatenated string as before caching existed at all —
   this fallback matters: it's what keeps every call correct even with the flag off.
 - `pipeline/src/tm/config.py`: new `enable_prompt_cache` kill-switch, shipped `False`
   then flipped to `True` once the smoke test (below) confirmed it live.
+
+Later additions to the same path:
+
+- **Model allowlist (retro#650).** `llm.py` sends cache blocks only to model IDs containing
+  `.anthropic.` or `.amazon.nova`; any other model gets the flat string (prefix still
+  included) and logs `event=prompt_cache_skipped_unsupported_model`.
+- **Single-article requests (retro#564, retro#876).** A lone article has no second call
+  inside the cache TTL to read the write, so the extractor prepends `PROMPT_PREFIX` to the
+  prompt uncached (`cached_prefix=None`). The prefix is still sent — from 2026-08-21 to
+  09-26 it was dropped entirely on these calls, which retro#876 fixed. Multi-article
+  `/forecast` requests share a `CacheWriteCoordinator`: the first call writes the cache,
+  the rest wait for it and then read it.
 
 ## What did NOT change
 
 - `extractor.py`'s output-format spec + trailing few-shot examples (`extractor.py`'s
   former tail, ~500-600 tokens) still sit AFTER the per-call variable fields, so they
   aren't part of the cached prefix in this first pass. Moving them earlier would
-  capture a bit more, but `tests/test_extractor_prompt.py` and prior incident notes
+  capture a bit more, but `pipeline/tests/test_extractor_prompt.py` and prior incident notes
   document that Nova Lite is measurably sensitive to whitespace/ordering changes in
   this exact prompt — reordering needs its own regression pass (widen
   `eval_gatekeeper.py`'s pattern to the extractor) before it's worth the small extra

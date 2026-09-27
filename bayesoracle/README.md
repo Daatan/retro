@@ -31,20 +31,19 @@ Static calibration layer that applies the **law of total probability** to a DAG 
 | `graph_pm.json` | Polymarket-backed DAG (auto-generated; backtestable) |
 | `build_pm_graph.py` | Generate `graph_pm.json` from `edge_weights.json` + `node_history/` |
 | `backtest.py` | Score the PM graph against realised prices vs persistence (Brier) |
-| `tests/test_core.py` | 15 unit tests for the engine |
+| `tests/` | Unit tests (engine in `test_core.py`, plus edge-fit/probability/refresh/series tests) |
 | `fetch_node_history.py` | Pull daily Polymarket CLOB price history for all 24 DAG nodes |
 | `calibrate_edges.py` | Estimate P(B\|A), P(B\|¬A) for each edge via LLM + news search |
 | `compute_edge_probs.py` | Blend LLM estimates with empirical price-correlation regression |
 | `edge_weights.json` | Output: 28 calibrated edges with pY/pN/blend fields |
-| `node_history/` | 24 JSON files — daily price history per node |
-| `graph.html` | Interactive what-if slider (legacy embedded model — see RETHINK.md) |
+| `node_history/` | 24 per-node JSON files (daily price history) + combined `all.json` |
+| `graph.html` | Interactive what-if slider (shared `core.js` engine + `graph_political.data.js`) |
 | `pm_analysis/index.html` | BayesOracle vs PM divergence view, ranked by surprise |
 
 > **Architecture note (2026-06):** `core.py` is now the one engine. The API
 > (`/bayes/nodes`) loads `graph_political.json` through it; the backtest loads
-> `graph_pm.json` through it. The two HTML viewers still embed their own legacy
-> data + propagation — porting them to fetch the JSON specs is the remaining
-> follow-up. See `RETHINK.md` for the full critique and `backtest.py` output for
+> `graph_pm.json` through it. Both HTML viewers now run on the shared `core.js` engine and load the JSON
+> specs via `*.data.js` files emitted by `gen_viewers.py` (re-run it after editing a graph JSON). See `RETHINK.md` for the full critique and `backtest.py` output for
 > the current (modest, honest) skill vs a no-change baseline.
 
 ---
@@ -87,13 +86,13 @@ After step 3, paste the JS patch printed by `calibrate_edges.py` into the HTML f
 
 For each edge A → B:
 
-1. **Search**: 3 queries via the `tm` provider chain (GDELT → paid fallbacks), deduplicated
+1. **Search**: 3 queries via the `tm` provider chain (news-indexer → GDELT → paid fallbacks), deduplicated
 2. **Fetch**: up to 4 full article texts via `trafilatura`
-3. **LLM call**: Bedrock Nova Lite via `tm.llm` — estimates `pY = P(B|A=1)` and `pN = P(B|A=0)`
+3. **LLM call**: Bedrock `extractor_model` (Claude Haiku 4.5 by default) via `tm.llm` — estimates `pY = P(B|A=1)` and `pN = P(B|A=0)`
 4. **Consistency check**: `pY·P(A) + pN·(1−P(A))` should be within 10pp of the PM price for B
 5. **Save**: appended to `edge_weights.json` immediately (crash-safe)
 
-**Context block** (`calibrate_edges.py:115–124`): hand-curated geopolitical summary dated May 14, 2026. Update this before re-running — stale context degrades the LLM's calibration.
+**Context block** (`calibrate_edges.py:111–120`, `CONTEXT`): hand-curated geopolitical summary dated May 14, 2026. Update this before re-running — stale context degrades the LLM's calibration.
 
 **Rate limit**: `time.sleep(1.2)` between edges. Each edge makes 3 search calls; GDELT needs ≥10s between calls. If GDELT is blocked (EC2 IP 429), the chain falls through to paid providers.
 

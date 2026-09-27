@@ -15,7 +15,8 @@ fixed date, at a cost of about $30 in LLM calls.
 * The only Polymarket dependency is the public, read-only **Gamma** API
   (`gamma-api.polymarket.com`). There is no CLOB client, no wallet, no
   `web3`/`py-clob-client` dependency, no private key anywhere in this tree —
-  `infra/tests/test_polymarket_paper_timer.sh` fails if one is added.
+  `infra/tests/test_polymarket_paper_timer.sh` fails if a web3/signing/CLOB
+  dependency is added to `pyproject.toml` (it checks dependencies, not keys).
 * Every trade row is stamped `"paper": true`.
 * The report is public (`GET /pm/paper`) because there is nothing to protect.
 

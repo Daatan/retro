@@ -249,8 +249,8 @@ rater's row:
 
 ```bash
 AWS_REGION=us-east-1 uv run python scripts/ab_extractor_prompt.py run \
-  scripts/ab_cases/numeric_threshold_blindness.json --runs 15 \
-  --model bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0 --label haiku
+  scripts/ab_cases/numeric_threshold_blindness.json --runs-per-case 15 \
+  --model bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0 --label haiku --out haiku.json
 ```
 
 `code abstained` is its own column for a reason. The comparison answers by
@@ -279,6 +279,8 @@ bracket section was cut.
 | `poll_facet_neither.json` | 4 | retro#541 | a poll or seat projection is `facet: neither`, not an announcement or a denial |
 | `stance_tone_conflation.json` | 2 | retro#545 | an alarmed tone about a hazard is not evidence the hazard occurred |
 | `multi_stage_brackets.json` | 5 | retro#720 | winning one stage of a bracket, series, runoff or staged approval is weak support for winning the whole thing |
+| `honorific_office_title.json` | 6 | retro#770 | an office title used as a form of address (teaser, passing mention, caption) is not evidence of tenure; plus three tenure controls |
+| `honorific_real_rows.json` | 4 | retro#770 | the same defect on real article rows, plus a tenure control |
 
 ### What the bracket file measured on `main` (2026-08-29, 5 runs/case)
 
@@ -289,7 +291,7 @@ with no multi-stage cases scores deleting that section as a clean win.
   closely enough to reproduce its worked examples — a round-of-16 favourite
   reads +0.30/0.30 against the prompt's stated +0.3/0.3, five runs out of five
   with no variance.
-- **Nova Lite** (the batch extractor): **3/5 pass**, both failures on magnitude
+- **Nova Lite** (the batch extractor at the time; batch moved to Haiku in retro#778): **3/5 pass**, both failures on magnitude
   alone. The three it passes — a runoff first-round lead, an advisory-panel
   recommendation, a 3–1 series lead — are the situations with a near-verbatim
   worked example in the section, or none of its business. The two it fails are

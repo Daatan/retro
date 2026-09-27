@@ -21,6 +21,11 @@ retro/
 │   │   ├── leaderboard.py       # Load/cache leaderboard.json for credibility weights
 │   │   ├── models.py            # Pydantic request/response schemas
 │   │   ├── config.py            # Settings (extends tm.config pattern)
+│   │   ├── aggregation.py       # Pool aggregation (Stage 4), shared with /pool/aggregate
+│   │   ├── stages.py            # Registry of shadow-then-promote stages → event=stage_modes (retro#866)
+│   │   ├── jev_shadow.py        # Jev shadow extraction + skip-gate pass 1 (retro#840/#850/#849)
+│   │   ├── jev_class.py         # Jev evidence_class corrector (retro#851)
+│   │   ├── jev_dates.py         # Date candidates for the Jev event_date shadow (retro#873)
 │   │   ├── auth.py              # x-api-key dependency (hmac.compare_digest)
 │   │   └── limiter.py           # slowapi rate limiting  (SSRF guard: imported from tm.net_guard)
 │   └── pyproject.toml
@@ -34,9 +39,8 @@ retro/
 │   │   ├── # --- Ingest ---
 │   │   ├── gnews_ingest.py      # GNews RSS → URL resolution → trafilatura + Wayback fallback
 │   │   ├── gdelt_ingest.py      # GDELT Doc 2.0 API batch ingestor (sequential, rate-limited)
-│   │   ├── ingestor.py          # Pluggable ingestor classes: DDGIngestor, GDELTIngestor
 │   │   ├── site_search.py       # Direct site-search scraper (no API key, high reliability)
-│   │   ├── web_search.py        # Multi-provider news search: news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG
+│   │   ├── web_search.py        # Multi-provider news search: news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG → trusted-sites
 │   │   ├── polymarket.py        # Polymarket Gamma API: fetch market history per event
 │   │   ├── polymarket_harvest.py # Bulk harvest of all resolved Polymarket political markets
 │   │   │
@@ -75,13 +79,13 @@ retro/
 │   ├── docker-compose.yml       # Local pipeline stack
 │   ├── pyproject.toml
 │   └── Dockerfile
-├── data/                        # Gitignored except events/ and sources/
+├── data/                        # Runtime caches (atlas/, vault2/, raw_ingest/, pages/, …) gitignored; events/, sources/, progress.json, leaderboard.json, … tracked
 │   ├── events/                  # Event definitions (TRACKED IN GIT)
 │   ├── sources/                 # Source definitions (TRACKED IN GIT)
 │   ├── raw_ingest/              # Scraped articles (regeneratable, not in git)
 │   ├── vault2/
 │   │   ├── articles/            # Deduplicated article cache by SHA-256 hash
-│   │   └── extractions/         # LLM extraction cache: {hash}_{event_id}_v1.json
+│   │   └── extractions/         # LLM extraction cache: {hash}_{event_id}_{EXTRACTION_PROMPT_VERSION}.json (currently v5)
 │   ├── atlas/                   # Atlas link files: atlas/{event_id}/{source_id}/entry_*.json
 │   └── progress.json            # Cell status: done/pending/no_predictions/failed
 ├── infra/
@@ -99,19 +103,36 @@ retro/
 │   ├── monitor.sh               # Local monitoring script (polls EC2 via SSM)
 │   ├── logs.sh                  # Tail EC2 pipeline logs via SSM
 │   ├── settlement_report.py     # Runs ON EC2: settlement shadow gates vs verifier
-│   ├── check_keys.sh            # Verify required AWS Secrets Manager keys exist
+│   ├── check_keys.sh            # Verify every secret web_search.py reads resolves (SSM /retro/prod/secrets/*) + Bedrock access
 │   ├── remote_stats.sh          # Fetch pipeline progress stats from EC2
 │   ├── oracle-api.service       # systemd unit for the Oracle API (gunicorn + uvicorn workers)
 │   ├── truthmachine.service     # systemd unit for the pipeline batch process
 │   ├── truthmachine-poc.service # systemd unit for PoC pipeline variant
+│   ├── oracle-api.service.d/    # systemd drop-ins (Environment= flag overrides), hand-synced — see docs/ORACLE_DEPLOY.md
+│   ├── metaculus-sync.{service,timer} + install_metaculus_timer.sh             # sidecar timer (re-installed by deploy_oracle.sh)
+│   ├── polymarket-paper.{service,timer} + install_polymarket_paper_timer.sh    # sidecar timer (re-installed by deploy_oracle.sh)
 │   ├── iam/                     # IAM policy templates (GH Actions OIDC, S3 snapshots) — see infra/iam/README.md
-│   └── nginx/                   # Nginx config fragments (oracle.daatan.com vhost)
+│   └── nginx/                   # Nginx configs (oracle.daatan.com + bayes.daatan.com vhosts, base/SSL configs)
+├── bayesoracle/                 # BayesOracle (bayes.daatan.com) + GitHub Pages viewers
+├── metaculus/                   # Metaculus tournament sync bot (see metaculus/README.md)
+├── polymarket_paper/            # Polymarket paper-trading scoreboard (retro#620)
+├── studies/                     # Retro case studies, published to GitHub Pages
+├── terraform/                   # Oracul box, EIP/Route53, Cognito, Bedrock alarms (state key retro/)
+├── docs/                        # Architecture, Oracul API/deploy/MCP/variables references
 ├── case-studies/                # Interactive case study pages
 ├── .github/workflows/
-│   ├── deploy-atlas.yml         # Deploy factum_atlas.html + oracle-test + duel to GitHub Pages
-│   └── deploy-oracle.yml        # On push to main affecting api/, redeploy Oracul via SSM (OIDC, no static keys)
+│   ├── deploy-atlas.yml         # Deploy the root HTML pages, bayesoracle/ and studies/ to GitHub Pages
+│   ├── deploy-oracle.yml        # On push to main affecting api/, pipeline/, metaculus/, polymarket_paper/ or their infra units, redeploy Oracul via SSM (OIDC, no static keys)
+│   ├── tests.yml                # pytest suites (also the deploy gate)
+│   ├── changelog.yml            # Require a CHANGELOG line on api/** / pipeline/src/** PRs
+│   ├── release.yml              # v* tag → GitHub release from CHANGELOG
+│   ├── terraform-validate.yml   # fmt + validate on terraform/** PRs
+│   ├── metaculus-sync.yml       # Manual Metaculus sync (the schedule is the systemd timer)
+│   └── pm_analysis_refresh.yml  # Daily bayesoracle/ PM-analysis data refresh (commits to main, see CLAUDE.md)
 ├── factum_atlas.html            # Generated atlas (committed by EC2 after each cycle)
 ├── oracle-test.html             # Oracul API test console (deployed to GitHub Pages)
+├── oracle-v2-test.html          # Oracle 2.0 playground (key-based)
+├── oracle-mcp-test.html         # Oracul MCP test console (Cognito OAuth)
 └── duel.html                    # TruthMachine vs Polymarket comparison report (generated by poc_report.py)
 ```
 
@@ -135,7 +156,7 @@ retro/
 ```
 
 **`category`** — multi-label list from the taxonomy:
-`Israeli Politics`, `Gaza War`, `Regional Geopolitics`, `Israeli Economy`, `Israeli Society`, `AI & Tech`, `Global`.
+`Israeli Politics`, `Gaza War`, `Regional Geopolitics`, `Israeli Economy`, `Israeli Society`, `AI & Tech`, `Israeli Tech`, `Energy`, `Global`.
 Used to compute per-category source accuracy scores for the forecasting model.
 
 **`tags`** — free-form keywords for fine-grained topic matching at inference time.
@@ -196,7 +217,7 @@ Consumers globbing `vault2/extractions/` must filter markers via
 ### Prediction (extracted by LLM)
 Each prediction has: `quote`, `claim`, `stance` (−1 to +1, event probability), `claim_strength` (named `certainty` before Oracle 1.5 Phase 1, retro#680; the old name is still emitted as a wire alias), `settled` (bool — true when the source reports the outcome as an accomplished fact, not a prediction; the prompt explicitly excludes historical background such as a past removal/ban, see #244), and `quantitative_estimate` (optional [0,1] — an explicit modeled probability, poll number, or market price the source cites for the event itself; carries the quantitative-anchor weight premium).
 
-Also requested, EXPERIMENTAL/shadow (Phase 2 of the author-scoring redesign — none of these fields pools, i.e. no aggregation step reads them; `fact_signal` and its facets are nonetheless consumed at EXTRACTION time, see below): `evidence_class` (reported_fact / cited_probability / cited_share / reporting / opinion — S2, see `docs/ORACLE_VARIABLES.md` §5), `fact_signal` (−1 to +1, what the reported facts alone imply, un-fused from the author's framing), `event_actors` / `event_target` (the fact's actor-target dyad, for cross-checking against the claim), `is_occurrence` (is the reported fact the event itself, or only a precursor), `verified` (independently reported vs. merely claimed by an interested party), `event_date` / `event_date_reference` (resolved absolute date + the article's original relative expression), and — since Oracle 1.5 Phase 1 (retro#681) — `reader_confidence` `{level, trap}`, which is about the extractor rather than the article: how confident it is in its OWN reading of the span, as against `claim_strength`, which is the source's commitment to the claim. The two were one field until retro#680. Unlike `fact_signal`, `reader_confidence` is shadow in the strict sense — nothing reads it, at extraction time or after. Full field docs: `PredictionExtraction` in `pipeline/src/tm/models.py`.
+Also requested, EXPERIMENTAL/shadow (Phase 2 of the author-scoring redesign — none of these fields pools, i.e. no aggregation step reads them; `fact_signal` and its facets are nonetheless consumed at EXTRACTION time, see below): `fact_signal` (−1 to +1, what the reported facts alone imply, un-fused from the author's framing), `event_actors` / `event_target` (the fact's actor-target dyad, for cross-checking against the claim), `is_occurrence` (is the reported fact the event itself, or only a precursor), `verified` (independently reported vs. merely claimed by an interested party), `event_date` / `event_date_reference` (resolved absolute date + the article's original relative expression), and — since Oracle 1.5 Phase 1 (retro#681) — `reader_confidence` `{level, trap}`, which is about the extractor rather than the article: how confident it is in its OWN reading of the span, as against `claim_strength`, which is the source's commitment to the claim. The two were one field until retro#680. Unlike `fact_signal`, `reader_confidence` is shadow in the strict sense — nothing reads it, at extraction time or after. Also requested and **live** (not shadow): `evidence_class` (reported_fact / cited_probability / cited_share / reporting / opinion — S2, see `docs/ORACLE_VARIABLES.md` §5), which keys the class weight in the Stage 3 pool weight; on `/forecast` Jev can replace it (`jev_class.py`, retro#851). Full field docs: `PredictionExtraction` in `pipeline/src/tm/models.py`.
 
 **"Shadow" does not mean inert.** `fact_signal` was accepted as a **diagnostic/guardrail lane, not a
 pricing lane in waiting** (retro#533, 2026-08-15 — corr(stance, fact_signal) 0.905 on precursor rows,
@@ -263,7 +284,7 @@ unresolved preconditions. The plan (3 phases) is to:
 - `speaker` — Attribution: the outlet or analyst making the conditional claim
 
 **Extraction design (v1.1, single-call):**
-The extractor uses a cheap lexical pre-filter (12 keywords: if, unless, should, provided, were, in the event, absent, barring, contingent, depends, assuming, so long as) to gate a 180-line conditional instruction block. When the lexicon matches, the LLM extracts the 9 fields; when it doesn't, the fields are expected to null. No second LLM round-trip — cost is ~0s for non-conditional articles.
+The extractor uses a cheap lexical pre-filter (12 keywords: if, unless, should, provided, were, in the event, absent, barring, contingent, depends, assuming, so long as) to gate a ~4.2k-char conditional instruction block (`_CONDITIONAL_BLOCK`). When the lexicon matches, the LLM extracts the 9 fields; when it doesn't, the fields are expected to null. No second LLM round-trip — cost is ~0s for non-conditional articles.
 
 **Safety:** The settlement-match gate (retro#388, which reads claim/quote/event_date/settled) is unaffected by the new conditional fields. Test `test_settlement_gate_unchanged_with_conditional_fields()` verifies this.
 
@@ -284,7 +305,6 @@ Ingest (choose one):
   gnews_ingest.py  — GNews RSS → URL resolution (Brave/SerpAPI/Serper/DDG) → trafilatura
                      If 0 articles: CDX/Wayback fallback
   gdelt_ingest.py  — GDELT Doc 2.0 API, sequential with rate-limiting
-  ingestor.py      — Pluggable DDGIngestor / GDELTIngestor classes
   site_search.py   — Direct site search scraper (no API key)
   All save to: data/raw_ingest/{source}/{event}/article_NN.json
   A cell with articles is skipped on re-run. gnews_ingest and web_search_ingest also
@@ -304,7 +324,7 @@ orchestrator.py  (local_file mode)
   │                               field is carried from the lead claim in code,
   │                               retro#721/#681)
   │    aggregator.aggregate_predictions → cell_signal.json (no LLM, weighted mean)
-  │    Save extraction (or negative marker) to vault2/extractions/{hash}_{event}_v1.json
+  │    Save extraction (or negative marker) to vault2/extractions/{hash}_{event}_v5.json
   │    Save atlas link to atlas/{event}/{source}/entry_{hash[:8]}.json
   │    Update progress.json → status: done | no_predictions | failed
   ▼
@@ -324,11 +344,11 @@ git push → GitHub Actions → GitHub Pages
 
 | Role | Model | Notes |
 |---|---|---|
-| Gatekeeper | `bedrock/amazon.nova-micro-v1:0` | Topic-relevance filter: is this article on-topic for the event? Uses a directive coarse-gate prompt that passes INDIRECT evidence (rival collapse, coalition dynamics, etc.), not just explicit predictions; regression-guarded by `pipeline/eval_gatekeeper.py`. |
+| Gatekeeper | `bedrock/us.amazon.nova-micro-v1:0` | Topic-relevance filter: is this article on-topic for the event? Uses a directive coarse-gate prompt that passes INDIRECT evidence (rival collapse, coalition dynamics, etc.), not just explicit predictions; regression-guarded by `pipeline/eval_gatekeeper.py`. |
 | Extractor | `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0` (config default since retro#778, 2026-09-08 — was Nova Lite on batch) | Structured extraction of up to 5 predictions per article (14 requested fields — see "Prediction (extracted by LLM)" above) |
-| Article Aggregator | `bedrock/amazon.nova-lite-v1:0` | Collapses high-spread (>0.4) predictions within a single article into one editorial signal |
-| Keywords | `bedrock/amazon.nova-micro-v1:0` | One-time: generate search keywords per event (via `tm.llm`) |
-| Jev skip-gate + shadow (live lane only) | TypeSafe System One `jev-latest` (`api/src/forecast_api/jev_shadow.py`, not Bedrock, not LiteLLM) | Typed judgments, no generation: one `noul` per sentence. Shadow extraction next to Haiku (retro#840, `JEV_SHADOW_ENABLED`) and, since retro#850, a skip-gate in front of the extractor — `max_noul` predicts an empty Haiku extraction at AUC 0.93; `JEV_GATE_ENABLED` logs the verdict, `JEV_GATE_ENFORCE` (off) would skip the call. Key in SSM `/retro/prod/secrets/TYPESAFE_API_KEY`. See `docs/ORACLE_VARIABLES.md` 2026-09-22/23 sections. |
+| Article Aggregator | same as Extractor (`settings.extractor_model`) | Collapses high-spread (>0.4) predictions within a single article into one editorial signal |
+| Keywords | `bedrock/us.amazon.nova-micro-v1:0` (`gatekeeper_model`) | One-time: generate search keywords per event (via `tm.llm`) |
+| Jev skip-gate + shadow + `evidence_class` corrector (live lane only) | TypeSafe System One `jev-latest` (`api/src/forecast_api/jev_shadow.py`, not Bedrock, not LiteLLM) | Typed judgments, no generation: one `noul` per sentence. Shadow extraction next to Haiku (retro#840, `JEV_SHADOW_ENABLED`) and, since retro#850, a skip-gate in front of the extractor — `max_noul` predicts an empty Haiku extraction at AUC 0.93; `JEV_GATE_ENABLED` logs the verdict, `JEV_GATE_ENFORCE` (off) would skip the call; `JEV_GATE_AB_ENABLED` (retro#849) logs a second pass 1 on a core-event rewrite of the question. The shadow's pass 2 also logs Jev's `evidence_class` (retro#851) and, on Haiku-settled claims, an `event_date` picked from code-found candidates (`jev_dates.py`, retro#873). Since retro#851, `jev_class.py` re-reads each claim's quote with the whole article and picks its `evidence_class`: `JEV_CLASS_ENABLED` logs `event=jev_class`, `JEV_CLASS_ENFORCE` replaces Haiku's class before anchor provenance and the class weights (fail-open to Haiku's, `jev_class_timeout_seconds` 1.5). All default off; see the drop-ins in `docs/ORACLE_DEPLOY.md`. Key in SSM `/retro/prod/secrets/TYPESAFE_API_KEY`. See `docs/ORACLE_VARIABLES.md` 2026-09-22 onward. |
 
 All defaults via AWS Bedrock. Override via env vars in `pipeline/src/tm/config.py`. The `model_api_base` and `model_api_key` settings allow routing through any LiteLLM-compatible provider (OpenRouter, etc.).
 
@@ -341,6 +361,8 @@ an adjacent-event A/B. The batch `truthmachine.service` (no override) picked up 
 once the config default changed, after measuring batch's call volume at only ~2-3% of live's —
 Mark's decision was to converge both lanes onto one model/prompt unless doing so was expensive,
 and at that volume ratio it wasn't. See `retro/CLAUDE.md`'s infra cheat-sheet for the same note.
+The other committed drop-ins in that directory switch on default-off shadow stages (Jev, precursor
+match, retry-relaxed search) — listed in `docs/ORACLE_DEPLOY.md`.
 
 Before shipping ANY extractor prompt edit, run the A/B harness against a fixed case sample on the live model — see [`docs/AB_HARNESS.md`](./AB_HARNESS.md) (retro#470).
 
@@ -373,7 +395,7 @@ weighted_brier  = brier × weight
 
 ---
 
-## Ingest Sources (27 defined)
+## Ingest Sources (27 defined, plus the `gdelt` and `web_search` pseudo-sources in `data/sources/`)
 
 ### Israeli — Hebrew
 | Source | Domain |
@@ -499,6 +521,7 @@ docs#122 (free `SecureString`, same read pattern via `_secret()`):
 | `/retro/prod/secrets/GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_CX` | Web search — Google Custom Search (optional) |
 | `/retro/prod/secrets/GCP_SA_KEY_JSON` | GDELT BigQuery fallback (optional) |
 | `/retro/prod/secrets/NEWS_INDEXER_URL` / `NEWS_INDEXER_API_KEY` | news-indexer provider (optional) |
+| `/retro/prod/secrets/TYPESAFE_API_KEY` | Jev (TypeSafe System One) — `jev_shadow` / `jev_gate` / `jev_class` (optional; missing → `skip=no_key`, fail-open) |
 | `/daatan/shared/secrets/ORACLE_API_KEY` | `duel_report.py`'s SSM fallback for the Oracle `x-api-key` — one parameter, also read by daatan's app, so the two sides can't drift (docs#122 group 3; fixed the `daatan/oracle-api-key` dead reference below) |
 
 Remaining secrets stay in AWS Secrets Manager (`eu-central-1`):
@@ -510,7 +533,7 @@ Remaining secrets stay in AWS Secrets Manager (`eu-central-1`):
 
 > **Note (resolved 2026-07-14):** these entries were originally created under `openclaw/*` (a decommissioned stack's namespace). PR #198 pointed the *code* at `daatan/*`; the `daatan/*` Secrets Manager entries existed to match, and the `openclaw/*` copies were retained but read by nothing. Search-provider keys have since moved again, off `daatan/*` Secrets Manager and onto the `/retro/prod/secrets/*` SSM parameters above (docs#122).
 >
-> **A missing secret does not fail loudly here.** `_secret()` returns `None` on a miss and the provider is then treated as *not configured* and skipped — no exception, no log line, just a quieter search chain. After adding or renaming any provider secret, run `bash infra/check_keys.sh`, which asserts that every secret `web_search.py` reads actually resolves.
+> **A missing secret does not fail loudly here.** `_secret()` returns `None` on a miss and the provider is then treated as *not configured* and skipped — no exception, only a WARNING line (summarised by `_log_unresolved_secrets()`), so the search chain just gets quieter. After adding or renaming any provider secret, run `bash infra/check_keys.sh`, which asserts that every secret `web_search.py` reads actually resolves.
 
 ### Bootstrap on an existing EC2 instance
 
@@ -668,8 +691,8 @@ POST /forecast
   "reason": null,
   "articles_found": 7,
   "outcome_counts": { "ok": 5, "gate_rejected": 2 },
-  "provider": "news-indexer",
-  "provider_chain": ["news-indexer"],
+  "provider": "news_indexer",
+  "provider_chain": ["news_indexer"],
   "distilled_query": null,
   "provenance": {
     "schema_version": "1.2",
@@ -677,7 +700,7 @@ POST /forecast
     "oracle": { "version": "1.65.x", "git_sha": "…", "built_at": "…" },
     "models": { "gatekeeper": "nova-micro", "extractor": "claude-haiku-4-5" },
     "method": "live",
-    "chain": ["news-indexer"],
+    "chain": ["news_indexer"],
     "inputs": [],
     "upstream": []
   }
@@ -699,7 +722,7 @@ with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,
 ### Pipeline
 
 **Stage 1 — Search & Fetch**
-1. `web_search.search_articles(question, limit)` — news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG fallback chain (news-indexer is first-in-chain: the local pgvector index is queried before any paid provider)
+1. `web_search.search_articles(question, limit)` — news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG → trusted-sites fallback chain (news-indexer is first-in-chain: the local pgvector index is queried before any paid provider)
 2. Per article: trafilatura full-text fetch (falls back to title+snippet). Caller-supplied articles (`POST /forecast` with `articles[]`) skip the fetch when they carry `text`; **t.me URLs are never fetched at all** (retro#417 — the t.me web preview extracts to nothing, so Telegram evidence uses supplied `text` or title+snippet). t.me-host articles are also exempt from the 20-char fallback floor (a 5-char truly-empty floor remains) and are judged/extracted with the short-form prompt overrides; an optional per-article `language` field is appended to both prompts as a hint. **Degraded-domain hybrid fallback** (retro#520): major publishers (Reuters, NYT, Bloomberg, Le Monde, …, `settings.degraded_fetch_domains`) fail live re-fetch almost always in prod (paywalls/bot-challenges the crawler at ingest wasn't subject to) — measured to starve the extractor of full text on ~18% of fetches and drive confidence-score variance. For those domains the live fetch is skipped up front in favor of news-indexer's archived-S3-text lookup (`GET /articles/text`, news-indexer#277 — same text it crawled at ingest, never a second origin fetch), falling through to a normal live fetch on a miss. Every other domain keeps live-fetch-first, with the same archive lookup tried before giving up to title+snippet on failure.
 
 **Stage 2 — Gatekeeper + Extractor** (parallel per article)
@@ -839,8 +862,9 @@ absences that feed those floors, so neither can buy influence:
   stored `evidence_weight`.
 
 Hedged/low-certainty articles are no longer dropped pre-aggregation — `certainty`
-is purely a downweighting factor in `weight = credibility · certainty · recency ·
-relevance²` (Stage 3 above), so a pool of only-speculative sources naturally falls
+is purely a downweighting factor — through `evidence_class`'s weight, or its own capped value when
+unclassified — in `weight = credibility · evidence_weight · recency · relevance_weight(relevance)`
+(Stage 3 above), so a pool of only-speculative sources naturally falls
 toward the `decisiveness_floor` case rather than being filtered out first.
 
 When `relevance_weight_floor` isn't met, or `no_search_results`/`timeout`/no

@@ -147,7 +147,7 @@ TOKEN=$(curl -s -X POST "https://<pool-domain>.auth.eu-central-1.amazoncognito.c
 The whole `/mcp` mount is **conditional on Cognito config** (`config.mcp_enabled`):
 if `COGNITO_USER_POOL_ID` is unset the endpoint is simply not mounted, so a deploy
 without the env boots the REST API normally. Set in the box's
-`/home/ubuntu/truthmachine/.env` (see `.env.example`):
+`/home/ubuntu/truthmachine/.env` (see `api/.env.example`):
 
 ```
 COGNITO_USER_POOL_ID=eu-central-1_XXXXXXXXX
@@ -196,7 +196,7 @@ intentional here (self-service trader onboarding), not an oversight.
 ### 2. Apply Cognito (`-target`, in dependency order)
 
 Never a blanket apply (workspace rule). From `terraform/` on the latest `main`,
-pass the **real** Claude redirect URIs (the tf default is a placeholder):
+check the Claude redirect URIs (the tf default `claude_callback_urls` already carries the claude.ai, `localhost:8080` and GitHub Pages callbacks):
 
 ```bash
 cd terraform
@@ -207,7 +207,7 @@ terraform init          # real S3 backend (state key retro/)
 # Adding Google federation only touches two resources — apply just those, IdP first
 # (the claude client's depends_on enforces that order, but -target doesn't chain
 # dependencies across separate invocations, so do it explicitly):
-terraform apply -target=aws_cognito_identity_provider.google  # requires the Secrets Manager secret to exist first (§1)
+terraform apply -target=aws_cognito_identity_provider.google  # requires the SSM parameter /retro/prod/secrets/COGNITO_GOOGLE_OAUTH to exist first (§1)
 terraform apply -target=aws_cognito_user_pool_client.claude   # adds "Google" to supported_identity_providers
 
 # Capture what the box + smoke tests need:

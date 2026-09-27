@@ -23,6 +23,9 @@ for deploy/rollback see [`docs/ORACLE_DEPLOY.md`](../docs/ORACLE_DEPLOY.md).
 | `limiter.py` / `cache.py` | slowapi rate limiting; forecast + search caches |
 | `mcp_server.py` / `mcp_auth.py` | MCP server at `/mcp` (agent tools) + Cognito OAuth Resource-Server auth — see [`../docs/ORACLE_MCP.md`](../docs/ORACLE_MCP.md) |
 | `article_fetch.py` / `polymarket_live.py` | `/fetch-url` extraction (shared with the MCP `fetch_article` tool); live Polymarket lookup for `polymarket_edge` |
+| `stages.py` | Registry of every shadow-then-promote stage (`*_enabled` / `*_enforce` pairs); logged once per worker as `event=stage_modes` |
+| `jev_shadow.py` / `jev_class.py` / `jev_dates.py` | Jev (TypeSafe System One) stages on `/forecast`: shadow extraction + skip-gate pass 1, the `evidence_class` corrector, the settled-claim `event_date` shadow — see [`../docs/ORACLE_VARIABLES.md`](../docs/ORACLE_VARIABLES.md) |
+| `pm_paper.py` | `/pm/paper` scorecard, rebuilt from the `polymarket_paper` ledger |
 
 It imports `tm.gatekeeper`, `tm.extractor`, `tm.web_search`, and `tm.net_guard`
 from the `pipeline/` package (a path dependency) — no code is duplicated.
@@ -63,7 +66,7 @@ Production runs the same app under gunicorn with uvicorn workers — see
 ## Test
 
 ```bash
-cd api && uv run pytest        # 154 tests; no network/secrets needed
+cd api && uv run pytest        # no network/secrets needed
 ```
 
 `tests/conftest.py` sets a dummy `ORACLE_API_KEY` so the suite runs without a real
@@ -75,10 +78,13 @@ secret. CI runs this on every PR and **gates the deploy** (see `.github/workflow
 `POST /fetch-url`, `POST /pool/aggregate`, `POST /relevance`,
 `GET /bayes/nodes`, `GET /leaderboard`, `POST /leaderboard/ingest`,
 `GET /leaderboard/resolution-shadow`, `GET /leaderboard/author-shadow`,
-`GET /health`, `GET /version`, `GET /pm/markets`, `POST /v2/forecast` + `GET /v2/jobs/{id}`
+`GET /leaderboard/settlement-pin-report`,
+`GET /health`, `GET /version`, `GET /pm/markets`, `GET /pm/paper`, `POST /v2/forecast` + `GET /v2/jobs/{id}`
 (the Oracle 2.0 playground, retro#595 — traced query-path runs behind
 `oracle-v2-test.html`). All require the `x-api-key`
-header **except** `/health`, `/version`, and the deliberately-public
+header **except** `/health`, `/version`, the rate-limited read-only
+`/pm/markets` (Polymarket Gamma proxy) and `/pm/paper` (paper-trading
+scorecard, retro#620), and the deliberately-public
 `/fetch-url` (which is rate-limited and SSRF-guarded — http(s) only, no
 private/loopback/link-local hosts). Full details in the
 [Oracle API contract](https://github.com/Daatan/docs/blob/main/oracle-api.md).

@@ -66,11 +66,11 @@ and consequence resolve correctly.
 The extractor checks for 12 keywords in the article text:
 - **if, unless, should, provided, were, in the event, absent, barring, contingent, depends, assuming, so long as**
 
-Regex: word-boundary check (`\b<keyword>\b`), case-insensitive.
+Check: the lower-cased text is tokenised with `\b\w+\b` and intersected with `CONDITIONAL_LEXICON` (`has_conditional_language` in `extractor.py`). Because the comparison is single-token, the two multi-word entries (`in the event`, `so long as`) can currently never match.
 
 ### 2. Conditional Block Gate
 
-**If lexicon matches:** Include a 180-line instruction block in the LLM prompt  
+**If lexicon matches:** Include the conditional instruction block (`_CONDITIONAL_BLOCK`, ~4.2k chars) in the LLM prompt  
 **If no match:** Omit block (model expected to null all 9 fields)
 
 ### 3. LLM Call (Single, No Round-Trip)
@@ -81,7 +81,7 @@ Regex: word-boundary check (`\b<keyword>\b`), case-insensitive.
 
 ### 4. Persist to ClaimDetail
 
-All claims (conditional or not) are stored in `EvidencePoolArticle.claimsDetail` JSON
+All claims (conditional or not) are stored in daatan's `EvidencePoolArticle.claimsDetail` JSON (column `claims_detail`)
 with their 9 conditional fields (populated or null).
 
 ---
@@ -93,7 +93,7 @@ with their 9 conditional fields (populated or null).
 | Decision | Rationale |
 |---|---|
 | **All 9 fields always in schema** | No API churn; constants schema shape across articles |
-| **Lexical pre-filter gates instruction block** | Cheap word check (regex) avoids 180-line block for 90% of articles |
+| **Lexical pre-filter gates instruction block** | Cheap word check (regex) avoids the ~4.2k-char block for 90% of articles |
 | **No second LLM round-trip** | Saves ~1.5s per article; Phase 1 is measurement-only, not scoring |
 | **Append-only prompt pattern** | Matches existing precedent (short_form, language_hint); zero breaking changes |
 
@@ -164,22 +164,22 @@ Every article processed by the extractor now has conditional claims captured in
 
 ### What's Queryable
 
-In prod (Oracul database):
+In prod (daatan database, table `evidence_pool_articles`):
 
 ```sql
 -- Conditional claims per relation
 SELECT relation, COUNT(*) FROM (
-  SELECT jsonb_array_elements(claimsDetail)->>'relation' as relation
-  FROM evidence_pool_article
-  WHERE claimsDetail::text LIKE '%"is_conditional":true%'
+  SELECT jsonb_array_elements(claims_detail)->>'relation' as relation
+  FROM evidence_pool_articles
+  WHERE claims_detail::text LIKE '%"is_conditional":true%'
 ) t
 WHERE relation IS NOT NULL
 GROUP BY relation;
 
 -- Articles with high conditional density
 SELECT url, COUNT(*) as cond_count
-FROM evidence_pool_article
-WHERE claimsDetail::text LIKE '%"is_conditional":true%'
+FROM evidence_pool_articles
+WHERE claims_detail::text LIKE '%"is_conditional":true%'
 GROUP BY url
 HAVING COUNT(*) > 3
 ORDER BY cond_count DESC;
@@ -326,7 +326,7 @@ All tests in `api/tests/test_claims_detail.py::TestConditionalFields`.
 - Pipeline integration: all extractor tests pass
 
 **Documentation:**
-- This file (conditional-capture.md)
+- This file (`docs/CONDITIONAL_CAPTURE.md`)
 - `docs/ARCHITECTURE.md` — "Conditional Claims (Phase 1 Capture)" section
 - Design (external): conditional-capture-phase1.md (draft design document)
 

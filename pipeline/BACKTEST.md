@@ -67,7 +67,7 @@ Each article in the Atlas window is converted to 11 features:
 | `stance` | LLM extraction | Primary directional signal — is the source bullish or bearish on the event? |
 | `certainty` | LLM extraction | High-certainty predictions are more informative |
 | `specificity` | LLM extraction | Vague predictions are discounted |
-| `hedge_index` | LLM extraction | Heavy hedging reduces the effective signal |
+| `hedge_ratio` | LLM extraction | Heavy hedging reduces the effective signal |
 | `conditionality` | LLM extraction | Conditional predictions ("if X then Y") are weaker signals |
 | `magnitude` | LLM extraction | Big predicted outcomes are more newsworthy but not necessarily more accurate |
 | `source_authority` | LLM extraction | Predictions based on named sources are more reliable than opinion |
@@ -132,7 +132,8 @@ curl -s -X POST https://oracle.daatan.com/search \
 ```
 
 **Provider behaviour with date filters:**
-- **GDELT (primary):** Supports `startdatetime`/`enddatetime` natively. Free, no API key. Rate-limited to 1 request per 10 seconds — pace bediavad calls accordingly (≥12s between requests to be safe).
+- **news-indexer (leg 0, when configured):** accepts no date params; results are post-filtered to the window and zero survivors fall through (retro#559).
+- **GDELT (first dated leg, after news-indexer):** Supports `startdatetime`/`enddatetime` natively. Free, no API key. Rate-limited to 1 request per 10 seconds — pace bediavad calls accordingly (≥12s between requests to be safe).
 - **GDELT returns no snippets** — set `enrich_snippets: true` to scrape article text in parallel (8 workers, 8s cap). Adds 5–15s per call.
 - If GDELT hits 429 (rapid sequential calls) it falls through to paid providers which may not respect the date filter.
 
@@ -182,7 +183,7 @@ that queries GDELT's GKG table in **BigQuery** directly:
   source it samples articles **spread across the window** rather than taking the
   newest N, so cells carry forward-looking coverage, not just the reactive tail.
 
-Requires the `daatan/gcp-service-account-key` secret (a BigQuery Job User SA). It
+Requires the `GCP_SA_KEY_JSON` credential (a BigQuery Job User SA; env var, else SSM `/retro/prod/secrets/GCP_SA_KEY_JSON`). It
 writes to `data/raw_ingest/{source_id}/{event_id}/`, so extraction → Atlas is the
 unchanged `orchestrator local_file` step.
 

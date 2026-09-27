@@ -80,17 +80,22 @@ uv sync
 | `MODEL_API_BASE` | No | LiteLLM-compatible base URL (leave empty for AWS Bedrock default) |
 | `AWS_REGION` | No | AWS region for Bedrock (default: `us-east-1`) |
 | `OPENROUTER_API_KEY` | No | OpenRouter key — alternative LLM provider |
-| `SERPAPI_API_KEY` | No | SerpAPI — news search (priority 2) |
-| `SERPER_API_KEY` | No | Serper.dev — news search (priority 3) |
-| `TAVILY_API_KEY` | No | Tavily — news search with date windowing (priority 3b); 1 credit/call |
-| `BRAVE_API_KEY` | No | Brave News Search (priority 4); also URL resolution fallback in gnews_ingest |
-| `BRIGHTDATA_API_KEY` | No | BrightData SERP API (priority 5) |
-| `NIMBLEWAY_API_KEY` | No | Nimbleway SERP API (priority 6) |
-| `NEWSDATA_API_KEY` | No | Newsdata.io archive search (priority 8) |
-| `DATAFORSEO_API_KEY` | No | DataForSEO — last-resort paid fallback (priority 9) |
+| `SERPAPI_API_KEY` | No | SerpAPI — news search |
+| `SERPER_API_KEY` | No | Serper.dev — news search |
+| `TAVILY_API_KEY` | No | Tavily — news search with date windowing; 1 credit/call |
+| `BRAVE_API_KEY` | No | Brave News Search; also URL resolution fallback in gnews_ingest |
+| `BRIGHTDATA_API_KEY` | No | BrightData SERP API |
+| `NIMBLEWAY_API_KEY` | No | Nimbleway SERP API |
+| `NEWSDATA_API_KEY` | No | Newsdata.io archive search |
+| `DATAFORSEO_API_KEY` | No | DataForSEO — last-resort paid fallback |
+| `GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_CX` | No | Google Custom Search |
+| `NEWS_INDEXER_URL` / `NEWS_INDEXER_API_KEY` | No | news-indexer (first in the chain) |
 | `GCP_SA_KEY_JSON` | No | GCP service account JSON — enables GDELT BigQuery for historical queries (>90 days) |
-| `DATA_DIR` | No | Path to data directory (default: `../data`) |
-| `VAULT_DIR` | No | Path to vault directory (default: `$DATA_DIR/vault`) |
+| `ORACLE_URL` / `ORACLE_API_KEY` | For `api` mode | Oracul `/search` endpoint (default `https://oracle.daatan.com`) and its key |
+| `DATA_DIR` | No | Path to data directory (code default `/app/data`; `.env.example` sets `../data`) |
+| `VAULT_DIR` | No | Path to vault directory (default: `$DATA_DIR/vault2`) |
+
+Search-provider keys not set in the env fall back to SSM `/retro/prod/secrets/<NAME>` (`_secret()` in `web_search.py`); the provider order is the `web_search.py` chain in the Structure block above.
 
 \* AWS Bedrock (the default) uses the ambient AWS credentials (`~/.aws/credentials` or instance role), not `MODEL_API_KEY`. Set `MODEL_API_KEY` only when using an explicit key-based provider.
 
@@ -107,7 +112,7 @@ writes scored entries to `data/atlas/`.
 DATA_DIR=/path/to/data VAULT_DIR=/path/to/data/vault2 \
   uv run python -m tm.orchestrator local_file
 
-# api mode — fetches articles via Brave Search API
+# api mode — fetches articles via the Oracul /search endpoint (needs ORACLE_API_KEY)
 DATA_DIR=/path/to/data VAULT_DIR=/path/to/data/vault2 \
   uv run python -m tm.orchestrator api
 ```
@@ -175,17 +180,17 @@ Progress: 3/250 (1.2%) | done: 2 | no_pred: 1 | failed: 0
 ## Pipeline stages
 
 > These are the **batch/backfill** lane's stages. The live `/forecast` lane runs the same
-> gatekeeper and extractor but a different orchestration, a different extractor model, and a
+> gatekeeper and extractor but a different orchestration and a
 > different set of per-article outcome labels. Both lanes, plus everything upstream of them
 > (discovery, cosine retrieval, the two rescue paths) and the complete drop taxonomy, are
 > documented in [funnel.md](https://github.com/Daatan/docs/blob/main/funnel.md).
 
 | Stage | File | Model | Purpose |
 |---|---|---|---|
-| 1 | `gatekeeper.py` | `bedrock/amazon.nova-micro-v1:0` | graded topic/evidence-relevance gate (emits relevance_score; passes indirect evidence, not just explicit predictions) |
-| 2 | `extractor.py` | `bedrock/amazon.nova-lite-v1:0` | extract up to 5 predictions per article (14 requested fields: quote, claim, stance, certainty, settled, quantitative_estimate, evidence_class, fact_signal, event_actors, event_target, is_occurrence, verified, event_date, event_date_reference — see `PredictionExtraction` in `pipeline/src/tm/models.py`) |
+| 1 | `gatekeeper.py` | `bedrock/us.amazon.nova-micro-v1:0` | graded topic/evidence-relevance gate (emits relevance_score; passes indirect evidence, not just explicit predictions) |
+| 2 | `extractor.py` | `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0` (since retro#778) | extract up to 5 predictions per article (requested fields include: quote, claim, stance, claim_strength (alias `certainty`), settled, quantitative_estimate, evidence_class, fact_signal, event_actors, event_target, is_occurrence, verified, event_date, event_date_reference — see `PredictionExtraction` in `pipeline/src/tm/models.py`) |
 | 3 | `runner.py` | — | orchestrate stages 1+2 per article |
-| 4 | `aggregator.py` | — | collapse article predictions → CellSignal |
+| 4 | `aggregator.py` | `extractor_model` (article-level collapse of high-spread predictions only) | collapse article predictions → CellSignal |
 | 5 | `orchestrator.py` | — | batch across all events × sources |
 | 6 | `backtest.py` | LightGBM | compare predictions to Polymarket via Brier score |
 

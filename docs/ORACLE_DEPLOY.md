@@ -24,11 +24,36 @@ runs as soon as the deploy lands:
 
 | Unit | Cadence | What | Docs |
 |---|---|---|---|
-| `metaculus-sync` | 4×/day | Submits Oracul forecasts to a Metaculus tournament | [`../metaculus/README.md`](../metaculus/README.md) |
+| `metaculus-sync` | every 20 min (:00/:20/:40) | Submits Oracul forecasts to a Metaculus tournament | [`../metaculus/README.md`](../metaculus/README.md) |
 | `polymarket-paper` | 00:30/06:30/12:30/18:30 UTC | **Paper** scoreboard on the Knesset-election Polymarket cluster; ledger under `data/polymarket_paper/`, served by `GET /pm/paper` (retro#620) | [`../polymarket_paper/README.md`](../polymarket_paper/README.md) |
 
 Kill switch for either: `sudo systemctl disable --now <unit>.timer` on the box; the next deploy
 re-enables it unless the installer call is removed from `deploy_oracle.sh`.
+
+## systemd drop-ins (not synced by deploy)
+
+Feature flags that differ from the `config.py` defaults are set on the live service by drop-ins
+committed under `infra/oracle-api.service.d/`. `deploy_oracle.sh` does **not** copy them (nor the
+`infra/oracle-api.service` unit itself) to `/etc/systemd/system/` — a committed drop-in is what
+*should* be live, applied by hand:
+
+```bash
+sudo cp /home/ubuntu/oracle-api/infra/oracle-api.service.d/<file>.conf /etc/systemd/system/oracle-api.service.d/
+sudo systemctl daemon-reload && sudo systemctl restart oracle-api
+```
+
+Rollback: delete the file on the host, daemon-reload, restart. What is actually running is the
+`event=stage_modes` line each worker logs at startup (`docs/ORACLE_VARIABLES.md`, retro#866).
+
+| Drop-in | Sets | Issue |
+|---|---|---|
+| `extractor-model.conf` | `EXTRACTOR_MODEL` = Haiku 4.5 (explicit pin; also the shared default since retro#778) | — |
+| `precursor-match-enabled.conf` | `PRECURSOR_MATCH_ENABLED=true` | retro#608 |
+| `retry-relaxed-search-enabled.conf` | `RETRY_RELAXED_SEARCH_ENABLED=true` | retro#621 |
+| `jev-shadow-enabled.conf` | `JEV_SHADOW_ENABLED=true` | retro#840 |
+| `jev-gate-enabled.conf` | `JEV_GATE_ENABLED=true` (shadow; not `JEV_GATE_ENFORCE`) | retro#850 |
+| `jev-gate-ab-enabled.conf` | `JEV_GATE_AB_ENABLED=true` (needs the gate on) | retro#849 |
+| `jev-class-enabled.conf` | `JEV_CLASS_ENABLED=true`, `JEV_CLASS_ENFORCE=true` | retro#851 |
 
 ## Deploy flow
 
@@ -36,7 +61,7 @@ re-enables it unless the installer call is removed from `deploy_oracle.sh`.
 
 1. `git fetch origin main` in `/home/ubuntu/oracle-api`
 2. `git reset --hard <ref>` (defaults to `origin/main`, override with a SHA to pin)
-3. `uv sync --frozen` in `api/`
+3. `uv sync --frozen` in `api/`, re-run `infra/install_metaculus_timer.sh` + `infra/install_polymarket_paper_timer.sh` (the sidecar timers above), and write `api/src/forecast_api/_build_info.json` (git SHA / build number read by `/version` and `/health`)
 4. `sudo systemctl reload-or-restart oracle-api` — gunicorn SIGHUPs its workers, new code is imported into fresh workers, old workers drain gracefully. The listening socket on `:8001` is never closed, so there's no 502 window.
 5. **Health gate (hardened 2026-06-02):** poll `/health` and require **5 consecutive** 200s over a window that spans the graceful-drain. If the reload is not durably healthy, **escalate to a full `systemctl restart`** and re-verify; only if *that* also fails does the script `exit 1` (deploy goes red).
 
@@ -72,7 +97,9 @@ against the box, waits for completion, and prints the deploy script's stdout/std
 Actions log. A `no-op` fast-path in `deploy_oracle.sh` makes the workflow cheap when the resolved
 HEAD already matches what's on the box.
 
-Manual trigger (for rollbacks or redeploying the same SHA): **Actions → Deploy Oracul API → Run workflow**, optionally pinning `ref` to a prior commit.
+The workflow's `test` job (`tests.yml`) runs first; the `deploy` job `needs` it, so a red suite blocks the deploy.
+
+Manual trigger (for rollbacks or redeploying the same SHA): **Actions → Deploy Oracle API → Run workflow**, optionally pinning `ref` to a prior commit.
 
 #### 2. Ad-hoc via SSM (no SSH needed)
 
@@ -140,13 +167,13 @@ aws ssm send-command --region eu-central-1 --instance-ids i-00ac444b94c5ff9b2 \
 
 Three options, in order of preference:
 
-1. **Via GH Actions**: Actions → Deploy Oracul API → Run workflow → set `ref` to the last known-good SHA. Deploys it via the same path as a normal deploy.
+1. **Via GH Actions**: Actions → Deploy Oracle API → Run workflow → set `ref` to the last known-good SHA. Deploys it via the same path as a normal deploy.
 2. **Via SSM from a laptop**: `aws ssm send-command ... "commands=[\"sudo -u ubuntu bash /home/ubuntu/oracle-api/infra/deploy_oracle.sh <prev-sha>\"]"`
 3. **Hard-reset on the box**: `sudo systemctl restart oracle-api` (2-5s 502 window) — the escape hatch when the service is wedged. Note the deploy script already auto-escalates to a full restart when a reload isn't durably healthy (see the health gate above), so this is rarely needed by hand.
 
 ## GitHub Actions → AWS auth
 
-The `deploy-oracle.yml` workflow uses OIDC, not static AWS keys. It reads two repository variables (not secrets; these aren't sensitive):
+The `deploy-oracle.yml` workflow uses OIDC, not static AWS keys. It reads three repository variables (not secrets; these aren't sensitive):
 
 | Name | Purpose | Default |
 |------|---------|---------|
@@ -156,7 +183,7 @@ The `deploy-oracle.yml` workflow uses OIDC, not static AWS keys. It reads two re
 
 ### One-time IAM setup
 
-The IAM role must have a trust policy that allows GitHub's OIDC provider to assume it from this repo's `main` branch, and a permissions policy that allows `ssm:SendCommand` / `ssm:GetCommandInvocation` / `ssm:ListCommandInvocations` on the target instance. A minimal setup:
+The IAM role must have a trust policy that allows GitHub's OIDC provider to assume it from this repo's `main` branch, and a permissions policy that allows `ssm:SendCommand` on the target instance (with the `AWS-RunShellScript` document) plus `ssm:GetCommandInvocation` / `ssm:ListCommandInvocations` / `ssm:ListCommands` (on `Resource: "*"` — a command id is only known after `SendCommand` returns). A minimal setup:
 
 ```bash
 # 1. Register GitHub's OIDC provider (once per AWS account; skip if already present).

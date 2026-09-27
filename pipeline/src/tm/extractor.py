@@ -1096,18 +1096,24 @@ CONDITIONAL_LEXICON = frozenset({
     'absent', 'barring', 'contingent', 'depends', 'assuming', 'so long as'
 })
 
+# Multi-word entries can't be members of a set of single words (retro#884): they are matched as
+# whole phrases, whitespace-tolerant, the single words by set lookup.
+_CONDITIONAL_WORDS = frozenset(k for k in CONDITIONAL_LEXICON if ' ' not in k)
+_CONDITIONAL_PHRASES = re.compile(
+    r'\b(?:' + '|'.join(r'\s+'.join(map(re.escape, k.split()))
+                         for k in sorted(CONDITIONAL_LEXICON) if ' ' in k) + r')\b')
+
 def has_conditional_language(text: str) -> bool:
     """Cheap lexical pre-filter: check if text contains conditional keywords.
 
     Word-boundary check (\\b) to avoid matching "if" in "life", "depends" in "independent", etc.
-    Case-insensitive. Returns True if ANY keyword is found.
+    Case-insensitive. Returns True if ANY keyword or phrase is found.
     """
     if not text:
         return False
     text_lower = text.lower()
-    # Split into words and check for matches
     words = re.findall(r'\b\w+\b', text_lower)
-    return bool(CONDITIONAL_LEXICON & set(words))
+    return bool(_CONDITIONAL_WORDS & set(words)) or bool(_CONDITIONAL_PHRASES.search(text_lower))
 
 # Appended when conditional language is detected in the article (or on the 5% bypass probe).
 # Instruction block for extracting conditional fields; all 9 fields are nullable, so this

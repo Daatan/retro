@@ -107,7 +107,7 @@ def test_apply_enforce_replaces_only_where_jev_answered(caplog):
     with caplog.at_level(logging.INFO, logger="forecast_api.jev_class"):
         jc.apply_jev_classes(preds, {"classes": ["cited_share", None, "reporting"], "p": [0.8, 0.0, 0.7],
                                      "ms": 500, "tok_in": 300}, enforce=True, url="u")
-    assert [p.evidence_class for p in preds] == ["cited_share", "opinion", "reporting"]
+    assert [p.evidence_class for p in preds] == ["cited_share", "opinion", None]   # None stays None
     line = next(r.getMessage() for r in caplog.records if "event=jev_class" in r.getMessage())
     payload = json.loads(line.split("payload=", 1)[1])
     assert payload["mode"] == "enforce" and payload["changed"] == 2

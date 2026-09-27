@@ -842,10 +842,12 @@ class ApiSettings(BaseSettings):
     # see jev_class.py). `jev_class_enabled` alone logs `event=jev_class` (Haiku vs Jev per
     # claim) from a background task; with `jev_class_enforce` the calls are awaited (~0.5 s,
     # in parallel) and Jev's class replaces Haiku's before enforce_anchor_provenance and the
-    # class weights. Fail-open: an unlocated quote, a Jev error or a timeout keeps Haiku's.
+    # class weights. Fail-open: an unlocated quote, a Jev error or a timeout keeps Haiku's,
+    # and a claim Haiku left unclassified stays so (logged). Median call 0.5 s; the 1.5 s cap
+    # bounds what a rate-limited Jev (the 2026-09-26 403 burst) can cost an article.
     jev_class_enabled: bool = False
     jev_class_enforce: bool = False
-    jev_class_timeout_seconds: float = 3.0
+    jev_class_timeout_seconds: float = 1.5
 
     # Precursor candidate-match (retro#608) — shadow/log-only, off by default.
     # Before pricing a v2-playground precursor fresh, checks whether it already

@@ -54,7 +54,7 @@ async def jev_evidence_classes(
     api_key: str = "",
     api_url: str = API_URL,
     max_sentences: int = 400,
-    timeout_s: float = 3.0,
+    timeout_s: float = 1.5,
     transport: Optional[httpx.AsyncBaseTransport] = None,
 ) -> dict:
     """Jev's class for each quote: `classes` and `p` are parallel to `quotes`, None / 0.0
@@ -106,7 +106,7 @@ async def jev_evidence_classes(
 
 def apply_jev_classes(predictions: list, result: dict, *, enforce: bool, url: str = "") -> list:
     """Log Jev's class beside Haiku's for every claim; with `enforce`, replace Haiku's class
-    wherever Jev returned one. Rows: [haiku, jev, jev_p]."""
+    wherever both have one. Rows: [haiku, jev, jev_p]."""
     classes = result.get("classes") or []
     probs = result.get("p") or []
     rows = []
@@ -116,7 +116,9 @@ def apply_jev_classes(predictions: list, result: dict, *, enforce: bool, url: st
         rows.append([p.evidence_class, jev, probs[k] if jev else 0.0])
         if jev is not None and jev != p.evidence_class:
             changed += 1
-            if enforce:
+            # A claim Haiku left unclassified stays unclassified: it is weight-capped at 0.25,
+            # Jev always picks a class, and that case was not in the measured gold. Logged.
+            if enforce and p.evidence_class is not None:
                 p.evidence_class = jev
     payload = {"url": url, "mode": "enforce" if enforce else "shadow", "changed": changed,
                "rows": rows, "ms": result.get("ms")}

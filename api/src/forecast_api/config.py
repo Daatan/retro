@@ -836,6 +836,17 @@ class ApiSettings(BaseSettings):
     jev_gate_ab_model: str = "bedrock/us.amazon.nova-micro-v1:0"
     jev_gate_ab_rewrite_timeout_seconds: float = 15.0
 
+    # retro#851: Jev as the evidence_class corrector. After Haiku extracts, one Jev call per
+    # claim re-reads the claim's quote WITH the whole article and picks its class (Haiku is
+    # 157/205 against a blind gold, Jev with the article 183/205, held-out 26 vs 34 of 40 —
+    # see jev_class.py). `jev_class_enabled` alone logs `event=jev_class` (Haiku vs Jev per
+    # claim) from a background task; with `jev_class_enforce` the calls are awaited (~0.5 s,
+    # in parallel) and Jev's class replaces Haiku's before enforce_anchor_provenance and the
+    # class weights. Fail-open: an unlocated quote, a Jev error or a timeout keeps Haiku's.
+    jev_class_enabled: bool = False
+    jev_class_enforce: bool = False
+    jev_class_timeout_seconds: float = 3.0
+
     # Precursor candidate-match (retro#608) — shadow/log-only, off by default.
     # Before pricing a v2-playground precursor fresh, checks whether it already
     # matches an open forecast in Daatan's own bank or a live Polymarket market,

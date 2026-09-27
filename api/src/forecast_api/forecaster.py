@@ -215,6 +215,7 @@ from .settlement_semantic import (
 )
 from .settlement_verifier import SettlementVote, Verdict, build_prompt, verify_settlement
 from .premise_verifier import PremiseResult, premise_check_triggered, verify_premise
+from .jev_class import apply_jev_classes, fire_jev_class_shadow, jev_evidence_classes
 from .jev_shadow import (evaluate_jev_gate, fire_jev_pass1, fire_jev_shadow, jev_pass1,
                          question_fingerprint, script_of, simplify_question)
 from .subject_card import SubjectCard, derive_subject_card, evaluate_subject_gate
@@ -1912,6 +1913,23 @@ async def _process_article(
                 pass1=jev_pass1_result if jev_pass1_result and "nouls" in jev_pass1_result else None,
                 article_date=article_date,
             )
+        # Jev evidence_class corrector (retro#851): Jev re-reads each claim's quote with the
+        # whole article. After the shadow snapshot above (it keeps Haiku's raw class) and
+        # before anchor provenance and the class weights read the class. Fail-open.
+        if settings.jev_class_enabled and extraction.predictions:
+            jev_class_kwargs = dict(
+                text=text, question=question,
+                quotes=[p.quote for p in extraction.predictions],
+                api_key=settings.typesafe_api_key, api_url=settings.jev_shadow_api_url,
+                timeout_s=settings.jev_class_timeout_seconds,
+            )
+            if settings.jev_class_enforce:
+                extraction.predictions = apply_jev_classes(
+                    extraction.predictions, await jev_evidence_classes(**jev_class_kwargs),
+                    enforce=True, url=result.url or "",
+                )
+            else:
+                fire_jev_class_shadow(extraction.predictions, url=result.url or "", **jev_class_kwargs)
         # Observability only (retro#298) — logs claim/stance sign mismatches on the
         # model's raw output, before any of the deterministic corrections below can
         # touch stance or settled. Never mutates.

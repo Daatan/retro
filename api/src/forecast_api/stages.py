@@ -191,6 +191,14 @@ STAGES: tuple[Stage, ...] = (
         events=("event=jev_gate_ab",),
         expect_telemetry=True,
     ),
+    Stage(
+        name="jev_class",
+        issue="retro#851",
+        enabled_attr="jev_class_enabled",
+        enforce_attr="jev_class_enforce",
+        events=("event=jev_class",),
+        expect_telemetry=True,
+    ),
 )
 
 STAGES_BY_NAME: dict[str, Stage] = {s.name: s for s in STAGES}

@@ -114,6 +114,18 @@ def test_apply_enforce_replaces_only_where_jev_answered(caplog):
     assert payload["rows"] == [["reported_fact", "cited_share", 0.8], ["opinion", None, 0.0], [None, "reporting", 0.7]]
 
 
+def test_apply_enforce_keeps_haikus_opinion(caplog):
+    """Jev reads quoted rhetoric as reporting/reported_fact; Haiku's opinion is kept (09-28)."""
+    preds = _preds("opinion", "reporting", "opinion")
+    with caplog.at_level(logging.INFO, logger="forecast_api.jev_class"):
+        jc.apply_jev_classes(preds, {"classes": ["reporting", "opinion", "opinion"], "p": [0.97, 0.8, 0.9]},
+                             enforce=True, url="u")
+    assert [p.evidence_class for p in preds] == ["opinion", "opinion", "opinion"]   # X->opinion still applies
+    line = next(r.getMessage() for r in caplog.records if "event=jev_class" in r.getMessage())
+    payload = json.loads(line.split("payload=", 1)[1])
+    assert payload["changed"] == 2 and payload["kept_opinion"] == 1
+
+
 def test_apply_shadow_changes_nothing():
     preds = _preds("reported_fact")
     jc.apply_jev_classes(preds, {"classes": ["cited_share"], "p": [0.8]}, enforce=False)

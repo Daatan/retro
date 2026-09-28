@@ -3126,7 +3126,12 @@ class weights read `evidence_class`.
 
 - shadow (`jev_class_enforce=False`): a background task; changes nothing.
 - enforce (`jev_class_enforce=True`): the calls are awaited (in parallel, capped at
-  `jev_class_timeout_seconds`) and Jev's class replaces Haiku's wherever both have one.
+  `jev_class_timeout_seconds`) and Jev's class replaces Haiku's wherever both have one —
+  **except Haiku's `opinion`, which is never overridden** (2026-09-28). Jev reads a quoted
+  politician's or official's rhetoric as `reporting`/`reported_fact`: on a blind two-labeler
+  adjudication of live overrides Jev was right on 2 of 13 opinion->X changes, Haiku on 10, in
+  Hebrew and English alike. A prompt fix failed the held-out set (29/40 vs 33); the guard is
+  >= the live prompt on all three sets (82 today 66 vs 61, 212 09-27 187 vs 186, 40 held-out 34 vs 33).
 
 **Fail-open.** A quote not found in the text, a Jev error, a timeout or no key keeps Haiku's
 class. A claim Haiku left **unclassified stays unclassified** (it is weight-capped at
@@ -3135,7 +3140,7 @@ class. A claim Haiku left **unclassified stays unclassified** (it is weight-capp
 Each article logs one line:
 
 ```
-event=jev_class payload={"url":…,"mode":"shadow|enforce","changed":<n>,
+event=jev_class payload={"url":…,"mode":"shadow|enforce","changed":<n>,"kept_opinion":<n>,
   "rows":[[haiku_class, jev_class, jev_p], …],"ms":…,"tok_in":…,"err_n":…}
 ```
 

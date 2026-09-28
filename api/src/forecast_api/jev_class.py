@@ -20,6 +20,13 @@ scored 32/40.
 
 Every failure keeps Haiku's class: a quote not found in the text, a Jev error, a timeout, no
 key. With `jev_class_enforce` off it only logs `event=jev_class`.
+
+Haiku's `opinion` is never overridden (2026-09-28). Jev reads a quoted politician's or
+official's rhetoric as `reporting`/`reported_fact` — by the fact it was said, not by what was
+said. On a blind two-labeler adjudication of live overrides, Jev was right on 2 of 13
+opinion->X changes, Haiku on 10, in Hebrew and English alike. Fixing it in the prompt failed
+the held-out set again (29/40 vs 33); this guard is >= the live prompt on all three sets:
+today 66 vs 61 / 82, 09-27 live 187 vs 186 / 212, held-out 34 vs 33 / 40.
 """
 from __future__ import annotations
 
@@ -110,7 +117,7 @@ def apply_jev_classes(predictions: list, result: dict, *, enforce: bool, url: st
     classes = result.get("classes") or []
     probs = result.get("p") or []
     rows = []
-    changed = 0
+    changed = kept_opinion = 0
     for k, p in enumerate(predictions):
         jev = classes[k] if k < len(classes) else None
         rows.append([p.evidence_class, jev, probs[k] if jev else 0.0])
@@ -118,10 +125,13 @@ def apply_jev_classes(predictions: list, result: dict, *, enforce: bool, url: st
             changed += 1
             # A claim Haiku left unclassified stays unclassified: it is weight-capped at 0.25,
             # Jev always picks a class, and that case was not in the measured gold. Logged.
-            if enforce and p.evidence_class is not None:
+            # Haiku's `opinion` stays too: Jev misreads quoted rhetoric (module docstring).
+            if p.evidence_class == "opinion":
+                kept_opinion += 1
+            elif enforce and p.evidence_class is not None:
                 p.evidence_class = jev
     payload = {"url": url, "mode": "enforce" if enforce else "shadow", "changed": changed,
-               "rows": rows, "ms": result.get("ms")}
+               "kept_opinion": kept_opinion, "rows": rows, "ms": result.get("ms")}
     for key in ("tok_in", "err_n", "skip", "err"):
         if key in result:
             payload[key] = result[key]

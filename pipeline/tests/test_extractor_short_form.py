@@ -92,12 +92,29 @@ async def test_short_form_and_language_stack():
 
 
 @pytest.mark.asyncio
-async def test_single_article_sends_the_instructions_uncached():
+async def test_single_article_sends_the_instructions_uncached(monkeypatch):
     """retro#876: skipping the cache block for a single-article request must not skip the
-    instructions. The model must see exactly the multi-article text, with no cache marker."""
+    instructions. The model must see exactly the multi-article text, with no cache marker.
+    The skip is now opt-in via extractor_cache_single_article=False (retro#894 rollback)."""
+    monkeypatch.setattr(extractor.settings, "extractor_cache_single_article", False)
     with patch("tm.extractor.complete_structured", new=AsyncMock(return_value=(None, {}))) as cs:
         await extractor.extract_predictions(**_ARGS, is_single_article=True)
     assert cs.await_args.kwargs.get("cached_prefix") is None
     sent = cs.await_args.args[2]
     assert "## SETTLED" in extractor.PROMPT_PREFIX and "## SETTLED" in sent
     assert sent == await _capture_prompt()
+
+
+@pytest.mark.asyncio
+async def test_single_article_sends_the_cache_block_by_default(monkeypatch):
+    """retro#894: with extractor_cache_single_article on (the default), a single-article call
+    passes PROMPT_PREFIX as the cacheable prefix — exactly as a multi-article call does — and the
+    per-call prompt does NOT also carry it (no double-send). Instructions still reach the model."""
+    monkeypatch.setattr(extractor.settings, "extractor_cache_single_article", True)
+    with patch("tm.extractor.complete_structured", new=AsyncMock(return_value=(None, {}))) as cs:
+        await extractor.extract_predictions(**_ARGS, is_single_article=True)
+    assert cs.await_args.kwargs.get("cached_prefix") == extractor.PROMPT_PREFIX
+    sent = cs.await_args.args[2]
+    assert not sent.startswith(extractor.PROMPT_PREFIX[:200])
+    assert "## SETTLED" not in sent
+    assert extractor.PROMPT_PREFIX + sent == await _capture_prompt()

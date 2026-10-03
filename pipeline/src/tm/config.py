@@ -61,6 +61,20 @@ class Settings(BaseSettings):
     # independent of caching) surfaced while verifying this.
     enable_prompt_cache: bool = True
 
+    # retro#894: send the extractor's cache block on 1-article requests too. retro#564 Fix #1
+    # stopped sending it there ("a lone article has no second call inside the 5-min TTL to read
+    # the write") — but every extractor call system-wide shares the same ~22.8k-token prefix
+    # (schema system message + PROMPT_PREFIX), so a news-indexer push can read what the
+    # previous push / batch call wrote. Measured 09-26→10-02 (retro#849 comment): simulated
+    # push hit rate ~58% vs a 21.7% break-even, ~$1.2/day; worst case (no reads) −$0.73/day.
+    # Default ON (Mark approved 2026-10-03). Rollback without a deploy: set
+    # EXTRACTOR_CACHE_SINGLE_ARTICLE=false in the oracle-api drop-in / box .env and restart —
+    # the prefix is then prepended to the prompt uncached, exactly the retro#876 behaviour.
+    # Either way the instructions are always sent (retro#876). No effect when
+    # enable_prompt_cache is off or the model isn't cache-capable (llm.py falls back to one
+    # flat string that still contains the prefix).
+    extractor_cache_single_article: bool = True
+
     # Magnitude ceiling for a PRECURSOR fact (`is_occurrence=false`): the largest
     # |fact_signal| a fact that merely precedes the event may carry. The extractor
     # prompt has taught this number since the fact lane shipped, but a prompt is

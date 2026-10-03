@@ -3195,3 +3195,23 @@ vendor announcement.
 OpenRouter's `/api/v1/systemone` (`jev_shadow_api_url`) takes the same request body; whether it
 accepts a pinned version string, rather than only `jev-latest`, is unverified — check
 `event=jev_model` / `status=` after switching endpoints.
+
+
+## 2026-10-03 — extractor prompt cache on 1-article calls (retro#894, umbrella #849)
+
+retro#564 Fix #1 stopped sending the Bedrock cache block on single-article requests ("a write
+nobody reads"), and every news-indexer push is a single-article request — so pushes (~128/day,
+~$4.0/day of Haiku) carried no cache point at all; daatan `oracle_call_logs.cacheReadTokens` was 0
+for `source='news-indexer'` every day. But the cached prefix (~22.8k tokens: the schema system
+message plus `PROMPT_PREFIX`) is identical across every extractor call system-wide, and pushes
+arrive close together, so one push can read what the previous call wrote. Cost only — the text
+the model sees is byte-identical either way.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `extractor_cache_single_article` (`EXTRACTOR_CACHE_SINGLE_ARTICLE`, `pipeline/src/tm/config.py`) | `true` | Send `PROMPT_PREFIX` as the cache-marked block on 1-article extractor calls too. `false` = the retro#564/#876 behaviour (prefix prepended to the prompt uncached). The instructions are sent either way (retro#876). No effect when `enable_prompt_cache` is off or the model is not cache-capable. Rollback is this env var in the oracle-api drop-in / box `.env` plus a restart. |
+
+**Expected:** simulated push hit rate ~58% against a 21.7% break-even → ~$1.2/day; worst case
+(no reads) −$0.73/day. **Kill criterion:** 48 h after deploy, if fewer than ~20% of
+`source='news-indexer'` rows in daatan `oracle_call_logs` show `cacheReadTokens > 0`, set the
+variable to `false`.

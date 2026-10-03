@@ -2655,8 +2655,9 @@ async def _run_forecast_inner(
     is_single_article = len(search_results) == 1
     # retro#564: coordinator gates only the FIRST extractor call so it writes the cache;
     # every other call in the batch waits for that one write, then proceeds concurrently,
-    # reading from the now-warm cache (no further serialization). Single-article requests
-    # skip caching entirely (is_single_article above), so no coordinator is needed there.
+    # reading from the now-warm cache (no further serialization). A single-article request
+    # makes only one call, so there is nothing to coordinate; whether that call carries the
+    # cache block is settings.extractor_cache_single_article (retro#894, tm/config.py).
     cache_coordinator = None if is_single_article else CacheWriteCoordinator()
     outcomes = await asyncio.gather(
         *[

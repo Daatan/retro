@@ -1355,8 +1355,11 @@ async def extract_predictions(
     on lexical pre-filter (has_conditional_language). When True, always include. When False, never
     include. Append-only; None/False keeps existing behavior unchanged for backward compat.
 
-    ``is_single_article`` (retro#564) skips prompt caching when true (single article in a request
-    has no cache reuse opportunity within the 5-minute TTL). Defaults to False for backward compat.
+    ``is_single_article`` (retro#564) marks a request carrying a single article. Whether that
+    call still sends the cache block is ``settings.extractor_cache_single_article`` (retro#894,
+    default on: the prefix is shared by every extractor call system-wide, so a lone push can read
+    what the previous call wrote). With the setting off the prefix is prepended uncached, the
+    retro#564/#876 behaviour. Either way the instructions are sent. Defaults to False.
 
     ``cache_coordinator`` (retro#564) when provided, gates ONLY the first extractor call in a
     request: that call writes the cache while everyone else waits, then all remaining calls
@@ -1403,11 +1406,13 @@ async def extract_predictions(
     if include_conditional_block:
         prompt += _CONDITIONAL_BLOCK
 
-    # Single-article requests skip the cache block (retro#564: a write nobody reads) but
-    # must still send the instructions — passing cached_prefix=None alone dropped the whole
-    # PROMPT_PREFIX from ~2/3 of live calls for five weeks (retro#876).
+    # Single-article requests send the cache block too unless
+    # settings.extractor_cache_single_article is off (retro#894; retro#564 had skipped it as
+    # "a write nobody reads"). When skipped they must still send the instructions — passing
+    # cached_prefix=None alone dropped the whole PROMPT_PREFIX from ~2/3 of live calls for
+    # five weeks (retro#876).
     cached_prefix: Optional[str] = PROMPT_PREFIX
-    if is_single_article:
+    if is_single_article and not settings.extractor_cache_single_article:
         prompt, cached_prefix = PROMPT_PREFIX + prompt, None
 
     async def _call_extractor():

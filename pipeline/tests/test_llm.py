@@ -451,6 +451,49 @@ class TestCompleteStructuredPromptCaching:
         assert captured["messages"] == [{"role": "user", "content": "SUFFIX"}]
 
 
+class TestSingleArticleRequestBody:
+    """retro#894: the request body actually sent to Bedrock for a single-article extractor
+    call — end to end through extract_predictions -> complete_structured -> the client."""
+
+    HAIKU = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+    @staticmethod
+    def _patch_client(monkeypatch):
+        captured = {}
+        async def fake_create(**kwargs):
+            captured.update(kwargs)
+            return ("OUT", SimpleNamespace(usage=None))
+        monkeypatch.setattr(llm.client.chat.completions, "create_with_completion", fake_create)
+        return captured
+
+    async def _send(self, monkeypatch, *, single_cache: bool):
+        from tm import extractor
+        monkeypatch.setattr(llm.settings, "enable_prompt_cache", True)
+        monkeypatch.setattr(extractor.settings, "extractor_cache_single_article", single_cache)
+        captured = self._patch_client(monkeypatch)
+        await extractor.extract_predictions(
+            "article body", "src", "2024-01-01", "Event", "desc",
+            is_single_article=True, model=self.HAIKU,
+        )
+        return extractor, captured["messages"][0]["content"]
+
+    async def test_cache_point_present_and_instructions_sent_once(self, monkeypatch):
+        extractor, content = await self._send(monkeypatch, single_cache=True)
+        assert isinstance(content, list) and len(content) == 2
+        assert content[0] == {"type": "text", "text": extractor.PROMPT_PREFIX,
+                              "cache_control": {"type": "ephemeral"}}
+        assert "## SETTLED" in content[0]["text"]          # retro#876: instructions present
+        assert extractor.PROMPT_PREFIX not in content[1]["text"]   # ...and not sent twice
+        assert "article body" in content[1]["text"]
+
+    async def test_setting_off_sends_flat_string_with_instructions(self, monkeypatch):
+        extractor, content = await self._send(monkeypatch, single_cache=False)
+        assert isinstance(content, str)
+        assert content.startswith(extractor.PROMPT_PREFIX)
+        assert content.count(extractor.PROMPT_PREFIX) == 1
+        assert "cache_control" not in content
+
+
 class TestCallerDelegation:
     async def test_gatekeeper_delegates_with_exact_params(self, monkeypatch):
         from tm import gatekeeper

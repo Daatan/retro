@@ -124,6 +124,21 @@ class TestJevGate:
                            pass1=_fake_pass1(HIGH), extractor=_extractor_spy(2))
         assert f"q8={expected} url=" in _gate_line(caplog)   # same question -> same fingerprint
 
+    async def test_gate_line_carries_served_model_and_pass1_gets_the_pin(self, monkeypatch, caplog):
+        """retro#863: pass 1 is asked for `settings.jev_model`, and the version the API reported
+        serving rides the gate line — last, so existing field parsers are unaffected."""
+        monkeypatch.setattr(api_settings, "jev_model", "jev-1.13.0")
+        fire = _fake_pass1({**HIGH, "jev_model": "jev-1.13.0"})
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            await _process(monkeypatch, enabled=True, enforce=False, pass1=fire, extractor=_extractor_spy(1))
+        assert fire.seen[0]["model"] == "jev-1.13.0"
+        assert _gate_line(caplog).endswith("prediction_id=pid-1 jev_model=jev-1.13.0")
+        caplog.clear()
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            await _process(monkeypatch, enabled=True, enforce=False, pass1=_fake_pass1({"err": "boom"}),
+                           extractor=_extractor_spy(1))
+        assert _gate_line(caplog).endswith("jev_model=")          # no answer -> empty, not a crash
+
     async def test_shadow_logs_keep_next_to_haiku_count(self, monkeypatch, caplog):
         fire = _fake_pass1(HIGH)
         with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):

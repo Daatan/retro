@@ -27,7 +27,7 @@ def _choice(label: str) -> dict:
     return {"type": "choice", "probabilities": {label: 0.8, "reporting": 0.2}}
 
 
-def _transport(calls: list, answer=lambda state: "cited_share", fail=False, delay=0.0):
+def _transport(calls: list, answer=lambda state: "cited_share", fail=False, delay=0.0, served=None):
     async def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         calls.append(body)
@@ -35,8 +35,10 @@ def _transport(calls: list, answer=lambda state: "cited_share", fail=False, dela
             await asyncio.sleep(delay)
         if fail:
             return httpx.Response(500, json={"error": "boom"})
-        return httpx.Response(200, json={"answers": {"evidence_class": _choice(answer(body["state"]))},
-                                         "usage": {"input_tokens": 100}})
+        out = {"answers": {"evidence_class": _choice(answer(body["state"]))}, "usage": {"input_tokens": 100}}
+        if served:
+            out["model"] = served
+        return httpx.Response(200, json=out)
     return httpx.MockTransport(handler)
 
 
@@ -198,3 +200,17 @@ async def test_enforce_fails_open_to_haiku(monkeypatch):
     jev = AsyncMock(return_value={"classes": [None], "p": [0.0], "err": "TimeoutError()"})
     seen, _ = await _process(monkeypatch, enabled=True, enforce=True, jev=jev)
     assert seen == ["reported_fact"]
+
+
+async def test_class_calls_carry_the_pin_and_log_the_served_model(caplog):
+    """retro#863: the requested model is the configured pin; the served one rides event=jev_class."""
+    calls: list = []
+    out = await jc.jev_evidence_classes(
+        text=ARTICLE, question=QUESTION, api_key="k", model="jev-1.13.0",
+        quotes=["Overall, the opposition bloc gained one seat, rising to 55."],
+        transport=_transport(calls, served="jev-1.13.0"))
+    assert calls[0]["model"] == "jev-1.13.0" and out["jev_model"] == "jev-1.13.0"
+    with caplog.at_level(logging.INFO, logger="forecast_api.jev_class"):
+        jc.apply_jev_classes(_preds("cited_share"), out, enforce=False, url="u")
+    line = next(r.getMessage() for r in caplog.records if "event=jev_class" in r.getMessage())
+    assert json.loads(line.split("payload=", 1)[1])["jev_model"] == "jev-1.13.0"

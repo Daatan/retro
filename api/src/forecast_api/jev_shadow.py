@@ -42,7 +42,12 @@ from .jev_dates import intervals as date_intervals
 logger = logging.getLogger(__name__)
 
 API_URL = "https://api.typesafe.ai/v1/systemone"
-MODEL = "jev-latest"
+# retro#863: pinned, not `jev-latest`. The gate threshold, the stance mapping and the class
+# results were all measured on one served version; a floating alias would move under them with
+# nothing in the logs to show it. The live value is `settings.jev_model` (JEV_MODEL), passed
+# by every caller; this is only the default for direct callers and tests. Moving the pin means
+# re-running the offline bench on the new version first (docs/ORACLE_VARIABLES.md, retro#863).
+MODEL = "jev-1.13.0"
 
 # Same segmentation as the offline evaluation: Latin/Hebrew/Arabic sentence ends, newlines.
 _SPLIT = re.compile(r'(?<=[.!?׃۔؟])\s+|\n+')
@@ -214,15 +219,43 @@ def _argmax(ans: dict, values: Sequence[float]) -> float:
     return values[int(max(probs, key=lambda k: probs[k]))]
 
 
+# Last served version seen per requested model, so a change is logged once, not per call.
+_SERVED: dict[str, str] = {}
+
+
+def _note_served(requested: str, served: Optional[str]) -> None:
+    """Log `event=jev_model` the first time a served version is seen for a requested model and
+    whenever it changes — WARNING when it is not the version asked for (a pin the vendor
+    resolved to something else, or an alias that moved). The per-line `jev_model` field on
+    every jev_* log line is the record analysis uses; this line is the alert."""
+    if not served or _SERVED.get(requested) == served:
+        return
+    prev = _SERVED.get(requested)
+    _SERVED[requested] = served
+    log = logger.info if served == requested else logger.warning
+    log("event=jev_model requested=%s served=%s previous=%s", requested, served, prev or "none")
+
+
+def served_model(responses: Sequence) -> Optional[str]:
+    """The `model` the API reported across a set of responses (exceptions skipped): the one
+    string in the normal case, several comma-joined if they differed mid-article, None if no
+    response carried one."""
+    seen = sorted({r.get("model") for r in responses
+                   if isinstance(r, dict) and r.get("model")})
+    return ",".join(seen) if seen else None
+
+
 async def _ask(client: httpx.AsyncClient, api_key: str, state, questions: dict,
-               api_url: str = API_URL) -> dict:
+               api_url: str = API_URL, model: str = MODEL) -> dict:
     r = await client.post(
         api_url,
         headers={"Authorization": f"Bearer {api_key}"},
-        json={"state": state, "model": MODEL, "questions": questions},
+        json={"state": state, "model": model, "questions": questions},
     )
     r.raise_for_status()
-    return r.json()
+    data = r.json()
+    _note_served(model, data.get("model") if isinstance(data, dict) else None)
+    return data
 
 
 def _selection_questions(n: int) -> dict:
@@ -303,11 +336,12 @@ async def jev_pass1(
     max_sentences: int = 400,
     timeout_s: float = 30.0,
     transport: Optional[httpx.AsyncBaseTransport] = None,
+    model: str = MODEL,
 ) -> dict:
     """Pass 1 alone: segment the article and ask one `noul` per sentence (plus the cached
     per-question negation verdict). Returns a dict with `sentences`, `spans`, `norm_text`,
-    `nouls`, `neg`, `max_noul`, `tok_in`, `ms` — or `skip`/`err` instead of `nouls`. Never
-    raises. `run_jev_shadow` accepts it as `pass1` so the skip-gate (retro#850) and the
+    `nouls`, `neg`, `max_noul`, `tok_in`, `ms`, `jev_model` (the served version, retro#863)
+    — or `skip`/`err` instead of `nouls`. Never raises. `run_jev_shadow` accepts it as `pass1` so the skip-gate (retro#850) and the
     shadow share one selection call per article."""
     t0 = time.perf_counter()
     out: dict = {}
@@ -326,10 +360,10 @@ async def jev_pass1(
         async with httpx.AsyncClient(timeout=timeout_s, transport=transport) as client:
             neg = _NEG_CACHE.get(question)
             sel_coro = _ask(client, api_key, {"sentences": sentences, "question": question},
-                            _selection_questions(len(sentences)), api_url)
+                            _selection_questions(len(sentences)), api_url, model)
             if neg is None:
                 sel, neg_resp = await asyncio.gather(
-                    sel_coro, _ask(client, api_key, {"related_event": question}, _NEG_QUESTION, api_url))
+                    sel_coro, _ask(client, api_key, {"related_event": question}, _NEG_QUESTION, api_url, model))
                 tok_in += neg_resp.get("usage", {}).get("input_tokens", 0)
                 neg = neg_resp["answers"]["neg"]["noul"]
                 if len(_NEG_CACHE) >= _NEG_CACHE_MAX:
@@ -339,7 +373,7 @@ async def jev_pass1(
                 sel = await sel_coro
         tok_in += sel.get("usage", {}).get("input_tokens", 0)
         nouls = [sel["answers"][f"s{i}"]["noul"] for i in range(len(sentences))]
-        out.update(nouls=nouls, neg=neg, max_noul=max(nouls), tok_in=tok_in)
+        out.update(nouls=nouls, neg=neg, max_noul=max(nouls), tok_in=tok_in, jev_model=served_model([sel]))
     except Exception as exc:  # never let Jev affect /forecast
         out["err"] = repr(exc)[:200]
     finally:
@@ -431,6 +465,7 @@ async def run_jev_shadow(
     transport: Optional[httpx.AsyncBaseTransport] = None,
     pass1: Optional[dict] = None,
     article_date: Optional[str] = None,
+    model: str = MODEL,
 ) -> Optional[dict]:
     """Run both Jev passes on one article and log `event=jev_shadow`. Returns the payload
     (for tests); never raises. A `pass1` result from `jev_pass1` (same text and question) is
@@ -440,7 +475,8 @@ async def run_jev_shadow(
     try:
         if pass1 is None or pass1.get("norm_text") is None:
             pass1 = await jev_pass1(text=text, question=question, api_key=api_key, api_url=api_url,
-                                    max_sentences=max_sentences, timeout_s=timeout_s, transport=transport)
+                                    max_sentences=max_sentences, timeout_s=timeout_s, transport=transport,
+                                    model=model)
         norm_text, spans, sentences = pass1["norm_text"], pass1["spans"], pass1["sentences"]
         payload["n"] = len(sentences)
         payload["haiku"] = [
@@ -484,14 +520,18 @@ async def run_jev_shadow(
                     client, api_key,
                     {"sentence": " ".join(sentences[i] for i in idx), "context": window,
                      "publication_date": pub.isoformat()},
-                    date_questions(dcands, pub), api_url)))
+                    date_questions(dcands, pub), api_url, model)))
             scored, dated = await asyncio.gather(
                 asyncio.gather(*[
-                    _ask(client, api_key, {"sentence": sentences[i], "related_event": question}, _scoring_questions(), api_url)
+                    _ask(client, api_key, {"sentence": sentences[i], "related_event": question}, _scoring_questions(), api_url, model)
                     for i in cand
                 ], return_exceptions=True),
                 asyncio.gather(*[job for _, _, job in date_jobs], return_exceptions=True),
             )
+        # retro#863: the version that actually answered (pass 1 and pass 2), so a threshold or a
+        # mapping read off this log is tied to the version it was measured on.
+        payload["jev_model"] = served_model(
+            [{"model": m} for m in (pass1.get("jev_model") or "").split(",") if m] + list(scored) + list(dated))
         payload["neg"] = round(neg, 3)
         payload["max_noul"] = round(max(nouls), 3)
         payload["top"] = [[i, round(nouls[i], 3)] for i in order[:8]]

@@ -1504,17 +1504,21 @@ def _log_jev_gate(
     `late=True` marks a shadow verdict logged after the article was already returned.
     `q8` is a stable 8-hex fingerprint of the question text: `prediction_id` is only set by
     callers that send one (empty on ~83% of lines, which left the per-article question fan-out
-    unmeasurable), while the question itself is always present here."""
+    unmeasurable), while the question itself is always present here. `jev_model` is the version
+    the API reported serving (retro#863), empty when pass 1 got no answer; it goes last so
+    existing parsers of the earlier fields are unaffected."""
     max_noul = pass1.get("max_noul")
     q8 = question_fingerprint(question)
     logger.info(
         "event=jev_gate would_skip=%s enforce=%s max_noul=%s threshold=%.2f n_preds=%s "
-        "status=%s late=%s script=%s language=%s n_sents=%d jev_ms=%s q8=%s url=%s prediction_id=%s",
+        "status=%s late=%s script=%s language=%s n_sents=%d jev_ms=%s q8=%s url=%s prediction_id=%s "
+        "jev_model=%s",
         would_skip, settings.jev_gate_enforce,
         f"{max_noul:.3f}" if max_noul is not None else "none", settings.jev_gate_threshold,
         n_preds if n_preds is not None else "skipped",
         pass1.get("skip") or pass1.get("err", "ok")[:80], bool(pass1.get("late")), script_of(text), language or "",
         len(pass1.get("sentences") or ()), pass1.get("ms", ""), q8, url, prediction_id or "",
+        pass1.get("jev_model") or "",
     )
 
 
@@ -1541,17 +1545,18 @@ def _fire_jev_gate_ab(*, text: str, question: str, url: str | None, n_preds: int
             alt = await jev_pass1(
                 text=text, question=simple,
                 api_key=settings.typesafe_api_key, api_url=settings.jev_shadow_api_url,
-                timeout_s=settings.jev_gate_timeout_seconds,
+                timeout_s=settings.jev_gate_timeout_seconds, model=settings.jev_model,
             )
             if not alt or "max_noul" not in alt:
                 return
             logger.info(
                 "event=jev_gate_ab q8=%s live_max_noul=%s simp_max_noul=%.3f n_preds=%d "
-                "script=%s n_sents=%d jev_ms=%s url=%s simp=%r",
+                "script=%s n_sents=%d jev_ms=%s url=%s simp=%r jev_model=%s",
                 question_fingerprint(question),
                 f"{live_max_noul:.3f}" if live_max_noul is not None else "none",
                 float(alt["max_noul"]), n_preds, script_of(text),
                 len(alt.get("sentences") or ()), alt.get("ms", ""), url, simple,
+                alt.get("jev_model") or "",
             )
         except Exception:  # noqa: BLE001 - measurement only
             logger.debug("jev gate A/B failed", exc_info=True)
@@ -1808,7 +1813,7 @@ async def _process_article(
         jev_pass1_task = fire_jev_pass1(
             text=text, question=question,
             api_key=settings.typesafe_api_key, api_url=settings.jev_shadow_api_url,
-            timeout_s=settings.jev_gate_timeout_seconds,
+            timeout_s=settings.jev_gate_timeout_seconds, model=settings.jev_model,
         )
     if jev_pass1_task is not None and settings.jev_gate_enforce:
         try:
@@ -1912,6 +1917,7 @@ async def _process_article(
                 # One selection call per article when both flags are on (retro#850).
                 pass1=jev_pass1_result if jev_pass1_result and "nouls" in jev_pass1_result else None,
                 article_date=article_date,
+                model=settings.jev_model,
             )
         # Jev evidence_class corrector (retro#851): Jev re-reads each claim's quote with the
         # whole article. After the shadow snapshot above (it keeps Haiku's raw class) and
@@ -1921,7 +1927,7 @@ async def _process_article(
                 text=text, question=question,
                 quotes=[p.quote for p in extraction.predictions],
                 api_key=settings.typesafe_api_key, api_url=settings.jev_shadow_api_url,
-                timeout_s=settings.jev_class_timeout_seconds,
+                timeout_s=settings.jev_class_timeout_seconds, model=settings.jev_model,
             )
             if settings.jev_class_enforce:
                 extraction.predictions = apply_jev_classes(

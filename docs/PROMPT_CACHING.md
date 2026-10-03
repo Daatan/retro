@@ -44,6 +44,16 @@ Later additions to the same path:
   09-26 it was dropped entirely on these calls, which retro#876 fixed. Multi-article
   `/forecast` requests share a `CacheWriteCoordinator`: the first call writes the cache,
   the rest wait for it and then read it.
+- **Single-article requests cache again (retro#894, 2026-10-03).** The "nobody reads the
+  write" premise above is about one request; the prefix (~22.8k tokens: instructor's schema
+  system message + `PROMPT_PREFIX`) is identical across *every* extractor call system-wide,
+  and news-indexer pushes arrive back-to-back (median gap 66 s), so a push can read what the
+  previous push or batch call wrote. Measured 09-26→10-02 (retro#849 comment): simulated push
+  hit rate ~58% vs a 21.7% break-even → ~$1.2/day; worst case (no reads) −$0.73/day.
+  `extractor_cache_single_article` (`EXTRACTOR_CACHE_SINGLE_ARTICLE`, default `true`) sends
+  the cache block on 1-article calls; `false` restores the uncached-prefix behaviour above.
+  The instructions are sent either way. Check: daatan `oracle_call_logs.cacheReadTokens` for
+  `source='news-indexer'` 48 h after deploy — revert if fewer than ~20% of pushes show a read.
 
 ## What did NOT change
 

@@ -3,7 +3,7 @@ import logging
 import re
 import unicodedata
 from datetime import date, timedelta
-from typing import Optional
+from typing import Optional, Protocol
 from urllib.parse import urlparse
 
 from .gatekeeper import has_no_article_page
@@ -1320,6 +1320,19 @@ set them to null — either is correct).
 """
 
 
+class ExtractionMemo(Protocol):
+    """An extraction memo (retro#895): remembers the model's RAW ``ExtractionOutput`` for an
+    exact (rendered prompt, schema, model) so an identical call skips Bedrock. Implemented in
+    ``forecast_api.extraction_memo_store`` (diskcache under data_dir); ``tm`` only sees this
+    interface, so the batch lane (which passes no memo) needs no store. ``key`` must cover the
+    response schema as well as ``model`` and ``prompt`` — the schema is ~27% of what the model
+    sees (retro#700) and is not in ``prompt``. Every method must fail open (miss / no-op)."""
+
+    def key(self, *, model: str, prompt: str) -> str: ...
+    async def get(self, key: str) -> Optional[str]: ...
+    async def put(self, key: str, value: str) -> None: ...
+
+
 async def extract_predictions(
     article_text: str,
     source_name: str,
@@ -1334,6 +1347,7 @@ async def extract_predictions(
     is_single_article: bool = False,
     cache_coordinator: Optional["CacheWriteCoordinator"] = None,
     model: Optional[str] = None,
+    memo: Optional[ExtractionMemo] = None,
 ) -> tuple["ExtractionOutput", dict]:
     """Returns (ExtractionOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
 
@@ -1372,6 +1386,16 @@ async def extract_predictions(
     default) keeps the configured global. A per-request opt-in, not a policy — callers who want a
     different model/cost tradeoff (e.g. a benchmark harness with a wider latency budget) pass one
     in; nothing here decides what a caller should choose.
+
+    ``memo`` (retro#895), when given, is consulted before the model is called. The key is the
+    FULL text the model sees (``PROMPT_PREFIX`` + the rendered prompt — the same whether or
+    not the prefix travels as a cache block), the model id and the memo's schema hash, so any
+    change to the article text, question, criteria, deadline, tail blocks, prompt, schema or
+    model misses naturally. A hit returns a freshly parsed copy of the stored RAW output with
+    ``usage={}`` (no tokens spent); a miss calls the model and stores its raw output before
+    returning, i.e. before any caller post-processing can mutate it. Callers run their
+    ``enforce_*`` chain on the returned object either way. Errors propagate uncached. A hit
+    bypasses ``cache_coordinator``, so it never claims (or waits on) the cache write.
     """
     # retro#803/#805: max_tokens 1200 -> 2200 below. 1200 already truncated v14 output on
     # quote-rich Hebrew articles; measured 2026-09-07 on the retro#545 A/B fixture (11 cases
@@ -1415,15 +1439,35 @@ async def extract_predictions(
     if is_single_article and not settings.extractor_cache_single_article:
         prompt, cached_prefix = PROMPT_PREFIX + prompt, None
 
+    effective_model = model or settings.extractor_model
+    memo_key: Optional[str] = None
+    if memo is not None:
+        memo_key = memo.key(model=effective_model, prompt=(cached_prefix or "") + prompt)
+        stored = await memo.get(memo_key)
+        if stored is not None:
+            try:
+                output = ExtractionOutput.model_validate_json(stored)
+            except Exception:  # noqa: BLE001 - a stale/malformed entry is a miss
+                logger.warning("event=extract_memo_error op=parse key=%s", memo_key[:16])
+            else:
+                logger.info("event=extract_memo result=hit key=%s model=%s n_preds=%d",
+                            memo_key[:16], effective_model, len(output.predictions))
+                return output, {}
+        logger.info("event=extract_memo result=miss key=%s model=%s", memo_key[:16], effective_model)
+
     async def _call_extractor():
         return await complete_structured(
-            model or settings.extractor_model, ExtractionOutput, prompt, max_tokens=2200, timeout=180,
+            effective_model, ExtractionOutput, prompt, max_tokens=2200, timeout=180,
             cached_prefix=cached_prefix,
         )
 
     if cache_coordinator is not None:
-        return await cache_coordinator.run(_call_extractor)
-    return await _call_extractor()
+        output, usage = await cache_coordinator.run(_call_extractor)
+    else:
+        output, usage = await _call_extractor()
+    if memo is not None and memo_key is not None and isinstance(output, ExtractionOutput):
+        await memo.put(memo_key, output.model_dump_json())
+    return output, usage
 
 
 class CacheWriteCoordinator:

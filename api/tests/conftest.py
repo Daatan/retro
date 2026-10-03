@@ -40,3 +40,7 @@ os.environ.setdefault("SETTLEMENT_VERIFIER_VOTES", "1")
 # test_event_decomposition_store.py exercises the store directly against a
 # tmp_path, unaffected by this.
 os.environ.setdefault("EVENT_DECOMPOSITION_CACHE_ENABLED", "false")
+# The extraction memo (retro#895) — same reasons again: default path under data_dir, and a
+# cross-test hit would skip a mocked extractor call. test_extraction_memo.py turns it on
+# against a tmp_path store.
+os.environ.setdefault("EXTRACTION_MEMO_ENABLED", "false")

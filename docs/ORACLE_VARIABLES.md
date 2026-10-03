@@ -3215,3 +3215,36 @@ the model sees is byte-identical either way.
 (no reads) −$0.73/day. **Kill criterion:** 48 h after deploy, if fewer than ~20% of
 `source='news-indexer'` rows in daatan `oracle_call_logs` show `cacheReadTokens > 0`, set the
 variable to `false`.
+
+
+## 2026-10-03 — extraction memo (retro#895, umbrella #849)
+
+28% of extractor calls (09-26→10-02) repeated a (url, question) pair already extracted in the
+previous 24 h, 36% within the 7-day window — nearly all from the bayesoracle series cron and the
+paper bot (retro#620), whose daily re-asks always miss the 1-hour whole-response `forecast_cache`,
+plus the `retry_relaxed_search` shadow (retro#621 rung 1), which re-runs the forecast and
+re-extracts the primary pass's articles. Nothing below the response cache memoised an extraction.
+
+`extraction_memo_store.py` (diskcache under `data_dir`, the `subject_card_store` /
+`settlement_verdict_store` shape) holds the model's **raw** `ExtractionOutput` keyed on
+sha256(`EXTRACTOR_SCHEMA_HASH`, model id, the full text the model is sent — `PROMPT_PREFIX` plus the
+rendered suffix with article text, question, event description/criteria, deadline, article date
+and the short-form / language / conditional tails). Any change to any of those misses; the
+prompt-cache split (retro#894) does not change the key. On a hit the Bedrock call is skipped
+(`usage={}`, so `token_usage` drops by that call) and **everything after it still runs**: the Jev
+shadow/class paths, `flag_claim_stance_sign_conflicts`, the `enforce_*` chain and every audit —
+so a post-processing fix applies to memoised extractions immediately. Failed calls are never
+stored. The batch lane (`tm/runner.py`) passes no memo and is unchanged.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `extraction_memo_enabled` (`EXTRACTION_MEMO_ENABLED`) | `true` | Kill switch; `false` = every call goes to the model, as before. Env line + restart, no deploy. |
+| `extraction_memo_ttl_hours` (`EXTRACTION_MEMO_TTL_HOURS`) | `24` | Entry lifetime. Measured saving ~$1.9/day at 24 h, ~$2.5/day at 168 h (7 d). |
+| `extraction_memo_path` (`EXTRACTION_MEMO_PATH`) | empty = `data_dir/extraction_memo` | diskcache **directory**; deleting it is the manual invalidation lever. 256 MB LRU bound. |
+
+**Semantics to know.** Haiku at temperature 0 is not fully deterministic (retro#532), so a memo
+hit freezes one roll per exact input for the TTL. For the series cron and the paper bot, which
+re-ask the same question over the same articles, that is a consistency gain rather than a loss.
+**Log:** `event=extract_memo result=hit|miss key=<16 hex> model=…` (`n_preds=` on a hit);
+`event=extract_memo_error op=get|put|parse` on a store failure (fail-open). The hit rate is
+`grep -c 'result=hit'` over `grep -c 'event=extract_memo '` on the Oracul log.

@@ -199,6 +199,7 @@ from .models import (
 )
 from .config import settings
 from .resolution_scorer import archetype_base_rate
+from .extraction_memo_store import ExtractionMemoStore
 from .settlement_verdict_store import get_verdict, put_verdict, verdict_key
 from .event_decomposition import decompose_event
 from .event_decomposition_store import (
@@ -1568,6 +1569,18 @@ def _fire_jev_gate_ab(*, text: str, question: str, url: str | None, n_preds: int
     task.add_done_callback(_AB_TASKS.discard)
 
 
+def _extraction_memo() -> ExtractionMemoStore | None:
+    """The extraction memo (retro#895) when enabled, else None. Read per call so the kill
+    switch and TTL are the live settings; the diskcache handle itself is cached per path."""
+    if not settings.extraction_memo_enabled:
+        return None
+    return ExtractionMemoStore(
+        settings.resolved_extraction_memo_path,
+        ttl_seconds=settings.extraction_memo_ttl_hours * 3600,
+        schema_hash=EXTRACTOR_SCHEMA_HASH,
+    )
+
+
 async def _process_article(
     result: SearchResult,
     question: str,
@@ -1860,6 +1873,7 @@ async def _process_article(
             is_single_article=is_single_article,
             cache_coordinator=cache_coordinator,
             model=extractor_model,
+            memo=_extraction_memo(),
         )
         if usage_events is not None and extract_usage:
             usage_events.append(extract_usage)

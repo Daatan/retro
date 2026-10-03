@@ -223,15 +223,27 @@ See `DESIGN.md` for the full target architecture. Items not yet built:
 - **Correlated parents / Gaussian copula** — multi-parent joint distributions
 - **`bayes_graph.html`** drilldown per DESIGN spec (current `graph.html` is a working prototype)
 
-## Daily Oracul node series (retro#577)
+## Oracul node series, every 3 days (retro#577, retro#896)
 
 `series/log_nodes.py` asks the v1 Oracul (`POST /forecast`) every node question in
-`series/questions.json` once per UTC day and appends one JSON line per node to a JSONL
-file (`{date,node_id,question,probability,ci,articles_used,confidence,insufficient_data,sources}`).
-Idempotent per day, sequential with a sleep. Runs from cron on the Oracul box
-(`06:30 UTC`, output `/home/ubuntu/oracle-series/nodes.jsonl`). API key from
-`ORACLE_API_KEY` (env or repo `.env`).
+`series/questions.json` and appends one JSON line per node to a JSONL file
+(`{date,node_id,question,probability,ci,articles_used,confidence,insufficient_data,sources}`).
+Idempotent per UTC day, sequential with a sleep. API key from `ORACLE_API_KEY` (env or repo `.env`).
+
+**Cadence: every 3 days** (was daily until 2026-10; 57 questions ≈ 320 Haiku extractions ≈ $3.4 per
+run — retro#896). Cron on the Oracul box still fires daily at `06:30 UTC`; `--min-interval-days 3`
+makes the script skip unless the newest `date` in the JSONL is today (finish a partial day) or ≥ 3
+days old. The JSONL is the state, so a run that wrote nothing (API down) is retried the next morning.
+This is a real 72 h stride; `*/3` in cron's day-of-month field would reset at every month boundary.
+The cron line is committed as `infra/oracle-series.crontab` and installed **by hand** with
+`sudo bash /home/ubuntu/truthmachine/infra/install_oracle_series_cron.sh` (backs up the old crontab;
+`deploy_oracle.sh` does not run it). Output `/home/ubuntu/oracle-series/nodes.jsonl`.
+
+Consequences for consumers (none read the file yet): the paired v1/v2 scoring in
+`Daatan/docs planning/oracle-2-relations-graph.md` §8 is per snapshot, not per day. The 1-day
+horizon becomes "nearest snapshot ≤ 2 days before", and first differences are 3-day differences.
 
 ```
-cd bayesoracle && ../pipeline/.venv/bin/python series/log_nodes.py --out /home/ubuntu/oracle-series/nodes.jsonl
+# manual run; --min-interval-days 0 forces one regardless of the last snapshot
+cd bayesoracle && ../pipeline/.venv/bin/python series/log_nodes.py --out /home/ubuntu/oracle-series/nodes.jsonl --min-interval-days 0
 ```

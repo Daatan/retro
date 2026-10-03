@@ -62,6 +62,14 @@ jobs:
       - name: Run polymarket-paper systemd unit tests
         run: bash infra/tests/test_polymarket_paper_timer.sh
 
+      # The node-series cron line only runs on the oracle box (retro#896): pin
+      # the every-3-days guard flag and that a deploy never installs it.
+      - name: shellcheck install_oracle_series_cron.sh
+        run: shellcheck -S error infra/install_oracle_series_cron.sh
+
+      - name: Run oracle-series cron tests
+        run: bash infra/tests/test_oracle_series_cron.sh
+
   pytest:
     runs-on: ubuntu-latest
     strategy:

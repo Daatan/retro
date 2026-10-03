@@ -48,6 +48,7 @@ NON_STAGE_ENABLED_FLAGS = frozenset(
         "settlement_verdict_cache_enabled",
         "event_decomposition_cache_enabled",
         "subject_gate_cache_enabled",
+        "extraction_memo_enabled",
     }
 )
 

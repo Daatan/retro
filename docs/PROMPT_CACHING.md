@@ -54,6 +54,10 @@ Later additions to the same path:
   the cache block on 1-article calls; `false` restores the uncached-prefix behaviour above.
   The instructions are sent either way. Check: daatan `oracle_call_logs.cacheReadTokens` for
   `source='news-indexer'` 48 h after deploy — revert if fewer than ~20% of pushes show a read.
+- **Extraction memo (retro#895).** A separate, coarser lever: an extractor call whose whole
+  input (prompt, article, question, schema, model) repeats within `extraction_memo_ttl_hours`
+  skips Bedrock entirely and reuses the stored raw output. See `docs/ORACLE_VARIABLES.md`
+  (2026-10-03, retro#895).
 
 ## What did NOT change
 

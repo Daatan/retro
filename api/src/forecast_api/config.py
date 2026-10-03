@@ -772,6 +772,21 @@ class ApiSettings(BaseSettings):
     subject_gate_cache_enabled: bool = True
     subject_gate_cache_path: Path = Path("")  # empty = data_dir/subject_card_cache
 
+    # Extraction memo (retro#895, umbrella #849). Reuses the extractor's RAW output when the
+    # exact same text (prompt + article + question/criteria + tails) goes to the same model
+    # with the same response schema within the TTL; the Bedrock call is skipped and every
+    # post-processing step still runs. Measured 09-26→10-02: 28% of extractor calls repeat a
+    # (url, question) within 24 h, ~$1.9/day (bayesoracle cron + paper bot + the retro#621
+    # relaxed-retry shadow). Default ON (Mark approved 2026-10-03); kill switch
+    # EXTRACTION_MEMO_ENABLED=false in the drop-in / .env, no deploy. TTL 24 h to start — the
+    # 7-day figure (~$2.5/day) is one env line (EXTRACTION_MEMO_TTL_HOURS=168). A hit freezes
+    # one temperature-0 roll per exact input for the TTL (retro#532: not fully deterministic).
+    # Log: `event=extract_memo result=hit|miss`. Path is a diskcache DIRECTORY under data_dir;
+    # deleting it is the manual invalidation lever.
+    extraction_memo_enabled: bool = True
+    extraction_memo_ttl_hours: float = 24.0
+    extraction_memo_path: Path = Path("")  # empty = data_dir/extraction_memo
+
     # The premise verifier (retro#575 slice 1) — shadow/log-only, off by
     # default. Asks whether a question's premise is already dead (resolved
     # or structurally impossible) before pricing it. `enforce` is unread this
@@ -1087,6 +1102,12 @@ class ApiSettings(BaseSettings):
         if self.event_decomposition_cache_path != Path(""):
             return self.event_decomposition_cache_path
         return self.data_dir / "event_decomposition_cache"
+
+    @property
+    def resolved_extraction_memo_path(self) -> Path:
+        if self.extraction_memo_path != Path(""):
+            return self.extraction_memo_path
+        return self.data_dir / "extraction_memo"
 
     @property
     def resolved_subject_card_cache_path(self) -> Path:

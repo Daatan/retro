@@ -1,0 +1,7 @@
+# bayesoracle node series (retro#577), cadence every 3 days (retro#896).
+# Installed into the `ubuntu` user's crontab by infra/install_oracle_series_cron.sh
+# — by hand only, deploy_oracle.sh does not run it. Cron fires daily; the
+# --min-interval-days guard in log_nodes.py decides whether today is a run day
+# (a true 72h stride, unlike `*/3` in the day-of-month field, which resets at
+# month boundaries). Runs from the batch tree, which self-syncs to main.
+30 6 * * * cd /home/ubuntu/truthmachine/bayesoracle && ../pipeline/.venv/bin/python series/log_nodes.py --out /home/ubuntu/oracle-series/nodes.jsonl --sleep 2 --min-interval-days 3 >> /home/ubuntu/oracle-series/cron.log 2>&1

@@ -9,7 +9,14 @@ co-movement between nodes can be measured.
     python series/log_nodes.py --out /var/lib/oracle-series/nodes.jsonl
 
 Idempotent per day: node ids already present for today's date are skipped, so
-re-running after a partial failure only fills the gaps. Calls are sequential
+re-running after a partial failure only fills the gaps.
+
+Cadence (retro#896): cron fires daily, ``--min-interval-days N`` makes the script
+skip unless the newest ``date`` already in the JSONL is today (gap-fill) or at least
+N days old. The JSONL is the state — no separate last-run file — and a day that
+wrote nothing (API down) does not move the anchor, so the next cron run retries.
+The default of 1 keeps the original every-day behaviour; the box crontab
+(``infra/oracle-series.crontab``) passes 3. Calls are sequential
 with a small sleep (rate, not burst). The API key is read from the environment
 (``ORACLE_API_KEY``) or from a ``.env`` file — never hardcoded.
 """
@@ -108,6 +115,37 @@ def logged_today(out: Path, date: str) -> set[str]:
     return done
 
 
+def last_logged_date(out: Path) -> str | None:
+    """Newest ``date`` present in the JSONL, or None if the file is empty/missing."""
+    if not out.exists():
+        return None
+    last = None
+    for line in out.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            d = json.loads(line).get("date")
+        except json.JSONDecodeError:
+            continue
+        if isinstance(d, str) and (last is None or d > last):
+            last = d
+    return last
+
+
+def due(today: str, last: str | None, min_interval_days: int) -> bool:
+    """Whether a run on ``today`` should proceed (retro#896).
+
+    Runs if nothing is logged yet, if ``last`` is today (finish a partial day),
+    or if at least ``min_interval_days`` have passed. ``min_interval_days <= 1``
+    is the original every-day behaviour; 0 also forces a run (manual bypass).
+    """
+    if last is None or last == today or min_interval_days <= 1:
+        return True
+    gap = (dt.date.fromisoformat(today) - dt.date.fromisoformat(last)).days
+    return gap >= min_interval_days
+
+
 def _to_prob(x):
     """Oracul stance mean/ci are on [-1, 1]; probability = (mean + 1) / 2."""
     return None if x is None else round((float(x) + 1) / 2, 4)
@@ -189,7 +227,16 @@ def main(argv=None) -> int:
     ap.add_argument("--max-articles", type=int, default=8)
     ap.add_argument("--date", help="override UTC date (YYYY-MM-DD)")
     ap.add_argument("--only", help="comma-separated node ids (e.g. pm.BIBI_PM)")
+    ap.add_argument("--min-interval-days", type=int, default=1,
+                    help="skip unless the newest logged date is today or >= N days old "
+                         "(default 1 = daily; 0 forces a run)")
     args = ap.parse_args(argv)
+
+    today = args.date or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
+    last = last_logged_date(args.out)
+    if not due(today, last, args.min_interval_days):
+        print(f"skip: last logged {last}, today {today}, interval {args.min_interval_days}d")
+        return 0
 
     load_env()
     questions = load_questions()
@@ -200,7 +247,7 @@ def main(argv=None) -> int:
         want = set(args.only.split(","))
         questions = [(n, q) for n, q in questions if n in want]
     forecast = http_forecaster(args.api, api_key(), args.max_articles)
-    n = run(questions, args.out, forecast, date=args.date, sleep_s=args.sleep)
+    n = run(questions, args.out, forecast, date=today, sleep_s=args.sleep)
     print(f"wrote {n} records to {args.out}")
     return 0
 

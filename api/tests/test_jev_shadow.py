@@ -50,7 +50,8 @@ def _score(level: int, n: int) -> dict:
             "probabilities": {str(k): (1.0 if k == level else 0.0) for k in range(n)}}
 
 
-def _transport(calls: list, *, fail: bool = False, urls: list | None = None):
+def _transport(calls: list, *, fail: bool = False, urls: list | None = None,
+               served: str | None = "jev-1.13.0"):
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         calls.append(body)
@@ -74,8 +75,10 @@ def _transport(calls: list, *, fail: bool = False, urls: list | None = None):
                            "reporting": 0.7, "opinion": 0.1}}}
         else:  # selection: sentence 0 and 2 bear on the question, 1 does not
             answers = {k: {"type": "noul", "noul": {"s0": 0.9, "s1": 0.05, "s2": 0.8}[k]} for k in qs}
-        return httpx.Response(200, json={"model": "jev-1.13.0", "answers": answers,
-                                         "usage": {"input_tokens": 100, "output_tokens": 10}})
+        body_out = {"answers": answers, "usage": {"input_tokens": 100, "output_tokens": 10}}
+        if served is not None:
+            body_out["model"] = served
+        return httpx.Response(200, json=body_out)
     return httpx.MockTransport(handler)
 
 
@@ -83,9 +86,11 @@ def _transport(calls: list, *, fail: bool = False, urls: list | None = None):
 def _clear_caches():
     js._NEG_CACHE.clear()
     js._KEY.clear()
+    js._SERVED.clear()
     yield
     js._NEG_CACHE.clear()
     js._KEY.clear()
+    js._SERVED.clear()
 
 
 def test_run_selects_scores_and_logs(caplog):
@@ -401,10 +406,10 @@ def test_date_pick_none_and_failed_date_call_do_not_break_the_shadow():
 
     real = js._ask
 
-    async def flaky(client, api_key, state, questions, api_url):
+    async def flaky(client, api_key, state, questions, api_url, model=js.MODEL):
         if "when" in questions:
             raise httpx.ReadTimeout("slow")
-        return await real(client, api_key, state, questions, api_url)
+        return await real(client, api_key, state, questions, api_url, model)
     js._ask, calls = flaky, []
     try:
         p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[SETTLED],
@@ -420,12 +425,12 @@ def test_one_failed_scoring_call_drops_only_its_row():
     real = js._ask
     seen = {"n": 0}
 
-    async def flaky(client, api_key, state, questions, api_url):
+    async def flaky(client, api_key, state, questions, api_url, model=js.MODEL):
         if "stance" in questions:
             seen["n"] += 1
             if seen["n"] == 1:
                 raise httpx.HTTPStatusError("429", request=None, response=None)
-        return await real(client, api_key, state, questions, api_url)
+        return await real(client, api_key, state, questions, api_url, model)
     js._ask = flaky
     try:
         p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[SETTLED],
@@ -434,3 +439,69 @@ def test_one_failed_scoring_call_drops_only_its_row():
         js._ask = real
     assert "err" not in p and p["score_err"] == 1
     assert len(p["cand"]) == 2 and p["dates"]
+
+
+# --- retro#863: pinned model, served version recorded -------------------------------------
+
+def test_default_model_is_pinned_not_latest():
+    from forecast_api.config import ApiSettings
+    assert js.MODEL == "jev-1.13.0"
+    assert ApiSettings.model_fields["jev_model"].default == js.MODEL   # setting default = same pin
+    assert "latest" not in js.MODEL
+
+
+def test_every_request_carries_the_configured_model_and_payload_the_served_one(caplog):
+    calls: list = []
+    haiku = [{"quote": "Analysts expect the Bank of Israel to cut rates in October.",
+              "stance": 0.7, "settled": True, "claim_strength": 0.6, "evidence_class": "reporting"}]
+    with caplog.at_level(logging.INFO, logger="forecast_api.jev_shadow"):
+        p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=haiku,
+                                          api_key="k", model="jev-9.9.9", article_date="2026-09-23",
+                                          transport=_transport(calls, served="jev-9.9.9")))
+    assert calls and all(c["model"] == "jev-9.9.9" for c in calls)   # selection, neg, scoring, date
+    assert any("when" in c["questions"] for c in calls)
+    assert p["jev_model"] == "jev-9.9.9"
+    line = next(r.getMessage() for r in caplog.records if "event=jev_shadow" in r.getMessage())
+    assert json.loads(line.split("payload=", 1)[1])["jev_model"] == "jev-9.9.9"
+
+
+def test_pass1_records_the_served_model():
+    out = asyncio.run(js.jev_pass1(text=ARTICLE, question=QUESTION, api_key="k",
+                                   transport=_transport([], served="jev-1.13.0")))
+    assert out["jev_model"] == "jev-1.13.0"
+
+
+def test_response_without_model_field_is_tolerated():
+    out = asyncio.run(js.jev_pass1(text=ARTICLE, question=QUESTION, api_key="k",
+                                   transport=_transport([], served=None)))
+    assert "err" not in out and out["jev_model"] is None
+    p = asyncio.run(js.run_jev_shadow(text=ARTICLE, question=QUESTION, url="u", haiku_predictions=[],
+                                      api_key="k", transport=_transport([], served=None)))
+    assert "err" not in p and p["jev_model"] is None
+
+
+def test_served_version_logged_once_per_change_and_warns_on_mismatch(caplog):
+    def model_lines():
+        return [r for r in caplog.records if "event=jev_model" in r.getMessage()]
+
+    with caplog.at_level(logging.INFO, logger="forecast_api.jev_shadow"):
+        for _ in range(2):
+            asyncio.run(js.jev_pass1(text=ARTICLE, question=QUESTION, api_key="k",
+                                     transport=_transport([], served="jev-1.13.0")))
+        lines = model_lines()
+        assert len(lines) == 1                                   # many calls, one line
+        assert lines[0].levelno == logging.INFO
+        assert "requested=jev-1.13.0 served=jev-1.13.0 previous=none" in lines[0].getMessage()
+
+        asyncio.run(js.jev_pass1(text=ARTICLE, question=QUESTION, api_key="k",
+                                 transport=_transport([], served="jev-1.14.0")))
+        lines = model_lines()
+        assert len(lines) == 2
+        assert lines[1].levelno == logging.WARNING              # served != pinned
+        assert "requested=jev-1.13.0 served=jev-1.14.0 previous=jev-1.13.0" in lines[1].getMessage()
+
+
+def test_served_model_helper():
+    assert js.served_model([{"model": "a"}, {"model": "a"}, RuntimeError("x")]) == "a"
+    assert js.served_model([{"model": "b"}, {"model": "a"}]) == "a,b"
+    assert js.served_model([{}, RuntimeError("x")]) is None

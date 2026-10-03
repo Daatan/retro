@@ -40,7 +40,8 @@ from typing import Optional, Sequence
 import httpx
 
 from forecast_api.jev_shadow import (
-    API_URL, EVIDENCE_CLASSES, _TASKS, _ask, _top_choice, locate_quote, resolve_api_key, segment,
+    API_URL, EVIDENCE_CLASSES, MODEL, _TASKS, _ask, _top_choice, locate_quote, resolve_api_key,
+    segment, served_model,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,10 +64,11 @@ async def jev_evidence_classes(
     max_sentences: int = 400,
     timeout_s: float = 1.5,
     transport: Optional[httpx.AsyncBaseTransport] = None,
+    model: str = MODEL,
 ) -> dict:
     """Jev's class for each quote: `classes` and `p` are parallel to `quotes`, None / 0.0
     where the quote is not in the text or its call failed. Also `tok_in`, `ms`, `err_n`,
-    or `skip`/`err` for the whole article. Never raises."""
+    `jev_model` (the served version, retro#863), or `skip`/`err` for the whole article. Never raises."""
     t0 = time.perf_counter()
     out: dict = {"classes": [None] * len(quotes), "p": [0.0] * len(quotes)}
     try:
@@ -91,7 +93,7 @@ async def jev_evidence_classes(
         async with httpx.AsyncClient(timeout=timeout_s, transport=transport) as client:
             resps = await asyncio.wait_for(asyncio.gather(*[
                 _ask(client, api_key, {"sentence": s, "related_event": question, "article": article},
-                     CLASS_QUESTION, api_url)
+                     CLASS_QUESTION, api_url, model)
                 for _, s in jobs
             ], return_exceptions=True), timeout=timeout_s)
         tok_in = err_n = 0
@@ -103,7 +105,7 @@ async def jev_evidence_classes(
             label, p = _top_choice((r.get("answers") or {}).get("evidence_class"))
             if label in EVIDENCE_CLASSES:
                 out["classes"][k], out["p"][k] = label, round(p, 3)
-        out.update(tok_in=tok_in, err_n=err_n)
+        out.update(tok_in=tok_in, err_n=err_n, jev_model=served_model(resps))
     except Exception as exc:  # never let Jev affect /forecast
         out["err"] = repr(exc)[:200]
     finally:
@@ -132,7 +134,7 @@ def apply_jev_classes(predictions: list, result: dict, *, enforce: bool, url: st
                 p.evidence_class = jev
     payload = {"url": url, "mode": "enforce" if enforce else "shadow", "changed": changed,
                "kept_opinion": kept_opinion, "rows": rows, "ms": result.get("ms")}
-    for key in ("tok_in", "err_n", "skip", "err"):
+    for key in ("tok_in", "err_n", "jev_model", "skip", "err"):
         if key in result:
             payload[key] = result[key]
     logger.info("event=jev_class payload=%s", json.dumps(payload, ensure_ascii=False, separators=(",", ":")))

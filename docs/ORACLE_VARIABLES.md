@@ -2973,8 +2973,11 @@ questions — both features together cost one selection request per article.
 ```
 event=jev_gate would_skip=<bool> enforce=<bool> max_noul=<0.000|none> threshold=<0.00>
   n_preds=<Haiku claims|skipped> status=<ok|skip/err reason> late=<bool> script=<latin|he|ar|cyr|other>
-  language=<caller hint> n_sents=<n> jev_ms=<ms> url=<url> prediction_id=<id>
+  language=<caller hint> n_sents=<n> jev_ms=<ms> q8=<8 hex> url=<url> prediction_id=<id>
+  jev_model=<served version, empty if pass 1 got no answer>
 ```
+
+(`q8` was added by retro#849, `jev_model` by retro#863 — last on the line.)
 
 `script` is derived from the text itself because the caller's language hint is often absent,
 and the threshold is meant to be read per script: Hebrew selection quality is the open
@@ -3155,3 +3158,40 @@ when the whole article fails.)
 
 `jev_class` is the twelfth entry in `stages.py` (the 2026-09-25 section above lists the eleven
 that existed then).
+
+
+## 2026-10-03 — Jev model pinned, served version logged (retro#863)
+
+Every Jev request used to send `model: "jev-latest"` and nothing read back the `model` the API
+answers with. The gate threshold (`jev_gate_threshold`, and the 0.07 proposed in retro#850), the
+stance mapping and the `evidence_class` gold results were all measured on whatever version was
+serving at the time — and that version was recorded nowhere. If the alias moved, the threshold
+would silently stop meaning what it meant. The vendor's own guidance is to pin once thresholds
+are tuned. A direct call when the issue was filed (2026-09-24) reported `jev-1.13.0` (the issue's figure; not re-checked
+from this PR, which has no key access), so that is the pin.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `jev_model` (`JEV_MODEL`) | `jev-1.13.0` | The model every Jev call requests — shadow passes 1 and 2, the skip-gate's pass 1, the gate A/B's second pass 1, and the `evidence_class` corrector. Movable with a `.env`/drop-in line and a restart, no deploy. **Before moving it:** re-run the offline bench (the retro#850 gate replay and the retro#851 class gold) on the new version and re-derive `jev_gate_threshold` from it; a threshold carried across versions unmeasured is exactly what this pin prevents. |
+
+**Served version on every line.** `_ask` reads the `model` field of each response:
+
+- `event=jev_gate … prediction_id=<id> jev_model=<served>` and `event=jev_gate_ab … simp=<…> jev_model=<served>` —
+  appended **last**, so existing parsers of the earlier fields are unaffected; empty when pass 1
+  got no answer (skip/err).
+- `event=jev_shadow` and `event=jev_class` payloads gain a `jev_model` key (`null` when no call
+  answered). If responses within one article disagree, the value is the sorted versions joined by `,`.
+
+Per-line rather than once per process because analysis filters on `event=` and reads lines from
+several days and restarts; a once-per-process line is lost to log rotation and is not on the line
+being analysed. The per-line field costs ~20 bytes.
+
+**Change alert.** `event=jev_model requested=<pin> served=<served> previous=<prior|none>` is
+logged once per process when a served version is first seen and again whenever it changes —
+`INFO` when served equals the pin, `WARNING` when it does not (the vendor resolved the pin to
+something else). `grep 'event=jev_model'` on the Oracul log is the quick check after a deploy or a
+vendor announcement.
+
+OpenRouter's `/api/v1/systemone` (`jev_shadow_api_url`) takes the same request body; whether it
+accepts a pinned version string, rather than only `jev-latest`, is unverified — check
+`event=jev_model` / `status=` after switching endpoints.

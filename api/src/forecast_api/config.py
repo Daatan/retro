@@ -797,6 +797,12 @@ class ApiSettings(BaseSettings):
     jev_shadow_enabled: bool = False
     typesafe_api_key: str = ""
     jev_shadow_api_url: str = "https://api.typesafe.ai/v1/systemone"
+    # retro#863: the Jev model every Jev call requests (shadow, gate, gate A/B, class) — pinned,
+    # not `jev-latest`, because the gate threshold and the class/stance results were measured on
+    # one served version. Every jev_* log line carries the version the API reports back
+    # (`jev_model`), and `event=jev_model` logs it once per change (WARNING if it differs from
+    # this pin). Move it only after re-running the offline bench on the new version.
+    jev_model: str = "jev-1.13.0"
     jev_shadow_select_bar: float = 0.3
     jev_shadow_min_top: int = 3
     jev_shadow_max_candidates: int = 25

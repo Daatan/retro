@@ -180,6 +180,16 @@ def test_key_falls_back_to_ssm_once(monkeypatch):
     assert asked == [js.KEY_SSM_NAME]
 
 
+def test_key_ssm_name_is_configurable(monkeypatch):
+    import tm.web_search
+    from forecast_api.config import settings
+    asked = []
+    monkeypatch.setattr(tm.web_search, "_secret", lambda env, name: asked.append(name) or "k")
+    monkeypatch.setattr(settings, "jev_api_key_ssm_name", "/retro/prod/secrets/OPENROUTER_JEV_API_KEY")
+    assert js.resolve_api_key() == "k"
+    assert asked == ["/retro/prod/secrets/OPENROUTER_JEV_API_KEY"]
+
+
 def test_missing_key_skips_loudly(monkeypatch, caplog):
     import tm.web_search
     monkeypatch.setattr(tm.web_search, "_secret", lambda env, name: None)

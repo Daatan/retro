@@ -112,8 +112,11 @@ def resolve_api_key(configured: str = "") -> Optional[str]:
     if configured:
         return configured
     if not _KEY:
+        from forecast_api.config import settings
         from tm.web_search import _secret
-        _KEY.append(_secret("TYPESAFE_API_KEY", KEY_SSM_NAME))
+        # JEV_API_KEY_SSM_NAME points at another parameter, e.g. an OpenRouter key when
+        # JEV_SHADOW_API_URL is OpenRouter's System One endpoint.
+        _KEY.append(_secret("TYPESAFE_API_KEY", settings.jev_api_key_ssm_name or KEY_SSM_NAME))
     return _KEY[0]
 
 

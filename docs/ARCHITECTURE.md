@@ -522,6 +522,8 @@ docs#122 (free `SecureString`, same read pattern via `_secret()`):
 | `/retro/prod/secrets/GCP_SA_KEY_JSON` | GDELT BigQuery fallback (optional) |
 | `/retro/prod/secrets/NEWS_INDEXER_URL` / `NEWS_INDEXER_API_KEY` | news-indexer provider (optional) |
 | `/retro/prod/secrets/TYPESAFE_API_KEY` | Jev (TypeSafe System One) — `jev_shadow` / `jev_gate` / `jev_class` (optional; missing → `skip=no_key`, fail-open) |
+| `/retro/prod/secrets/JEV_PROVIDER` | Which Jev-API provider is live (`typesafe` / `openrouter` / `clef-flash` / `clef`), re-read every 60 s — retro#901 |
+| `/retro/prod/secrets/CLOUDFLARE_AI_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Workers AI (Clef), only when `JEV_PROVIDER` is a Clef model |
 | `/retro/prod/secrets/OPENROUTER_JEV_API_KEY` | Jev via OpenRouter (`JEV_API_KEY_SSM_NAME`, 2026-10-04: TypeSafe direct credits ran out, Mark bills through OpenRouter) |
 | `/daatan/shared/secrets/ORACLE_API_KEY` | `duel_report.py`'s SSM fallback for the Oracle `x-api-key` — one parameter, also read by daatan's app, so the two sides can't drift (docs#122 group 3; fixed the `daatan/oracle-api-key` dead reference below) |
 

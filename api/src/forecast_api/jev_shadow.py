@@ -29,9 +29,11 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import re
 import time
 import unicodedata
+from dataclasses import dataclass
 from datetime import date
 from typing import Optional, Sequence
 
@@ -103,21 +105,126 @@ _TASKS: set[asyncio.Task] = set()
 _NEG_CACHE: dict[str, float] = {}
 _NEG_CACHE_MAX = 1024
 KEY_SSM_NAME = "/retro/prod/secrets/TYPESAFE_API_KEY"
-# Resolved key per process: SSM is asked once, not per article.
-_KEY: list[Optional[str]] = []
+# Resolved key per SSM parameter, per process: SSM is asked once, not per article.
+_KEY: dict[str, Optional[str]] = {}
 
 
-def resolve_api_key(configured: str = "") -> Optional[str]:
-    """Configured key, else SSM (blocking boto3 call — run it off the event loop)."""
+@dataclass(frozen=True)
+class JevProvider:
+    """Where Jev-API calls go (retro#901). `calibrated` = the gate threshold and the class
+    corrector were measured on this model; an uncalibrated provider runs log-only (gate and
+    class enforce are ignored) until it is measured. `{account_id}` in `url` is filled from
+    SSM `CF_ACCOUNT_SSM_NAME`."""
+    name: str
+    url: str
+    model: str
+    key_ssm: str
+    key_env: str
+    calibrated: bool
+
+
+CF_ACCOUNT_SSM_NAME = "/retro/prod/secrets/CLOUDFLARE_ACCOUNT_ID"
+_CF_URL = "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/cloudflare/"
+# Cloudflare's REST API wraps the body in {"success", "result"} and caps a request at 64 questions.
+_CF_MAX_QUESTIONS = 64
+PROVIDERS: dict[str, JevProvider] = {
+    "typesafe": JevProvider("typesafe", API_URL, MODEL, KEY_SSM_NAME, "TYPESAFE_API_KEY", True),
+    # Same Jev 1.13 (served as typesafe/jev-1.13-20260917), billed through OpenRouter.
+    "openrouter": JevProvider("openrouter", "https://openrouter.ai/api/v1/systemone", "typesafe/jev-1.13",
+                              "/retro/prod/secrets/OPENROUTER_JEV_API_KEY", "OPENROUTER_JEV_API_KEY", True),
+    # Cloudflare Clef (Jev-API compatible, open weights) — not measured on our data yet.
+    "clef-flash": JevProvider("clef-flash", _CF_URL + "clef-flash", "clef-flash",
+                              "/retro/prod/secrets/CLOUDFLARE_AI_API_TOKEN", "CLOUDFLARE_AI_API_TOKEN", False),
+    "clef": JevProvider("clef", _CF_URL + "clef", "clef",
+                        "/retro/prod/secrets/CLOUDFLARE_AI_API_TOKEN", "CLOUDFLARE_AI_API_TOKEN", False),
+}
+_PROVIDER: dict = {}  # {"at": monotonic, "p": JevProvider} — the current choice, TTL-cached
+
+
+def _legacy_provider() -> JevProvider:
+    """No JEV_PROVIDER anywhere: the explicit settings (JEV_SHADOW_API_URL / JEV_MODEL /
+    JEV_API_KEY_SSM_NAME), exactly as before retro#901."""
+    from forecast_api.config import settings
+    return JevProvider("custom", settings.jev_shadow_api_url, settings.jev_model,
+                       settings.jev_api_key_ssm_name or KEY_SSM_NAME, "TYPESAFE_API_KEY", True)
+
+
+def _read_ssm(name: str) -> Optional[str]:
+    """One SSM read with short timeouts (it runs on a request path); None on any failure."""
+    try:
+        import boto3
+        from botocore.config import Config
+        client = boto3.client("ssm", region_name="eu-central-1",
+                              config=Config(connect_timeout=2, read_timeout=2, retries={"max_attempts": 1}))
+        return client.get_parameter(Name=name, WithDecryption=True)["Parameter"]["Value"].strip()
+    except Exception as exc:  # noqa: BLE001 - a missing parameter just means "not set"
+        logger.debug("jev provider: SSM %s unreadable: %r", name, exc)
+        return None
+
+
+def resolve_provider() -> JevProvider:
+    """The provider every Jev call uses now. JEV_PROVIDER (env) wins; else the SSM parameter
+    JEV_PROVIDER_SSM_NAME, re-read every `jev_provider_ttl_seconds` — so switching is one
+    `aws ssm put-parameter`, no restart; else the legacy explicit settings. Blocking (boto3):
+    call it off the event loop. Logs `event=jev_provider` whenever the choice changes."""
+    from forecast_api.config import settings
+    now = time.monotonic()
+    cached = _PROVIDER.get("p")
+    if cached is not None and now - _PROVIDER["at"] < settings.jev_provider_ttl_seconds:
+        return cached
+    name = (settings.jev_provider or "").strip()
+    source = "env"
+    if not name and settings.jev_provider_ssm_name:
+        name = (_read_ssm(settings.jev_provider_ssm_name) or "").strip()
+        source = "ssm"
+        if not name and cached is not None and cached.name != "custom":
+            # SSM blip: keep the last known choice rather than flapping to legacy.
+            _PROVIDER["at"] = now
+            return cached
+    if name and name not in PROVIDERS:
+        logger.warning("event=jev_provider unknown=%s known=%s — using the legacy settings",
+                       name, ",".join(PROVIDERS))
+        name = ""
+    p = PROVIDERS[name] if name else _legacy_provider()
+    if "{account_id}" in p.url:
+        acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or _read_ssm(CF_ACCOUNT_SSM_NAME)
+        if not acct:
+            logger.warning("event=jev_provider name=%s missing=CLOUDFLARE_ACCOUNT_ID — using the legacy settings", name)
+            p = _legacy_provider()
+        else:
+            p = JevProvider(p.name, p.url.format(account_id=acct), p.model, p.key_ssm, p.key_env, p.calibrated)
+    if cached is None or cached != p:
+        logger.info("event=jev_provider name=%s source=%s model=%s host=%s calibrated=%s previous=%s",
+                    p.name, source if name else "settings", p.model, httpx.URL(p.url).host, p.calibrated,
+                    cached.name if cached else "none")
+    _PROVIDER.update(at=now, p=p)
+    return p
+
+
+def current_provider() -> JevProvider:
+    """Last resolved provider, no I/O — for sync decisions (enforce or not) right after a call."""
+    return _PROVIDER.get("p") or _legacy_provider()
+
+
+def resolve_api_key(configured: str = "", provider: Optional[JevProvider] = None) -> Optional[str]:
+    """Configured key, else the provider's env var, else its SSM parameter (blocking boto3
+    call — run it off the event loop)."""
     if configured:
         return configured
-    if not _KEY:
-        from forecast_api.config import settings
+    p = provider or current_provider()
+    if p.key_ssm not in _KEY:
         from tm.web_search import _secret
-        # JEV_API_KEY_SSM_NAME points at another parameter, e.g. an OpenRouter key when
-        # JEV_SHADOW_API_URL is OpenRouter's System One endpoint.
-        _KEY.append(_secret("TYPESAFE_API_KEY", settings.jev_api_key_ssm_name or KEY_SSM_NAME))
-    return _KEY[0]
+        _KEY[p.key_ssm] = _secret(p.key_env, p.key_ssm)
+    return _KEY[p.key_ssm]
+
+
+async def resolve_target(api_key: str = "", api_url: Optional[str] = None,
+                         model: Optional[str] = None) -> tuple[Optional[str], str, str]:
+    """(key, url, model) for one Jev call: explicit arguments win (tests, direct callers),
+    the current provider fills the rest."""
+    p = await asyncio.to_thread(resolve_provider)
+    key = api_key or await asyncio.to_thread(resolve_api_key, "", p)
+    return key, api_url or p.url, model or p.model
 
 
 def _norm(s: str) -> str:
@@ -248,8 +355,8 @@ def served_model(responses: Sequence) -> Optional[str]:
     return ",".join(seen) if seen else None
 
 
-async def _ask(client: httpx.AsyncClient, api_key: str, state, questions: dict,
-               api_url: str = API_URL, model: str = MODEL) -> dict:
+async def _post(client: httpx.AsyncClient, api_key: str, state, questions: dict,
+                api_url: str, model: str) -> dict:
     r = await client.post(
         api_url,
         headers={"Authorization": f"Bearer {api_key}"},
@@ -257,6 +364,27 @@ async def _ask(client: httpx.AsyncClient, api_key: str, state, questions: dict,
     )
     r.raise_for_status()
     data = r.json()
+    if isinstance(data, dict) and "result" in data and "answers" not in data:
+        data = data["result"]  # Cloudflare REST envelope
+    return data
+
+
+async def _ask(client: httpx.AsyncClient, api_key: str, state, questions: dict,
+               api_url: str = API_URL, model: str = MODEL) -> dict:
+    if "api.cloudflare.com" in api_url:
+        # Clef's documented noul takes `instructions` only; it caps a request at 64 questions.
+        qs = {k: ({kk: vv for kk, vv in q.items() if kk != "criteria"} if q.get("type") == "noul" else q)
+              for k, q in questions.items()}
+        keys = list(qs)
+        chunks = [keys[i:i + _CF_MAX_QUESTIONS] for i in range(0, len(keys), _CF_MAX_QUESTIONS)]
+        parts = await asyncio.gather(*[
+            _post(client, api_key, state, {k: qs[k] for k in c}, api_url, model) for c in chunks])
+        data = {"model": parts[0].get("model"), "answers": {},
+                "usage": {"input_tokens": sum((x.get("usage") or {}).get("input_tokens", 0) for x in parts)}}
+        for x in parts:
+            data["answers"].update(x.get("answers") or {})
+    else:
+        data = await _post(client, api_key, state, questions, api_url, model)
     _note_served(model, data.get("model") if isinstance(data, dict) else None)
     return data
 
@@ -335,11 +463,11 @@ async def jev_pass1(
     text: str,
     question: str,
     api_key: str = "",
-    api_url: str = API_URL,
+    api_url: Optional[str] = None,
     max_sentences: int = 400,
     timeout_s: float = 30.0,
     transport: Optional[httpx.AsyncBaseTransport] = None,
-    model: str = MODEL,
+    model: Optional[str] = None,
 ) -> dict:
     """Pass 1 alone: segment the article and ask one `noul` per sentence (plus the cached
     per-question negation verdict). Returns a dict with `sentences`, `spans`, `norm_text`,
@@ -355,7 +483,7 @@ async def jev_pass1(
         if not sentences or len(sentences) > max_sentences:
             out["skip"] = "no_sentences" if not sentences else "too_long"
             return out
-        api_key = api_key or await asyncio.to_thread(resolve_api_key)
+        api_key, api_url, model = await resolve_target(api_key, api_url, model)
         if not api_key:
             out["skip"] = "no_key"
             return out
@@ -459,7 +587,7 @@ async def run_jev_shadow(
     url: str,
     haiku_predictions: Sequence[dict],
     api_key: str = "",
-    api_url: str = API_URL,
+    api_url: Optional[str] = None,
     select_bar: float = 0.3,
     min_top: int = 3,
     max_candidates: int = 25,
@@ -468,7 +596,7 @@ async def run_jev_shadow(
     transport: Optional[httpx.AsyncBaseTransport] = None,
     pass1: Optional[dict] = None,
     article_date: Optional[str] = None,
-    model: str = MODEL,
+    model: Optional[str] = None,
 ) -> Optional[dict]:
     """Run both Jev passes on one article and log `event=jev_shadow`. Returns the payload
     (for tests); never raises. A `pass1` result from `jev_pass1` (same text and question) is
@@ -494,7 +622,7 @@ async def run_jev_shadow(
         if "err" in pass1:
             payload["err"] = pass1["err"]
             return payload
-        api_key = api_key or await asyncio.to_thread(resolve_api_key)
+        api_key, api_url, model = await resolve_target(api_key, api_url, model)
         if not api_key:
             payload["skip"] = "no_key"
             return payload

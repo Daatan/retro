@@ -10,6 +10,8 @@ import os
 import tempfile
 
 os.environ.setdefault("ORACLE_API_KEY", "test-key")
+# No SSM lookup of the Jev provider under test (retro#901): legacy settings unless a test sets one.
+os.environ.setdefault("JEV_PROVIDER_SSM_NAME", "")
 
 # The forecast cache is disk-backed and shared across processes (retro#405) —
 # exactly the property that makes the REAL directory poisonous under test: a
@@ -44,3 +46,15 @@ os.environ.setdefault("EVENT_DECOMPOSITION_CACHE_ENABLED", "false")
 # cross-test hit would skip a mocked extractor call. test_extraction_memo.py turns it on
 # against a tmp_path store.
 os.environ.setdefault("EXTRACTION_MEMO_ENABLED", "false")
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _fresh_jev_provider():
+    """The Jev provider choice is TTL-cached per process (retro#901); no test inherits another's."""
+    from forecast_api import jev_shadow
+    jev_shadow._PROVIDER.clear()
+    yield
+    jev_shadow._PROVIDER.clear()

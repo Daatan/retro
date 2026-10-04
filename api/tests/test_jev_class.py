@@ -11,6 +11,7 @@ import pytest
 
 from forecast_api import forecaster
 from forecast_api import jev_class as jc
+from forecast_api import jev_shadow as js
 from forecast_api.config import settings as api_settings
 from tm.models import GatekeeperOutput, PredictionExtraction
 from tm.web_search import SearchResult
@@ -95,7 +96,7 @@ async def test_label_outside_the_enum_is_ignored():
 
 
 async def test_no_key_skips(monkeypatch):
-    monkeypatch.setattr(jc, "resolve_api_key", lambda: None)
+    monkeypatch.setattr(js, "resolve_api_key", lambda *a, **k: None)
     out = await jc.jev_evidence_classes(text=ARTICLE, question=QUESTION, quotes=["x"])
     assert out["skip"] == "no_key" and out["classes"] == [None]
 

@@ -217,7 +217,7 @@ from .settlement_semantic import (
 from .settlement_verifier import SettlementVote, Verdict, build_prompt, verify_settlement
 from .premise_verifier import PremiseResult, premise_check_triggered, verify_premise
 from .jev_class import apply_jev_classes, fire_jev_class_shadow, jev_evidence_classes
-from .jev_shadow import (evaluate_jev_gate, fire_jev_pass1, fire_jev_shadow, jev_pass1,
+from .jev_shadow import (current_provider, evaluate_jev_gate, fire_jev_pass1, fire_jev_shadow, jev_pass1,
                          question_fingerprint, script_of, simplify_question)
 from .subject_card import SubjectCard, derive_subject_card, evaluate_subject_gate
 from .subject_card_store import get_subject_card, put_subject_card, subject_card_key
@@ -1514,7 +1514,7 @@ def _log_jev_gate(
         "event=jev_gate would_skip=%s enforce=%s max_noul=%s threshold=%.2f n_preds=%s "
         "status=%s late=%s script=%s language=%s n_sents=%d jev_ms=%s q8=%s url=%s prediction_id=%s "
         "jev_model=%s",
-        would_skip, settings.jev_gate_enforce,
+        would_skip, settings.jev_gate_enforce and current_provider().calibrated,
         f"{max_noul:.3f}" if max_noul is not None else "none", settings.jev_gate_threshold,
         n_preds if n_preds is not None else "skipped",
         pass1.get("skip") or pass1.get("err", "ok")[:80], bool(pass1.get("late")), script_of(text), language or "",
@@ -1545,8 +1545,8 @@ def _fire_jev_gate_ab(*, text: str, question: str, url: str | None, n_preds: int
                 return
             alt = await jev_pass1(
                 text=text, question=simple,
-                api_key=settings.typesafe_api_key, api_url=settings.jev_shadow_api_url,
-                timeout_s=settings.jev_gate_timeout_seconds, model=settings.jev_model,
+                api_key=settings.typesafe_api_key,
+                timeout_s=settings.jev_gate_timeout_seconds,
             )
             if not alt or "max_noul" not in alt:
                 return
@@ -1825,8 +1825,8 @@ async def _process_article(
     if settings.jev_gate_enabled:
         jev_pass1_task = fire_jev_pass1(
             text=text, question=question,
-            api_key=settings.typesafe_api_key, api_url=settings.jev_shadow_api_url,
-            timeout_s=settings.jev_gate_timeout_seconds, model=settings.jev_model,
+            api_key=settings.typesafe_api_key,
+            timeout_s=settings.jev_gate_timeout_seconds,
         )
     if jev_pass1_task is not None and settings.jev_gate_enforce:
         try:
@@ -1836,7 +1836,9 @@ async def _process_article(
         except Exception:  # noqa: BLE001 - fail open, including asyncio.TimeoutError
             jev_pass1_result = {"err": "gate_timeout"}
         would_skip, max_noul = evaluate_jev_gate(jev_pass1_result, settings.jev_gate_threshold)
-        if would_skip:
+        # An uncalibrated Jev provider (retro#901, e.g. Clef before it is measured) runs log-only.
+        # Checked after pass 1: that call is what resolves the provider on a fresh worker.
+        if would_skip and current_provider().calibrated:
             _log_jev_gate(jev_pass1_result, would_skip=True, n_preds=None, text=text,
                           language=language, url=result.url, prediction_id=prediction_id,
                           question=question)
@@ -1923,7 +1925,6 @@ async def _process_article(
                     for p in extraction.predictions
                 ],
                 api_key=settings.typesafe_api_key,
-                api_url=settings.jev_shadow_api_url,
                 select_bar=settings.jev_shadow_select_bar,
                 min_top=settings.jev_shadow_min_top,
                 max_candidates=settings.jev_shadow_max_candidates,
@@ -1931,7 +1932,6 @@ async def _process_article(
                 # One selection call per article when both flags are on (retro#850).
                 pass1=jev_pass1_result if jev_pass1_result and "nouls" in jev_pass1_result else None,
                 article_date=article_date,
-                model=settings.jev_model,
             )
         # Jev evidence_class corrector (retro#851): Jev re-reads each claim's quote with the
         # whole article. After the shadow snapshot above (it keeps Haiku's raw class) and
@@ -1940,10 +1940,10 @@ async def _process_article(
             jev_class_kwargs = dict(
                 text=text, question=question,
                 quotes=[p.quote for p in extraction.predictions],
-                api_key=settings.typesafe_api_key, api_url=settings.jev_shadow_api_url,
-                timeout_s=settings.jev_class_timeout_seconds, model=settings.jev_model,
+                api_key=settings.typesafe_api_key,
+                timeout_s=settings.jev_class_timeout_seconds,
             )
-            if settings.jev_class_enforce:
+            if settings.jev_class_enforce and current_provider().calibrated:
                 extraction.predictions = apply_jev_classes(
                     extraction.predictions, await jev_evidence_classes(**jev_class_kwargs),
                     enforce=True, url=result.url or "",

@@ -816,6 +816,14 @@ class ApiSettings(BaseSettings):
     # OpenRouter key together with JEV_SHADOW_API_URL=https://openrouter.ai/api/v1/systemone
     # (and the OpenRouter model slug in JEV_MODEL) to bill Jev through OpenRouter.
     jev_api_key_ssm_name: str = "/retro/prod/secrets/TYPESAFE_API_KEY"
+    # retro#901: provider switch. One of jev_shadow.PROVIDERS (typesafe, openrouter, clef-flash,
+    # clef): sets URL, model and key together. JEV_PROVIDER (env) wins; else the SSM parameter
+    # below, re-read every `jev_provider_ttl_seconds`, so a switch is one
+    # `aws ssm put-parameter --overwrite` with no restart; neither → the three explicit settings
+    # above. Providers marked uncalibrated (Clef) run log-only: gate and class enforce are ignored.
+    jev_provider: str = ""
+    jev_provider_ssm_name: str = "/retro/prod/secrets/JEV_PROVIDER"
+    jev_provider_ttl_seconds: float = 60.0
     # retro#863: the Jev model every Jev call requests (shadow, gate, gate A/B, class) — pinned,
     # not `jev-latest`, because the gate threshold and the class/stance results were measured on
     # one served version. Every jev_* log line carries the version the API reports back

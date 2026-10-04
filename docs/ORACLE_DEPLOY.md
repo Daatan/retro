@@ -52,8 +52,31 @@ Rollback: delete the file on the host, daemon-reload, restart. What is actually 
 | `retry-relaxed-search-enabled.conf` | `RETRY_RELAXED_SEARCH_ENABLED=true` | retro#621 |
 | `jev-shadow-enabled.conf` | `JEV_SHADOW_ENABLED=true` | retro#840 |
 | `jev-gate-enabled.conf` | `JEV_GATE_ENABLED=true` (shadow; not `JEV_GATE_ENFORCE`) | retro#850 |
-| `jev-gate-ab-enabled.conf` | `JEV_GATE_AB_ENABLED=true` (needs the gate on) | retro#849 |
+| `jev-gate-enforce.conf` | `JEV_GATE_ENFORCE=true`, `JEV_GATE_THRESHOLD=0.07` | retro#850 |
+| `jev-openrouter.conf` | Jev URL/key/model = OpenRouter — fallback only; SSM `JEV_PROVIDER` decides (below) | retro#901 |
 | `jev-class-enabled.conf` | `JEV_CLASS_ENABLED=true`, `JEV_CLASS_ENFORCE=true` | retro#851 |
+
+## Switching the Jev provider (retro#901)
+
+Jev-API calls (skip-gate, shadow, `evidence_class` corrector) go to the provider named in SSM
+`/retro/prod/secrets/JEV_PROVIDER`. Each worker re-reads it every 60 s — **no restart, no deploy**:
+
+```bash
+aws ssm put-parameter --region eu-central-1 --name /retro/prod/secrets/JEV_PROVIDER \
+  --type String --overwrite --value openrouter      # typesafe | openrouter | clef-flash | clef
+```
+
+| Name | Endpoint | Model | Key (SSM) | Calibrated |
+|---|---|---|---|---|
+| `typesafe` | api.typesafe.ai | `jev-1.13.0` | `TYPESAFE_API_KEY` | yes |
+| `openrouter` | openrouter.ai `/api/v1/systemone` | `typesafe/jev-1.13` | `OPENROUTER_JEV_API_KEY` | yes |
+| `clef-flash` / `clef` | Cloudflare Workers AI | `clef-flash` / `clef` | `CLOUDFLARE_AI_API_TOKEN` (+ `CLOUDFLARE_ACCOUNT_ID`) | **no** |
+
+An uncalibrated provider runs **log-only**: the gate logs `enforce=False` and the class corrector
+only logs, whatever the flags say — the 0.07 threshold was measured on Jev 1.13. Every change logs
+`event=jev_provider name=… previous=…`; served versions stay in `event=jev_model`. `JEV_PROVIDER`
+in the environment overrides SSM; with neither, the explicit `JEV_SHADOW_API_URL` / `JEV_MODEL` /
+`JEV_API_KEY_SSM_NAME` apply. Presets live in `api/src/forecast_api/jev_shadow.py` `PROVIDERS`.
 
 ## Deploy flow
 

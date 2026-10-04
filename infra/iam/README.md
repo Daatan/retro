@@ -59,7 +59,10 @@ Inline policy for the existing `truthmachine-ec2-role` — the live source of tr
 which Bedrock models the Oracul/pipeline may invoke. Nova (gatekeeper)
 plus Claude Haiku 4.5 (extractor; both the cross-region inference profiles and
 the underlying foundation-model ARN, which cross-region routing requires in every member
-region — hence the `*` region). Adding a new extractor model = add its ARNs here and
+region — hence the `*` region), and Claude Sonnet 4.5 (`us.` profile only) for daatan's
+`evidence-second-opinion` re-reads (`EVIDENCE_SECOND_OPINION_MODEL`, daatan#1636) — it was
+missing until retro#904, so that detector silently produced nothing from 08-27 to 10-05.
+Adding a new extractor model = add its ARNs here and
 re-apply, or the host gets `AccessDenied` and every extraction fails (`reason:
 extraction_errors`, discovered 2026-07-12).
 

@@ -812,6 +812,10 @@ class ApiSettings(BaseSettings):
     jev_shadow_enabled: bool = False
     typesafe_api_key: str = ""
     jev_shadow_api_url: str = "https://api.typesafe.ai/v1/systemone"
+    # SSM SecureString the key is read from when TYPESAFE_API_KEY is unset. Point it at an
+    # OpenRouter key together with JEV_SHADOW_API_URL=https://openrouter.ai/api/v1/systemone
+    # (and the OpenRouter model slug in JEV_MODEL) to bill Jev through OpenRouter.
+    jev_api_key_ssm_name: str = "/retro/prod/secrets/TYPESAFE_API_KEY"
     # retro#863: the Jev model every Jev call requests (shadow, gate, gate A/B, class) — pinned,
     # not `jev-latest`, because the gate threshold and the class/stance results were measured on
     # one served version. Every jev_* log line carries the version the API reports back

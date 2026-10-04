@@ -2892,7 +2892,8 @@ expected-value stance never reaches ±1 while argmax over-saturates, so both are
 | Variable | Default | Meaning |
 |---|---|---|
 | `jev_shadow_enabled` | `False` | Master switch. |
-| `typesafe_api_key` | `""` | TypeSafe API key. Empty → SSM `/retro/prod/secrets/TYPESAFE_API_KEY`, read once per process; neither → `skip=no_key` on every article. |
+| `typesafe_api_key` | `""` | TypeSafe API key. Empty → SSM `jev_api_key_ssm_name`, read once per process; neither → `skip=no_key` on every article. |
+| `jev_api_key_ssm_name` | `/retro/prod/secrets/TYPESAFE_API_KEY` | SSM SecureString the Jev key is read from. Since 2026-10-04 Jev bills through OpenRouter: `/retro/prod/secrets/OPENROUTER_JEV_API_KEY` with `jev_shadow_api_url` = `https://openrouter.ai/api/v1/systemone` and the OpenRouter slug in `jev_model` (drop-in `jev-openrouter.conf`). |
 | `jev_shadow_api_url` | TypeSafe `/v1/systemone` | OpenRouter's `https://openrouter.ai/api/v1/systemone` takes the identical request (with an OpenRouter key). |
 | `jev_shadow_select_bar` | `0.3` | Pass-1 noul that makes a sentence a pass-2 candidate beyond the top `min_top`. |
 | `jev_shadow_min_top` | `3` | The best-ranked sentences always scored, whatever their noul (retro#845: rank is reliable, the absolute noul scale is not). |

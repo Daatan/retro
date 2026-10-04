@@ -40,7 +40,7 @@ from typing import Optional, Sequence
 import httpx
 
 from forecast_api.jev_shadow import (
-    API_URL, EVIDENCE_CLASSES, MODEL, _TASKS, _ask, _top_choice, locate_quote, resolve_api_key,
+    EVIDENCE_CLASSES, _TASKS, _ask, _top_choice, locate_quote, resolve_target,
     segment, served_model,
 )
 
@@ -60,11 +60,11 @@ async def jev_evidence_classes(
     question: str,
     quotes: Sequence[Optional[str]],
     api_key: str = "",
-    api_url: str = API_URL,
+    api_url: Optional[str] = None,
     max_sentences: int = 400,
     timeout_s: float = 1.5,
     transport: Optional[httpx.AsyncBaseTransport] = None,
-    model: str = MODEL,
+    model: Optional[str] = None,
 ) -> dict:
     """Jev's class for each quote: `classes` and `p` are parallel to `quotes`, None / 0.0
     where the quote is not in the text or its call failed. Also `tok_in`, `ms`, `err_n`,
@@ -77,7 +77,7 @@ async def jev_evidence_classes(
         if not sentences or len(sentences) > max_sentences:
             out["skip"] = "no_sentences" if not sentences else "too_long"
             return out
-        api_key = api_key or await asyncio.to_thread(resolve_api_key)
+        api_key, api_url, model = await resolve_target(api_key, api_url, model)
         if not api_key:
             out["skip"] = "no_key"
             return out

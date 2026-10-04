@@ -125,13 +125,13 @@ class TestJevGate:
         assert f"q8={expected} url=" in _gate_line(caplog)   # same question -> same fingerprint
 
     async def test_gate_line_carries_served_model_and_pass1_gets_the_pin(self, monkeypatch, caplog):
-        """retro#863: pass 1 is asked for `settings.jev_model`, and the version the API reported
-        serving rides the gate line — last, so existing field parsers are unaffected."""
-        monkeypatch.setattr(api_settings, "jev_model", "jev-1.13.0")
+        """retro#863: the version the API reported serving rides the gate line — last, so
+        existing field parsers are unaffected. retro#901: the model (and URL) are no longer
+        passed by the caller; pass 1 takes them from the live Jev provider."""
         fire = _fake_pass1({**HIGH, "jev_model": "jev-1.13.0"})
         with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
             await _process(monkeypatch, enabled=True, enforce=False, pass1=fire, extractor=_extractor_spy(1))
-        assert fire.seen[0]["model"] == "jev-1.13.0"
+        assert "model" not in fire.seen[0] and "api_url" not in fire.seen[0]
         assert _gate_line(caplog).endswith("prediction_id=pid-1 jev_model=jev-1.13.0")
         caplog.clear()
         with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
@@ -176,6 +176,28 @@ class TestJevGate:
         assert debugs[-1].outcome == "jev_gated" and debugs[-1].gate_passed is True
         assert "would_skip=True enforce=True max_noul=0.050 threshold=0.15 n_preds=skipped" in _gate_line(caplog)
         assert any("event=article_outcome outcome=jev_gated" in r.getMessage() for r in caplog.records)
+
+    async def test_uncalibrated_provider_never_skips(self, monkeypatch, caplog):
+        """retro#901: with an uncalibrated provider (Clef) the gate only logs, even when the
+        provider is first resolved by this very pass 1 (fresh worker, or right after a switch)."""
+        from forecast_api import jev_shadow as js
+        clef = js.JevProvider("clef-flash", "https://cf/x", "clef-flash", "/k", "K", False)
+        seen: list = []
+
+        def fire(**kwargs):
+            seen.append(kwargs)
+
+            async def go():
+                js._PROVIDER.update(at=time.monotonic(), p=clef)   # what resolve_target does
+                return LOW
+            return asyncio.get_running_loop().create_task(go())
+        ex = _extractor_spy()
+        with caplog.at_level(logging.INFO, logger="forecast_api.forecaster"):
+            out = await _process(monkeypatch, enabled=True, enforce=True, pass1=fire, extractor=ex)
+        ex.assert_awaited_once()
+        assert out is not None
+        assert "would_skip=True enforce=False max_noul=0.050" in _gate_line(caplog)
+        assert not any("outcome=jev_gated" in r.getMessage() for r in caplog.records)
 
     async def test_enforce_extracts_above_threshold(self, monkeypatch, caplog):
         ex = _extractor_spy()

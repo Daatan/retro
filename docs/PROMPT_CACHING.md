@@ -58,6 +58,14 @@ Later additions to the same path:
   input (prompt, article, question, schema, model) repeats within `extraction_memo_ttl_hours`
   skips Bedrock entirely and reuses the stored raw output. See `docs/ORACLE_VARIABLES.md`
   (2026-10-03, retro#895).
+- **Opt-in 1-hour TTL (retro#906).** `prompt_cache_ttl` (`PROMPT_CACHE_TTL`, default `""`)
+  adds `"ttl": "1h"` to the cache block; litellm forwards it to Bedrock's `cachePoint` for
+  Claude 4.5+ only and drops it for Nova. A 1h write costs 2× base input (5 min: 1.25×).
+  Measured 2026-10-05: after retro#894 Haiku wrote ~1.23M cache tokens/day (~54 prefix
+  writes), matching the ~54 extractor-call gaps/day that fall between 5 min and 1 h — each
+  of those becomes a read with the 1h TTL, about −$1.2/day. Check: CloudWatch
+  `AWS/Bedrock` `CacheWriteInputTokenCount` / `CacheReadInputTokenCount` for the Haiku model
+  ID, day before vs day after.
 
 ## What did NOT change
 

@@ -75,6 +75,16 @@ class Settings(BaseSettings):
     # flat string that still contains the prefix).
     extractor_cache_single_article: bool = True
 
+    # retro#906: TTL of the prompt-cache block. "" (default) keeps the plain
+    # {"type": "ephemeral"} block, i.e. Bedrock's 5-minute cache, byte-identical to before.
+    # "1h" asks for the 1-hour cache: a write costs 2x base input instead of 1.25x, but the
+    # ~9% of extractor calls that arrive 5-60 min after the previous one read the prefix
+    # instead of re-writing it (measured 2026-10-05: ~54 writes/day of the ~22.8k prefix).
+    # litellm forwards the ttl only to Claude 4.5+ on Bedrock and drops it for every other
+    # model (Nova), so the gatekeeper is unaffected. Enable with PROMPT_CACHE_TTL=1h in the
+    # oracle-api drop-in; unset it and restart to roll back.
+    prompt_cache_ttl: str = ""
+
     # Magnitude ceiling for a PRECURSOR fact (`is_occurrence=false`): the largest
     # |fact_signal| a fact that merely precedes the event may carry. The extractor
     # prompt has taught this number since the fact lane shipped, but a prompt is

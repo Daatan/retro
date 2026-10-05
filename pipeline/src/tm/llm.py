@@ -235,8 +235,11 @@ async def complete_structured(
     before caching existed — behaviour is unchanged.
     """
     if cached_prefix and settings.enable_prompt_cache and _model_supports_prompt_cache(model):
+        cache_control = {"type": "ephemeral"}
+        if settings.prompt_cache_ttl:
+            cache_control["ttl"] = settings.prompt_cache_ttl
         content = [
-            {"type": "text", "text": cached_prefix, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": cached_prefix, "cache_control": cache_control},
             {"type": "text", "text": prompt},
         ]
     else:

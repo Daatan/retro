@@ -426,6 +426,32 @@ class TestCompleteStructuredPromptCaching:
             {"type": "text", "text": "SUFFIX"},
         ]}]
 
+    async def test_cache_ttl_setting_adds_ttl_to_the_cache_block(self, monkeypatch):
+        """retro#906: PROMPT_CACHE_TTL=1h asks Bedrock for the 1-hour cache."""
+        monkeypatch.setattr(llm.settings, "enable_prompt_cache", True)
+        monkeypatch.setattr(llm.settings, "prompt_cache_ttl", "1h")
+        captured = self._patch_client(monkeypatch)
+
+        await llm.complete_structured(
+            "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0", dict, "SUFFIX",
+            max_tokens=10, timeout=5, cached_prefix="PREFIX ",
+        )
+        assert captured["messages"][0]["content"][0] == {
+            "type": "text", "text": "PREFIX ", "cache_control": {"type": "ephemeral", "ttl": "1h"},
+        }
+
+    async def test_litellm_forwards_1h_ttl_to_bedrock_for_haiku_only(self):
+        """The ttl only matters if litellm puts it in the Converse cachePoint. It does for
+        Claude 4.5 and drops it for Nova, which is what keeps the gatekeeper safe."""
+        from litellm.llms.bedrock.chat.converse_transformation import AmazonConverseConfig
+        block = {"type": "text", "text": "P", "cache_control": {"type": "ephemeral", "ttl": "1h"}}
+        cfg = AmazonConverseConfig()
+        haiku = cfg._get_cache_point_block(block, "content_block",
+                                           model="us.anthropic.claude-haiku-4-5-20251001-v1:0")
+        nova = cfg._get_cache_point_block(block, "content_block", model="us.amazon.nova-micro-v1:0")
+        assert haiku["cachePoint"] == {"type": "default", "ttl": "1h"}
+        assert nova["cachePoint"] == {"type": "default"}
+
     async def test_cache_enabled_but_unsupported_model_sends_flat_string(self, monkeypatch):
         """retro#650: Bedrock hard-rejects the whole call when cache_control is sent
         to a model family that doesn't support it (found via Qwen3 32B: 0/50 calls

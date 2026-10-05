@@ -3213,6 +3213,7 @@ the model sees is byte-identical either way.
 | Variable | Default | Meaning |
 |---|---|---|
 | `extractor_cache_single_article` (`EXTRACTOR_CACHE_SINGLE_ARTICLE`, `pipeline/src/tm/config.py`) | `true` | Send `PROMPT_PREFIX` as the cache-marked block on 1-article extractor calls too. `false` = the retro#564/#876 behaviour (prefix prepended to the prompt uncached). The instructions are sent either way (retro#876). No effect when `enable_prompt_cache` is off or the model is not cache-capable. Rollback is this env var in the oracle-api drop-in / box `.env` plus a restart. |
+| `prompt_cache_ttl` (`PROMPT_CACHE_TTL`, `pipeline/src/tm/config.py`) | `""` | TTL of the prompt-cache block (retro#906). `""` = plain `{"type": "ephemeral"}`, Bedrock's 5-minute cache. `1h` = the 1-hour cache: a write costs 2× base input instead of 1.25×, and calls 5–60 min apart read instead of re-writing (~−$1.2/day measured 2026-10-05). litellm forwards it to Claude 4.5+ only; Nova (gatekeeper) is unaffected. Rollback: unset in the oracle-api drop-in plus a restart. |
 
 **Expected:** simulated push hit rate ~58% against a 21.7% break-even → ~$1.2/day; worst case
 (no reads) −$0.73/day. **Kill criterion:** 48 h after deploy, if fewer than ~20% of

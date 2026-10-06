@@ -380,6 +380,19 @@ event decomposition, v2 decompose / anchor match / precursor match, and the raw 
 proxy. Before retro#911 they fell back to `extractor_model`, so a switch silently moved six
 stages nobody had measured on the new model. `api/tests/test_model_decoupling.py` pins this.
 Each stage's own `*_MODEL` setting still wins over `judge_model`.
+The batch aggregator has its own `aggregator_model` (`AGGREGATOR_MODEL`, pipeline, Haiku).
+A per-request `model` is part of the `/forecast` response-cache key, so an override is never
+served another model's cached answer.
+
+**Model choices elsewhere (not covered by these knobs)**
+- Gatekeeper `GATEKEEPER_MODEL` (Nova Micro) also drives search-query distillation and the
+  `/relevance` endpoint that news-indexer's judge calls — one knob, three uses.
+- Jev: `JEV_PROVIDER` picks provider + model together (all four Jev uses share it).
+- `bayesoracle/calibrate_edges.py` (offline) still uses `extractor_model`.
+- news-indexer: embeddings are Titan v2 at 1024 dims, hard-coded; a change means re-embedding
+  everything and re-tuning the cosine thresholds, not a setting flip.
+- daatan app: ~14 stages (draft, moderation, tags, translation, guessChances, …) share one
+  `GEMINI_MODEL` constant in `src/lib/llm/index.ts`; see daatan for its own decoupling.
 
 **The knobs**
 - Live lane (`oracle-api`): `EXTRACTOR_MODEL` in `infra/oracle-api.service.d/extractor-model.conf`.

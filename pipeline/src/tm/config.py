@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # spends part of it on reasoning (Gemini 3.8 Flash hit finish_reason=length at 2200 in
     # the retro#909 re-test), so raise it together with EXTRACTOR_MODEL when switching.
     extractor_max_tokens: int = 2200
+    # Batch aggregator (aggregator.py). Followed extractor_model until retro#911; pinned to
+    # the same Haiku ID so the split changes nothing, and the extractor can now move alone.
+    aggregator_model: str = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
     ground_truth_model: str = "bedrock/us.amazon.nova-lite-v1:0"
 
     # retro#688 — per-event extractor override for threshold-shaped batch events, where

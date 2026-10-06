@@ -2291,7 +2291,7 @@ async def run_forecast(
     claim_meta = build_claim_meta(req)
     # Keyed on the EFFECTIVE limit, not the raw request value — two keys with
     # different caps must not alias to the same cached response.
-    cache_key = forecast_cache.make_key(req.question, limit, articles_hash, claim_meta)
+    cache_key = forecast_cache.make_key(req.question, limit, articles_hash, claim_meta, req.model)
     cached = forecast_cache.get(cache_key)
     if cached is not None:
         _log_phase(

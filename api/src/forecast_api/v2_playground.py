@@ -59,7 +59,7 @@ class V2ForecastRequest(BaseModel):
     max_forecast_calls: int = Field(default=15, ge=1, le=80, description="Hard cap on flat pricings (root included)")
     max_articles: int = Field(default=10, ge=3, le=30)
     claim_deadline: Optional[str] = Field(default=None, description="YYYY-MM-DD; passed to the forecaster and the decomposer")
-    decompose_model: Optional[str] = Field(default=None, description="litellm id; default = the extractor model")
+    decompose_model: Optional[str] = Field(default=None, description="litellm id; default = the Oracle judge_model")
 
 
 class V2JobCreated(BaseModel):

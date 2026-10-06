@@ -97,7 +97,7 @@ async def aggregate_article_predictions(
     )
 
     output, _usage = await complete_structured(
-        settings.extractor_model, PredictionExtraction, prompt, max_tokens=1000, timeout=120,
+        settings.aggregator_model, PredictionExtraction, prompt, max_tokens=1000, timeout=120,
     )
     # Direct assignment, deliberately not `model_copy(update=...)`: that API is
     # UNVALIDATED in Pydantic v2, so a mistyped key becomes a stray attribute and

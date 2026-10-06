@@ -8,6 +8,7 @@ stages nobody had A/B'd. This pins the one sanctioned read of the extractor sett
 import re
 from pathlib import Path
 
+from forecast_api.cache import ForecastCache
 from forecast_api.config import settings
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "forecast_api"
@@ -38,3 +39,9 @@ def test_effective_extractor_model_only_feeds_extractor_arguments():
 
 def test_judge_model_has_a_default():
     assert settings.judge_model
+
+
+def test_forecast_cache_key_separates_a_per_request_model():
+    default = ForecastCache.make_key("q", 5, "h", "m")
+    assert ForecastCache.make_key("q", 5, "h", "m", None) == default
+    assert ForecastCache.make_key("q", 5, "h", "m", "bedrock/other") != default

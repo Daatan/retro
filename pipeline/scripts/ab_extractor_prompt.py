@@ -62,8 +62,8 @@ from pathlib import Path
 
 from tm import llm
 from tm.ab_harness import (
-    CONFIDENT_MIN_RUNS, Case, QuantityDiagnostic, build_case_results, gate_exit_code,
-    load_cases, quantity_diagnostics,
+    CONFIDENT_MIN_RUNS, PROFILE_FIELDS, Case, QuantityDiagnostic, arm_profile,
+    build_case_results, gate_exit_code, load_cases, profile_regressions, quantity_diagnostics,
 )
 from tm.config import settings
 from tm.extractor import PROMPT_PREFIX, PROMPT_SUFFIX
@@ -421,13 +421,33 @@ def _cmd_compare(args: argparse.Namespace) -> None:
             print(f"  pass       {r.case.id}{leak}")
 
     code = gate_exit_code(results, allow_leakage=args.allow_leakage)
+
+    # retro#909 (#561 trigger 2): the facet gate cannot see a model that extracts less or
+    # says everything louder. Always printed; it only gates when a threshold is given.
+    ids = [c.id for c in cases]
+    profiles = {"baseline": arm_profile(baseline_preds, ids), "patched": arm_profile(patched_preds, ids)}
+    print("\nElicitation profile:")
+    print(f"  {'arm':<9} {'runs':>5} {'preds/run':>9} {'mean|st|':>8} {'|st|>=.95':>9} {'|st|=1':>7}  fill")
+    for label, prof in profiles.items():
+        fills = " ".join(f"{f}={prof.fill[f] / prof.predictions:.0%}" if prof.predictions else f"{f}=-"
+                         for f in PROFILE_FIELDS)
+        print(f"  {label:<9} {prof.runs:>5} {prof.per_run:>9.2f} {prof.mean_abs_stance:>8.3f} "
+              f"{prof.saturated_share:>9.0%} {prof.at_one_share:>7.0%}  {fills}")
+    profile_fail = profile_regressions(
+        profiles["baseline"], profiles["patched"],
+        max_recall_drop=args.max_recall_drop, max_saturation_rise=args.max_saturation_rise,
+    )
+    for reason in profile_fail:
+        print(f"  PROFILE FAIL {reason}")
+    if profile_fail:
+        code = 1
     gated_regressions = [
         r for r in results
         if r.regressions and (args.allow_leakage or not r.case.is_temporal_leakage)
     ]
     low_confidence = [r for r in gated_regressions if r.low_confidence_regression]
     print(f"\nGate: {'FAIL' if code else 'PASS'} "
-          f"({len(gated_regressions)} in-scope regression(s)"
+          f"({len(gated_regressions)} in-scope regression(s), {len(profile_fail)} profile failure(s)"
           f"{', leakage cases excluded' if not args.allow_leakage and any_regression else ''})")
     if low_confidence:
         print(f"  {len(low_confidence)} of those measured at fewer than {CONFIDENT_MIN_RUNS} "
@@ -456,6 +476,10 @@ def main() -> None:
                         help="Case file to re-load (defaults to the cases embedded in --baseline)")
     p_cmp.add_argument("--allow-leakage", action="store_true",
                         help="Include temporal-leakage cases in the regression gate")
+    p_cmp.add_argument("--max-recall-drop", type=float, default=None,
+                        help="Fail if predictions/run falls by more than this fraction (e.g. 0.10)")
+    p_cmp.add_argument("--max-saturation-rise", type=float, default=None,
+                        help="Fail if the |stance|>=0.95 share rises by more than this (e.g. 0.05 = 5pp)")
     p_cmp.set_defaults(func=_cmd_compare)
 
     args = parser.parse_args()

@@ -391,3 +391,95 @@ def quantity_diagnostics(
             runs=runs, target_hit=target_hit, target_miscomparated=target_miscomparated,
         ))
     return out
+
+
+# ── elicitation profile: recall and stance saturation (retro#909, #561 trigger 2) ──
+#
+# `unmet_facets` answers "did ANY prediction in ANY run get this right", so a model that
+# extracts less, or says everything louder, passes it untouched. That is exactly how
+# Gemini 2.5 Flash cleared the gate in #561 while extracting 18% fewer predictions and
+# putting 28% of them at |stance| = 1.00 (Haiku: 8%). Since probability = (stance + 1) / 2,
+# a saturated stance is one source asserting 100% / 0%. This profile is computed per arm,
+# and `profile_regressions` turns the two shifts into gate failures when the caller sets
+# thresholds. Without thresholds nothing here gates; existing prompt-edit runs keep their
+# exact pass/fail.
+
+SATURATION_EDGE = 0.95
+
+# Per-prediction fields whose fill rate is reported per arm. A field that fills at 100%
+# can still be unusable (quantity/tone on Nova Lite, retro#683/#684), so fill is the floor
+# of the question, not the answer; it is what makes a silently-dropped field visible.
+PROFILE_FIELDS = ("fact_signal", "reader_confidence", "report_kind", "quantity", "tone", "voice")
+
+
+@dataclass(frozen=True)
+class ArmProfile:
+    runs: int
+    predictions: int
+    mean_abs_stance: float
+    saturated: int          # |stance| >= SATURATION_EDGE
+    at_one: int             # |stance| == 1.0
+    fill: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def per_run(self) -> float:
+        return self.predictions / self.runs if self.runs else 0.0
+
+    @property
+    def saturated_share(self) -> float:
+        return self.saturated / self.predictions if self.predictions else 0.0
+
+    @property
+    def at_one_share(self) -> float:
+        return self.at_one / self.predictions if self.predictions else 0.0
+
+
+def arm_profile(
+    predictions: Mapping[str, list[list[PredictionExtraction]]],
+    case_ids: Optional[list[str]] = None,
+) -> ArmProfile:
+    ids = case_ids if case_ids is not None else list(predictions)
+    runs = n = saturated = at_one = 0
+    abs_sum = 0.0
+    fill = {f: 0 for f in PROFILE_FIELDS}
+    for cid in ids:
+        for run in predictions.get(cid, []):
+            runs += 1
+            for p in run:
+                n += 1
+                a = abs(p.stance)
+                abs_sum += a
+                saturated += a >= SATURATION_EDGE
+                at_one += a >= 1.0
+                for f in PROFILE_FIELDS:
+                    fill[f] += getattr(p, f) is not None
+    return ArmProfile(runs=runs, predictions=n, mean_abs_stance=abs_sum / n if n else 0.0,
+                      saturated=saturated, at_one=at_one, fill=fill)
+
+
+def profile_regressions(
+    baseline: ArmProfile,
+    patched: ArmProfile,
+    *,
+    max_recall_drop: Optional[float] = None,
+    max_saturation_rise: Optional[float] = None,
+) -> list[str]:
+    """Reasons the patched arm's profile fails the given thresholds; empty = pass.
+
+    ``max_recall_drop`` is relative (0.10 = predictions per run may fall at most 10%);
+    ``max_saturation_rise`` is absolute, in share points (0.05 = the |stance| >= 0.95 share
+    may rise at most 5 points). Either left as None is not checked.
+    """
+    out = []
+    if max_recall_drop is not None and baseline.per_run > 0:
+        drop = 1 - patched.per_run / baseline.per_run
+        if drop > max_recall_drop:
+            out.append(f"recall: {patched.per_run:.2f} predictions/run vs {baseline.per_run:.2f} "
+                       f"(-{drop:.0%}, limit -{max_recall_drop:.0%})")
+    if max_saturation_rise is not None:
+        rise = patched.saturated_share - baseline.saturated_share
+        if rise > max_saturation_rise:
+            out.append(f"saturation: |stance|>={SATURATION_EDGE} on {patched.saturated_share:.0%} "
+                       f"vs {baseline.saturated_share:.0%} (+{rise * 100:.0f}pp, "
+                       f"limit +{max_saturation_rise * 100:.0f}pp)")
+    return out

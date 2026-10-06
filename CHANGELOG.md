@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Added
+- A/B harness elicitation profile (retro#909, retro#561 trigger 2): `compare` prints per-arm predictions/run, mean |stance|, |stance| ≥ 0.95 and = 1.00 shares, and fill rates of the newer per-prediction fields; `--max-recall-drop` / `--max-saturation-rise` make it gate (off by default — prompt-edit runs keep their exact pass/fail). Eval tooling only, nothing at serve time uses it.
 - `prompt_cache_ttl` (`PROMPT_CACHE_TTL`, retro#906, PR#907): opt-in 1-hour TTL on the extractor's Bedrock prompt-cache block (`"1h"`); default `""` keeps the 5-minute block byte-identical. litellm forwards it to Claude 4.5+ only (Nova unaffected). Expected ~−$1.2/day once enabled via the oracle-api drop-in.
 - Jev provider switch (`JEV_PROVIDER`, SSM `/retro/prod/secrets/JEV_PROVIDER`, retro#901): `typesafe`, `openrouter`, `clef-flash`, `clef` presets set URL + model + key together; workers re-read the SSM choice every 60 s, so a switch needs no restart. Cloudflare's response envelope and 64-question cap are handled. Uncalibrated providers (Clef) run log-only. Logs `event=jev_provider` on change.
 - `jev_api_key_ssm_name` (`JEV_API_KEY_SSM_NAME`, retro#901): the SSM parameter the Jev key is read from is configurable, so Jev can bill through OpenRouter's System One endpoint with an OpenRouter key. Default unchanged.

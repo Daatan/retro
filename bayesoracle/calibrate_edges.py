@@ -228,7 +228,7 @@ def _collect_articles(candidates: list[dict], target: int = 4) -> list[dict]:
 # ─── LLM call ────────────────────────────────────────────────────────────────
 
 def _llm(prompt: str) -> Optional[dict]:
-    # Routed through tm.llm → Bedrock Nova Lite (complete_text handles routing and
+    # Routed through tm.llm → the tm extractor_model (complete_text handles routing and
     # rate-limit retry). asyncio.run is fine here: this is a synchronous batch
     # script, one short-lived event loop per edge.
     try:

@@ -691,13 +691,20 @@ class ApiSettings(BaseSettings):
     # verifier itself produced nothing to compare against.
     settlement_semantic_gates_fallback_enforce: bool = False
 
+    # Default model for every LLM stage on the Oracle side EXCEPT the extractor itself:
+    # settlement verifier, subject gate, premise verifier, event decomposition,
+    # precursor/anchor matching, v2 decomposition, the raw /llm proxy. Each stage's own
+    # `*_model` setting still wins. Until retro#911 these fell back to
+    # `tm.config.extractor_model`, so switching EXTRACTOR_MODEL silently moved six
+    # stages nobody had A/B'd on the new model. Now the extractor can move alone.
+    # Same Haiku ID the extractor drop-in pins, so the split is a no-op on the box today.
+    judge_model: str = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
     settlement_verifier_enabled: bool = True
     settlement_verifier_enforce: bool = True
     settlement_verifier_timeout_seconds: int = 12
-    # The extractor's model, not the gatekeeper's: this is a semantic judgment
-    # about aspect and role, which is exactly the class Nova Lite failed on in
-    # the adjacent-event A/B (see docs/ORACLE_VARIABLES.md). Prod's oracle-api
-    # drop-in overrides extractor_model to Claude Haiku 4.5, so this follows it.
+    # A semantic judgment about aspect and role — the class Nova Lite failed on in
+    # the adjacent-event A/B (see docs/ORACLE_VARIABLES.md). None = `judge_model`.
     settlement_verifier_model: Optional[str] = None
     # retro#532 — decide each verdict ONCE, then remember it. The gate's
     # verdict is not idempotent even at temperature=0 (6 of the 13 questions
@@ -732,9 +739,8 @@ class ApiSettings(BaseSettings):
     # alone does not establish. Same knob shape as threshold_extractor_model
     # (pipeline/src/tm/config.py): exists, off, one line to enable.
     inject_event_decomposition: bool = False
-    # None = settlement_verifier_model, which already follows the live
-    # extractor (Haiku 4.5 via the oracle-api drop-in) — see that setting's
-    # comment. A decomposition call is the same class of semantic judgment.
+    # None = a per-request `model`, then `judge_model` (retro#911 — no longer the
+    # extractor). A decomposition call is the same class of semantic judgment.
     event_decomposition_model: Optional[str] = None
     event_decomposition_timeout_seconds: int = 15
     event_decomposition_cache_enabled: bool = True
@@ -751,7 +757,7 @@ class ApiSettings(BaseSettings):
     # found only through the model's unverified English gloss of a verified span clears
     # the gate (default no — the gloss is exactly what W3 gets wrong); the shadow log's
     # `matched_via=gloss` count is the number that decides it. Model default follows
-    # settlement_verifier_model → the live extractor, like event_decomposition_model.
+    # settlement_verifier_model → per-request `model` → `judge_model` (retro#911).
     subject_gate_enabled: bool = True
     subject_gate_enforce: bool = False
     subject_gate_trust_gloss: bool = False

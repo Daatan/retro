@@ -59,7 +59,7 @@ class V2ForecastRequest(BaseModel):
     max_forecast_calls: int = Field(default=15, ge=1, le=80, description="Hard cap on flat pricings (root included)")
     max_articles: int = Field(default=10, ge=3, le=30)
     claim_deadline: Optional[str] = Field(default=None, description="YYYY-MM-DD; passed to the forecaster and the decomposer")
-    decompose_model: Optional[str] = Field(default=None, description="litellm id; default = the extractor model")
+    decompose_model: Optional[str] = Field(default=None, description="litellm id; default = the Oracle judge_model")
 
 
 class V2JobCreated(BaseModel):
@@ -209,7 +209,7 @@ Respond ONLY with JSON:
 
 
 async def _decompose(job: dict, node: dict, req: V2ForecastRequest) -> list[dict]:
-    model = req.decompose_model or _pipeline_settings.extractor_model
+    model = req.decompose_model or settings.judge_model
     prompt = DECOMPOSE_PROMPT.format(
         question=node["text"], today=datetime.now(timezone.utc).date().isoformat(),
         deadline=req.claim_deadline or "not stated", n=max(req.max_precursors * 2, 4)
@@ -322,7 +322,7 @@ async def _same_question(job: dict, node: dict, market_question: str) -> tuple[b
     closed: no verdict → not the same question."""
     if not market_question:
         return False, None
-    model = _pipeline_settings.extractor_model
+    model = settings.judge_model
     messages = [{"role": "user", "content": SAME_QUESTION_PROMPT.format(a=node["text"], b=market_question)}]
     entry = {
         "id": f"p{len(job['prompts']) + 1}", "step": "anchor_match", "node_id": node["id"], "model": model,
@@ -454,7 +454,7 @@ async def _classify_relation(job: dict, node: dict, candidate_text: str) -> Opti
     closed: no parseable verdict returns None, never a fabricated relation."""
     if not candidate_text:
         return None
-    model = settings.precursor_match_model or _pipeline_settings.extractor_model
+    model = settings.precursor_match_model or settings.judge_model
     messages = [{"role": "user", "content": RELATION_MATCH_PROMPT.format(a=node["text"], b=candidate_text)}]
     entry = {
         "id": f"p{len(job['prompts']) + 1}", "step": "precursor_match_relation", "node_id": node["id"], "model": model,

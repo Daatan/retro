@@ -322,7 +322,7 @@ async def _same_question(job: dict, node: dict, market_question: str) -> tuple[b
     closed: no verdict → not the same question."""
     if not market_question:
         return False, None
-    model = settings.judge_model
+    model = settings.anchor_match_model or settings.judge_model
     messages = [{"role": "user", "content": SAME_QUESTION_PROMPT.format(a=node["text"], b=market_question)}]
     entry = {
         "id": f"p{len(job['prompts']) + 1}", "step": "anchor_match", "node_id": node["id"], "model": model,

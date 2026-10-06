@@ -239,6 +239,7 @@ async def check_is_prediction(
     event_name: str,
     short_form: bool = False,
     language: str | None = None,
+    model: str | None = None,
 ) -> tuple["GatekeeperOutput", dict]:
     """Returns (GatekeeperOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
 
@@ -275,6 +276,6 @@ async def check_is_prediction(
     if language:
         prompt += _LANGUAGE_HINT.format(language=language)
     return await complete_structured(
-        settings.gatekeeper_model, GatekeeperOutput, prompt, max_tokens=200, timeout=90,
+        model or settings.gatekeeper_model, GatekeeperOutput, prompt, max_tokens=200, timeout=90,
         cached_prefix=PROMPT_PREFIX,
     )

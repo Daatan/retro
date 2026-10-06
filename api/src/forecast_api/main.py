@@ -400,6 +400,7 @@ async def relevance(
             event_name=body.claim,
             short_form=body.short_form,
             language=body.language,
+            model=settings.relevance_model,
         )
     except Exception as exc:
         logger.warning("relevance check failed claim=%.60s err=%s", body.claim, exc)
@@ -409,7 +410,7 @@ async def relevance(
         relevance_score=out.relevance_score,
         reason=out.reason,
         prediction_count_estimate=out.prediction_count_estimate,
-        model=_pipeline_settings.gatekeeper_model,
+        model=settings.relevance_model or _pipeline_settings.gatekeeper_model,
         gatekeeper_prompt_version=GATEKEEPER_PROMPT_VERSION,
         gatekeeper_prompt_hash=GATEKEEPER_PROMPT_HASH,
         gatekeeper_schema_hash=GATEKEEPER_SCHEMA_HASH,

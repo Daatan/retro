@@ -5,6 +5,8 @@ OR the extractor model, and whenever re-evaluating whether a cheaper model than 
 live Claude Haiku 4.5 override can be trusted:
 
     cd pipeline && AWS_REGION=us-east-1 .venv/bin/python eval_extractor_adjacent_events.py
+    # any litellm model ids (retro#911):
+    ... eval_extractor_adjacent_events.py --models bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0 vertex_ai/gemini-3.8-flash
 
 ## Background
 
@@ -22,8 +24,8 @@ see tests/test_extractor_prompt.py's de-naming note).
 ## What this measures
 
 For each (article, event, expected_settled) case, run N times against each model in
-MODELS and count how many runs produce `settled=True` when `expected_settled` is
-False — a false settlement is the single highest-impact failure mode this prompt
+MODELS and count how many runs settle the event POSITIVELY (`settled=True` with
+`stance > 0`) when `expected_settled` is False — a false settlement is the single highest-impact failure mode this prompt
 guards against (it feeds directly into forecast resolution). This does NOT replace a
 full quality eval — it's a fast, targeted regression/comparison check on exactly the
 failure class that motivated the current model choice.
@@ -38,6 +40,7 @@ set:
     normal model noise).
   - Otherwise: escalate to a human call — this script does not auto-decide.
 """
+import argparse
 import asyncio
 from collections import defaultdict
 
@@ -178,20 +181,23 @@ async def _run_case(model: str, case: tuple) -> list[bool]:
     for _ in range(RUNS_PER_CASE):
         try:
             out, _ = await llm.complete_structured(
-                model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
+                model, ExtractionOutput, prompt, max_tokens=settings.extractor_max_tokens, timeout=180,
                 cached_prefix=PROMPT_PREFIX,
             )
         except Exception as exc:  # noqa: BLE001 — report, keep going
             print(f"    EXCEPTION: {type(exc).__name__}: {exc}")
             continue
-        settled_true = any(p.settled for p in out.predictions)
+        # A settled claim with stance <= 0 resolves the event NO — the correct reading of
+        # "a rival won the final" or a negated claim whose event happened. Counting it as a
+        # false settlement inflated every model's rate by 10-20 pp (retro#909 re-test).
+        settled_true = any(p.settled and p.stance > 0 for p in out.predictions)
         false_settlements.append(settled_true and not expected_settled)
     return false_settlements
 
 
-async def main() -> None:
+async def main(models: list[str]) -> None:
     summary = defaultdict(list)
-    for model in MODELS:
+    for model in models:
         print(f"\n=== {model} ===")
         for i, case in enumerate(CASES):
             event_name = case[0]
@@ -213,4 +219,6 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--models", nargs="+", default=MODELS, help="litellm model ids to compare")
+    asyncio.run(main(list(dict.fromkeys(ap.parse_args().models))))

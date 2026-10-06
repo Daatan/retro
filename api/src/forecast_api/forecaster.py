@@ -1060,7 +1060,7 @@ async def _apply_settlement_match_gate(
     # The direction matters as much as the match: facts that decide the question
     # the OTHER way are not proof of the answer about to be published (the
     # France-World-Cup pin, found by replaying this gate over past pins).
-    model = settings.settlement_verifier_model or _pipeline_settings.extractor_model
+    model = settings.settlement_verifier_model or settings.judge_model
     answer = "YES" if agg.mean >= 0 else "NO"
     samples = max(1, settings.settlement_verifier_votes)
 
@@ -2604,7 +2604,7 @@ async def _run_forecast_inner(
                 )
                 for r in search_results
             ],
-            model=settings.premise_verifier_model or effective_extractor_model,
+            model=settings.premise_verifier_model or req.model or settings.judge_model,
             timeout_s=settings.premise_verifier_timeout_seconds,
         ))
         if settings.premise_verifier_enabled
@@ -2619,7 +2619,7 @@ async def _run_forecast_inner(
     # this existed.
     event_decomposition: Optional[str] = None
     if settings.inject_event_decomposition:
-        decomposition_model = settings.event_decomposition_model or effective_extractor_model
+        decomposition_model = settings.event_decomposition_model or req.model or settings.judge_model
         decomp_key = decomposition_key(
             req.question, req.resolution_criteria, model=decomposition_model,
         )
@@ -2641,7 +2641,8 @@ async def _run_forecast_inner(
     subject_card: Optional[SubjectCard] = None
     if settings.subject_gate_enabled:
         subject_model = (
-            settings.subject_gate_model or settings.settlement_verifier_model or effective_extractor_model
+            settings.subject_gate_model or settings.settlement_verifier_model or req.model
+            or settings.judge_model
         )
         sc_key = subject_card_key(req.question, req.resolution_criteria, model=subject_model)
         sc_path = settings.resolved_subject_card_cache_path

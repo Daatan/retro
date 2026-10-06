@@ -475,7 +475,7 @@ async def llm_proxy(
             {"detail": "This API key is spend-capped and cannot use the raw /llm proxy"},
             status_code=403,
         )
-    model = body.model or _pipeline_settings.extractor_model
+    model = body.model or settings.judge_model
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
     try:
         content, usage = await complete_text_once_with_usage(

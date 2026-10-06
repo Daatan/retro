@@ -691,13 +691,20 @@ class ApiSettings(BaseSettings):
     # verifier itself produced nothing to compare against.
     settlement_semantic_gates_fallback_enforce: bool = False
 
+    # Default model for every LLM stage on the Oracle side EXCEPT the extractor itself:
+    # settlement verifier, subject gate, premise verifier, event decomposition,
+    # precursor/anchor matching, v2 decomposition, the raw /llm proxy. Each stage's own
+    # `*_model` setting still wins. Until retro#911 these fell back to
+    # `tm.config.extractor_model`, so switching EXTRACTOR_MODEL silently moved six
+    # stages nobody had A/B'd on the new model. Now the extractor can move alone.
+    # Same Haiku ID the extractor drop-in pins, so the split is a no-op on the box today.
+    judge_model: str = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
     settlement_verifier_enabled: bool = True
     settlement_verifier_enforce: bool = True
     settlement_verifier_timeout_seconds: int = 12
-    # The extractor's model, not the gatekeeper's: this is a semantic judgment
-    # about aspect and role, which is exactly the class Nova Lite failed on in
-    # the adjacent-event A/B (see docs/ORACLE_VARIABLES.md). Prod's oracle-api
-    # drop-in overrides extractor_model to Claude Haiku 4.5, so this follows it.
+    # A semantic judgment about aspect and role — the class Nova Lite failed on in
+    # the adjacent-event A/B (see docs/ORACLE_VARIABLES.md). None = `judge_model`.
     settlement_verifier_model: Optional[str] = None
     # retro#532 — decide each verdict ONCE, then remember it. The gate's
     # verdict is not idempotent even at temperature=0 (6 of the 13 questions

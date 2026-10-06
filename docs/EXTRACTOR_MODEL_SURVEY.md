@@ -370,3 +370,47 @@ THRESHOLD_EXTRACTOR_MODEL=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
 Empty or unset = off, which is what merging retro#688 ships. That default is deliberate: the
 batch tree self-syncs to `origin/main` and re-execs every cycle, so a non-empty default would be
 a live, unmeasured cost change within ~5 minutes of merge.
+
+## Switching the extractor model (retro#911, 2026-10-06)
+
+The extractor model is one setting, and since retro#911 moving it moves **only the
+extractor**. Every other Oracle LLM stage falls back to `judge_model` (`JUDGE_MODEL`, API
+settings, default Claude Haiku 4.5): settlement verifier, subject gate, premise verifier,
+event decomposition, v2 decompose / anchor match / precursor match, and the raw `/llm`
+proxy. Before retro#911 they fell back to `extractor_model`, so a switch silently moved six
+stages nobody had measured on the new model. `api/tests/test_model_decoupling.py` pins this.
+Each stage's own `*_MODEL` setting still wins over `judge_model`.
+
+**The knobs**
+- Live lane (`oracle-api`): `EXTRACTOR_MODEL` in `infra/oracle-api.service.d/extractor-model.conf`.
+  Drop-ins are hand-synced over SSM, not by deploy (the file's header has the command).
+- Batch lane (`truthmachine.service`): `EXTRACTOR_MODEL` in the box's `~/truthmachine/.env`,
+  otherwise the `tm/config.py` default. Two places: change both, or decide not to.
+- `EXTRACTOR_MAX_TOKENS` (default 2200): raise it together with a thinking model — Gemini
+  3.8 Flash hit `finish_reason=length` at 2200 in the retro#909 re-test.
+- One request can try a model without any switch: `/forecast` body field `model` (retro#652)
+  overrides the extractor and the premise verifier for that call only.
+
+**Gates before a switch** (all offline, nothing in prod changes)
+1. `pipeline/scripts/ab_extractor_prompt.py` on the retro#561 case sets, then
+   `compare --max-recall-drop 0.10 --max-saturation-rise 0.05` (`docs/AB_HARNESS.md`).
+2. `pipeline/eval_extractor_adjacent_events.py --models <baseline> <candidate>` — counts only
+   positive false settlements (`settled` and `stance > 0`).
+3. Not covered by either, still required: real long (≤4000-char) Hebrew articles, and
+   per-field usability beyond fill rate (retro#545 acceptance).
+
+**What still differs by provider — handled, but know it**
+- Prompt cache: `tm/llm.py` sends the cache block only to `.anthropic.` / `.amazon.nova`
+  models; anything else is sent uncached-flat (correct, just no Bedrock cache discount —
+  Vertex Gemini caches implicitly, ~65% of input in the re-test). `PROMPT_CACHE_TTL` reaches
+  Claude 4.5+ only.
+- `temperature=0` is sent by default; the newest Anthropic models reject it (pass `None`).
+- Extraction memo keys include the model, so a switch never serves the old model's output.
+- Not wired in code (deliberately, nothing needs it yet): a thinking-level knob
+  (`reasoning_effort` — Gemini 3.x defaults to high thinking; the re-test patched it to `low`
+  from outside), and Vertex credentials on the box (would need a GCP service account in SSM,
+  never a personal ADC file). Bedrock → Bedrock needs only the EC2 role to allow the model
+  (`infra/iam/README.md` §4).
+- Cost visibility: the daily cost report and the CloudWatch token metrics read Bedrock only;
+  a non-Bedrock extractor's spend would be invisible there until the report learns about it.
+

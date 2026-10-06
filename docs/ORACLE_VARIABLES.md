@@ -440,7 +440,7 @@ is that check, and it is deterministic where it matters.
    `PROVENANCE_SCHEMA_VERSION` is unchanged; the card exists to be checked, not stored.
 2. **Subject card** (`api/src/forecast_api/subject_card.py`) — who the QUESTION is about,
    derived **once per question** from `event_name` + `resolution_criteria` by a structured
-   call (`subject_gate_model` → `settlement_verifier_model` → the live extractor), with
+   call (`subject_gate_model` → `settlement_verifier_model` → per-request `model` → `judge_model`), with
    surface forms in English, Hebrew, Russian and Arabic (`subject_gate_languages`), and
    cached under `data_dir/subject_card_cache` (`subject_gate_cache_enabled` / `subject_gate_cache_path`;
    call timeout `subject_gate_timeout_seconds`, 20) (`subject_card_store.py`, keyed on prompt
@@ -2174,7 +2174,7 @@ never triggers, zero added cost — the same additive/fail-open framing
 |---|---|---|
 | `premise_verifier_enabled` | `False` | Master switch. While off, the check never runs and never spends a token. |
 | `premise_verifier_enforce` | `False` | Unread this slice — reserved for the follow-up that acts on the verdict. |
-| `premise_verifier_model` | `None` | Falls back to `extractor_model` (Claude Haiku 4.5 in prod) when unset. |
+| `premise_verifier_model` | `None` | Falls back to a per-request `model`, then `judge_model` (Claude Haiku 4.5) — not to `extractor_model` since retro#911. |
 | `premise_verifier_timeout_seconds` | `12` | Per-call timeout; a timeout is fail-open, not a `dead=True`. |
 
 ### Explicitly out of scope for this slice
@@ -2243,7 +2243,7 @@ one fetch per node either way.
 |---|---|---|
 | `precursor_match_enabled` | `False` | Master switch. While off, the check never runs and never spends a token or an HTTP call. |
 | `precursor_match_enforce` | `False` | Unread this slice — reserved for the follow-up that acts on the verdict. |
-| `precursor_match_model` | `None` | Falls back to `extractor_model` (Claude Haiku 4.5 in prod) when unset. |
+| `precursor_match_model` | `None` | Falls back to `judge_model` (Claude Haiku 4.5) — not to `extractor_model` since retro#911. |
 | `precursor_match_timeout_seconds` | `12` | Per-call timeout for the Daatan bank lookup. |
 
 ### Explicitly out of scope for this slice
@@ -2724,7 +2724,7 @@ broken cache or an unreachable model degrades to "no decomposition appended",
 byte-identical to before this existed.
 
 Companion settings (`api/src/forecast_api/config.py`): `event_decomposition_model` (`None` →
-`settlement_verifier_model`), `event_decomposition_timeout_seconds` (`15`),
+per-request `model` → `judge_model`), `event_decomposition_timeout_seconds` (`15`),
 `event_decomposition_cache_enabled` (`True`), `event_decomposition_cache_path` (empty →
 `data_dir/event_decomposition_cache`).
 

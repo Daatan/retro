@@ -1457,7 +1457,8 @@ async def extract_predictions(
 
     async def _call_extractor():
         return await complete_structured(
-            effective_model, ExtractionOutput, prompt, max_tokens=2200, timeout=180,
+            effective_model, ExtractionOutput, prompt, max_tokens=settings.extractor_max_tokens,
+            timeout=180,
             cached_prefix=cached_prefix,
         )
 

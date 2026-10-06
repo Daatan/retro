@@ -265,6 +265,36 @@ should have extracted from THIS article, i.e. the "PR#671 known values". The
 comparison is pinned in `tests/test_threshold_compare.py` to get all ten
 retro#664 cases right from those values — the arithmetic was never the hard part.
 
+## Recall and stance saturation — the model-swap facets (retro#909)
+
+The facet gate is met when *any* prediction in *any* run matches, so it can't see a model
+that extracts less or says everything louder. That is how Gemini 2.5 Flash passed it clean in
+retro#561 while extracting 18% fewer predictions and putting 28% of them at |stance| = 1.00
+(Haiku: 8%). `compare` now always prints an **elicitation profile** per arm:
+
+- **runs;**
+- **predictions per run** (recall);
+- **mean |stance|;**
+- **share at |stance| ≥ 0.95, and share exactly at 1.00** (saturation);
+- **fill rate** of `fact_signal`, `reader_confidence`, `report_kind`, `quantity`, `tone` and `voice`.
+
+It gates only when you ask:
+
+```bash
+.venv/bin/python scripts/ab_extractor_prompt.py compare base.json cand.json \
+    --max-recall-drop 0.10 --max-saturation-rise 0.05
+```
+
+`--max-recall-drop` is relative: 0.10 means predictions per run may fall by at most 10%.
+`--max-saturation-rise` is in share points: 0.05 means at most +5 pp at |stance| ≥ 0.95.
+
+Use both for any **model** swap. A prompt edit may legitimately move either number, so they
+are off by default and the facet gate behaves exactly as before.
+
+Fill rate is the floor of the per-field question, not the answer. `quantity` and `tone` fill
+at 100% on Nova Lite and are still unusable there (retro#683/#684), so a model swap also
+needs a per-field read.
+
 ## The corpus
 
 One file per defect the corpus was built to catch. A prompt edit should run

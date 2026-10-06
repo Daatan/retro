@@ -393,3 +393,53 @@ class TestVolatileCorpusTags:
         for case_id in self._EXPECTED_VOLATILE_IDS:
             assert case_id in by_id, f"{case_id} missing from the corpus"
             assert by_id[case_id].volatile is True, f"{case_id} should be volatile"
+
+
+# ── retro#909: elicitation profile (recall + stance saturation) ──────────────
+
+from tm.ab_harness import SATURATION_EDGE, arm_profile, profile_regressions  # noqa: E402
+
+
+def test_arm_profile_counts_recall_and_saturation():
+    preds = {
+        "a": [[_pred(stance=1.0), _pred(stance=0.5)], [_pred(stance=-0.96)]],
+        "b": [[]],
+    }
+    prof = arm_profile(preds)
+    assert prof.runs == 3 and prof.predictions == 3
+    assert prof.per_run == pytest.approx(1.0)
+    assert prof.saturated == 2 and prof.at_one == 1
+    assert prof.mean_abs_stance == pytest.approx((1.0 + 0.5 + 0.96) / 3)
+    assert prof.fill["tone"] == 0
+
+
+def test_arm_profile_restricts_to_given_cases():
+    preds = {"a": [[_pred(stance=1.0)]], "b": [[_pred(stance=0.1), _pred(stance=0.1)]]}
+    assert arm_profile(preds, ["b"]).predictions == 2
+
+
+def test_arm_profile_fill_counts_present_fields():
+    prof = arm_profile({"a": [[_pred(tone="alarm"), _pred()]]})
+    assert prof.fill["tone"] == 1
+
+
+def test_profile_regressions_off_without_thresholds():
+    """No threshold → never fails: existing prompt-edit runs keep their exact gate."""
+    base = arm_profile({"a": [[_pred(stance=0.5), _pred(stance=0.5)]]})
+    worse = arm_profile({"a": [[_pred(stance=1.0)]]})
+    assert profile_regressions(base, worse) == []
+
+
+def test_profile_regressions_flags_561_shape():
+    """The #561 numbers: 1.86 → 1.52 predictions/run and 8% → 28% saturated."""
+    base = arm_profile({"a": [[_pred(stance=0.6)] * 9 + [_pred(stance=1.0)]] * 5})   # 10/run, 10%
+    gem = arm_profile({"a": [[_pred(stance=0.6)] * 6 + [_pred(stance=1.0)] * 2] * 5})  # 8/run, 25%
+    reasons = profile_regressions(base, gem, max_recall_drop=0.10, max_saturation_rise=0.05)
+    assert len(reasons) == 2
+    assert reasons[0].startswith("recall") and reasons[1].startswith("saturation")
+
+
+def test_profile_regressions_passes_within_limits():
+    base = arm_profile({"a": [[_pred(stance=0.6)] * 10]})
+    near = arm_profile({"a": [[_pred(stance=0.6)] * 9 + [_pred(stance=SATURATION_EDGE)]]})
+    assert profile_regressions(base, near, max_recall_drop=0.10, max_saturation_rise=0.10) == []

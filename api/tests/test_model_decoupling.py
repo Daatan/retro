@@ -45,3 +45,20 @@ def test_forecast_cache_key_separates_a_per_request_model():
     default = ForecastCache.make_key("q", 5, "h", "m")
     assert ForecastCache.make_key("q", 5, "h", "m", None) == default
     assert ForecastCache.make_key("q", 5, "h", "m", "bedrock/other") != default
+
+
+def test_gatekeeper_model_is_not_read_by_api_stages_without_their_own_knob():
+    # /relevance and query distillation each have a knob; their fallback to the gatekeeper's
+    # model is the only sanctioned api-side read of it.
+    reads = [
+        line.strip()
+        for path in sorted(SRC.glob("*.py"))
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if "_pipeline_settings.gatekeeper_model" in line
+    ]
+    assert all(
+        r.startswith(("settings.relevance_model or", "model=settings.relevance_model or",
+                      "settings.query_distill_model or"))
+        or "gatekeeper_model=_pipeline_settings.gatekeeper_model" in r
+        for r in reads
+    ), reads

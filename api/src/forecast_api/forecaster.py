@@ -1197,7 +1197,7 @@ async def _distill_query(question: str) -> tuple[str, dict]:
         # Non-retrying variant: this runs inside the latency-bounded /forecast
         # path, so it must not inherit complete_text's [30,60,120] backoff.
         text, usage = await complete_text_once_with_usage(
-            _pipeline_settings.gatekeeper_model,
+            settings.query_distill_model or _pipeline_settings.gatekeeper_model,
             prompt,
             max_tokens=40,
             timeout=20,

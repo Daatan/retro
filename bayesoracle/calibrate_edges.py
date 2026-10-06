@@ -168,8 +168,10 @@ import logging
 logging.getLogger("tm.web_search").setLevel(logging.ERROR)  # suppress provider-quota noise
 
 from tm.web_search import search_articles as _tm_search, SearchResult
-from tm.config import settings as _tm_settings
 from tm.llm import complete_text
+
+CALIBRATE_EDGES_MODEL = os.environ.get(
+    "CALIBRATE_EDGES_MODEL", "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
 
 
 def _search_articles(src_label: str, tgt_label: str) -> list[dict]:
@@ -228,12 +230,12 @@ def _collect_articles(candidates: list[dict], target: int = 4) -> list[dict]:
 # ─── LLM call ────────────────────────────────────────────────────────────────
 
 def _llm(prompt: str) -> Optional[dict]:
-    # Routed through tm.llm → the tm extractor_model (complete_text handles routing and
-    # rate-limit retry). asyncio.run is fine here: this is a synchronous batch
-    # script, one short-lived event loop per edge.
+    # Routed through tm.llm (complete_text handles routing and rate-limit retry).
+    # Own knob since retro#911 — it used to follow the extractor's model.
+    # asyncio.run is fine here: a synchronous batch script, one event loop per edge.
     try:
         raw = asyncio.run(complete_text(
-            _tm_settings.extractor_model,
+            CALIBRATE_EDGES_MODEL,
             prompt,
             max_tokens=350,
             temperature=0,

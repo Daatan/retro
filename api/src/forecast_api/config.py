@@ -699,6 +699,14 @@ class ApiSettings(BaseSettings):
     # stages nobody had A/B'd on the new model. Now the extractor can move alone.
     # Same Haiku ID the extractor drop-in pins, so the split is a no-op on the box today.
     judge_model: str = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    # retro#911 — stages that used to share the gatekeeper's model. None = the
+    # gatekeeper's (`tm` GATEKEEPER_MODEL, Nova Micro), so unset changes nothing.
+    # `relevance_model`: the standalone /relevance endpoint news-indexer's judge calls.
+    # `query_distill_model`: /forecast's 4-6 search keywords from the question.
+    relevance_model: Optional[str] = None
+    query_distill_model: Optional[str] = None
+    # v2 playground anchor match (Polymarket same-question check). None = judge_model.
+    anchor_match_model: Optional[str] = None
 
     settlement_verifier_enabled: bool = True
     settlement_verifier_enforce: bool = True

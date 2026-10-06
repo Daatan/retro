@@ -117,7 +117,7 @@ class ForecastRequest(BaseModel):
     # attached to this field -- it's a capability for a caller who wants to pick their
     # own model (e.g. the #619 calibration backtest A/B-testing model tiers), not an
     # "effort" tier with an opinion about what a caller SHOULD pick.
-    model: Optional[str] = Field(default=None, description="litellm model id overriding the extractor stage (and premise verifier) for this call only, e.g. 'bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0'. Never affects the gatekeeper or settlement verifier.")
+    model: Optional[str] = Field(default=None, description="litellm model id overriding the extractor stage for this call only, e.g. 'bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0'. Also reaches the premise verifier, event decomposition and subject card unless their own *_MODEL is set; never the gatekeeper or settlement verifier. Part of the response-cache key.")
     articles: Optional[list[ArticleInput]] = Field(
         default=None,
         description=(

@@ -385,10 +385,13 @@ A per-request `model` is part of the `/forecast` response-cache key, so an overr
 served another model's cached answer.
 
 **Model choices elsewhere (not covered by these knobs)**
-- Gatekeeper `GATEKEEPER_MODEL` (Nova Micro) also drives search-query distillation and the
-  `/relevance` endpoint that news-indexer's judge calls — one knob, three uses.
-- Jev: `JEV_PROVIDER` picks provider + model together (all four Jev uses share it).
-- `bayesoracle/calibrate_edges.py` (offline) still uses `extractor_model`.
+- Gatekeeper `GATEKEEPER_MODEL` (Nova Micro). Since the retro#911 follow-up the two stages
+  that shared it have their own knobs, unset = the gatekeeper's: `RELEVANCE_MODEL` (the
+  `/relevance` endpoint news-indexer's judge calls) and `QUERY_DISTILL_MODEL` (/forecast's
+  search keywords). v2 anchor match: `ANCHOR_MATCH_MODEL` (unset = `judge_model`).
+- Jev: `JEV_PROVIDER` picks provider + model together (all four Jev uses share it) — by
+  design, a Jev model id only means something to its provider.
+- `bayesoracle/calibrate_edges.py` (offline): `CALIBRATE_EDGES_MODEL`, default Haiku.
 - news-indexer: embeddings are Titan v2 at 1024 dims, hard-coded; a change means re-embedding
   everything and re-tuning the cosine thresholds, not a setting flip.
 - daatan app: ~14 stages (draft, moderation, tags, translation, guessChances, …) share one

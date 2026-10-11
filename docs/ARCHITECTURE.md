@@ -111,18 +111,20 @@ retro/
 │   ├── oracle-api.service.d/    # systemd drop-ins (Environment= flag overrides), hand-synced — see docs/ORACLE_DEPLOY.md
 │   ├── metaculus-sync.{service,timer} + install_metaculus_timer.sh             # sidecar timer (re-installed by deploy_oracle.sh)
 │   ├── polymarket-paper.{service,timer} + install_polymarket_paper_timer.sh    # sidecar timer (re-installed by deploy_oracle.sh)
+│   ├── manifold-paper.{service,timer} + install_manifold_paper_timer.sh        # sidecar timer (re-installed by deploy_oracle.sh)
 │   ├── iam/                     # IAM policy templates (GH Actions OIDC, S3 snapshots) — see infra/iam/README.md
 │   └── nginx/                   # Nginx configs (oracle.daatan.com + bayes.daatan.com vhosts, base/SSL configs)
 ├── bayesoracle/                 # BayesOracle (bayes.daatan.com) + GitHub Pages viewers
 ├── metaculus/                   # Metaculus tournament sync bot (see metaculus/README.md)
 ├── polymarket_paper/            # Polymarket paper-trading scoreboard (retro#620)
+├── manifold_paper/              # Manifold paper bot: read-only calibration scorecard (retro#918)
 ├── studies/                     # Retro case studies, published to GitHub Pages
 ├── terraform/                   # Oracul box, EIP/Route53, Cognito, Bedrock alarms (state key retro/)
 ├── docs/                        # Architecture, Oracul API/deploy/MCP/variables references
 ├── case-studies/                # Interactive case study pages
 ├── .github/workflows/
 │   ├── deploy-atlas.yml         # Deploy the root HTML pages, bayesoracle/ and studies/ to GitHub Pages
-│   ├── deploy-oracle.yml        # On push to main affecting api/, pipeline/, metaculus/, polymarket_paper/ or their infra units, redeploy Oracul via SSM (OIDC, no static keys)
+│   ├── deploy-oracle.yml        # On push to main affecting api/, pipeline/, metaculus/, polymarket_paper/, manifold_paper/ or their infra units, redeploy Oracul via SSM (OIDC, no static keys)
 │   ├── tests.yml                # pytest suites (also the deploy gate)
 │   ├── changelog.yml            # Require a CHANGELOG line on api/** / pipeline/src/** PRs
 │   ├── release.yml              # v* tag → GitHub release from CHANGELOG

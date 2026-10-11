@@ -52,3 +52,7 @@ api/src/forecast_api/_build_info.json
 
 # Polymarket paper bot ledger (local runs; on the box it lives under data_dir)
 polymarket_paper/data/
+
+# Manifold paper bot ledger (local runs; on the box it lives under data_dir)
+manifold_paper/data/
+manifold_paper/.venv/

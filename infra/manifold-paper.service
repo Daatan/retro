@@ -1,0 +1,44 @@
+[Unit]
+Description=Manifold paper bot — record Oracle vs market price, open hypothetical Mana positions (retro#918)
+Documentation=https://github.com/Daatan/retro/blob/main/manifold_paper/README.md
+After=network-online.target
+Wants=network-online.target
+
+# Gated on the bot's own credentials file. install_manifold_paper_timer.sh
+# derives it from the box's ORACLE_API_KEYS map (the named `metaculus` relay
+# entry, retro#725, or a `manifold-paper` entry when one exists) — so no new
+# secret is provisioned by hand, and the bot does not depend on
+# .env.metaculus (retro#619 blocked). The bot needs no Manifold account or key:
+# Phase 1 is GET-only against the unauthenticated public API.
+ConditionPathExists=/home/ubuntu/truthmachine/.env.manifold-paper
+
+[Service]
+Type=oneshot
+User=ubuntu
+
+# API-only checkout, same tree deploy_oracle.sh resets to origin/main (never
+# /home/ubuntu/truthmachine — that tree has its own lifecycle).
+WorkingDirectory=/home/ubuntu/oracle-api/manifold_paper
+
+# The Metaculus file is optional (leading "-") and read first; the bot's own
+# file is required and read last, so it wins. To lift the metaculus
+# max_articles cap: add a `manifold-paper` entry to ORACLE_API_KEYS, delete
+# .env.manifold-paper, redeploy — the installer regenerates it from that entry.
+EnvironmentFile=-/home/ubuntu/truthmachine/.env.metaculus
+EnvironmentFile=/home/ubuntu/truthmachine/.env.manifold-paper
+
+# The ledger lives beside the Oracle API's other on-box ledgers, and the API
+# serves it read-only at GET /manifold/paper — so the scorecard needs no SSM.
+Environment=PAPER_LEDGER_DIR=/home/ubuntu/truthmachine/data/manifold_paper
+
+ExecStart=/home/ubuntu/.local/bin/uv run --frozen python paper.py
+
+# 12 Oracle calls at the measured p99 (~226 s) is ~45 min worst case; the timer
+# period is 6 h. A wedged run must fail, not block the next slot.
+TimeoutStartSec=3600
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

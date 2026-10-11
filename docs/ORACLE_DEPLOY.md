@@ -15,17 +15,19 @@ Both checkouts read the same `data/` directory — it lives in the pipeline's tr
 
 ## Sidecar timers on the box
 
-Two systemd oneshots share the Oracul box and are (re)installed by `deploy_oracle.sh` on every
+Three systemd oneshots share the Oracul box and are (re)installed by `deploy_oracle.sh` on every
 deploy, each gated on a `ConditionPathExists=` credentials file, so a box without the key simply
 never runs them. `metaculus-sync` waits for `/home/ubuntu/truthmachine/.env.metaculus` (never
 provisioned — retro#619 is blocked, so that timer fires and skips). `polymarket-paper` waits for
 `.env.polymarket-paper`, which its installer derives from the box's `ORACLE_API_KEYS` map, so it
-runs as soon as the deploy lands:
+runs as soon as the deploy lands; `manifold-paper` (retro#918) does the same with `.env.manifold-paper`
+(entry `manifold-paper`, then `polymarket-paper`, then `metaculus`):
 
 | Unit | Cadence | What | Docs |
 |---|---|---|---|
 | `metaculus-sync` | every 20 min (:00/:20/:40) | Submits Oracul forecasts to a Metaculus tournament | [`../metaculus/README.md`](../metaculus/README.md) |
 | `polymarket-paper` | 00:30/06:30/12:30/18:30 UTC | **Paper** scoreboard on the Knesset-election Polymarket cluster; ledger under `data/polymarket_paper/`, served by `GET /pm/paper` (retro#620) | [`../polymarket_paper/README.md`](../polymarket_paper/README.md) |
+| `manifold-paper` | 00:45/06:45/12:45/18:45 UTC | **Paper** calibration scorecard on liquid Manifold binary markets (read-only, no account/key); ledger under `data/manifold_paper/`, served by `GET /manifold/paper` (retro#918) | [`../manifold_paper/README.md`](../manifold_paper/README.md) |
 
 Kill switch for either: `sudo systemctl disable --now <unit>.timer` on the box; the next deploy
 re-enables it unless the installer call is removed from `deploy_oracle.sh`.
@@ -84,7 +86,7 @@ in the environment overrides SSM; with neither, the explicit `JEV_SHADOW_API_URL
 
 1. `git fetch origin main` in `/home/ubuntu/oracle-api`
 2. `git reset --hard <ref>` (defaults to `origin/main`, override with a SHA to pin)
-3. `uv sync --frozen` in `api/`, re-run `infra/install_metaculus_timer.sh` + `infra/install_polymarket_paper_timer.sh` (the sidecar timers above), and write `api/src/forecast_api/_build_info.json` (git SHA / build number read by `/version` and `/health`)
+3. `uv sync --frozen` in `api/`, re-run `infra/install_metaculus_timer.sh` + `infra/install_polymarket_paper_timer.sh` + `infra/install_manifold_paper_timer.sh` (the sidecar timers above), and write `api/src/forecast_api/_build_info.json` (git SHA / build number read by `/version` and `/health`)
 4. `sudo systemctl reload-or-restart oracle-api` — gunicorn SIGHUPs its workers, new code is imported into fresh workers, old workers drain gracefully. The listening socket on `:8001` is never closed, so there's no 502 window.
 5. **Health gate (hardened 2026-06-02):** poll `/health` and require **5 consecutive** 200s over a window that spans the graceful-drain. If the reload is not durably healthy, **escalate to a full `systemctl restart`** and re-verify; only if *that* also fails does the script `exit 1` (deploy goes red).
 
@@ -114,7 +116,7 @@ There are three supported ways to deploy. **Normal operation is path 1 — do no
 `pipeline/**`, `metaculus/**`, `infra/deploy_oracle.sh`, `infra/oracle-api.service`,
 `infra/metaculus-sync.service`, `infra/metaculus-sync.timer`, `infra/install_metaculus_timer.sh`,
 `polymarket_paper/**`, `infra/polymarket-paper.service`, `infra/polymarket-paper.timer`,
-`infra/install_polymarket_paper_timer.sh` (retro#620), or the workflow file itself **[CORRECTED 2026-09-07 — the metaculus paths were added later and
+`infra/install_polymarket_paper_timer.sh` (retro#620), `manifold_paper/**`, `infra/manifold-paper.service`, `infra/manifold-paper.timer`, `infra/install_manifold_paper_timer.sh` (retro#918), or the workflow file itself **[CORRECTED 2026-09-07 — the metaculus paths were added later and
 this list had gone stale]**. It authenticates to AWS via OIDC, calls `aws ssm send-command`
 against the box, waits for completion, and prints the deploy script's stdout/stderr into the
 Actions log. A `no-op` fast-path in `deploy_oracle.sh` makes the workflow cheap when the resolved

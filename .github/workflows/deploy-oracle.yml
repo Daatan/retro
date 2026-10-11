@@ -22,6 +22,10 @@ on:
       - infra/polymarket-paper.service
       - infra/polymarket-paper.timer
       - infra/install_polymarket_paper_timer.sh
+      - manifold_paper/**
+      - infra/manifold-paper.service
+      - infra/manifold-paper.timer
+      - infra/install_manifold_paper_timer.sh
       - .github/workflows/deploy-oracle.yml
 
   # Manual trigger — useful for redeploying the current main (e.g. after a

@@ -44,6 +44,9 @@ class ApiSettings(BaseSettings):
     # a systemd oneshot on the same box) appends its JSONL ledger to; served
     # read-only at GET /pm/paper.
     polymarket_paper_ledger_dir: Path = Path("")  # empty = data_dir/polymarket_paper
+    # retro#918: same, for the Manifold paper bot (manifold_paper/paper.py);
+    # served read-only at GET /manifold/paper.
+    manifold_paper_ledger_dir: Path = Path("")  # empty = data_dir/manifold_paper
     # Step 4 — the cutover (docs/ORACLE_VARIABLES.md §9). When True,
     # get_credibility_weight() sources credibility from the resolution-informed
     # shadow board above instead of the vault-curated leaderboard.json. Full
@@ -1116,6 +1119,12 @@ class ApiSettings(BaseSettings):
         if self.polymarket_paper_ledger_dir != Path(""):
             return self.polymarket_paper_ledger_dir
         return self.data_dir / "polymarket_paper"
+
+    @property
+    def resolved_manifold_paper_ledger_dir(self) -> Path:
+        if self.manifold_paper_ledger_dir != Path(""):
+            return self.manifold_paper_ledger_dir
+        return self.data_dir / "manifold_paper"
 
     @property
     def resolved_settlement_verdict_cache_path(self) -> Path:

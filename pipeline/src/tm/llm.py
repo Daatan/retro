@@ -44,6 +44,37 @@ _PROMPT_CACHE_MODEL_MARKERS = (".anthropic.", ".amazon.nova")
 def _model_supports_prompt_cache(model: str) -> bool:
     return any(marker in model for marker in _PROMPT_CACHE_MODEL_MARKERS)
 
+# Bedrock rejects the `temperature` parameter outright on the newest Anthropic
+# models ("`temperature` is deprecated for this model" -- a ValidationException /
+# BadRequestError), which fails 100% of calls to them. Every Oracul stage sends
+# temperature=0 by default, so a `model` override (or a default bump) onto one of
+# these used to show up as a silent abstain, not an error (retro#916: 10/10
+# second opinions abstained on Sonnet 5.5). Probed directly with Converse on
+# 2026-10-11 -- rejecting: Sonnet 5 / 5.5, Opus 4.7 / 4.8 / 5 / 5.5; accepting:
+# Sonnet 4.5 / 4.6, Opus 4.5 / 4.6, Haiku 4.5, Nova. Substring markers so the
+# `us.` / `eu.` / `global.` profile prefixes all match. This list is evidence,
+# not a guess -- extend it only from a probe of the new model.
+_TEMPERATURE_REJECTING_MARKERS = (
+    "claude-sonnet-5",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-opus-5",
+)
+
+
+def _model_rejects_temperature(model: str) -> bool:
+    return any(marker in model for marker in _TEMPERATURE_REJECTING_MARKERS)
+
+
+def _set_temperature(kwargs: dict, model: str, temperature: float | None) -> None:
+    """Put ``temperature`` on ``kwargs`` unless it is None or ``model`` rejects it."""
+    if temperature is None:
+        return
+    if _model_rejects_temperature(model):
+        logger.debug("event=temperature_omitted_unsupported_model model=%s", model)
+        return
+    kwargs["temperature"] = temperature
+
 # litellm reads this global for OpenAI-compatible backends. For ``bedrock/*``
 # models (the default) litellm ignores it and authenticates with AWS
 # credentials, so on the normal path this is a no-op; it only matters when
@@ -222,8 +253,9 @@ async def complete_structured(
     a future caller needs otherwise. Pass ``None`` to omit the parameter from the
     request entirely — the newest Anthropic models on Bedrock reject it outright
     (``BedrockException: `temperature` is deprecated for this model``), which
-    fails 100% of calls to them, so a caller reaching for one of those has no way
-    to say "leave it off" other than this.
+    fails 100% of calls to them. Models known to reject it
+    (:data:`_TEMPERATURE_REJECTING_MARKERS`) get it omitted automatically whatever
+    the caller passes; ``None`` is for a model not on that list.
 
     ``cached_prefix``, when given and ``settings.enable_prompt_cache`` is on, is sent
     as its own Bedrock/Anthropic cache-marked content block ahead of ``prompt`` — for
@@ -259,8 +291,7 @@ async def complete_structured(
         timeout=timeout,
         max_retries=1,
     )
-    if temperature is not None:
-        call_kwargs["temperature"] = temperature
+    _set_temperature(call_kwargs, model, temperature)
     kwargs = apply_routing(call_kwargs)
     output, completion = await client.chat.completions.create_with_completion(**kwargs)
     return output, extract_usage(completion)
@@ -291,8 +322,7 @@ async def complete_text_once_with_usage(
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
     kwargs = apply_routing(dict(model=model, messages=messages, max_tokens=max_tokens))
-    if temperature is not None:
-        kwargs["temperature"] = temperature
+    _set_temperature(kwargs, model, temperature)
     if response_format is not None:
         kwargs["response_format"] = response_format
     if timeout is not None:

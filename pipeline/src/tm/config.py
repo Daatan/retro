@@ -89,7 +89,8 @@ class Settings(BaseSettings):
     # instead of re-writing it (measured 2026-10-05: ~54 writes/day of the ~22.8k prefix).
     # litellm forwards the ttl only to Claude 4.5+ on Bedrock and drops it for every other
     # model (Nova), so the gatekeeper is unaffected. Enable with PROMPT_CACHE_TTL=1h in the
-    # oracle-api drop-in; unset it and restart to roll back.
+    # oracle-api drop-in; unset it and restart to roll back. Tried 2026-10-06..09 and rolled
+    # back: Haiku prefix writes did not fall (retro#906), so "" is what runs.
     prompt_cache_ttl: str = ""
 
     # Magnitude ceiling for a PRECURSOR fact (`is_occurrence=false`): the largest

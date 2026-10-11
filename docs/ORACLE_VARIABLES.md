@@ -1606,7 +1606,10 @@ Small-tasks breakdown, in order:
   2026-07-25)** — the same ingest now also carries an optional
   `author_signals` array (byline `author`, `outlet_name`, `author_lean`
   [−1..1], `author_lean_certainty`, `evidence_class`), pushed by daatan from
-  the pool's `author_lean` shadow columns. `rescore_authors_from_disk()`
+  the pool's `author_lean` shadow columns (`outlet_name` is the article's
+  `source` when news-indexer has no outlet row for it — daatan#1835; the
+  2026-10-11 ledger was patched to match, 187 of 229 signals filled).
+  `rescore_authors_from_disk()`
   replays it per **(byline author, outlet)** into
   `data/resolution_author_leaderboard.json`, exposed at
   `GET /leaderboard/author-shadow`. Two deliberate departures from the
@@ -3213,7 +3216,7 @@ the model sees is byte-identical either way.
 | Variable | Default | Meaning |
 |---|---|---|
 | `extractor_cache_single_article` (`EXTRACTOR_CACHE_SINGLE_ARTICLE`, `pipeline/src/tm/config.py`) | `true` | Send `PROMPT_PREFIX` as the cache-marked block on 1-article extractor calls too. `false` = the retro#564/#876 behaviour (prefix prepended to the prompt uncached). The instructions are sent either way (retro#876). No effect when `enable_prompt_cache` is off or the model is not cache-capable. Rollback is this env var in the oracle-api drop-in / box `.env` plus a restart. |
-| `prompt_cache_ttl` (`PROMPT_CACHE_TTL`, `pipeline/src/tm/config.py`) | `""` | TTL of the prompt-cache block (retro#906). `""` = plain `{"type": "ephemeral"}`, Bedrock's 5-minute cache. `1h` = the 1-hour cache: a write costs 2× base input instead of 1.25×, and calls 5–60 min apart read instead of re-writing (~−$1.2/day measured 2026-10-05). litellm forwards it to Claude 4.5+ only; Nova (gatekeeper) is unaffected. Rollback: unset in the oracle-api drop-in plus a restart. |
+| `prompt_cache_ttl` (`PROMPT_CACHE_TTL`, `pipeline/src/tm/config.py`) | `""` | TTL of the prompt-cache block (retro#906). `""` = plain `{"type": "ephemeral"}`, Bedrock's 5-minute cache. `1h` = the 1-hour cache: a write costs 2× base input instead of 1.25×, and calls 5–60 min apart read instead of re-writing (~−$1.2/day measured 2026-10-05). litellm forwards it to Claude 4.5+ only; Nova (gatekeeper) is unaffected. Rollback: unset in the oracle-api drop-in plus a restart. **Tried and rolled back:** enabled 2026-10-06 07:17 via the oracle-api drop-in; Haiku prefix writes did not fall (≈1.48M tokens/day before, 1.4–1.66M/day after) while each write cost 2×. Removed 2026-10-09; the default `""` (5-minute cache) is live. Cause unresolved (retro#906): log cache creation/read on every extractor call and confirm `ttl` is actually sent before trying again. |
 
 **Expected:** simulated push hit rate ~58% against a 21.7% break-even → ~$1.2/day; worst case
 (no reads) −$0.73/day. **Kill criterion:** 48 h after deploy, if fewer than ~20% of

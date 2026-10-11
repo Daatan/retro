@@ -66,6 +66,7 @@ Later additions to the same path:
   of those becomes a read with the 1h TTL, about −$1.2/day. Check: CloudWatch
   `AWS/Bedrock` `CacheWriteInputTokenCount` / `CacheReadInputTokenCount` for the Haiku model
   ID, day before vs day after.
+  **Tried and rolled back:** enabled 2026-10-06 07:17 via the oracle-api drop-in; Haiku prefix writes did not fall (≈1.48M tokens/day before, 1.4–1.66M/day after) while each write cost 2×. Removed 2026-10-09; the default `""` (5-minute cache) is live. Cause unresolved (retro#906): log cache creation/read on every extractor call and confirm `ttl` is actually sent before trying again.
 
 ## What did NOT change
 

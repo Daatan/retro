@@ -14,6 +14,7 @@ on:
       - bayesoracle/**
       - metaculus/**
       - polymarket_paper/**
+      - manifold_paper/**
       # The case studies are hand-edited data, and test_event_validation.py
       # validates the committed set — so a bad edit to an event file alone must
       # trigger this workflow, not just changes under pipeline/.
@@ -62,6 +63,12 @@ jobs:
       - name: Run polymarket-paper systemd unit tests
         run: bash infra/tests/test_polymarket_paper_timer.sh
 
+      - name: shellcheck install_manifold_paper_timer.sh
+        run: shellcheck -S error infra/install_manifold_paper_timer.sh
+
+      - name: Run manifold-paper systemd unit tests
+        run: bash infra/tests/test_manifold_paper_timer.sh
+
       # The node-series cron line only runs on the oracle box (retro#896): pin
       # the every-3-days guard flag and that a deploy never installs it.
       - name: shellcheck install_oracle_series_cron.sh
@@ -75,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [api, pipeline, bayesoracle, metaculus, polymarket_paper]
+        project: [api, pipeline, bayesoracle, metaculus, polymarket_paper, manifold_paper]
     defaults:
       run:
         working-directory: ${{ matrix.project }}

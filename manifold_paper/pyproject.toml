@@ -1,0 +1,22 @@
+[project]
+name = "manifold-paper"
+version = "0.1.0"
+description = "Read-only Manifold Markets paper bot: records Oracle probability vs market price, opens hypothetical Mana positions, never calls a write endpoint (retro#918)"
+requires-python = ">=3.11"
+# httpx only. No Manifold API key, no bet/market-creation client — by design
+# (retro#918 Phase 1 is GET-only). Real-Mana bets are a separate, gated Phase 2.
+dependencies = [
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

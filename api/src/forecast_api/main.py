@@ -35,6 +35,7 @@ from .resolution_scorer import load_shadow_leaderboard, rescore_authors_from_dis
 from .settlement_pin_ledger import load_ledger, record_settlement_pin
 from .stages import describe_stages
 from .pm_paper import build_report as build_pm_paper_report, render_markdown as render_pm_paper_markdown
+from .manifold_paper import build_report as build_manifold_paper_report, render_markdown as render_manifold_paper_markdown
 from tm.config import settings as _pipeline_settings
 from tm.gatekeeper import check_is_prediction
 from tm.llm import complete_text_once_with_usage
@@ -568,6 +569,26 @@ async def pm_paper(
     report = await asyncio.to_thread(build_pm_paper_report, settings.resolved_polymarket_paper_ledger_dir)
     if format == "md":
         return PlainTextResponse(render_pm_paper_markdown(report), media_type="text/markdown; charset=utf-8")
+    return JSONResponse(report)
+
+
+@app.get("/manifold/paper", tags=["Manifold"])
+@limiter.limit("30/minute")
+async def manifold_paper(
+    request: Request,
+    format: str = Query(default="json", pattern="^(json|md)$", description="json (default) or md for a Markdown scorecard"),
+):
+    """
+    Calibration scorecard of the Manifold **paper** bot (retro#918): Oracle
+    probability vs Manifold price per tracked binary market, Brier and log-loss
+    of both on resolved YES/NO markets (same snapshot), a bootstrap CI on the
+    Brier difference, a reliability table, and the pre-registered pass bar.
+    Rebuilt from the on-box JSONL ledger on every call; no Manifold call is made
+    here. Public and read-only: no account, no bets, no credentials.
+    """
+    report = await asyncio.to_thread(build_manifold_paper_report, settings.resolved_manifold_paper_ledger_dir)
+    if format == "md":
+        return PlainTextResponse(render_manifold_paper_markdown(report), media_type="text/markdown; charset=utf-8")
     return JSONResponse(report)
 
 

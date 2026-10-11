@@ -66,6 +66,12 @@ if [[ -f "$API_DIR/infra/install_polymarket_paper_timer.sh" ]]; then
   sudo bash "$API_DIR/infra/install_polymarket_paper_timer.sh"
 fi
 
+# ── 2a''. Re-install the Manifold paper bot timer (retro#918) ───────────────
+if [[ -f "$API_DIR/infra/install_manifold_paper_timer.sh" ]]; then
+  log "re-installing manifold-paper timer..."
+  sudo bash "$API_DIR/infra/install_manifold_paper_timer.sh"
+fi
+
 # ── 2b. Write build provenance (read by /version and /health) ─────────────────
 # Generated, environment-specific — not committed (see .gitignore). The runtime
 # git fallback in _build.py covers dev where this file is absent. The semver is

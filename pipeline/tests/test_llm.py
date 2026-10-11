@@ -384,6 +384,85 @@ class TestCompleteStructuredTemperature:
         assert "temperature" not in captured
 
 
+class TestTemperatureRejectingModels:
+    """retro#916: Bedrock rejects `temperature` on the newest Anthropic models.
+
+    Every stage sends temperature=0 by default, so a model override onto one of
+    them used to fail 100% of calls and surface as a silent abstain. The decision
+    now lives in llm.py; the two lists below are the Converse probe of 2026-10-11."""
+
+    REJECTING = [
+        "bedrock/us.anthropic.claude-sonnet-5",
+        "bedrock/us.anthropic.claude-sonnet-5-5",
+        "bedrock/eu.anthropic.claude-sonnet-5-5",
+        "bedrock/global.anthropic.claude-sonnet-5-5",
+        "bedrock/us.anthropic.claude-opus-4-7",
+        "bedrock/us.anthropic.claude-opus-4-8",
+        "bedrock/us.anthropic.claude-opus-5",
+        "bedrock/us.anthropic.claude-opus-5-5",
+    ]
+    ACCEPTING = [
+        "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "bedrock/us.anthropic.claude-sonnet-4-6",
+        "bedrock/us.anthropic.claude-opus-4-5-20251101-v1:0",
+        "bedrock/us.anthropic.claude-opus-4-6-v1",
+        "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "bedrock/us.amazon.nova-lite-v1:0",
+        "bedrock/us.amazon.nova-2-lite-v1:0",
+    ]
+
+    @pytest.mark.parametrize("model", REJECTING)
+    def test_rejecting_models_are_recognised(self, model):
+        assert llm._model_rejects_temperature(model) is True
+
+    @pytest.mark.parametrize("model", ACCEPTING)
+    def test_accepting_models_are_not_touched(self, model):
+        assert llm._model_rejects_temperature(model) is False
+
+    @pytest.mark.parametrize("model", REJECTING)
+    async def test_structured_call_omits_temperature(self, monkeypatch, model):
+        captured = {}
+        async def fake_create(**kwargs):
+            captured.update(kwargs)
+            return ("OUT", SimpleNamespace(usage=None))
+        monkeypatch.setattr(llm.client.chat.completions, "create_with_completion", fake_create)
+        await llm.complete_structured(model, dict, "P", max_tokens=10, timeout=5)
+        assert "temperature" not in captured
+
+    @pytest.mark.parametrize("model", ACCEPTING)
+    async def test_structured_call_keeps_temperature(self, monkeypatch, model):
+        captured = {}
+        async def fake_create(**kwargs):
+            captured.update(kwargs)
+            return ("OUT", SimpleNamespace(usage=None))
+        monkeypatch.setattr(llm.client.chat.completions, "create_with_completion", fake_create)
+        await llm.complete_structured(model, dict, "P", max_tokens=10, timeout=5)
+        assert captured["temperature"] == 0
+
+    async def test_text_call_omits_temperature_for_rejecting_model(self, monkeypatch):
+        captured = {}
+        async def fake_acompletion(**kwargs):
+            captured.update(kwargs)
+            msg = SimpleNamespace(content="ok")
+            return SimpleNamespace(choices=[SimpleNamespace(message=msg)], usage=None)
+        monkeypatch.setattr(llm.litellm, "acompletion", fake_acompletion)
+        out = await llm.complete_text_once("bedrock/us.anthropic.claude-sonnet-5-5", "p",
+                                           max_tokens=5, temperature=0)
+        assert out == "ok"
+        assert "temperature" not in captured
+
+    async def test_text_call_keeps_temperature_for_accepting_model(self, monkeypatch):
+        captured = {}
+        async def fake_acompletion(**kwargs):
+            captured.update(kwargs)
+            msg = SimpleNamespace(content="ok")
+            return SimpleNamespace(choices=[SimpleNamespace(message=msg)], usage=None)
+        monkeypatch.setattr(llm.litellm, "acompletion", fake_acompletion)
+        await llm.complete_text_once("bedrock/us.anthropic.claude-sonnet-4-6", "p",
+                                     max_tokens=5, temperature=0)
+        assert captured["temperature"] == 0
+
+
 class TestCompleteStructuredPromptCaching:
     """cached_prefix wiring in complete_structured itself — the content shape sent
     to the underlying instructor/litellm client, not just that callers pass the

@@ -298,6 +298,10 @@ async def complete_structured(
         # Haiku 5.5 thinks adaptively by default; on a long structured prompt the
         # thinking block ate max_tokens and returned an empty body (retro#921).
         call_kwargs["thinking"] = {"type": "disabled"}
+        # litellm validates `thinking` against its model cost map; when the remote map
+        # can't be fetched it falls back to a bundled copy that predates Haiku 5.5 and
+        # raises UnsupportedParamsError (seen live 2026-10-12). Allow it explicitly.
+        call_kwargs["allowed_openai_params"] = ["thinking"]
     kwargs = apply_routing(call_kwargs)
     output, completion = await client.chat.completions.create_with_completion(**kwargs)
     return output, extract_usage(completion)

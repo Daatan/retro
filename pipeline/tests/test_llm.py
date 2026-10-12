@@ -452,6 +452,7 @@ class TestTemperatureRejectingModels:
         await llm.complete_structured("bedrock/us.anthropic.claude-haiku-5-5", dict, "P",
                                       max_tokens=10, timeout=5)
         assert captured["thinking"] == {"type": "disabled"}
+        assert captured["allowed_openai_params"] == ["thinking"]
         captured.clear()
         await llm.complete_structured("bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0", dict, "P",
                                       max_tokens=10, timeout=5)

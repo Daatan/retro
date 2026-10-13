@@ -63,6 +63,14 @@ class TestRunShadow:
         lines = await self._run(extract, caplog)
         assert len(lines) == 1 and "err=RuntimeError" in lines[0] and "shadow_n=" not in lines[0]
 
+    async def test_error_message_is_one_token(self, caplog):
+        async def extract(**kw):
+            raise RuntimeError("AccessDenied: not authorized\nto invoke model")
+
+        lines = await self._run(extract, caplog)
+        assert "err=RuntimeError:AccessDenied:_not_authorized_to_invoke_model" in lines[0]
+        assert lines[0].rstrip().endswith("to_invoke_model")
+
     async def test_timeout_is_logged_not_raised(self, caplog):
         async def extract(**kw):
             await asyncio.sleep(5)

@@ -106,7 +106,10 @@ async def run_shadow(
     except asyncio.TimeoutError:
         err = "timeout"
     except Exception as exc:  # noqa: BLE001 - a shadow must never surface an error
-        err = type(exc).__name__
+        # Type alone hid an AccessDenied behind InstructorRetryException (2026-10-13); add a
+        # short single-token message so the readout can tell IAM from schema from timeout.
+        msg = "_".join(str(exc).split())[:160]
+        err = f"{type(exc).__name__}:{msg}" if msg else type(exc).__name__
     ms = (time.perf_counter() - started) * 1000
     try:
         logger.info(format_line(url=url, prediction_id=prediction_id, live_model=live_model,

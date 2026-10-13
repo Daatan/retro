@@ -216,6 +216,7 @@ from .settlement_semantic import (
 )
 from .settlement_verifier import SettlementVote, Verdict, build_prompt, verify_settlement
 from .premise_verifier import PremiseResult, premise_check_triggered, verify_premise
+from .extractor_shadow import fire_extractor_shadow
 from .jev_class import apply_jev_classes, fire_jev_class_shadow, jev_evidence_classes
 from .jev_shadow import (current_provider, evaluate_jev_gate, fire_jev_pass1, fire_jev_shadow, jev_pass1,
                          question_fingerprint, script_of, simplify_question)
@@ -1879,6 +1880,23 @@ async def _process_article(
         )
         if usage_events is not None and extract_usage:
             usage_events.append(extract_usage)
+        # Extractor model shadow (retro#921): log-only, background, never awaited.
+        if settings.extractor_shadow_model:
+            fire_extractor_shadow(
+                extract=extract_predictions,
+                shadow_model=settings.extractor_shadow_model,
+                live_model=extractor_model or "default",
+                live_extraction=extraction,
+                call_kwargs=dict(
+                    article_text=text, source_name=source_name, article_date=article_date,
+                    event_name=question, event_description=event_description,
+                    claim_deadline=claim_deadline, short_form=short_form, language=language,
+                    is_single_article=is_single_article,
+                ),
+                url=result.url,
+                prediction_id=prediction_id,
+                timeout_s=settings.extractor_shadow_timeout_seconds,
+            )
         # Jev skip-gate, shadow verdict (retro#850): pass 1 ran alongside the extractor; log
         # what it would have done against what Haiku actually found. Shadow must not add
         # latency, so it waits only `jev_gate_shadow_wait_seconds` for a pass 1 still in

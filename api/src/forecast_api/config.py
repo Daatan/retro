@@ -882,6 +882,14 @@ class ApiSettings(BaseSettings):
     # (`event=jev_gate_ab`). The gate itself keeps deciding on the live question: this is
     # measurement only. The rewrite is cached per question, so it costs one cheap call the
     # first time a question is seen and nothing afterwards.
+    # retro#921: extractor MODEL shadow. When non-empty, every live /forecast article is ALSO
+    # extracted by this model in a background task and one `event=extractor_shadow` line logs
+    # the two side by side (count, |stance|, settled, fact_signal fill, shadow tokens/latency).
+    # Log-only: never reaches the response, pool, memo or any enforce_* step. Empty = off.
+    # e.g. bedrock/us.anthropic.claude-haiku-5-5 (needs the temperature/thinking handling in llm.py).
+    extractor_shadow_model: str = ""
+    extractor_shadow_timeout_seconds: float = 90.0
+
     jev_gate_ab_enabled: bool = False
     jev_gate_ab_model: str = "bedrock/us.amazon.nova-micro-v1:0"
     jev_gate_ab_rewrite_timeout_seconds: float = 15.0

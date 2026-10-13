@@ -9,9 +9,7 @@
     "journalist": "unknown",
     "article_text": "Tonight on the programme: Prime Minister L, the opposition's new campaign chief, and the panel on the week in politics.",
     "expect": {
-      "settled": false,
-      "is_occurrence": false,
-      "stance_band": "none"
+      "no_predictions": true
     },
     "tags": [
       "retro-770",
@@ -48,9 +46,7 @@
     "journalist": "unknown",
     "article_text": "The delegation toured the earthquake-damaged district for two hours before returning to the capital. Pictured: Prime Minister L speaking with rescue workers at the site.",
     "expect": {
-      "settled": false,
-      "is_occurrence": false,
-      "stance_band": "none"
+      "no_predictions": true
     },
     "tags": [
       "retro-770",

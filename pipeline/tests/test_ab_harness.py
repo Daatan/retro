@@ -224,8 +224,12 @@ class TestShippedCaseFiles:
         cases = load_cases(path)
         assert cases, f"{path.name} holds no cases"
         for case in cases:
-            unknown = set(case.expect) - set(_FACET_READERS)
+            # `no_predictions` (retro#775) is resolved by unmet_facets itself, not by a
+            # per-prediction reader, so it is a valid expectation that has no entry here.
+            unknown = set(case.expect) - set(_FACET_READERS) - {"no_predictions"}
             assert not unknown, f"{case.id}: unknown facet(s) {sorted(unknown)}"
+            if "no_predictions" in case.expect:
+                assert case.expect["no_predictions"] is True, f"{case.id}: no_predictions must be true"
 
     def test_case_ids_are_unique_across_files(self):
         """`compare` keys results by case id across whichever files an arm ran,

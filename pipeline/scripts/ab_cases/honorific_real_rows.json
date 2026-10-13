@@ -9,9 +9,7 @@
     "journalist": "unknown",
     "article_text": "הערב בפטריוטים:\nראש הממשלה\nבנימין נתניהו\nתשע🔥",
     "expect": {
-      "settled": false,
-      "is_occurrence": false,
-      "stance_band": "none"
+      "no_predictions": true
     },
     "tags": [
       "retro-770",

@@ -15,7 +15,7 @@ def _write(dir_: Path, name: str, rows: list[dict]) -> None:
 
 def _snap(mid, ts, yes, oracle=None, outcome=None, raw=None, closed=False, **extra):
     return {"ts": ts, "run_id": ts, "market_id": mid, "market_slug": f"s{mid}", "question": f"Q{mid}",
-            "end_date": None, "closed": closed, "resolved_outcome": outcome, "resolution_raw": raw,
+            "end_date": "2026-10-20T00:00:00+00:00", "closed": closed, "resolved_outcome": outcome, "resolution_raw": raw,
             "market_yes": yes, "oracle_yes": oracle, "oracle_reason": None,
             "edge": None if oracle is None else round(oracle - yes, 4), **extra}
 
@@ -28,7 +28,7 @@ def test_empty_ledger_dir(tmp_path):
     assert "calibration scorecard" in render_markdown(r)
 
 
-def test_scores_last_oracle_snapshot_on_yes_no_only(tmp_path):
+def test_scores_first_oracle_snapshot_on_yes_no_only(tmp_path):
     _write(tmp_path, "snapshots.jsonl", [
         _snap("1", "2026-10-11T00:00:00+00:00", 0.40, oracle=0.70),
         _snap("1", "2026-10-12T00:00:00+00:00", 0.55),                       # price-only
@@ -48,6 +48,41 @@ def test_scores_last_oracle_snapshot_on_yes_no_only(tmp_path):
     assert s["brier_market"] == round((0.6 ** 2 + 0.9 ** 2) / 2, 4)
     assert s["brier_diff_mean"] == round(((0.09 - 0.36) + (0.36 - 0.81)) / 2, 4)
     assert s["logloss_oracle"] is not None and s["criterion"]["enough_data"] is False
+
+
+def test_first_oracle_number_is_the_scored_one_not_the_last(tmp_path):
+    # Re-asked closer to the close, the Oracle drifts toward the outcome and the market
+    # price is near 0/1; only the earliest forecast is a fair test (rule of 2026-10-13).
+    _write(tmp_path, "snapshots.jsonl", [
+        _snap("1", "2026-10-11T00:00:00+00:00", 0.40, oracle=0.30),
+        _snap("1", "2026-10-15T00:00:00+00:00", 0.80, oracle=0.95),
+        _snap("1", "2026-10-20T00:00:00+00:00", 1.0, outcome="YES", raw="YES", closed=True),
+    ])
+    r = build_report(tmp_path)
+    (m,) = r["markets"]
+    assert m["oracle_yes"] == 0.30 and m["market_yes_at_oracle"] == 0.40
+    assert r["summary"]["brier_oracle"] == round(0.7 ** 2, 4)
+
+
+def test_late_or_extreme_forecasts_are_excluded_and_counted(tmp_path):
+    day = "2026-10-20T00:00:00+00:00"
+    _write(tmp_path, "snapshots.jsonl", [
+        _snap("ok", "2026-10-11T00:00:00+00:00", 0.50, oracle=0.60),
+        _snap("ok", day, 1.0, outcome="YES", raw="YES", closed=True),
+        _snap("late", "2026-10-18T00:00:00+00:00", 0.50, oracle=0.60),       # 2 d before close
+        _snap("late", day, 1.0, outcome="YES", raw="YES", closed=True),
+        _snap("extreme", "2026-10-11T00:00:00+00:00", 0.97, oracle=0.60),    # price already ~1
+        _snap("extreme", day, 1.0, outcome="YES", raw="YES", closed=True),
+        _snap("nodate", "2026-10-11T00:00:00+00:00", 0.50, oracle=0.60, end_date=None),
+        _snap("nodate", day, 1.0, outcome="YES", raw="YES", closed=True, end_date=None),
+    ])
+    r = build_report(tmp_path)
+    s = r["summary"]
+    assert (s["n_resolved"], s["n_scored"], s["n_excluded_horizon"], s["n_excluded_band"]) == (4, 1, 2, 1)
+    by = {m["market_id"]: m["excluded"] for m in r["markets"]}
+    assert by == {"ok": None, "late": "horizon", "extreme": "band", "nodate": "horizon"}
+    assert s["scoring_rule"]["min_horizon_days"] == 5.0
+    assert "not scorable" in render_markdown(r)
 
 
 def test_reliability_bins_and_bootstrap_are_deterministic(tmp_path):

@@ -62,7 +62,8 @@ the underlying foundation-model ARN, which cross-region routing requires in ever
 region — hence the `*` region), and Claude Sonnet 4.5 (`us.` profile only) for daatan's
 `evidence-second-opinion` re-reads (`EVIDENCE_SECOND_OPINION_MODEL`, daatan#1636) — it was
 missing until retro#904, so that detector silently produced nothing from 08-27 to 10-05.
-Adding a new extractor model = add its ARNs here and
+Adding a new extractor model — **including a shadow-only one** (retro#921: Haiku 5.5 shadow
+failed 100% until its ARNs were added) = add its ARNs here and
 re-apply, or the host gets `AccessDenied` and every extraction fails (`reason:
 extraction_errors`, discovered 2026-07-12).
 

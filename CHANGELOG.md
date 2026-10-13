@@ -19,6 +19,9 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 
 ## [Unreleased]
 
+### Fixed
+- Extractor shadow (retro#921): the first prod calls all failed in ~450 ms because `truthmachine-ec2-role` had no `anthropic.claude-haiku-5-5` ARNs (AccessDenied behind `InstructorRetryException`). Added the foundation-model + `us.` inference-profile ARNs to `infra/iam/truthmachine-ec2-pipeline-policy.json` (must be re-applied by hand) and `err=` now carries a short message after the exception type. Live responses were never affected.
+
 ### Added
 - Extractor model shadow (retro#921): `extractor_shadow_model` (`EXTRACTOR_SHADOW_MODEL`, default empty = off) runs a candidate extractor next to the live one on `/forecast` in a background task and logs one `event=extractor_shadow` line per article (count, max/mean |stance|, settled, `fact_signal` fill, net stance, shadow tokens/latency, `err=`). Log-only: never reaches the response, pool, extraction memo (`memo=None`) or prompt-cache coordination (`cache_coordinator=None`); failures and timeouts (`extractor_shadow_timeout_seconds`, 90 s) are swallowed into `err=`. Drop-in `infra/oracle-api.service.d/extractor-shadow-haiku55.conf` (hand-synced) points it at Claude Haiku 5.5. Default off: no behaviour change on merge.
 - **Fixed** (retro#921, groundwork for evaluating Claude Haiku 5.5, no behaviour change for current models): `claude-haiku-5` joins the models that reject `temperature` (probed 2026-10-12: "`temperature` is deprecated for this model"), and structured calls to it send `thinking={"type": "disabled"}` — it thinks adaptively by default and on the ~11k-token extractor prompt the thinking block exhausted `max_tokens` and returned an empty body. Without both, pointing `EXTRACTOR_MODEL` at it would have abstained on 100% of calls (cf. retro#916).

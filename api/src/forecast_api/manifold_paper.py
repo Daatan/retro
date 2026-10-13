@@ -9,8 +9,14 @@ Unlike the Polymarket scorecard this one is a *calibration* report, because that
 is what the arena is for (retro#918):
 
 * **Brier / log-loss** of the Oracle vs the market, both scored from the *same*
-  snapshot (the last one carrying an Oracle number), on markets that resolved
-  YES or NO. MKT and CANCEL resolutions are counted, never scored.
+  snapshot: the **first** one carrying an Oracle number, on markets that resolved
+  YES or NO. It only counts when it was made at least ``MIN_HORIZON_DAYS`` before
+  the market's close and the market price then sat inside the scoring band — a
+  forecast made hours before the outcome, against a price already at 0 or 1,
+  proves nothing (rule fixed 2026-10-13 while 0 markets were scored, so it is not
+  tuned to a result; before that it was the *last* snapshot). Excluded markets are
+  counted (``n_excluded_horizon`` / ``n_excluded_band``), never silently dropped.
+  MKT and CANCEL resolutions are counted, never scored.
 * **Brier difference** (oracle − market) with a deterministic bootstrap 95% CI;
   negative means the Oracle beat the market. The pre-registered bar is
   ``n_scored >= MIN_SCORED`` and the CI's mean within ``PASS_MARGIN`` of zero.
@@ -37,6 +43,11 @@ TRADES = "trades.jsonl"
 
 MIN_SCORED = 150          # pre-registered in retro#918
 PASS_MARGIN = 0.01        # Oracle Brier may exceed the market's by at most this
+# Mirrors manifold_paper/paper.py (Params.min_horizon_days, oracle_price_min/max); the two
+# packages do not import each other, so keep them in step by hand.
+MIN_HORIZON_DAYS = 5.0
+SCORE_PRICE_MIN = 0.10
+SCORE_PRICE_MAX = 0.90
 N_BINS = 5
 BOOTSTRAP_ITERS = 2000
 _EPS = 1e-4
@@ -93,12 +104,31 @@ def _reliability(pairs: list[tuple[float, str]]) -> list[dict]:
     return out
 
 
+def _exclusion(o: dict) -> Optional[str]:
+    """Why the first Oracle snapshot cannot be scored, or None when it can.
+
+    ``horizon``: made less than MIN_HORIZON_DAYS before the market's close (or the
+    timestamps are unreadable — a forecast of unknown lead time is not evidence).
+    ``band``: the market price at that moment was already near 0 or 1."""
+    try:
+        close = datetime.fromisoformat(str(o.get("end_date")))
+        made = datetime.fromisoformat(str(o.get("ts")))
+        if (close - made).total_seconds() < MIN_HORIZON_DAYS * 86400:
+            return "horizon"
+    except (TypeError, ValueError):
+        return "horizon"
+    pm = float(o["market_yes"])
+    if not (SCORE_PRICE_MIN <= pm <= SCORE_PRICE_MAX):
+        return "band"
+    return None
+
+
 def build_report(ledger_dir: Path) -> dict:
     snapshots = list(_read(ledger_dir / SNAPSHOTS))
     trades = list(_read(ledger_dir / TRADES))
 
     latest: dict[str, dict] = {}
-    last_oracle: dict[str, dict] = {}
+    first_oracle: dict[str, dict] = {}
     n_calls = 0
     counts: dict[str, int] = {}
     for row in snapshots:  # file order is time order
@@ -106,7 +136,7 @@ def build_report(ledger_dir: Path) -> dict:
         latest[mid] = row
         counts[mid] = counts.get(mid, 0) + 1
         if row.get("oracle_yes") is not None:
-            last_oracle[mid] = row
+            first_oracle.setdefault(mid, row)
             n_calls += 1
         elif row.get("oracle_reason"):
             n_calls += 1
@@ -114,8 +144,9 @@ def build_report(ledger_dir: Path) -> dict:
     markets = []
     scored: list[tuple[float, float, str]] = []  # (oracle, market, outcome)
     n_void = 0
+    n_excl_horizon = n_excl_band = 0
     for mid, row in latest.items():
-        o = last_oracle.get(mid)
+        o = first_oracle.get(mid)
         outcome = row.get("resolved_outcome")
         raw = row.get("resolution_raw")
         if raw in ("MKT", "CANCEL"):
@@ -133,12 +164,20 @@ def build_report(ledger_dir: Path) -> dict:
             "articles_used": None if o is None else o.get("articles_used"),
             "oracle_reason": row.get("oracle_reason"),
             "n_snapshots": counts[mid], "brier_oracle": None, "brier_market": None,
+            "excluded": None,
         }
         if outcome in ("YES", "NO") and o is not None and o.get("market_yes") is not None:
             po, pm = float(o["oracle_yes"]), float(o["market_yes"])
-            entry["brier_oracle"] = round(_brier(po, outcome), 4)
-            entry["brier_market"] = round(_brier(pm, outcome), 4)
-            scored.append((po, pm, outcome))
+            excluded = _exclusion(o)
+            if excluded == "horizon":
+                n_excl_horizon += 1
+            elif excluded == "band":
+                n_excl_band += 1
+            entry["excluded"] = excluded
+            if excluded is None:
+                entry["brier_oracle"] = round(_brier(po, outcome), 4)
+                entry["brier_market"] = round(_brier(pm, outcome), 4)
+                scored.append((po, pm, outcome))
         markets.append(entry)
     markets.sort(key=lambda m: (m["end_date"] or "", m["market_id"]))
 
@@ -191,6 +230,11 @@ def build_report(ledger_dir: Path) -> dict:
             "n_resolved": sum(1 for m in markets if m["resolved_outcome"] in ("YES", "NO")),
             "n_void": n_void,
             "n_scored": n,
+            "n_excluded_horizon": n_excl_horizon,
+            "n_excluded_band": n_excl_band,
+            "scoring_rule": {"snapshot": "first with an Oracle number",
+                             "min_horizon_days": MIN_HORIZON_DAYS,
+                             "price_band": [SCORE_PRICE_MIN, SCORE_PRICE_MAX]},
             "brier_oracle": round(sum(_brier(po, oc) for po, _, oc in scored) / n, 4) if n else None,
             "brier_market": round(sum(_brier(pm, oc) for _, pm, oc in scored) / n, 4) if n else None,
             "logloss_oracle": round(sum(_logloss(po, oc) for po, _, oc in scored) / n, 4) if n else None,
@@ -231,6 +275,9 @@ def render_markdown(report: dict) -> str:
            "| | |", "|---|---|",
            f"| Markets tracked | {s['n_markets']} (Oracle number on {s['n_with_oracle']}, coverage {_f(s['coverage'], 2)}) |",
            f"| Resolved YES/NO · void (MKT/CANCEL) · scored | {s['n_resolved']} · {s['n_void']} · {s['n_scored']} |",
+           f"| Resolved but not scorable (< {s['scoring_rule']['min_horizon_days']:g} d lead · price outside "
+           f"{s['scoring_rule']['price_band'][0]:g}–{s['scoring_rule']['price_band'][1]:g}) | "
+           f"{s['n_excluded_horizon']} · {s['n_excluded_band']} |",
            f"| **Brier — Oracle / market** | **{_f(s['brier_oracle'], 4)} / {_f(s['brier_market'], 4)}** |",
            f"| Log-loss — Oracle / market | {_f(s['logloss_oracle'], 4)} / {_f(s['logloss_market'], 4)} |",
            f"| Brier diff (oracle − market), 95% CI | {_f(s['brier_diff_mean'], 4)} {'—' if ci is None else f'[{ci[0]:+.4f}, {ci[1]:+.4f}]'} |",

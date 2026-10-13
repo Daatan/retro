@@ -33,11 +33,23 @@ class TestDecisions:
     def test_never_asked(self):
         assert wants_oracle_call(mkm(), None, P, NOW) is True
 
-    def test_fresh_answer_not_re_asked_stale_is(self):
-        fresh = {"ts": (NOW - timedelta(hours=6)).isoformat(), "oracle_yes": 0.3}
-        stale = {"ts": (NOW - timedelta(hours=21)).isoformat(), "oracle_yes": 0.3}
+    def test_a_market_with_a_number_is_never_asked_again(self):
+        answered = {"ts": (NOW - timedelta(days=30)).isoformat(), "oracle_yes": 0.3}
+        assert wants_oracle_call(mkm(), answered, P, NOW) is False
+
+    def test_no_answer_is_retried_only_after_the_stale_window(self):
+        fresh = {"ts": (NOW - timedelta(hours=6)).isoformat(), "oracle_reason": "all_articles_off_topic"}
+        stale = {"ts": (NOW - timedelta(hours=73)).isoformat(), "oracle_reason": "all_articles_off_topic"}
         assert wants_oracle_call(mkm(), fresh, P, NOW) is False
         assert wants_oracle_call(mkm(), stale, P, NOW) is True
+
+    def test_too_close_to_resolution_cannot_be_scored_so_is_not_asked(self):
+        assert wants_oracle_call(mkm(close_in_days=4.0), None, P, NOW) is False
+        assert wants_oracle_call(mkm(close_in_days=5.5), None, P, NOW) is True
+
+    def test_scoring_band_is_not_asked(self):
+        assert wants_oracle_call(mkm(prob=0.05), None, P, NOW) is False
+        assert wants_oracle_call(mkm(prob=0.95), None, P, NOW) is False
 
     def test_closed_or_longshot_is_never_asked(self):
         assert wants_oracle_call(mkm(resolved=True), None, P, NOW) is False
@@ -87,7 +99,7 @@ def _full(mid, **kw):
 
 
 def test_run_snapshots_candidates_filters_junk_and_trades_on_edge(tmp_path):
-    rows = [raw_market("good", prob=0.30, close_in_days=3), raw_market("thin", bettors=2),
+    rows = [raw_market("good", prob=0.30, close_in_days=8), raw_market("thin", bettors=2),
             raw_market("mine", question="Will I finish my novel?"), raw_market("poll", outcome_type="POLL")]
     asked = []
 
@@ -96,7 +108,7 @@ def test_run_snapshots_candidates_filters_junk_and_trades_on_edge(tmp_path):
         return httpx.Response(200, json={"mean": 0.5, "ci_low": 0.3, "ci_high": 0.7, "articles_used": 5})
 
     led = Ledger(tmp_path)
-    with _client(rows, {"good": _full("good", prob=0.30, close_in_days=3)}) as c, _oracle(oracle_handler) as o:
+    with _client(rows, {"good": _full("good", prob=0.30, close_in_days=8)}) as c, _oracle(oracle_handler) as o:
         stats = run(c, o, led, P, UP, now=NOW)
     assert stats["markets"] == 1 and stats["oracle_calls"] == 1 and stats["trades_opened"] == 1
     assert asked[0]["resolution_criteria"].startswith("Resolves YES")  # description fetched by id
@@ -142,7 +154,7 @@ def test_cancelled_market_stops_being_tracked_and_is_not_scored(tmp_path):
 
 
 def test_oracle_cap_goes_to_soonest_closing(tmp_path):
-    rows = [raw_market("far", close_in_days=20), raw_market("near", close_in_days=2), raw_market("mid", close_in_days=9)]
+    rows = [raw_market("far", close_in_days=20), raw_market("near", close_in_days=6), raw_market("mid", close_in_days=9)]
     order = []
 
     def oracle_handler(req):
@@ -171,3 +183,41 @@ def test_dry_run_writes_nothing(tmp_path):
     with _client([raw_market("a")]) as c, _oracle(lambda r: pytest.fail("no Oracle call in dry run")) as o:
         run(c, o, led, P, UP, now=NOW, dry_run=True)
     assert list(led.snapshots()) == [] and list(led.trades()) == []
+
+
+def test_answered_market_is_not_re_asked_on_later_runs(tmp_path):
+    """Regression (retro#918): a price-only row after an answer used to hide it, so every
+    market was re-asked on every run and the cap never reached the later-closing ones."""
+    led = Ledger(tmp_path)
+    rows = [raw_market("a", close_in_days=8)]
+    full = {"a": dict(rows[0], textDescription="d")}
+    calls = []
+
+    def oracle_handler(req):
+        calls.append(1)
+        return httpx.Response(200, json={"mean": 0.0, "ci_low": -0.1, "ci_high": 0.1, "articles_used": 3})
+
+    for hours in (0, 6, 12, 18):
+        with _client(rows, full) as c, _oracle(oracle_handler) as o:
+            run(c, o, led, P, UP, now=NOW + timedelta(hours=hours))
+    assert len(calls) == 1 and len(list(led.snapshots())) == 4
+
+
+def test_cap_prefers_never_asked_over_retries(tmp_path):
+    led = Ledger(tmp_path)
+    rows = [raw_market("old", close_in_days=6), raw_market("new", close_in_days=25)]
+    full = {r["id"]: dict(r, textDescription="d") for r in rows}
+    led.append_snapshot({"ts": (NOW - timedelta(days=4)).isoformat(), "run_id": "r0", "market_id": "old",
+                         "market_slug": "s", "question": "Q", "end_date": rows[0] and "x", "closed": False,
+                         "resolved_outcome": None, "resolution_raw": None, "market_yes": 0.4,
+                         "oracle_yes": None, "oracle_reason": "no_usable_predictions", "edge": None})
+    asked = []
+
+    def oracle_handler(req):
+        asked.append(json.loads(req.content)["question"])
+        return httpx.Response(200, json={"mean": 0.0, "ci_low": -0.1, "ci_high": 0.1, "articles_used": 1})
+
+    with _client(rows, full) as c, _oracle(oracle_handler) as o:
+        run(c, o, led, Params(max_markets_per_run=1), UP, now=NOW)
+    answered = [s["market_id"] for s in led.snapshots() if s["oracle_yes"] is not None]
+    assert answered == ["new"]  # a never-asked market beats a retry even though it closes later

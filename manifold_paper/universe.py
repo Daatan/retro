@@ -19,7 +19,8 @@ from manifold_client import Market
 # news, and "will I like X" has no news to read.
 _PERSONAL = re.compile(
     r"\b(i|i\'ll|i\'m|my|me|mine|we|our|myself)\b|\bthis (market|poll)\b|\bmana\b|\bmanifold\b"
-    r"|\[short fuse\]|\bsubsidy\b|\bwill (this|the) (market|question)\b",
+    r"|\[short fuse\]|\bsubsidy\b|\bwill (this|the) (market|question)\b"
+    r"|coin ?flip|^\s*daily\b|shitpost",
     re.IGNORECASE,
 )
 
@@ -28,7 +29,7 @@ _PERSONAL = re.compile(
 class UniverseParams:
     min_bettors: int = 15
     min_volume: float = 500.0
-    min_hours_to_close: float = 12.0
+    min_hours_to_close: float = 120.0
     max_days_to_close: float = 30.0
 
 

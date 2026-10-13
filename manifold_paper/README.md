@@ -47,8 +47,23 @@ then `universe.py`: at least `MIN_BETTORS` unique bettors and `MIN_VOLUME` Mana,
 closing between `MIN_HOURS_TO_CLOSE` and `MAX_DAYS_TO_CLOSE`, not
 personal/self-referential (keyword filter). Markets already in the ledger skip
 admission and are re-fetched by id every run until they resolve, so a market
-that falls out of the search still gets its outcome recorded. The per-run
-Oracle cap goes to the soonest-closing markets.
+that falls out of the search still gets its outcome recorded.
+
+**Who gets an Oracle call** (`wants_oracle_call`, rule of 2026-10-13): a market
+is asked once. It is skipped if it already has an Oracle number (price-only
+rows written later do not hide it: `Ledger.last_asked_by_market`), if its
+price is outside `ORACLE_PRICE_MIN..MAX` (0.10–0.90) or if it closes in less
+than `MIN_HORIZON_DAYS` (5) — those can never be scored (see below). A market
+with no usable answer (`oracle_reason`) is retried after `STALE_AFTER_HOURS`
+(72). The per-run cap goes first to never-asked markets, then to retries,
+soonest-closing first within each group.
+
+**Scoring rule** (scorecard side, `api/.../manifold_paper.py`): the Oracle number
+scored for a market is the FIRST one (a re-ask near the close drifts toward the
+outcome and the market price is already ~0/1). A market is scored only if that
+forecast was made at least 5 days before the close and the market price was
+inside 0.10–0.90 then; the rest are counted as `n_excluded_horizon` /
+`n_excluded_band`, not dropped silently.
 
 `resolution` of YES/NO is scored; MKT (probabilistic) and CANCEL are recorded
 (`resolution_raw`) but never scored.

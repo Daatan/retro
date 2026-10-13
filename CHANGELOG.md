@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Fixed
+- Manifold paper arena (retro#918): coverage was 62/150 because a price-only snapshot hid an earlier Oracle answer, so every market looked "never asked" on every run and the 12-call cap kept hitting the same soonest-closing markets (~86 November markets never asked). Now a market with a number is asked once, never-asked markets go first, markets under 5 days to close or outside 0.10–0.90 are not asked, and `coin flip`/`daily` junk is filtered. Scorecard scores the FIRST Oracle number per market and reports `n_excluded_horizon`/`n_excluded_band` (was: last number, near close).
 - Extractor shadow (retro#921): the first prod calls all failed in ~450 ms because `truthmachine-ec2-role` had no `anthropic.claude-haiku-5-5` ARNs (AccessDenied behind `InstructorRetryException`). Added the foundation-model + `us.` inference-profile ARNs to `infra/iam/truthmachine-ec2-pipeline-policy.json` (must be re-applied by hand) and `err=` now carries a short message after the exception type. Live responses were never affected.
 
 ### Added

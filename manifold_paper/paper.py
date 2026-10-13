@@ -18,15 +18,19 @@ Env vars:
     ORACLE_BASE_URL         default https://oracle.daatan.com
     PAPER_LEDGER_DIR        default ./data
     MAX_MARKETS_PER_RUN     default 12 — Oracle calls per run
-    STALE_AFTER_HOURS       default 20 — re-forecast a market only when its last
-                            Oracle snapshot is older than this
+    STALE_AFTER_HOURS       default 72 — retry a market the Oracle had no answer for
+                            only when that attempt is older than this; a market that
+                            already has a number is never asked again
+    MIN_HORIZON_DAYS        default 5 — ask only markets closing at least this far
+                            out (a later forecast cannot be scored)
     EDGE_THRESHOLD          default 0.10 — |oracle − market| to open a position
     TRADE_PRICE_MIN/MAX     default 0.05 / 0.95
-    ORACLE_PRICE_MIN/MAX    default 0.02 / 0.98
+    ORACLE_PRICE_MIN/MAX    default 0.10 / 0.90 — also the scorecard's scoring band
     NOTIONAL_MANA           default 100 — size of every hypothetical position
     MIN_BETTORS             default 15   — universe: unique bettors
     MIN_VOLUME              default 500  — universe: Mana volume
-    MIN_HOURS_TO_CLOSE      default 12   — universe: closes no sooner than this
+    MIN_HOURS_TO_CLOSE      default 120  — universe: closes no sooner than this (= 5 d,
+                            the scoring horizon; nearer markets could never be scored)
     MAX_DAYS_TO_CLOSE       default 30   — universe: closes no later than this
     DRY_RUN                 "true": log, call no Oracle, write nothing
 """
@@ -55,18 +59,24 @@ MAX_CRITERIA_CHARS = 1500
 @dataclass(frozen=True)
 class Params:
     max_markets_per_run: int = 12
-    stale_after: timedelta = timedelta(hours=20)
+    # Retry window for a market the Oracle answered "insufficient data" on. A market
+    # that already has a number is never asked again (one forecast per market).
+    stale_after: timedelta = timedelta(hours=72)
+    # A forecast only counts if it is made at least this long before the market closes
+    # (mirrored by api/forecast_api/manifold_paper.py); asking later cannot be scored.
+    min_horizon_days: float = 5.0
     edge_threshold: float = 0.10
     trade_price_min: float = 0.05
     trade_price_max: float = 0.95
-    oracle_price_min: float = 0.02
-    oracle_price_max: float = 0.98
+    oracle_price_min: float = 0.10
+    oracle_price_max: float = 0.90
     notional_mana: float = 100.0
 
     def as_dict(self) -> dict:
         return {
             "max_markets_per_run": self.max_markets_per_run,
             "stale_after_hours": self.stale_after.total_seconds() / 3600,
+            "min_horizon_days": self.min_horizon_days,
             "edge_threshold": self.edge_threshold,
             "trade_price_band": [self.trade_price_min, self.trade_price_max],
             "oracle_price_band": [self.oracle_price_min, self.oracle_price_max],
@@ -93,16 +103,24 @@ def _parse_ts(value: str | None) -> Optional[datetime]:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def wants_oracle_call(m: Market, last: Optional[dict], p: Params, now: datetime) -> bool:
-    """Ask the Oracle about this market on this run?"""
+def wants_oracle_call(m: Market, asked: Optional[dict], p: Params, now: datetime) -> bool:
+    """Ask the Oracle about this market on this run?
+
+    ``asked`` is the market's last row *in which the Oracle was asked*
+    (``Ledger.last_asked_by_market``), not its latest snapshot — see that method."""
     if m.closed or not m.has_price:
         return False
     if not (p.oracle_price_min <= m.yes_price <= p.oracle_price_max):  # type: ignore[operator]
         return False
-    if last is None or last.get("oracle_yes") is None and last.get("oracle_reason") is None:
-        # never asked (or an earlier row was price-only)
+    if m.end_date is not None:
+        close = datetime.fromisoformat(m.end_date)
+        if close - now < timedelta(days=p.min_horizon_days):
+            return False  # too close to resolution to give a scoreable forecast
+    if asked is None:
         return True
-    asked_at = _parse_ts(last.get("ts"))
+    if asked.get("oracle_yes") is not None:
+        return False  # one forecast per market: re-asking only drags it toward the outcome
+    asked_at = _parse_ts(asked.get("ts"))
     return asked_at is None or now - asked_at >= p.stale_after
 
 
@@ -221,11 +239,17 @@ def run(client: ManifoldClient, oracle: OracleClient, ledger: Ledger, p: Params,
     now = now or datetime.now(timezone.utc)
     run_id = now.strftime("%Y%m%dT%H%M%SZ")
     markets = gather_universe(client, ledger, up, now)
-    latest = ledger.latest_snapshot_by_market()
+    asked = ledger.last_asked_by_market()
     open_ids = ledger.open_trade_market_ids()
+    # Spend the per-run cap on markets never asked first, then on retries; within each
+    # group soonest close first. Without this the cap went to the same soonest-closing
+    # markets on every run and the November ones were never reached (retro#918).
+    candidates = [m for m in markets
+                  if m.has_price and wants_oracle_call(m, asked.get(m.market_id), p, now)]
+    candidates.sort(key=lambda m: (asked.get(m.market_id) is not None, m.end_date or "9999"))
+    to_ask = {m.market_id for m in candidates[:p.max_markets_per_run]}
     log.info("run %s: %d markets, params=%s", run_id, len(markets), p.as_dict())
 
-    calls = 0
     stats = {"markets": len(markets), "oracle_calls": 0, "oracle_insufficient": 0,
              "trades_opened": 0, "price_only": 0, "skipped_no_price": 0, "errors": 0}
     for m in markets:
@@ -233,8 +257,7 @@ def run(client: ManifoldClient, oracle: OracleClient, ledger: Ledger, p: Params,
             stats["skipped_no_price"] += 1
             continue
         oracle_resp: Optional[dict] = None
-        if calls < p.max_markets_per_run and wants_oracle_call(m, latest.get(m.market_id), p, now):
-            calls += 1
+        if m.market_id in to_ask:
             if dry_run:
                 log.info("DRY RUN would forecast %s %r", m.market_id, m.question)
             else:
@@ -284,12 +307,13 @@ def params_from_env(env: dict = os.environ) -> Params:  # type: ignore[assignmen
     g = env.get
     return Params(
         max_markets_per_run=int(g("MAX_MARKETS_PER_RUN", "12")),
-        stale_after=timedelta(hours=float(g("STALE_AFTER_HOURS", "20"))),
+        stale_after=timedelta(hours=float(g("STALE_AFTER_HOURS", "72"))),
+        min_horizon_days=float(g("MIN_HORIZON_DAYS", "5")),
         edge_threshold=float(g("EDGE_THRESHOLD", "0.10")),
         trade_price_min=float(g("TRADE_PRICE_MIN", "0.05")),
         trade_price_max=float(g("TRADE_PRICE_MAX", "0.95")),
-        oracle_price_min=float(g("ORACLE_PRICE_MIN", "0.02")),
-        oracle_price_max=float(g("ORACLE_PRICE_MAX", "0.98")),
+        oracle_price_min=float(g("ORACLE_PRICE_MIN", "0.10")),
+        oracle_price_max=float(g("ORACLE_PRICE_MAX", "0.90")),
         notional_mana=float(g("NOTIONAL_MANA", "100")),
     )
 
@@ -299,7 +323,7 @@ def universe_params_from_env(env: dict = os.environ) -> UniverseParams:  # type:
     return UniverseParams(
         min_bettors=int(g("MIN_BETTORS", "15")),
         min_volume=float(g("MIN_VOLUME", "500")),
-        min_hours_to_close=float(g("MIN_HOURS_TO_CLOSE", "12")),
+        min_hours_to_close=float(g("MIN_HOURS_TO_CLOSE", "120")),
         max_days_to_close=float(g("MAX_DAYS_TO_CLOSE", "30")),
     )
 

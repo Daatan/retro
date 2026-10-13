@@ -66,5 +66,18 @@ class Ledger:
             latest[row["market_id"]] = row
         return latest
 
+    def last_asked_by_market(self) -> dict[str, dict]:
+        """market_id → most recent row in which the Oracle was actually asked, i.e. that
+        carries an ``oracle_yes`` or an ``oracle_reason``.
+
+        ``latest_snapshot_by_market`` is NOT this: every run that does not ask writes a
+        price-only row, which hides the earlier answer. Gating "was this market asked
+        already?" on the latest row re-asked every market on every run (retro#918)."""
+        asked: dict[str, dict] = {}
+        for row in self.snapshots():
+            if row.get("oracle_yes") is not None or row.get("oracle_reason"):
+                asked[row["market_id"]] = row
+        return asked
+
     def open_trade_market_ids(self) -> set[str]:
         return {t["market_id"] for t in self.trades()}

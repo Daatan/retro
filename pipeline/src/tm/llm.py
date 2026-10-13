@@ -50,7 +50,8 @@ def _model_supports_prompt_cache(model: str) -> bool:
 # temperature=0 by default, so a `model` override (or a default bump) onto one of
 # these used to show up as a silent abstain, not an error (retro#916: 10/10
 # second opinions abstained on Sonnet 5.5). Probed directly with Converse on
-# 2026-10-11 -- rejecting: Sonnet 5 / 5.5, Opus 4.7 / 4.8 / 5 / 5.5; accepting:
+# 2026-10-11 (Haiku 5.5: 2026-10-12, retro#921) -- rejecting: Sonnet 5 / 5.5,
+# Opus 4.7 / 4.8 / 5 / 5.5, Haiku 5.5; accepting:
 # Sonnet 4.5 / 4.6, Opus 4.5 / 4.6, Haiku 4.5, Nova. Substring markers so the
 # `us.` / `eu.` / `global.` profile prefixes all match. This list is evidence,
 # not a guess -- extend it only from a probe of the new model.
@@ -59,6 +60,7 @@ _TEMPERATURE_REJECTING_MARKERS = (
     "claude-opus-4-7",
     "claude-opus-4-8",
     "claude-opus-5",
+    "claude-haiku-5",
 )
 
 
@@ -292,6 +294,14 @@ async def complete_structured(
         max_retries=1,
     )
     _set_temperature(call_kwargs, model, temperature)
+    if "claude-haiku-5" in model:
+        # Haiku 5.5 thinks adaptively by default; on a long structured prompt the
+        # thinking block ate max_tokens and returned an empty body (retro#921).
+        call_kwargs["thinking"] = {"type": "disabled"}
+        # litellm validates `thinking` against its model cost map; when the remote map
+        # can't be fetched it falls back to a bundled copy that predates Haiku 5.5 and
+        # raises UnsupportedParamsError (seen live 2026-10-12). Allow it explicitly.
+        call_kwargs["allowed_openai_params"] = ["thinking"]
     kwargs = apply_routing(call_kwargs)
     output, completion = await client.chat.completions.create_with_completion(**kwargs)
     return output, extract_usage(completion)

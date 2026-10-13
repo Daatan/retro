@@ -400,6 +400,8 @@ class TestTemperatureRejectingModels:
         "bedrock/us.anthropic.claude-opus-4-8",
         "bedrock/us.anthropic.claude-opus-5",
         "bedrock/us.anthropic.claude-opus-5-5",
+        "bedrock/us.anthropic.claude-haiku-5-5",
+        "bedrock/global.anthropic.claude-haiku-5-5",
     ]
     ACCEPTING = [
         "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -438,6 +440,23 @@ class TestTemperatureRejectingModels:
         monkeypatch.setattr(llm.client.chat.completions, "create_with_completion", fake_create)
         await llm.complete_structured(model, dict, "P", max_tokens=10, timeout=5)
         assert captured["temperature"] == 0
+
+    async def test_haiku_5_structured_call_disables_thinking(self, monkeypatch):
+        """retro#921: Haiku 5.5 thinks by default; on the long extractor prompt the
+        thinking block ate max_tokens and returned an empty body."""
+        captured = {}
+        async def fake_create(**kwargs):
+            captured.update(kwargs)
+            return ("OUT", SimpleNamespace(usage=None))
+        monkeypatch.setattr(llm.client.chat.completions, "create_with_completion", fake_create)
+        await llm.complete_structured("bedrock/us.anthropic.claude-haiku-5-5", dict, "P",
+                                      max_tokens=10, timeout=5)
+        assert captured["thinking"] == {"type": "disabled"}
+        assert captured["allowed_openai_params"] == ["thinking"]
+        captured.clear()
+        await llm.complete_structured("bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0", dict, "P",
+                                      max_tokens=10, timeout=5)
+        assert "thinking" not in captured
 
     async def test_text_call_omits_temperature_for_rejecting_model(self, monkeypatch):
         captured = {}

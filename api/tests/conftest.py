@@ -47,6 +47,13 @@ os.environ.setdefault("EVENT_DECOMPOSITION_CACHE_ENABLED", "false")
 # against a tmp_path store.
 os.environ.setdefault("EXTRACTION_MEMO_ENABLED", "false")
 
+# The subject gate (retro#805/#833) ships enabled, and derive_subject_card() makes a real
+# Bedrock/Haiku call once per question — so every un-stubbed run_forecast in the suite paid a
+# network round trip (~2 s each; the 69-case aggregation matrix alone took 2m+ for ~25 s of CPU)
+# and, with AWS credentials on the box, real tokens. OFF by default under test; tests that
+# exercise the gate turn it on explicitly (retro#887).
+os.environ.setdefault("SUBJECT_GATE_ENABLED", "false")
+
 
 import pytest  # noqa: E402
 

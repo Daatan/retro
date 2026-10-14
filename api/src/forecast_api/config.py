@@ -15,7 +15,6 @@ class ApiSettings(BaseSettings):
     # Empty/absent = single-key behavior, byte-for-byte unchanged. Malformed
     # JSON fails closed: named keys 401, the primary key keeps working.
     oracle_api_keys: str = ""
-    openrouter_api_key: Optional[str] = None  # DEAD: /llm now routes to Bedrock via tm.llm. Kept to avoid breaking env wiring; safe to remove later.
 
     data_dir: Path = Path("/home/ubuntu/truthmachine/data")
     leaderboard_path: Path = Path("")  # empty = data_dir/leaderboard.json

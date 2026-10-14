@@ -8,7 +8,15 @@ dependencies = [
     "scipy>=1.11.0",
 ]
 
+# CI installs the extra (`uv sync --extra dev`, same as the other packages).
 [project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+# Same dep as a PEP 735 group: `uv run` syncs the `dev` group by default, so a bare
+# `uv run pytest` uses the project venv (numpy/scipy) instead of a system pytest (retro#888).
+[dependency-groups]
 dev = [
     "pytest>=8.0.0",
 ]

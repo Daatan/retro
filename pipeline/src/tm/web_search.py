@@ -203,6 +203,12 @@ def _log_unresolved_secrets() -> None:
             "%d/%d search-provider secrets unresolved, providers silently disabled: %s",
             len(missing), len(keys), ", ".join(missing),
         )
+        # One greppable line per secret, same key=value shape as the other
+        # `event=` lines in oracle_log, so an alert/grep doesn't have to parse the
+        # free-text summary above (retro#890).
+        for var, ssm in _SECRET_GLOBALS.items():
+            if not globals().get(var):
+                logger.warning("event=search_secret_missing secret=%s ssm=%s", var, ssm)
 
 
 _log_unresolved_secrets()

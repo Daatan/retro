@@ -13,23 +13,24 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   changelog:
     name: CHANGELOG touched
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
       - name: Require a CHANGELOG line for code changes
         env:
+          GH_TOKEN: ${{ github.token }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
-          git fetch origin main --quiet
-          CHANGED=$(git diff --name-only origin/main...HEAD)
+          # No checkout: a fetch-depth 0 clone of this repo (atlas data commits)
+          # takes 120-230 s and used to trip the job timeout (retro#928).
+          CHANGED=$(gh api --paginate \
+            "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+            --jq '.[].filename')
           if ! grep -Eq '^(api/|pipeline/src/)' <<<"$CHANGED"; then
             echo "no Oracle code changed — nothing to require"; exit 0
           fi

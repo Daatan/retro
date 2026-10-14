@@ -1076,6 +1076,28 @@ class TestSecretLoadingLogsLoudly:
         assert not any("/retro/prod/secrets/SERPAPI_API_KEY" in m for m in messages)
 
     @needs_deps
+    def test_unresolved_secret_emits_structured_event_per_key(self, caplog):
+        """retro#890: one `event=search_secret_missing` line per missing secret, none for present ones."""
+        ws = _fresh_ws()
+        for name in ws._SECRET_GLOBALS:
+            setattr(ws, name, "present")
+        ws.DATAFORSEO_API_KEY = None
+        ws.TAVILY_API_KEY = None
+
+        caplog.clear()
+        with caplog.at_level("WARNING", logger="tm.web_search"):
+            ws._log_unresolved_secrets()
+
+        events = [r.getMessage() for r in caplog.records
+                  if "event=search_secret_missing" in r.getMessage()]
+        assert sorted(events) == [
+            "event=search_secret_missing secret=DATAFORSEO_API_KEY "
+            "ssm=/retro/prod/secrets/DATAFORSEO_API_KEY",
+            "event=search_secret_missing secret=TAVILY_API_KEY "
+            "ssm=/retro/prod/secrets/TAVILY_API_KEY",
+        ]
+
+    @needs_deps
     def test_log_unresolved_secrets_silent_when_all_present(self, caplog):
         """No warning at all once every provider secret has resolved."""
         ws = _fresh_ws()

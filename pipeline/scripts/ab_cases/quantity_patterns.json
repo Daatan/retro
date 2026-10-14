@@ -1,0 +1,202 @@
+[
+  {
+    "id": "bound-verb-topped",
+    "event_name": "Lithium carbonate spot price exceeds 90,000 yuan per tonne in 2026",
+    "event_description": "The spot price of battery-grade lithium carbonate in China exceeds 90,000 yuan per tonne at any point before 31 December 2026.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-09-08",
+    "article_text": "Battery-grade lithium carbonate topped 90,000 yuan a tonne in Guangzhou trading on Tuesday for the first time this year.\nTraders attributed the move to restocking ahead of the autumn production cycle.",
+    "expect": {},
+    "tags": [
+      "retro-935",
+      "bound-verb",
+      "comparator"
+    ],
+    "volatile": true,
+    "question_threshold": {
+      "comparator": ">",
+      "value": 90000,
+      "unit": "yuan per tonne"
+    },
+    "expect_quantity": {
+      "value": 90000,
+      "unit": "yuan per tonne",
+      "comparator": ">"
+    }
+  },
+  {
+    "id": "bound-verb-breached",
+    "event_name": "Country B unemployment rate reaches 7% by the third quarter of 2026",
+    "event_description": "The headline unemployment rate of Country B for the third quarter of 2026 is 7.0% or higher.",
+    "claim_deadline": "2026-10-31",
+    "article_date": "2026-08-20",
+    "article_text": "Country B's jobless rate breached 7 percent in the latest monthly reading, the statistics office said on Thursday.\nEconomists had expected the rate to hold near 6.8 percent.",
+    "expect": {},
+    "tags": [
+      "retro-935",
+      "bound-verb",
+      "comparator"
+    ],
+    "volatile": true,
+    "question_threshold": {
+      "comparator": ">=",
+      "value": 7,
+      "unit": "percent"
+    },
+    "expect_quantity": {
+      "value": 7,
+      "unit": "percent",
+      "comparator": ">"
+    }
+  },
+  {
+    "id": "bound-verb-surpassed",
+    "event_name": "Port W handles more than 3 million containers in 2026",
+    "event_description": "Port W reports a calendar-year 2026 throughput above 3 million TEU.",
+    "claim_deadline": "2027-01-31",
+    "article_date": "2026-09-15",
+    "article_text": "Port W has surpassed 3 million containers handled so far this year, the harbour authority said, with four months of the calendar year still to run.",
+    "expect": {},
+    "tags": [
+      "retro-935",
+      "bound-verb",
+      "comparator"
+    ],
+    "volatile": true,
+    "question_threshold": {
+      "comparator": ">",
+      "value": 3000000,
+      "unit": "containers"
+    },
+    "expect_quantity": {
+      "value": 3000000,
+      "unit": "containers",
+      "comparator": ">"
+    }
+  },
+  {
+    "id": "bound-verb-fell-below-control",
+    "event_name": "Country C inflation falls below 4% in 2026",
+    "event_description": "Country C's annual CPI inflation prints below 4.0% for any month before 31 December 2026.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-09-10",
+    "article_text": "Annual consumer price inflation in Country C fell below 4 percent in August, the first time in two years, according to the national statistics bureau.",
+    "expect": {},
+    "tags": [
+      "retro-935",
+      "bound-verb",
+      "control"
+    ],
+    "volatile": true,
+    "question_threshold": {
+      "comparator": "<",
+      "value": 4,
+      "unit": "percent"
+    },
+    "expect_quantity": {
+      "value": 4,
+      "unit": "percent",
+      "comparator": "<"
+    }
+  },
+  {
+    "id": "vague-count-a-few-billion",
+    "event_name": "Government B commits more than 1 billion euros to flood defences",
+    "event_description": "Government B formally commits at least 1 billion euros to flood defences by 31 December 2026.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-09-02",
+    "article_text": "A few billion euros have been earmarked for flood defences over the coming decade, a ministry spokesperson said, without giving a figure or a schedule.",
+    "expect": {},
+    "tags": [
+      "retro-935",
+      "vague-count",
+      "omit-quantity"
+    ],
+    "volatile": true
+  },
+  {
+    "id": "vague-count-hundreds",
+    "event_name": "More than 500 aid trucks cross into Region X in September 2026",
+    "event_description": "UN data show more than 500 aid trucks entering Region X during September 2026.",
+    "claim_deadline": "2026-10-10",
+    "article_date": "2026-09-12",
+    "article_text": "Hundreds of trucks have crossed into Region X since the crossing reopened, relief workers said, though no official tally has been published.",
+    "expect": {},
+    "tags": [
+      "retro-935",
+      "vague-count",
+      "omit-quantity"
+    ],
+    "volatile": true
+  },
+  {
+    "id": "vague-count-several-thousand",
+    "event_name": "Evacuations from District D exceed 10,000 people",
+    "event_description": "Official figures put the number of people evacuated from District D above 10,000.",
+    "claim_deadline": "2026-10-31",
+    "article_date": "2026-09-18",
+    "article_text": "Several thousand residents have left District D ahead of the storm, local officials said, and more are expected to follow overnight.",
+    "expect": {},
+    "tags": [
+      "retro-935",
+      "vague-count",
+      "omit-quantity"
+    ],
+    "volatile": true
+  },
+  {
+    "id": "projection-within-six-months",
+    "event_name": "Share of firms in Country E using AI daily exceeds 40% by March 2027",
+    "event_description": "A national survey reports that more than 40% of firms in Country E use AI tools daily by 31 March 2027.",
+    "claim_deadline": "2027-03-31",
+    "article_date": "2026-09-07",
+    "article_text": "A survey of 4,000 firms found 22.4 percent already use AI in regular operations, while another 25.9 percent expect to begin within six months.\nIf those plans are carried out, more than 48 percent of firms could be using it daily by early next year.",
+    "expect": {},
+    "tags": [
+      "retro-935",
+      "projection",
+      "as-of"
+    ],
+    "volatile": true
+  },
+  {
+    "id": "projection-forecast-year-end",
+    "event_name": "Grain harvest in Country F exceeds 80 million tonnes in 2026",
+    "event_description": "Country F's 2026 grain harvest exceeds 80 million tonnes according to the agriculture ministry's final tally.",
+    "claim_deadline": "2027-02-28",
+    "article_date": "2026-08-28",
+    "article_text": "The harvest so far stands at 31 million tonnes, the ministry said. Officials project the full-year crop at about 82 million tonnes if the weather holds through September.",
+    "expect": {},
+    "tags": [
+      "retro-935",
+      "projection",
+      "as-of"
+    ],
+    "volatile": true
+  },
+  {
+    "id": "projection-current-control",
+    "event_name": "Country G unemployment reaches 6% in 2026",
+    "event_description": "Country G's unemployment rate is 6.0% or higher for any month of 2026.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-09-09",
+    "article_text": "Country G's unemployment rate stood at 5.8 percent in August, the statistics office reported on Wednesday.",
+    "expect": {},
+    "tags": [
+      "retro-935",
+      "projection",
+      "control"
+    ],
+    "volatile": true,
+    "question_threshold": {
+      "comparator": ">=",
+      "value": 6,
+      "unit": "percent"
+    },
+    "expect_quantity": {
+      "value": 5.8,
+      "unit": "percent",
+      "comparator": "="
+    }
+  }
+]

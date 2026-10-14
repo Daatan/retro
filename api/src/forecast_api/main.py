@@ -362,9 +362,15 @@ async def pool_aggregate(
 ):
     """
     Recompute a pooled estimate over an already-extracted evidence pool —
-    no search, no LLM calls. Reuses the exact same pooling math `/forecast`
-    uses live, so a recompute can never silently drift from a fresh run of
-    the same evidence (retro docs/ORACLE_VARIABLES.md, recompute-over-pool).
+    no search and no extraction calls. Reuses the exact same pooling math
+    `/forecast` uses live, so a recompute can never silently drift from a
+    fresh run of the same evidence (retro docs/ORACLE_VARIABLES.md,
+    recompute-over-pool).
+
+    Not LLM-free: a pool that reaches a settlement pin runs the settlement
+    verifier (up to `settlement_verifier_votes` calls) unless the verdict
+    store hits (retro#388, retro#835). Replaying pools off-box should set
+    `SETTLEMENT_VERIFIER_ENABLED=false`.
 
     The `mean` field is in stance space [-1, 1], same as `/forecast`.
     """

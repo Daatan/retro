@@ -1068,10 +1068,15 @@ async def _apply_settlement_match_gate(
     verdict: Optional[Verdict] = None
     key = store_path = None
     rolled = agree = 0
+    # Fingerprint of the exact text the verifier is asked, logged on every decision (retro#835):
+    # two rolls of "the same" question that disagree can be compared by this value instead of
+    # guessing whether their inputs (fact order, re-extracted claims_detail, ...) differed.
+    prompt_text = build_prompt(question, votes, answer=answer)
+    prompt_fp = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()[:12]
     if settings.settlement_verdict_cache_enabled:
         store_path = settings.resolved_settlement_verdict_cache_path
         key = verdict_key(
-            build_prompt(question, votes, answer=answer),
+            prompt_text,
             model=model, samples=samples,
             config_fingerprint=_settlement_config_fingerprint(),
         )
@@ -1132,10 +1137,11 @@ async def _apply_settlement_match_gate(
                 )
     logger.warning(
         "event=settlement_verifier settles=%s errored=%s enforced=%s votes=%d "
-        "cached=%s samples=%d agree=%d question=%s reason=%r",
+        "cached=%s samples=%d agree=%d question=%s prompt=%s reason=%r",
         verdict.settles, verdict.errored,
         settings.settlement_verifier_enforce and not verdict.settles and not verdict.errored,
-        len(votes), rolled == 0, rolled, agree, _question_hash(question), verdict.reason[:200],
+        len(votes), rolled == 0, rolled, agree, _question_hash(question), prompt_fp,
+        verdict.reason[:200],
     )
     if verdict.settles or verdict.errored or not settings.settlement_verifier_enforce:
         return agg
@@ -3330,8 +3336,10 @@ async def _run_forecast_inner(
 
 async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse:
     """Recompute a pooled estimate over a caller-supplied set of already-
-    extracted per-source signals — no search, no LLM calls (retro
-    docs/ORACLE_VARIABLES.md, recompute-over-pool). Reuses aggregate_pool()
+    extracted per-source signals — no search and no extraction calls (retro
+    docs/ORACLE_VARIABLES.md, recompute-over-pool); a pool that reaches a
+    settlement pin still runs the settlement verifier unless the verdict
+    store hits (retro#388, retro#835). Reuses aggregate_pool()
     (aggregation.py), the exact same pooling math run_forecast() uses live,
     so a recompute over an accumulated evidence pool can never silently
     drift from what a fresh run of the same evidence would produce.

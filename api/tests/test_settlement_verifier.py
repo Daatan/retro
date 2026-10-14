@@ -467,6 +467,35 @@ class TestVerdictStore:
         await forecaster.run_pool_aggregate(_pool_request("[store-votes] Will the step be taken?", variant="b"))
         assert len(calls) == 2, "new evidence is a new decision — a stale veto must not outlive its vote-set"
 
+    @staticmethod
+    def _prompt_fps(caplog) -> list[str]:
+        import re
+        return [
+            m.group(1) for r in caplog.records
+            if (m := re.search(r"event=settlement_verifier .* prompt=([0-9a-f]{12}) ", r.getMessage()))
+        ]
+
+    async def test_log_line_carries_a_prompt_fingerprint(self, monkeypatch, caplog):
+        """retro#835: two rolls of the same question can be told apart by their input —
+        same vote-set → same fingerprint, a changed vote-set → a different one."""
+        self._stub_verify(monkeypatch, [Verdict(settles=True, reason="reported as done")])
+        with caplog.at_level("WARNING", logger="forecast_api.forecaster"):
+            await forecaster.run_pool_aggregate(_pool_request("[fp] Will the step be taken?", variant="a"))
+            await forecaster.run_pool_aggregate(_pool_request("[fp] Will the step be taken?", variant="a"))
+            await forecaster.run_pool_aggregate(_pool_request("[fp] Will the step be taken?", variant="b"))
+        fps = self._prompt_fps(caplog)
+        assert len(fps) == 3
+        assert fps[0] == fps[1], "an unchanged vote-set must log the same fingerprint (cached or not)"
+        assert fps[0] != fps[2], "a changed vote-set must log a different fingerprint"
+
+    async def test_prompt_fingerprint_is_logged_without_the_store(self, monkeypatch, caplog):
+        """The fingerprint must not depend on the verdict cache being enabled."""
+        monkeypatch.setattr(api_settings, "settlement_verdict_cache_enabled", False)
+        self._stub_verify(monkeypatch, [Verdict(settles=True, reason="reported as done")])
+        with caplog.at_level("WARNING", logger="forecast_api.forecaster"):
+            await forecaster.run_pool_aggregate(_pool_request("[fp-nostore] Will the step be taken?"))
+        assert len(self._prompt_fps(caplog)) == 1
+
     async def test_a_config_change_rolls_fresh(self, monkeypatch):
         calls = self._stub_verify(monkeypatch, [Verdict(settles=True, reason="reported as done")])
         await forecaster.run_pool_aggregate(_pool_request("[store-config] Will the step be taken?"))

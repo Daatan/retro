@@ -515,3 +515,47 @@ def test_served_model_helper():
     assert js.served_model([{"model": "a"}, {"model": "a"}, RuntimeError("x")]) == "a"
     assert js.served_model([{"model": "b"}, {"model": "a"}]) == "a,b"
     assert js.served_model([{}, RuntimeError("x")]) is None
+
+
+# --- retro#943: sentence splits at abbreviations -------------------------------------------
+
+def _sents(text, v2):
+    t, spans = js.segment(text, v2=v2)
+    return [t[a:b] for a, b in spans]
+
+
+def test_segment_v1_cuts_at_abbreviated_month_and_loses_it():
+    out = _sents("The situation escalated further on Sept. 20 when seven armed groups formed an alliance.", v2=False)
+    assert out == ["The situation escalated further on Sept.", "20 when seven armed groups formed an alliance."]
+    # a short head is dropped outright: the surviving sentence has no month at all
+    assert _sents("Sept. 23, 2026, advancing soldiers seized government positions.", v2=False) == [
+        "23, 2026, advancing soldiers seized government positions."]
+    assert _sents("Sept. 23, 2026, advancing soldiers seized government positions.", v2=True) == [
+        "Sept. 23, 2026, advancing soldiers seized government positions."]
+
+
+def test_segment_v2_keeps_month_titles_and_initials():
+    assert _sents("The situation escalated further on Sept. 20 when seven armed groups formed an alliance.", v2=True) == [
+        "The situation escalated further on Sept. 20 when seven armed groups formed an alliance."]
+    assert _sents("Introduced as Senate Bill 482 by Sen. Tom Leek for consideration this year.", v2=True) == [
+        "Introduced as Senate Bill 482 by Sen. Tom Leek for consideration this year."]
+    assert _sents("On April 27, 2026, Chief Judge Daniel D. Domenico granted the motion.", v2=True) == [
+        "On April 27, 2026, Chief Judge Daniel D. Domenico granted the motion."]
+
+
+def test_segment_v2_does_not_join_real_sentence_ends():
+    # a month abbreviation not followed by a digit, a sentence ending in Inc., a newline break
+    text = "Talks resume in Oct. The board met at Acme Inc. Shares rose sharply on the news.\nSecond paragraph here is long."
+    out = _sents(text, v2=True)
+    assert out == ["Talks resume in Oct.", "The board met at Acme Inc.", "Shares rose sharply on the news.",
+                   "Second paragraph here is long."]
+
+
+def test_segment_v2_off_by_default(monkeypatch):
+    from forecast_api.config import settings
+    monkeypatch.setattr(settings, "jev_segment_v2", False)
+    assert js.segment("Fighting began on Sept. 23 in the north of the country.") == js.segment(
+        "Fighting began on Sept. 23 in the north of the country.", v2=False)
+    monkeypatch.setattr(settings, "jev_segment_v2", True)
+    assert js.segment("Fighting began on Sept. 23 in the north of the country.") == js.segment(
+        "Fighting began on Sept. 23 in the north of the country.", v2=True)

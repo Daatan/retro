@@ -72,3 +72,16 @@ def test_german_hier_and_capitalised_morgen_are_not_relative_days():
     assert intervals("hier ist es", PUB) == []
     assert [e for *_, e in intervals("heute Morgen", PUB)] == ["heute"]
     assert _by_expr("morgen früh")["morgen"] == (date(2026, 9, 17),) * 2
+
+
+# --- retro#943: same-day weekday ------------------------------------------------------------
+
+def test_bare_weekday_on_the_same_weekday_is_today_not_a_week_back():
+    iv = _by_expr("The senator returned to the Senate on Wednesday.")   # PUB is a Wednesday
+    assert iv["Wednesday (past)"] == (PUB, PUB)
+    assert "Wednesday (a week earlier)" not in iv
+
+
+def test_last_weekday_on_the_same_weekday_is_a_week_back():
+    iv = _by_expr("The vote was held last Wednesday.")
+    assert iv["Wednesday (a week earlier)"] == (date(2026, 9, 9),) * 2

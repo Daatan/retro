@@ -90,6 +90,11 @@ def _he_bases(tok: str) -> set[str]:
 def _month_iv(y, m):
     return date(y, m, 1), date(y, m, calendar.monthrange(y, m)[1])
 
+_LAST_CUE = re.compile(
+    r"\b(?:last|previous|prior|letzte[nrms]?|dernier|dernière|pasad[oa]|прошл\w+|предыдущ\w+)\b|שעבר|הקודם|الماضي|السابق",
+    re.I)
+
+
 def intervals(text: str, pub: date) -> list[tuple[date, date, str]]:
     """Every date expression in `text` as (start, end, verbatim expression), resolved against
     the publication date `pub`. Points have start == end. Deduplicated on (start, end)."""
@@ -139,7 +144,10 @@ def intervals(text: str, pub: date) -> list[tuple[date, date, str]]:
                 wd = WEEKDAYS[t]
                 back = (pub.weekday() - wd) % 7
                 add(pub - timedelta(days=back), raw + " (past)")
-                if back == 0:   # "last Friday" in a Friday paper is a week back (cf. extractor)
+                if back == 0 and _LAST_CUE.search(text[max(0, w.start() - 16):w.end() + 16]):
+                    # "last Friday" in a Friday paper is a week back (cf. extractor). A bare
+                    # "on Monday" in a Monday paper is today (retro#943: Jev picked the week-back
+                    # candidate for NPR's "returned on Monday").
                     add(pub - timedelta(days=7), raw + " (a week earlier)")
                 add(pub + timedelta(days=(wd - pub.weekday()) % 7), raw + " (upcoming)")
     for rx, k in WEEK_REL:

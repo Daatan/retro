@@ -1165,8 +1165,8 @@
     "B10:israel_hayom": {
       "event_id": "B10",
       "source_id": "israel_hayom",
-      "status": "done",
-      "prediction_count": 5,
+      "status": "no_predictions",
+      "prediction_count": 0,
       "error": null
     },
     "B10:walla": {
@@ -14064,5 +14064,5 @@
       "error": null
     }
   },
-  "last_updated": "2026-10-15T10:49:06.568249"
+  "last_updated": "2026-10-15T10:50:34.625363"
 }

@@ -11,6 +11,7 @@ inlined, no build step, plus the rated article table as CSV. Add a new study as
 |---|---|---|
 | [`ukraine-2022/`](ukraine-2022/) | E01, Russia's full-scale invasion of Ukraine, 2022-02-24 | 2026-09-23 |
 | [`israel-2022/`](israel-2022/) | E02, 25th Knesset election: does Netanyahu's bloc reach 61? 2022-11-01 | 2026-09-24 |
+| [`energy-2022/`](energy-2022/) | E03, Brent ≥ $120 (ICE settle) and TTF > EUR 200/MWh in 2022; both crossed 2022-03-07 | 2026-10-15 |
 
 ## ukraine-2022 method, in short
 
@@ -48,5 +49,24 @@ inlined, no build step, plus the rated article table as CSV. Add a new study as
   and sceptics raised to 35%. The aggregates use the full 1,100-row pool.
 - **Gaps.** N12, Kan and Channel 13 are barely covered, and TV is not covered.
   15 quotes are model paraphrases and are flagged.
+
+## energy-2022 method, in short
+
+- **Questions.** Two independent legs: does ICE front-month Brent settle at or above $120 at
+  some point in 2022, and does TTF front-month close above EUR 200/MWh. Outcome: yes and yes,
+  first crossed 2022-03-07 (Brent max settle $127.98 on 03-08, TTF max EUR 339 on 08-26).
+  Statements window 2021-09-01 to 2022-02-24. No derived score; two P tracks.
+- **Source.** 146 seed domains (wires, trade and energy press, agencies, banks, think tanks,
+  Russian and European outlets). GDELT GKG via BigQuery, 12,537 energy-titled URLs; Wayback
+  for text. Bloomberg, FT and WSJ are barely covered.
+- **Filter.** Keyword score and Haiku title triage (2,551 → 817), full-text rating of 498,
+  then horizon filter (only `year_2022` / `next_months`; "prices are high today" is dropped),
+  hindsight check, page-date check for every year, leg-scope guard (US-gas pieces cannot feed
+  the TTF leg), dedupe per speaker and day.
+- **Rating.** Same `P = 0.5 + 0.5·stance` per leg; a stated probability wins. Price forecasts
+  follow a fixed clamp rule (Brent <90 −0.6 … ≥130 +0.6; TTF <100 −0.6 … ≥250 +0.6).
+- **Table.** 227 rows, at most 15 per domain and 3 per speaker. Aggregates use the 280-row pool.
+- **Gaps.** Most articles name no price, so P is the model's directional reading, not a
+  calibrated probability. TTF coverage by banks and agencies is thin (2 and 7 statements).
 
 Working files (fetch lists, raw texts, rating JSONL) are kept outside the repo.

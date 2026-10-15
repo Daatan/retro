@@ -233,10 +233,36 @@ def _norm(s: str) -> str:
     return _WS.sub(" ", s).strip()
 
 
-def segment(text: str) -> tuple[str, list[tuple[int, int]]]:
-    """Normalised text + [(start, end)] of each sentence long enough to carry a claim."""
+# retro#943: `_SPLIT` also cuts at "Sept. 23", "Sen. Tom Leek", "Daniel D. Domenico". The short
+# head ("Sept.") is then dropped by `_MIN_SENTENCE_CHARS` and the claim sentence starts at "23,
+# 2026, …" with no month. v2 re-joins a piece to the next one only on these narrow cases; it is
+# off by default because the gate thresholds and the offline evaluation use the plain split.
+_ABBR_MONTH = re.compile(r"(?:^|[\s(\"'])(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\.$")
+_ABBR_TITLE = re.compile(
+    r"(?:^|[\s(\"'])(?:Mr|Mrs|Ms|Dr|Prof|Sen|Rep|Gov|Gen|Lt|Col|Sgt|Capt|Maj|Adm|Rev|St|Mt|Hon|Pres|Sec)\.$")
+_ABBR_INITIAL = re.compile(r"(?:^|\s)[A-Z]\.$")
+_ABBR_INLINE = re.compile(r"(?:^|[\s(\"'])(?:vs|No|Nos|Inc|Ltd|Co|Corp|Jr|Sr|approx|est)\.$", re.I)
+
+
+def _joins_next(prev: str, nxt: str) -> bool:
+    c = nxt.lstrip()[:1]
+    if _ABBR_MONTH.search(prev):
+        return c.isdigit()
+    if _ABBR_TITLE.search(prev) or _ABBR_INITIAL.search(prev):
+        return c.isupper()
+    if _ABBR_INLINE.search(prev):
+        return c.islower() or c.isdigit()      # "No. 5", "vs. the" — not "… Inc. The board"
+    return False
+
+
+def segment(text: str, v2: Optional[bool] = None) -> tuple[str, list[tuple[int, int]]]:
+    """Normalised text + [(start, end)] of each sentence long enough to carry a claim.
+    `v2` (default: `settings.jev_segment_v2`) re-joins splits at abbreviations (retro#943)."""
+    if v2 is None:
+        from forecast_api.config import settings
+        v2 = settings.jev_segment_v2
     t = _norm(text)
-    spans: list[tuple[int, int]] = []
+    raw: list[tuple[int, int]] = []
     pos = 0
     for piece in _SPLIT.split(t):
         if not piece:
@@ -245,8 +271,16 @@ def segment(text: str) -> tuple[str, list[tuple[int, int]]]:
         if i < 0:
             continue
         pos = i + len(piece)
-        if len(piece.strip()) >= _MIN_SENTENCE_CHARS:
-            spans.append((i, pos))
+        raw.append((i, pos))
+    if v2:
+        joined: list[tuple[int, int]] = []
+        for a, b in raw:
+            if joined and "\n" not in t[joined[-1][1]:a] and _joins_next(t[joined[-1][0]:joined[-1][1]], t[a:b]):
+                joined[-1] = (joined[-1][0], b)
+            else:
+                joined.append((a, b))
+        raw = joined
+    spans = [(a, b) for a, b in raw if len(t[a:b].strip()) >= _MIN_SENTENCE_CHARS]
     return t, spans
 
 

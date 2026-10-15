@@ -3022,6 +3022,7 @@ on the live question; nothing about its behaviour changes.
 | variable | default | meaning |
 |---|---|---|
 | `JEV_GATE_AB_ENABLED` | `false` | run the second pass 1 and log `event=jev_gate_ab` |
+| `JEV_SEGMENT_V2` | `false` | retro#943: re-join sentence splits at abbreviations ("Sept. 23", "Sen. Tom Leek") in `jev_shadow.segment`; changes sentence indices, so enable only after the offline re-ask (see the issue) |
 | `JEV_GATE_AB_MODEL` | `bedrock/us.amazon.nova-micro-v1:0` | model that rewrites the question |
 | `JEV_GATE_AB_REWRITE_TIMEOUT_SECONDS` | `15.0` | cap on one rewrite call |
 

@@ -826,6 +826,9 @@ class ApiSettings(BaseSettings):
     # Rewording the selection question only rescaled nouls, it did not rank better.
     # `max_candidates` caps pass-2 requests per article.
     jev_shadow_enabled: bool = False
+    # retro#943: re-join sentence splits at abbreviations ("Sept. 23", "Sen. Tom Leek"). Off:
+    # the gate thresholds and the offline evaluation were measured on the plain split.
+    jev_segment_v2: bool = False
     typesafe_api_key: str = ""
     jev_shadow_api_url: str = "https://api.typesafe.ai/v1/systemone"
     # SSM SecureString the key is read from when TYPESAFE_API_KEY is unset. Point it at an

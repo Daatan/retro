@@ -57,6 +57,7 @@ Rollback: delete the file on the host, daemon-reload, restart. What is actually 
 | `jev-gate-enforce.conf` | `JEV_GATE_ENFORCE=true`, `JEV_GATE_THRESHOLD=0.07` | retro#850 |
 | `jev-openrouter.conf` | Jev URL/key/model = OpenRouter — fallback only; SSM `JEV_PROVIDER` decides (below) | retro#901 |
 | `jev-class-enabled.conf` | `JEV_CLASS_ENABLED=true`, `JEV_CLASS_ENFORCE=true` | retro#851 |
+| `jev-segment-v2.conf` | `JEV_SEGMENT_V2=true` | retro#943 |
 
 ## Switching the Jev provider (retro#901)
 

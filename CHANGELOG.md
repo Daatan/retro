@@ -21,6 +21,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 
 ### Removed
 - `GET /pm/markets` (retro#937): the public, unauthenticated Polymarket Gamma proxy (30/min, ≤50 ids) re-served Polymarket data to anyone, which Polymarket's ToU §4.2 forbids ("directly or through an API"). No page or tool called it; the MCP `polymarket_market` tool uses the one-lookup adapter in `polymarket_live.py` and is unaffected.
+- Polymarket PoC cycle (retro#937): `tm.polymarket_harvest`, `tm.poc_event_gen`, `tm.poc_report`, `infra/ec2_run_poc.sh`, `infra/truthmachine-poc.service` and the published `duel.html` page (it republished Polymarket prices from a public repo). `tm.duel_report` and `data/duel_oracle/` stay as the offline evaluation harness. The box's `truthmachine-poc` service must be stopped separately.
 
 ### Fixed
 - Jev date candidates (retro#943): a bare weekday that equals the publication weekday ("returned on Monday" in a Monday article) no longer also offers the date a week back; that candidate is kept only next to "last/previous" (and the Hebrew/Arabic/German/French/Spanish/Russian equivalents). Jev had picked the week-back date for an NPR claim.

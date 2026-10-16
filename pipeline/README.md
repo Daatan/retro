@@ -17,7 +17,6 @@ pipeline/
     site_search.py         # Direct site-search scraper (no API key, high reliability)
     web_search.py          # Multi-provider search: news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG → trusted-sites
     polymarket.py          # Polymarket Gamma API: fetch market history per event
-    polymarket_harvest.py  # Bulk harvest of all resolved Polymarket political markets
 
     # Elicitation
     gatekeeper.py          # LLM stage 1: graded topic/evidence-relevance gate (emits relevance_score; passes indirect evidence, not just explicit predictions)
@@ -38,7 +37,6 @@ pipeline/
     # One-off scripts
     init_db.py             # Initialize SQLite DB for progress tracking
     migrate_cell_signals.py  # One-time: compute cell_signal.json from existing vault data
-    poc_event_gen.py         # Convert harvested Polymarket events → pipeline event JSONs
     create_real_samples.py   # Create real sample data for testing
     create_sample_data.py    # Create synthetic sample data for testing
 

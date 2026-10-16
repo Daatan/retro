@@ -8,7 +8,6 @@ on:
       - oracle-test.html
       - oracle-v2-test.html
       - oracle-mcp-test.html
-      - duel.html
       - 'bayesoracle/**'
       - 'studies/**'
       - .github/workflows/deploy-atlas.yml
@@ -45,8 +44,6 @@ jobs:
           cp oracle-test.html _site/oracle-test.html
           cp oracle-v2-test.html _site/oracle-v2-test.html
           cp oracle-mcp-test.html _site/oracle-mcp-test.html
-          # Copy duel report if it exists
-          if [ -f duel.html ]; then cp duel.html _site/duel.html; fi
           # Copy BayesOracle pages and subdirectories
           if [ -d bayesoracle ]; then
             mkdir -p _site/bayesoracle

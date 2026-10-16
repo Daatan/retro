@@ -78,8 +78,8 @@ def current_yes_price(market: dict) -> Optional[float]:
     """Current YES-outcome implied probability [0,1], or None.
 
     Reads outcomePrices[0] (index 0 = Yes) first — already in the market payload,
-    no extra API call — then falls back to lastTradePrice. Mirrors
-    tm.polymarket_harvest._extract_outcome's price parsing.
+    no extra API call — then falls back to lastTradePrice. Same
+    parsing the retired tm.polymarket_harvest used (retro#937).
     """
     prices = _json_list(market.get("outcomePrices"))
     if prices:

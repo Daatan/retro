@@ -25,7 +25,7 @@ this project must not grow that capability incrementally.
 
 ## Relation to `duel.html`
 
-The older public "Duel" page scores TruthMachine vs Polymarket on a hand-picked set of
+The retired public "Duel" page (`duel.html`, removed in retro#937) scores TruthMachine vs Polymarket on a hand-picked set of
 already-resolved events (13 at the time of writing). This bot is the forward-looking
 version: forecasts are recorded *before* resolution, on a fixed universe, at a fixed
 cadence, so nothing can be selected after the fact.

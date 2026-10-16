@@ -12,7 +12,7 @@ same rejected articles. These tests pin the new contract:
     suppresses re-extraction; any mismatch (prompt or model changed) or
     --force-reextract re-runs the LLM;
   - every reader of vault2/extractions/*.json ignores markers instead of
-    treating them as extractions (atlas links, poc_report, duel_report).
+    treating them as extractions (atlas links, duel_report).
 """
 
 import json
@@ -277,20 +277,6 @@ class TestReadersIgnoreMarkers:
         raw_art = {"headline": "H", "url": "https://ynet.com/a", "author": "A", "published_at": "2024-12-01"}
         orch.create_atlas_link("E1", "ynet", art_hash, extract_path, raw_art, event_date="2024-12-08")
         assert not (orch.atlas_dir / "E1" / "ynet" / f"entry_{art_hash[:8]}.json").exists()
-
-    def test_poc_report_ignores_markers(self, tmp_path):
-        from tm.poc_report import load_tm_predictions
-        extractions = tmp_path / "vault2" / "extractions"
-        _write_json(extractions / f"{'a' * 64}_E1_v1.json", {
-            "extraction": {"predictions": [{"quote": "q", "claim": "c", "stance": 1.0, "certainty": 0.8}]},
-        })
-        _write_json(extractions / f"{'b' * 64}_E1_v1.json", _marker())
-        _write_json(extractions / f"{'d' * 64}_E2_v1.json", _marker("no_predictions"))
-        preds = load_tm_predictions(tmp_path)
-        # Marker-only E2 contributes nothing; E1's probability comes from the
-        # single real extraction (stance 1.0 -> 1.0), unpolluted by the marker.
-        assert "E2" not in preds
-        assert preds["E1"] == 1.0
 
     def test_duel_report_ignores_markers(self, tmp_path):
         from tm.duel_report import _load_vault2_articles

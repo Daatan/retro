@@ -1,8 +1,11 @@
 name: PM Analysis Daily Refresh
 
 on:
-  schedule:
-    - cron: '0 8 * * *'
+  # retro#937: the daily schedule is OFF. Each run re-fetched Polymarket price history and
+  # committed it to this public repo / Pages, which Polymarket's ToU §4.2 treats as
+  # redistribution. Mark's call 2026-10-16: stop the fetch, keep the data already committed.
+  # Consequence: bayes.daatan.com prices are no longer refreshed; the staleness is intended.
+  # Re-enable only with written permission from Polymarket (restore `schedule: - cron: '0 8 * * *'`).
   workflow_dispatch:
 
 jobs:

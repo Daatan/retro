@@ -130,7 +130,7 @@ retro/
 │   ├── release.yml              # v* tag → GitHub release from CHANGELOG
 │   ├── terraform-validate.yml   # fmt + validate on terraform/** PRs
 │   ├── metaculus-sync.yml       # Manual Metaculus sync (the schedule is the systemd timer)
-│   └── pm_analysis_refresh.yml  # Daily bayesoracle/ PM-analysis data refresh (commits to main, see CLAUDE.md)
+│   └── pm_analysis_refresh.yml  # bayesoracle/ PM-analysis data refresh — schedule OFF since retro#937, manual dispatch only (commits to main, see CLAUDE.md)
 ├── factum_atlas.html            # Generated atlas (committed by EC2 after each cycle)
 ├── oracle-test.html             # Oracul API test console (deployed to GitHub Pages)
 ├── oracle-v2-test.html          # Oracle 2.0 playground (key-based)

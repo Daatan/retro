@@ -205,7 +205,7 @@ class TestTheDiagnostic:
     @staticmethod
     def _pred(stance, quantity=None):
         return PredictionExtraction(
-            quote="q", claim="c", stance=stance, claim_strength=0.7, quantity=quantity,
+            quote="q 1", claim="c", stance=stance, claim_strength=0.7, quantity=quantity,
         )
 
     def test_a_correct_extraction_with_a_correct_stance_agrees(self, case):
@@ -265,7 +265,7 @@ class TestTheTargetCounters:
     @staticmethod
     def _pred(stance, quantity=None):
         return PredictionExtraction(
-            quote="q", claim="c", stance=stance, claim_strength=0.7, quantity=quantity,
+            quote="q 1", claim="c", stance=stance, claim_strength=0.7, quantity=quantity,
         )
 
     def test_a_run_that_carries_the_number_hits_once_however_many_predictions(self, case):

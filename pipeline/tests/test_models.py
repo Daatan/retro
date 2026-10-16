@@ -680,7 +680,7 @@ class TestQuantity:
 
     @staticmethod
     def _pred(**over):
-        base = dict(quote="q", claim="c", stance=0.4, claim_strength=0.65)
+        base = dict(quote="q 36", claim="c", stance=0.4, claim_strength=0.65)
         return PredictionExtraction(**{**base, **over})
 
     def test_a_stated_level_round_trips(self):

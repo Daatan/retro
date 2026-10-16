@@ -1,6 +1,7 @@
 import json as _json
 import logging
 import re
+import re
 from pydantic import (
     AliasChoices, BaseModel, ConfigDict, Field, model_serializer, model_validator,
 )
@@ -475,6 +476,28 @@ def quote_asserts_lower_bound(quote: str, value: float) -> bool:
     return False
 
 
+# retro#935 pattern 2. "A few billion euros" / "hundreds of trucks" / "several thousand
+# residents" carry no number, but both raters fill `quantity` with the QUESTION's threshold
+# (`>= 1e9`, 15/15) — the exact failure the field's own rule forbids. A figure can only be
+# the article's if the quote states one: a digit, or a spelled-out cardinal. Prose edits aimed
+# at comparators made Nova Lite worse before (retro#683 v9b/v9c), so this is checked in code.
+# The allow-list errs toward keeping the field: any digit or number word keeps it.
+_NUMBER_WORDS = (
+    "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|"
+    "sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|"
+    "half|quarter|dozen|zero"
+)
+_QUOTE_STATES_NUMBER_RE = re.compile(
+    r"\d|\b(?:" + _NUMBER_WORDS + r")\b|\b(?:a|an)\s+(?:hundred|thousand|million|billion|trillion)\b",
+    re.IGNORECASE,
+)
+
+
+def quote_states_a_number(quote: str) -> bool:
+    """False when `quote` has no digit and no spelled-out cardinal ("a few billion", "hundreds of")."""
+    return _QUOTE_STATES_NUMBER_RE.search(quote) is not None
+
+
 def _drop_malformed_quantity(data: Any) -> Any:
     """The nested-object version of `_drop_out_of_enum`, for retro#683.
 
@@ -894,6 +917,13 @@ class PredictionExtraction(BaseModel):
         data = _drop_out_of_enum(data, "tone", _TONE_VALUES)
         data = _drop_out_of_enum(data, "evidence_class", _EVIDENCE_CLASS_VALUES)
         return _drop_out_of_enum(data, "report_kind", _REPORT_KIND_VALUES)
+
+    @model_validator(mode="after")
+    def _quantity_needs_a_number(self) -> "PredictionExtraction":
+        if self.quantity is not None and not quote_states_a_number(self.quote):
+            logger.info("event=quantity_dropped_no_number value=%r", self.quantity.value)
+            self.quantity = None
+        return self
 
     @model_validator(mode="after")
     def _bound_verb_comparator(self) -> "PredictionExtraction":

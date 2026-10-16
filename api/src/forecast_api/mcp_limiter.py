@@ -32,7 +32,7 @@ _strategy = FixedWindowRateLimiter(_storage)
 
 # Mirrors each tool's REST equivalent: forecast->10/min, search_news->60/min
 # (/search), fetch_article->30/min (/fetch-url), polymarket_market->30/min
-# (/pm/markets). polymarket_edge runs a full forecast internally, so it gets
+# (formerly the public /pm/markets proxy, removed in retro#937; the limit stays). polymarket_edge runs a full forecast internally, so it gets
 # forecast's limit rather than a separate one. bayes_nodes/source_leaderboard
 # have no REST limiter either — left uncapped for parity.
 FORECAST_LIMIT = parse("10/minute")

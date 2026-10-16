@@ -7,7 +7,7 @@
 #   stop    - kill the server by the port it's bound to
 #
 # Safety: sets a fake ORACLE_API_KEY (never a real one) and does not touch
-# /forecast, /search, /llm, /pool/aggregate, /relevance, /pm/markets — those
+# /forecast, /search, /llm, /pool/aggregate, /relevance — those
 # need real Bedrock/OpenRouter/Polymarket credentials this sandbox must not use.
 set -euo pipefail
 

@@ -1,5 +1,6 @@
 import json as _json
 import logging
+import re
 from pydantic import (
     AliasChoices, BaseModel, ConfigDict, Field, model_serializer, model_validator,
 )
@@ -447,6 +448,33 @@ class Grounds(BaseModel):
     )
 
 
+# retro#935 pattern 1. "topped 90,000 yuan" asserts a bound (> 90,000), but both raters read
+# the sentence as a stated level and answer "=" 15/15 — and two prose edits aimed at
+# comparators made Nova Lite worse (retro#683 v9b/v9c), so the verb is read in code instead.
+# Deliberately narrow: only an "=" answer is rewritten, only when the verb sits directly in
+# front of the extracted number, and never under a negation ("failed to top"). "hit"/"reached"
+# are left alone — they genuinely state a level.
+_BOUND_VERB = r"(?:topp(?:ed|ing)|breach(?:ed|ing)|cross(?:ed|ing)|exceed(?:ed|ing)|surpass(?:ed|ing)|pass(?:ed|ing))"
+_BOUND_VERB_NUMBER_RE = re.compile(
+    _BOUND_VERB + r"\s+(?:about\s+|around\s+|roughly\s+)?[$€£]?\s*(\d[\d,]*(?:\.\d+)?)\s*"
+    r"(thousand|million|billion|trillion|k|m|bn|b)?\b",
+    re.IGNORECASE,
+)
+_BOUND_NEGATION_RE = re.compile(r"(?:\bnot\b|n't\b|\bnever\b|\bfail(?:ed|s)?\s+to\b|\bwithout\b|\bshort of\b)[^.;]{0,25}$", re.IGNORECASE)
+_SCALE = {"thousand": 1e3, "k": 1e3, "million": 1e6, "m": 1e6, "billion": 1e9, "bn": 1e9, "b": 1e9, "trillion": 1e12}
+
+
+def quote_asserts_lower_bound(quote: str, value: float) -> bool:
+    """True when `quote` says a bound verb (topped, breached, crossed, ...) directly followed by `value`."""
+    for m in _BOUND_VERB_NUMBER_RE.finditer(quote):
+        if _BOUND_NEGATION_RE.search(quote[: m.start()]):
+            continue
+        number = float(m.group(1).replace(",", "")) * _SCALE.get((m.group(2) or "").lower(), 1.0)
+        if abs(number - value) <= 1e-9 * max(1.0, abs(value)):
+            return True
+    return False
+
+
 def _drop_malformed_quantity(data: Any) -> Any:
     """The nested-object version of `_drop_out_of_enum`, for retro#683.
 
@@ -866,6 +894,14 @@ class PredictionExtraction(BaseModel):
         data = _drop_out_of_enum(data, "tone", _TONE_VALUES)
         data = _drop_out_of_enum(data, "evidence_class", _EVIDENCE_CLASS_VALUES)
         return _drop_out_of_enum(data, "report_kind", _REPORT_KIND_VALUES)
+
+    @model_validator(mode="after")
+    def _bound_verb_comparator(self) -> "PredictionExtraction":
+        q = self.quantity
+        if q is not None and q.comparator == "=" and quote_asserts_lower_bound(self.quote, q.value):
+            logger.info("event=quantity_comparator_from_verb value=%r", q.value)
+            self.quantity = q.model_copy(update={"comparator": ">"})
+        return self
 
 
 class ExtractionOutput(BaseModel):

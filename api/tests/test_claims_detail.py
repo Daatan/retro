@@ -52,8 +52,9 @@ _BODY = (
 
 
 def _claim(**over: Any) -> PredictionExtraction:
+    # A `quantity` needs a quote that states a number, or the model drops it (retro#935).
     return PredictionExtraction(**{
-        "quote": "Fixture quote.",
+        "quote": "Fixture quote 1." if over.get("quantity") else "Fixture quote.",
         "claim": "Fixture claim.",
         "stance": 0.4,
         "certainty": 0.6,

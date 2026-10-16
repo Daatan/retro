@@ -2998,6 +2998,7 @@ live only after ≥1 week of shadow with a per-script split of `would_skip=True`
 | `jev_gate_enabled` | `False` | Run pass 1 before the extractor and log `event=jev_gate`. Needs `typesafe_api_key` (or the SSM fallback) like the shadow. Prod enable = sync the committed drop-in `infra/oracle-api.service.d/jev-gate-enabled.conf` to the box (manual, like the other drop-ins). |
 | `jev_gate_threshold` | `0.15` | `max_noul` below this = "Haiku would find nothing". Chosen on the 09-20..23 replay; re-read per script from the shadow log before enforcing. |
 | `jev_gate_enforce` | `False` | Skip the extractor on a below-threshold verdict. Off = shadow. |
+| `jev_segment_v2` | `False` | Re-join sentence splits at abbreviations (`Sept. 23`, `Sen. Tom Leek`, initials) in the Jev segmenter that feeds the gate, pass 1 and `jev_class` (retro#943). Prod enable = sync the committed drop-in `infra/oracle-api.service.d/jev-segment-v2.conf` (manual). A/B 2026-10-16: 0 gate flips at 0.07. |
 | `jev_gate_timeout_seconds` | `8.0` | Pass-1 HTTP timeout, and the longest enforce waits before failing open (shadow p50 785 ms / p90 1.7 s for both passes). |
 | `jev_gate_shadow_wait_seconds` | `0.5` | Shadow only: how long the article waits after Haiku for a pass 1 still in flight before the verdict is logged late from a callback. |
 

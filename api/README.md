@@ -79,16 +79,15 @@ secret. CI runs this on every PR and **gates the deploy** (see `.github/workflow
 `GET /bayes/nodes`, `GET /leaderboard`, `POST /leaderboard/ingest`,
 `GET /leaderboard/resolution-shadow`, `GET /leaderboard/author-shadow`,
 `GET /leaderboard/settlement-pin-report`,
-`GET /health`, `GET /version`, `GET /pm/markets`, `GET /pm/paper`, `POST /v2/forecast` + `GET /v2/jobs/{id}`
+`GET /health`, `GET /version`, `GET /pm/paper`, `POST /v2/forecast` + `GET /v2/jobs/{id}`
 (the Oracle 2.0 playground, retro#595 — traced query-path runs behind
 `oracle-v2-test.html`). All require the `x-api-key`
-header **except** `/health`, `/version`, the rate-limited read-only
-`/pm/markets` (Polymarket Gamma proxy) and `/pm/paper` (paper-trading
+header **except** `/health`, `/version`, and the read-only
+`/pm/paper` (paper-trading
 scorecard, retro#620), and the deliberately-public
 `/fetch-url` (which is rate-limited and SSRF-guarded — http(s) only, no
 private/loopback/link-local hosts). Full details in the
 [Oracle API contract](https://github.com/Daatan/docs/blob/main/oracle-api.md).
 
 Error-contract notes: `/search` returns **422** (not 500) on malformed date
-params, and `/pm/markets` returns **502** on a Polymarket upstream HTTP error
-(**504** on an upstream connect/timeout failure) rather than an opaque 500.
+params rather than an opaque 500.

@@ -19,6 +19,9 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 
 ## [Unreleased]
 
+### Removed
+- `GET /pm/markets` (retro#937): the public, unauthenticated Polymarket Gamma proxy (30/min, ≤50 ids) re-served Polymarket data to anyone, which Polymarket's ToU §4.2 forbids ("directly or through an API"). No page or tool called it; the MCP `polymarket_market` tool uses the one-lookup adapter in `polymarket_live.py` and is unaffected.
+
 ### Fixed
 - Jev date candidates (retro#943): a bare weekday that equals the publication weekday ("returned on Monday" in a Monday article) no longer also offers the date a week back; that candidate is kept only next to "last/previous" (and the Hebrew/Arabic/German/French/Spanish/Russian equivalents). Jev had picked the week-back date for an NPR claim.
 - Config (retro#892, item 1 only): removed the dead `ApiSettings.openrouter_api_key` (nothing in `api/` read it since `/llm` moved to Bedrock via `tm.llm`). `extra="ignore"` means a leftover `OPENROUTER_API_KEY` in `.env` is still harmless, and `tm.config` still reads it for the pipeline. Splitting `ApiSettings` into grouped models (item 2) is not done.

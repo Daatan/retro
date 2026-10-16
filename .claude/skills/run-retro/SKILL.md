@@ -90,7 +90,7 @@ time of writing and will drift on every merge — that's expected, not a regress
 
 **Never called here** (need real production credentials/network — do not attempt):
 `POST /forecast`, `POST /search`, `POST /llm`, `POST /pool/aggregate`,
-`POST /relevance`, `GET /pm/markets` (Bedrock, OpenRouter, search-provider APIs, or
+`POST /relevance` (Bedrock, OpenRouter, search-provider APIs, or
 live Polymarket). `POST /fetch-url` is public and SSRF-guarded but was not exercised
 here since it fetches an arbitrary live URL.
 

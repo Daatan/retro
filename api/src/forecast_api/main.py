@@ -1,10 +1,8 @@
 import asyncio
 import logging
-import re
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
-import httpx
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
@@ -515,47 +513,6 @@ async def fetch_url(request: Request, body: FetchUrlRequest):
         return await fetch_and_extract(body.url)
     except ArticleFetchError as exc:
         return JSONResponse({"detail": exc.detail}, status_code=exc.status)
-
-
-_GAMMA_BASE = "https://gamma-api.polymarket.com"
-_GAMMA_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; TruthMachine/1.0)"}
-_ID_RE = re.compile(r"^\d+(,\d+)*$")
-
-
-@app.get("/pm/markets", tags=["Polymarket"])
-@limiter.limit("30/minute")
-async def pm_markets(
-    request: Request,
-    id: str = Query(..., description="Comma-separated Gamma market IDs"),
-):
-    """
-    Proxy for Polymarket Gamma API — returns live market data with CORS headers.
-    Gamma API does not send Access-Control-Allow-Origin, so browser fetches from
-    GitHub Pages are blocked; this endpoint forwards the request server-side.
-    """
-    if not _ID_RE.match(id):
-        return JSONResponse({"detail": "id must be comma-separated integers"}, status_code=422)
-    ids = id.split(",")
-    if len(ids) > 50:
-        return JSONResponse({"detail": "max 50 ids per request"}, status_code=422)
-
-    # Gamma requires repeated params: ?id=111&id=222 (not comma-separated)
-    params = [("id", i) for i in ids] + [("limit", str(len(ids)))]
-    url = f"{_GAMMA_BASE}/markets"
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, params=params, headers=_GAMMA_HEADERS)
-            resp.raise_for_status()
-        return JSONResponse(resp.json())
-    except httpx.HTTPStatusError as exc:
-        # Surface upstream failures as 502 rather than an opaque 500 — this proxy
-        # is the browser's only path to Gamma.
-        return JSONResponse(
-            {"detail": f"Upstream Polymarket error: {exc.response.status_code}"},
-            status_code=502,
-        )
-    except httpx.HTTPError:
-        return JSONResponse({"detail": "Upstream Polymarket request failed"}, status_code=504)
 
 
 @app.get("/pm/paper", tags=["Polymarket"])

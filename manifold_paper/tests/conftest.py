@@ -5,7 +5,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-NOW = datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
+# Wall-clock based, not a fixed date: `parse_market` decides `closed` against the real clock,
+# so a fixed NOW made every fixture market with a near close time "closed" once the real date
+# passed it (the 2026-10-11 pin broke CI on 2026-10-17).
+NOW = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
 
 def ms(dt: datetime) -> int:

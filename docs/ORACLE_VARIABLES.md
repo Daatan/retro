@@ -3249,6 +3249,8 @@ stored. The batch lane (`tm/runner.py`) passes no memo and is unchanged.
 |---|---|---|
 | `extraction_memo_enabled` (`EXTRACTION_MEMO_ENABLED`) | `true` | Kill switch; `false` = every call goes to the model, as before. Env line + restart, no deploy. |
 | `extraction_memo_ttl_hours` (`EXTRACTION_MEMO_TTL_HOURS`) | `24` | Entry lifetime. Measured saving ~$1.9/day at 24 h, ~$2.5/day at 168 h (7 d). |
+| `pool_shadow_a_enabled` (`POOL_SHADOW_A_ENABLED`) | `false` | retro#955 / retro#852. On: `_log_jev_gate` also stores pass-1 `max_noul` per `(url, q8)` (diskcache, no TTL), and `/pool/aggregate` logs `event=pool_shadow_a q8= n= n_cov= live= a= a_x=` — the pre-settlement-gate mean beside the mean with Jev's number replacing Nova's relevance on covered rows (`a`: `x²`, `a_x`: `x`). Needs `question` on the request. Log-only, no LLM call. Values accrue only from the moment it is turned on. |
+| `pool_shadow_a_path` (`POOL_SHADOW_A_PATH`) | `data_dir/jev_values` | Directory of that store; deleting it drops the history. |
 | `extraction_memo_path` (`EXTRACTION_MEMO_PATH`) | empty = `data_dir/extraction_memo` | diskcache **directory**; deleting it is the manual invalidation lever. 256 MB LRU bound. |
 
 **Semantics to know.** Haiku at temperature 0 is not fully deterministic (retro#532), so a memo

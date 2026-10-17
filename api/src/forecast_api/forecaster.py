@@ -200,6 +200,7 @@ from .models import (
 from .config import settings
 from .resolution_scorer import archetype_base_rate
 from .extraction_memo_store import ExtractionMemoStore
+from .jev_value_store import get_max_noul, put_max_noul
 from .settlement_verdict_store import get_verdict, put_verdict, verdict_key
 from .event_decomposition import decompose_event
 from .event_decomposition_store import (
@@ -1517,6 +1518,8 @@ def _log_jev_gate(
     existing parsers of the earlier fields are unaffected."""
     max_noul = pass1.get("max_noul")
     q8 = question_fingerprint(question)
+    if settings.pool_shadow_a_enabled:
+        put_max_noul(settings.resolved_pool_shadow_a_path, url, q8, max_noul)
     logger.info(
         "event=jev_gate would_skip=%s enforce=%s max_noul=%s threshold=%.2f n_preds=%s "
         "status=%s late=%s script=%s language=%s n_sents=%d jev_ms=%s q8=%s url=%s prediction_id=%s "
@@ -3334,6 +3337,51 @@ async def _run_forecast_inner(
     return response
 
 
+def _log_pool_shadow_a(
+    req: PoolAggregateRequest, sources, live, stances, weights, relevances, settled_flags,
+    valve_weights, age_adjusted_weights, pool_kwargs,
+) -> None:
+    """Log-only (retro#955): the pooled mean with Jev's pass-1 `max_noul` as the relevance of
+    every row that has one (Nova's score elsewhere), next to the live mean. Compares the
+    pre-settlement-gate aggregate on both sides, calls `aggregate_pool` directly and so adds no
+    LLM call, no settlement-gate rerun and no second set of per-row log lines. Never raises."""
+    try:
+        q8 = question_fingerprint(req.question or "")
+        if not q8:
+            return
+        vals = [get_max_noul(settings.resolved_pool_shadow_a_path, s.url, q8) for s in sources]
+        n_cov = sum(v is not None for v in vals)
+        if n_cov == 0:
+            logger.info("event=pool_shadow_a q8=%s n=%d n_cov=0", q8, len(sources))
+            return
+        out: dict[str, float | None] = {}
+        for name, curve in (("a", lambda x: x * x), ("a_x", lambda x: x)):
+            w, vw, aw, rel = [], [], [], []
+            for i, v in enumerate(vals):
+                if v is None:
+                    w.append(weights[i]); vw.append(valve_weights[i]); aw.append(age_adjusted_weights[i])
+                    rel.append(relevances[i])
+                    continue
+                old = relevance_weight(relevances[i])
+                new = curve(v)
+                # The three weights are products with relevance_weight as one factor; swap it.
+                ratio = new / old if old > 0 else 0.0
+                w.append(weights[i] * ratio); vw.append(valve_weights[i] * ratio)
+                aw.append(age_adjusted_weights[i] * ratio)
+                rel.append(v)
+            kw = dict(pool_kwargs, valve_weights=vw, age_adjusted_weights=aw)
+            r = aggregate_pool(stances, w, rel, settled_flags, **kw)
+            out[name] = r.mean if r is not None and r.insufficient_reason is None else None
+        fmt = lambda v: f"{v:.4f}" if v is not None else "none"
+        logger.info(
+            "event=pool_shadow_a q8=%s n=%d n_cov=%d live=%s a=%s a_x=%s",
+            q8, len(sources), n_cov,
+            fmt(live.mean if live.insufficient_reason is None else None), fmt(out["a"]), fmt(out["a_x"]),
+        )
+    except Exception:  # noqa: BLE001 - shadow must never break the recompute
+        logger.warning("event=pool_shadow_a_error", exc_info=True)
+
+
 async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse:
     """Recompute a pooled estimate over a caller-supplied set of already-
     extracted per-source signals — no search and no extraction calls (retro
@@ -3544,6 +3592,11 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
                 _settlement_vote_verified(sources[idx].claims_detail),
             )
     agg = aggregate_pool(stances, weights, relevances, settled_flags, **_pool_kwargs)
+    if agg is not None and settings.pool_shadow_a_enabled:
+        _log_pool_shadow_a(
+            req, sources, agg, stances, weights, relevances, settled_flags, valve_weights,
+            age_adjusted_weights, _pool_kwargs,
+        )
     if agg is not None:
         # Evidence-window shadow (retro#545 slice iii) — recompute-path twin of
         # the live path's lines above; the row index is the identifier, as with

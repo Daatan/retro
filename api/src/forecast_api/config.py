@@ -803,6 +803,16 @@ class ApiSettings(BaseSettings):
     extraction_memo_ttl_hours: float = 24.0
     extraction_memo_path: Path = Path("")  # empty = data_dir/extraction_memo
 
+    # Jev-weighted pool shadow (retro#955, from the retro#852 measurement). Pass-1 `max_noul`
+    # is persisted per (url, question) in a diskcache dir whenever `event=jev_gate` is logged,
+    # and `/pool/aggregate` then logs what the pooled mean WOULD be with that number as the
+    # row's relevance (`event=pool_shadow_a`: live mean, A-weighted mean on `x**2` and on
+    # `x`, coverage). Log-only: the live mean, weights and response are untouched, no extra
+    # LLM calls, no settlement gate re-run. Default OFF; both the write and the read follow this
+    # flag. Path is a diskcache DIRECTORY; deleting it drops the history.
+    pool_shadow_a_enabled: bool = False
+    pool_shadow_a_path: Path = Path("")  # empty = data_dir/jev_values
+
     # The premise verifier (retro#575 slice 1) — shadow/log-only, off by
     # default. Asks whether a question's premise is already dead (resolved
     # or structurally impossible) before pricing it. `enforce` is unread this
@@ -1147,6 +1157,12 @@ class ApiSettings(BaseSettings):
         if self.event_decomposition_cache_path != Path(""):
             return self.event_decomposition_cache_path
         return self.data_dir / "event_decomposition_cache"
+
+    @property
+    def resolved_pool_shadow_a_path(self) -> Path:
+        if self.pool_shadow_a_path != Path(""):
+            return self.pool_shadow_a_path
+        return self.data_dir / "jev_values"
 
     @property
     def resolved_extraction_memo_path(self) -> Path:

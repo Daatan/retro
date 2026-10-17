@@ -184,6 +184,7 @@ def test_shipped_defaults_are_unchanged_by_this_refactor():
         "jev_gate": "off",
         "jev_gate_ab": "off",
         "jev_class": "off",
+        "pool_shadow_a": "off",
     }
 
 
@@ -231,6 +232,8 @@ def test_telemetry_coverage_is_the_stages_that_log_per_request():
         "jev_gate_ab",
         # retro#851
         "jev_class",
+        # retro#955
+        "pool_shadow_a",
     }
     assert {s.name for s in STAGES if not s.expect_telemetry} == {
         "conditional_attenuation",

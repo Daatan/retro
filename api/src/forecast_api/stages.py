@@ -185,6 +185,13 @@ STAGES: tuple[Stage, ...] = (
         expect_telemetry=True,
     ),
     Stage(
+        name="pool_shadow_a",
+        issue="retro#955",
+        enabled_attr="pool_shadow_a_enabled",
+        events=("event=pool_shadow_a",),
+        expect_telemetry=True,
+    ),
+    Stage(
         name="jev_gate_ab",
         issue="retro#849",
         enabled_attr="jev_gate_ab_enabled",

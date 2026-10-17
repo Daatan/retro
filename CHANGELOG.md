@@ -20,6 +20,9 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Added
+- Grouped read-only views over `ApiSettings` (`forecast_api/settings_groups.py`, retro#947 stage 1): `grouped(settings).jev.jev_gate_enabled` etc. Env var names, defaults and every existing `settings.<field>` call site are unchanged; tests pin the field-name snapshot, the one-group-per-field partition and old-vs-new equality under a real environment. Call sites and the model itself are not migrated yet (stage 2).
+
+### Added
 - Jev-weighted pool shadow (retro#955, from retro#852), default OFF (`POOL_SHADOW_A_ENABLED`). Pass-1 `max_noul` is persisted per `(url, q8)` when `event=jev_gate` is logged, and `/pool/aggregate` logs `event=pool_shadow_a` — the live pooled mean beside the mean with Jev's number as the row's relevance (`x²` and `x` curves) and the coverage. Log-only: response, weights and LLM calls unchanged.
 
 ### Removed

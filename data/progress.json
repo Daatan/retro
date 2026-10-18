@@ -15885,7 +15885,7 @@
       "source_id": "nyt",
       "status": "no_predictions",
       "prediction_count": 0,
-      "error": "unprocessable article: <failed_attempts> <generation number=\"1\"> <exception> The output is incomplete due to a max_tokens length limit. </exception> <completion> ModelResponse(id='chatcmpl-46cdf9e7-042e-4647-9ebe-bb192f590cbb', created=1792352334, model='us.amazon.nova-micro-v1:0', object='chat.completion', system_fingerprint=None, choices=[Choices(finish_reason='length', index=0, message=Message(content='```json\\n{\\n \"properties\": {\\n \"is_prediction\": {\\n \"title\": \"Is Prediction\",\\n \"type\": \"bo",
+      "error": "unprocessable article: <failed_attempts> <generation number=\"1\"> <exception> The output is incomplete due to a max_tokens length limit. </exception> <completion> ModelResponse(id='chatcmpl-0e9310f3-e153-42c6-9537-54a6523e70ca', created=1792353592, model='us.amazon.nova-micro-v1:0', object='chat.completion', system_fingerprint=None, choices=[Choices(finish_reason='length', index=0, message=Message(content='```json\\n{\\n \"properties\": {\\n \"is_prediction\": {\\n \"title\": \"Is Prediction\",\\n \"type\": \"bo",
       "failed_attempts": 0
     },
     "I04:reuters": {
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-10-18T19:38:57.498215"
+  "last_updated": "2026-10-18T19:59:56.018074"
 }

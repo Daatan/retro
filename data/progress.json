@@ -9750,7 +9750,7 @@
       "status": "failed",
       "prediction_count": 0,
       "error": null,
-      "failed_attempts": 2
+      "failed_attempts": 3
     },
     "B08:aljazeera": {
       "event_id": "B08",
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-10-18T13:21:15.993948"
+  "last_updated": "2026-10-18T13:23:13.237436"
 }

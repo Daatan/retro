@@ -939,8 +939,38 @@ class TestRunEvent:
         await orch.run_event("E1")
         cell = load_state().get("E1", "ynet")
         assert cell.status == CellStatus.no_predictions
-        assert cell.error.startswith("unprocessable article: litellm.BadRequestError")
+        # the stable marker, not the raw text (which embeds a per-call completion id, retro#959)
+        assert cell.error == "unprocessable article: Input Tokens Exceeded"
         assert cell.failed_attempts == 0
+
+    async def test_unprocessable_error_is_identical_across_passes(self, tmp_path, monkeypatch):
+        """retro#959: the raw gate error embeds a fresh completion id each call; recording it made
+        `--retry-empty` rewrite progress.json (and the loop push an atlas commit) on every pass."""
+        orch = _make_orch(tmp_path)
+        _make_event(tmp_path)
+        _make_source(tmp_path)
+        calls = {"n": 0}
+
+        async def fake_search(*a, **kw):
+            return [{"text": "x" * 600, "published_at": "2024-12-01", "url": "u1", "author": "a", "headline": "h1"}]
+
+        async def fake_process(raw_art, event, source):
+            calls["n"] += 1
+            return PipelineResult(
+                article=None, is_prediction=False, gatekeeper_reason="",
+                error=f"The output is incomplete due to a max_tokens length limit. id=chatcmpl-{calls['n']}",
+            )
+
+        monkeypatch.setattr(orch, "search_articles", fake_search)
+        monkeypatch.setattr(orch, "process_article", fake_process)
+        monkeypatch.setattr(orch_mod.asyncio, "sleep", _instant_sleep)
+
+        await orch.run_event("E1")
+        first = load_state().get("E1", "ynet").error
+        orch.retry_empty = True
+        await orch.run_event("E1")
+        assert calls["n"] == 2
+        assert load_state().get("E1", "ynet").error == first
 
     async def test_unprocessable_plus_infra_error_still_fails(self, tmp_path, monkeypatch):
         """A mixed cell is not safe to park: the infra error may be transient."""

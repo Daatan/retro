@@ -916,6 +916,57 @@ class TestRunEvent:
         assert cell.error == "bedrock throttled for u1"  # first error wins
         assert cell.failed_attempts == 1
 
+    async def test_unprocessable_article_is_no_predictions_not_failed(self, tmp_path, monkeypatch):
+        """retro#962: a gate error that is a property of the article (too long for the model)
+        repeats identically on every pass, so the cell must not end `failed`."""
+        orch = _make_orch(tmp_path)
+        _make_event(tmp_path)
+        _make_source(tmp_path)
+
+        async def fake_search(*a, **kw):
+            return [{"text": "x" * 600, "published_at": "2024-12-01", "url": "u1", "author": "a", "headline": "h1"}]
+
+        async def fake_process(raw_art, event, source):
+            return PipelineResult(
+                article=None, is_prediction=False, gatekeeper_reason="",
+                error='litellm.BadRequestError: BedrockException - {"message":"Input Tokens Exceeded: Number of input tokens exceeds maximum length."}',
+            )
+
+        monkeypatch.setattr(orch, "search_articles", fake_search)
+        monkeypatch.setattr(orch, "process_article", fake_process)
+        monkeypatch.setattr(orch_mod.asyncio, "sleep", _instant_sleep)
+
+        await orch.run_event("E1")
+        cell = load_state().get("E1", "ynet")
+        assert cell.status == CellStatus.no_predictions
+        assert cell.error.startswith("unprocessable article: litellm.BadRequestError")
+        assert cell.failed_attempts == 0
+
+    async def test_unprocessable_plus_infra_error_still_fails(self, tmp_path, monkeypatch):
+        """A mixed cell is not safe to park: the infra error may be transient."""
+        orch = _make_orch(tmp_path)
+        _make_event(tmp_path)
+        _make_source(tmp_path)
+
+        async def fake_search(*a, **kw):
+            return [
+                {"text": "x" * 600, "published_at": "2024-12-01", "url": "u1", "author": "a", "headline": "h1"},
+                {"text": "x" * 600, "published_at": "2024-12-01", "url": "u2", "author": "a", "headline": "h2"},
+            ]
+
+        async def fake_process(raw_art, event, source):
+            err = "Input Tokens Exceeded" if raw_art["url"] == "u1" else "ThrottlingException: slow down"
+            return PipelineResult(article=None, is_prediction=False, gatekeeper_reason="", error=err)
+
+        monkeypatch.setattr(orch, "search_articles", fake_search)
+        monkeypatch.setattr(orch, "process_article", fake_process)
+        monkeypatch.setattr(orch_mod.asyncio, "sleep", _instant_sleep)
+
+        await orch.run_event("E1")
+        cell = load_state().get("E1", "ynet")
+        assert cell.status == CellStatus.failed
+        assert cell.error == "ThrottlingException: slow down"
+
     async def test_partial_success_wins_over_had_errors(self, tmp_path, monkeypatch):
         """One article errors, another succeeds and writes a prediction —
         predictions-on-disk should win over had_errors (status == done)."""

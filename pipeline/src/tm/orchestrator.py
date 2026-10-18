@@ -44,6 +44,21 @@ EXTRACTION_PROMPT_VERSION = "v5"
 MAX_FAILED_ATTEMPTS = 3
 
 
+# Gatekeeper failures that are a property of the *article*, not of the infrastructure: the
+# same article fails the same way on every pass, so retrying only burns calls (retro#962 —
+# 296 such errors, 6 cells re-failed on every pass). Matched on the runner's error text.
+#   - Nova Micro rejects an article whose prompt exceeds its context window.
+#   - Nova Micro echoes the JSON schema on a very long article and is cut at max_tokens.
+UNPROCESSABLE_ERROR_MARKERS = (
+    "Input Tokens Exceeded",
+    "The output is incomplete due to a max_tokens length limit",
+)
+
+
+def is_unprocessable_error(message: Optional[str]) -> bool:
+    return bool(message) and any(m in message for m in UNPROCESSABLE_ERROR_MARKERS)
+
+
 class Orchestrator:
     def __init__(self, data_dir: Path, mode: SearchMode = SearchMode.mock, force_reextract: bool = False, retry_empty: bool = False):
         self.data_dir = data_dir
@@ -171,6 +186,9 @@ class Orchestrator:
             # (retro#962: the final update_cell below used to overwrite the
             # runner's per-article error with None).
             first_error: Optional[str] = None
+            # Deterministic per-article failures (see UNPROCESSABLE_ERROR_MARKERS): they do not
+            # make the cell `failed`, which would retry them forever.
+            unprocessable_error: Optional[str] = None
             for raw_art in articles:
                 try:
                     result = await asyncio.wait_for(
@@ -178,8 +196,11 @@ class Orchestrator:
                         timeout=300,
                     )
                     if result is not None and result.error:
-                        had_errors = True
-                        first_error = first_error or result.error
+                        if is_unprocessable_error(result.error):
+                            unprocessable_error = unprocessable_error or result.error
+                        else:
+                            had_errors = True
+                            first_error = first_error or result.error
                 except asyncio.TimeoutError:
                     console.print(f"    [bold red]Article timeout (300s), skipping[/bold red]")
                     had_errors = True
@@ -222,6 +243,15 @@ class Orchestrator:
                         CellStatus.failed,
                         error=(first_error or "unknown error (no message recorded)")[:500],
                         failed_attempts=cell.failed_attempts + 1,
+                    )
+                elif unprocessable_error:
+                    # Every article that errored is unprocessable by the gate (too long): record
+                    # why, but do not retry — the result would be identical.
+                    update_cell(
+                        event_id,
+                        source["id"],
+                        CellStatus.no_predictions,
+                        error=f"unprocessable article: {' '.join(unprocessable_error.split())}"[:500],
                     )
                 else:
                     update_cell(event_id, source["id"], CellStatus.no_predictions)

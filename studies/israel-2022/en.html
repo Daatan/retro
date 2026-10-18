@@ -253,7 +253,7 @@ body{margin:0}
     <div><h3>Search</h3><p>A seed list of 326 domains: news-indexer sources, the Israeli press in Hebrew, English, Russian and Arabic, world outlets, think tanks and pollsters. GDELT GKG via BigQuery returned 20,245 URLs from 157 of them. Israel Hayom, Haaretz English, NewsRu.co.il, INSS, JPPI and others missing from GDELT were added from the Wayback archive.</p></div>
     <div><h3>Filter</h3><p>Keywords in four languages, then Claude Haiku on titles: 2,261 of 8,780 candidates kept. Full texts then dropped irrelevant pieces, repeats of one speaker on one day, repeats of one poll in one week, and anything edited after 1 November. Dates were checked against the page itself: 37 articles from earlier campaigns (2019–2021) that GDELT and the archive had filed under 2022 were dropped. A separate pass dropped 33 spring-2022 articles where “61” was about the current Knesset (no-confidence votes, defections, an alternative government without an election), not the election outcome.</p></div>
     <div><h3>Rating</h3><p>The model reads the text as of its publication date and returns the main voice’s stance from −1 to +1, confidence, the bloc’s seat total if given, and a verbatim quote. For seat polls the stance follows a fixed rule: ≤58 seats −0.6, 59 −0.4, 60 −0.2, 61–62 +0.3, ≥63 +0.6. The article’s framing can shift it by up to 0.2.</p><div class="formula">P = 0.5 + 0.5 × stance</div></div>
-    <div><h3>Whose voice it is</h3><p>P belongs to the article’s main voice, not to the outlet or the author: a Kikar piece reporting what Gantz said gets Gantz’s P. P ≥ 0.6 counts as “expects 61+”, P ≤ 0.4 as “does not”, and everything in between as “unsure”.</p></div>
+    <div><h3>Whose voice it is</h3><p>P belongs to the article’s main voice, not to the outlet or the author: a Kikar piece reporting what Gantz said gets Gantz’s P. P ≥ 0.6 counts as “expects 61+”, P ≤ 0.4 as “does not”, and everything in between as “unsure”. The aggregates on this page use the full pool of 1,100 rated rows, published as <a href="pool.csv">pool.csv</a> (date, group, region, P, side).</p></div>
   </div>
   <div class="col" style="margin-top:36px"><h2 style="font-size:22px">What is missing</h2></div>
   <ul class="gaps">
@@ -264,7 +264,7 @@ body{margin:0}
     <li>Ratings are by the model. It sometimes misplaces a speaker’s camp or reads a conditional “if Netanyahu gets 61” as a forecast, so some table rows are wrong. The cards above and a sample of about 40 rows were checked by hand.</li>
   </ul>
 </section>
-<footer><span>Daatan retro · E02</span><a href="articles.csv">CSV: 300 articles</a><span>built 24 Sep 2026</span><span>GDELT · Wayback · Claude Haiku 4.5</span></footer>
+<footer><span>Daatan retro · E02</span><a href="articles.csv">CSV: 300 articles</a><a href="pool.csv">CSV: 1,100 pool rows</a><span>built 24 Sep 2026</span><span>GDELT · Wayback · Claude Haiku 4.5</span></footer>
 </div>
 <div id="tip" hidden></div>
 <script>

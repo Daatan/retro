@@ -4,7 +4,10 @@ Hand-built retro case studies, one directory per event, published to GitHub Page
 `https://daatan.github.io/retro/studies/` by `.github/workflows/deploy-atlas.yml`.
 
 Each study is a self-contained `index.html` (Russian) and `en.html` (English), data
-inlined, no build step, plus the rated article table as CSV. Add a new study as
+inlined, no build step, plus the rated article table as `articles.csv` and the full rated
+pool behind the headline aggregates as `pool.csv` (one row per statement: date, group, region,
+P and side; Energy has `p_brent`/`p_ttf` instead). `pool.csv` is the `POOL` array inlined in
+`en.html`, in the same order. Add a new study as
 `studies/<slug>/` and a card in both `studies/index.html` and `studies/en.html`.
 
 | Study | Event | Built |

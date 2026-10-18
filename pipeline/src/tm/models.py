@@ -1,7 +1,6 @@
 import json as _json
 import logging
 import re
-import re
 from pydantic import (
     AliasChoices, BaseModel, ConfigDict, Field, model_serializer, model_validator,
 )

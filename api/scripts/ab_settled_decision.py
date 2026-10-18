@@ -376,7 +376,6 @@ def score(args) -> int:
     from collections import Counter
     labels = {d["key"]: d["verdict"] for d in load_jsonl(args.labels)}
     decisions = load_jsonl(args.out)
-    cands = {candidate_key(r): r for r in load_jsonl(args.candidates)}
 
     print("=" * 74)
     print("SETTLED-DECISION A/B — retro#697 acceptance test")

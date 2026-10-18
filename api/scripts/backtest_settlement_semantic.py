@@ -196,7 +196,7 @@ def main() -> int:
     combos = [(name,) for name in ALL_GATES] + [tuple(ALL_GATES)]
     results = {}
     for combo in combos:
-        seen, tp = {}, None
+        tp = None
         per_dec = {}
         for v, p, cands in cases:
             key = (v["qhash"], signature(cands))

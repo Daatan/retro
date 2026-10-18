@@ -3032,8 +3032,8 @@ time a question is seen; rewrites are cached per question in-process. Every fail
 quiet: a rewrite that errors, times out, comes back empty or absurdly long simply logs nothing
 for that article. The A/B never touches the request path, so it adds no latency.
 
-Enable with the `infra/oracle-api.service.d/jev-gate-ab-enabled.conf` drop-in, which is committed
-but deliberately not synced by the deploy script.
+No drop-in for this is committed: enable it with `JEV_GATE_AB_ENABLED=true` in a hand-synced
+drop-in (the deploy script does not sync the `jev-*` drop-ins).
 
 `event=jev_gate` also carries `q8`, an 8-hex fingerprint of the question text, since
 `prediction_id` is empty on most lines and the per-article question fan-out was unmeasurable

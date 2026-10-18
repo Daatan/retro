@@ -9749,7 +9749,7 @@
       "source_id": "nyt",
       "status": "no_predictions",
       "prediction_count": 0,
-      "error": "unprocessable article: <failed_attempts> <generation number=\"1\"> <exception> litellm.BadRequestError: BedrockException - {\"message\":\"The model returned the following errors: Input Tokens Exceeded: Number of input tokens exceeds maximum length. Please update the input to try again.\"} </exception> <completion> None </completion> </generation> </failed_attempts> <last_exception> litellm.BadRequestError: BedrockException - {\"message\":\"The model returned the following errors: Input Tokens Exceeded: N",
+      "error": "unprocessable article: Input Tokens Exceeded",
       "failed_attempts": 0
     },
     "B08:aljazeera": {
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-10-18T20:50:18.692516"
+  "last_updated": "2026-10-18T20:52:16.490299"
 }

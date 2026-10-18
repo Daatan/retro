@@ -37,3 +37,13 @@ def test_reporting_does_not_mutate_the_environment():
     sd.unrecognized_env(env, FIELDS)
     sd.deprecated_env(env)
     assert env == {"JEV_TYPO": "1"}
+
+
+def test_pipeline_settings_fields_count_as_known():
+    """EXTRACTOR_MODEL is set by infra/oracle-api.service.d and read by tm.config, not ApiSettings;
+    the startup check must pass both field sets or it flags a live, working variable."""
+    from tm.config import settings as pipeline_settings
+
+    both = [*FIELDS, *type(pipeline_settings).model_fields]
+    assert sd.unrecognized_env({"EXTRACTOR_MODEL": "x"}, FIELDS) == ["EXTRACTOR_MODEL"]
+    assert sd.unrecognized_env({"EXTRACTOR_MODEL": "x"}, both) == []

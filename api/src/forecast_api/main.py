@@ -71,11 +71,14 @@ async def lifespan(app: FastAPI):
         " ".join(f"{name}={mode}" for name, mode in sorted(describe_stages(settings).items())),
     )
     # extra="ignore" swallows a misspelled or removed flag silently (retro#947). Report only;
-    # this must never stop the service from starting.
+    # this must never stop the service from starting. The shared `tm.config` settings read the
+    # same environment (EXTRACTOR_MODEL is one of theirs), so their fields count as known.
     try:
         for name, hint in deprecated_env(os.environ):
             logger.warning("event=deprecated_env name=%s hint=%s", name, hint)
-        for name in unrecognized_env(os.environ, type(settings).model_fields):
+        for name in unrecognized_env(
+            os.environ, [*type(settings).model_fields, *type(_pipeline_settings).model_fields]
+        ):
             logger.warning("event=unrecognized_env name=%s (no matching ApiSettings field; ignored)", name)
     except Exception:  # noqa: BLE001
         logger.exception("env check failed")

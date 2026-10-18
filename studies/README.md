@@ -65,8 +65,8 @@ inlined, no build step, plus the rated article table as CSV. Add a new study as
   the TTF leg), dedupe per speaker and day.
 - **Rating.** Same `P = 0.5 + 0.5·stance` per leg; a stated probability wins. Price forecasts
   follow a fixed clamp rule (Brent <90 −0.6 … ≥130 +0.6; TTF <100 −0.6 … ≥250 +0.6).
-- **Table.** 227 rows, at most 15 per domain and 3 per speaker. Aggregates use the 280-row pool.
+- **Table.** 211 rows, at most 15 per domain and 3 per speaker. Aggregates use the 264-row pool.
 - **Gaps.** Most articles name no price, so P is the model's directional reading, not a
-  calibrated probability. TTF coverage by banks and agencies is thin (2 and 7 statements).
+  calibrated probability. TTF coverage by banks and agencies is thin (18 and 4 statements).
 
 Working files (fetch lists, raw texts, rating JSONL) are kept outside the repo.

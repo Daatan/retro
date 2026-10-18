@@ -55,8 +55,17 @@ UNPROCESSABLE_ERROR_MARKERS = (
 )
 
 
+def unprocessable_reason(message: Optional[str]) -> Optional[str]:
+    """The matching marker, or None. Recorded on the cell instead of the raw error text: that text
+    embeds a fresh completion id and timestamp on every call, so under `--retry-empty` each pass
+    rewrote `progress.json` and the loop kept pushing no-op atlas commits (retro#959)."""
+    if not message:
+        return None
+    return next((m for m in UNPROCESSABLE_ERROR_MARKERS if m in message), None)
+
+
 def is_unprocessable_error(message: Optional[str]) -> bool:
-    return bool(message) and any(m in message for m in UNPROCESSABLE_ERROR_MARKERS)
+    return unprocessable_reason(message) is not None
 
 
 class Orchestrator:
@@ -197,7 +206,7 @@ class Orchestrator:
                     )
                     if result is not None and result.error:
                         if is_unprocessable_error(result.error):
-                            unprocessable_error = unprocessable_error or result.error
+                            unprocessable_error = unprocessable_error or unprocessable_reason(result.error)
                         else:
                             had_errors = True
                             first_error = first_error or result.error
@@ -251,7 +260,7 @@ class Orchestrator:
                         event_id,
                         source["id"],
                         CellStatus.no_predictions,
-                        error=f"unprocessable article: {' '.join(unprocessable_error.split())}"[:500],
+                        error=f"unprocessable article: {unprocessable_error}",
                     )
                 else:
                     update_cell(event_id, source["id"], CellStatus.no_predictions)

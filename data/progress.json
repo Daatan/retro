@@ -13910,7 +13910,7 @@
       "status": "failed",
       "prediction_count": 0,
       "error": null,
-      "failed_attempts": 1
+      "failed_attempts": 2
     },
     "H09:reuters": {
       "event_id": "H09",
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-10-18T13:24:25.452443"
+  "last_updated": "2026-10-18T13:33:01.728732"
 }

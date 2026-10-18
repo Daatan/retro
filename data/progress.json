@@ -2982,7 +2982,7 @@
       "status": "failed",
       "prediction_count": 0,
       "error": null,
-      "failed_attempts": 2
+      "failed_attempts": 3
     },
     "A10:toi": {
       "event_id": "A10",
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-10-18T13:11:34.193934"
+  "last_updated": "2026-10-18T13:19:55.649604"
 }

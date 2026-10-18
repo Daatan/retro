@@ -19,6 +19,9 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 
 ## [Unreleased]
 
+### Fixed
+- Batch loop no longer spins on permanently-failing cells (retro#959): a cell that ends `failed` 3 passes in a row (`MatrixCell.failed_attempts`, `MAX_FAILED_ATTEMPTS`) is parked and not counted as outstanding by `infra/ec2_run.sh`, and the loop skips the atlas/progress commit when only the `last_updated` / "Generated …" timestamps changed. Previously 6 reuters/nyt cells kept it in "retry immediately" mode — ~1,640 no-op commits and Pages deploys a day. `--force-reextract` still reprocesses parked cells.
+
 ### Added
 - Grouped read-only views over `ApiSettings` (`forecast_api/settings_groups.py`, retro#947 stage 1): `grouped(settings).jev.jev_gate_enabled` etc. Env var names, defaults and every existing `settings.<field>` call site are unchanged; tests pin the field-name snapshot, the one-group-per-field partition and old-vs-new equality under a real environment. Call sites and the model itself are not migrated yet (stage 2).
 

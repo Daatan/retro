@@ -133,6 +133,7 @@ def update_cell(
     status: CellStatus,
     prediction_count: int = 0,
     error: Optional[str] = None,
+    failed_attempts: Optional[int] = None,
 ) -> MatrixState:
     state = load_state()
     state.set_status(
@@ -142,5 +143,7 @@ def update_cell(
         prediction_count=prediction_count,
         error=error,
     )
+    if failed_attempts is not None:
+        state.get(event_id, source_id).failed_attempts = failed_attempts
     save_state(state)
     return state

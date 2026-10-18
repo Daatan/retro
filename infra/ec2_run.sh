@@ -49,6 +49,21 @@ except Exception:
 PY
 }
 
+# True when the staged diff changes more than the two timestamps every cycle rewrites
+# (progress.json `last_updated`, the atlas footer "Generated …"). Committing those alone
+# produced ~1,640 no-op commits + Pages deploys a day (retro#959).
+has_real_change() {
+  git diff --cached -U0 | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' \
+    | grep -vE 'last_updated|Generated [0-9]{4}-[0-9]{2}-[0-9]{2}' | grep -q .
+}
+
+# Timestamp-only diff: restore the tracked files so the index stays clean for the next
+# rebase/sync. Safe — the only bytes that differ are the two rewritten timestamps.
+discard_timestamp_only_change() {
+  git reset -q HEAD -- factum_atlas.html data/progress.json 2>/dev/null || true
+  git checkout -q -- factum_atlas.html data/progress.json 2>/dev/null || true
+}
+
 commit_and_push() {
   local msg="$1"
   cd "$WORKDIR"
@@ -66,12 +81,14 @@ try:
     print(sum(1 for v in cells.values() if v.get('status') == 'done'))
 except: print(0)
 " 2>/dev/null)
-  if [[ "${DONE_COUNT:-0}" -gt 0 ]] && ! git diff --cached --quiet; then
+  if [[ "${DONE_COUNT:-0}" -gt 0 ]] && ! git diff --cached --quiet && has_real_change; then
     git commit -m "atlas: ${msg} — ${STATS}"
     git fetch origin main
     git rebase origin/main || { git rebase --abort; log "WARNING: rebase failed, skipping push"; return 0; }
     git push origin main
     log "Pushed: ${msg} — ${STATS}"
+  elif ! git diff --cached --quiet; then
+    discard_timestamp_only_change
   fi
 }
 
@@ -243,11 +260,13 @@ print(' '.join(sorted(p.stem for p in events_dir.glob('*.json'))))
   # Push progress.json after ingest so local clone sees live status
   cd "$WORKDIR"
   git add data/progress.json 2>/dev/null || true
-  if ! git diff --cached --quiet; then
+  if ! git diff --cached --quiet && has_real_change; then
     git commit -m "progress: ingest batch ${INGEST_EVENTS[*]} — $(cell_stats)"
     git fetch origin main
     git rebase origin/main || { git rebase --abort; log "WARNING: progress push rebase failed"; }
     git push origin main && log "Pushed progress.json after ingest"
+  elif ! git diff --cached --quiet; then
+    discard_timestamp_only_change
   fi
 
   # ── 3. Extract: run orchestrator in batches of 5 events, commit after each ─
@@ -360,7 +379,11 @@ from pathlib import Path
 try:
     p = Path(os.environ['DATA_DIR']) / 'progress.json'
     cells = json.loads(p.read_text()).get('cells', {})
-    print(sum(1 for v in cells.values() if v.get('status') in ('failed', 'pending')))
+    # A `failed` cell at the retry cap is parked (orchestrator.MAX_FAILED_ATTEMPTS) — it is
+    # not outstanding work, or the loop would spin on it forever (retro#959).
+    print(sum(1 for v in cells.values()
+              if v.get('status') == 'pending'
+              or (v.get('status') == 'failed' and v.get('failed_attempts', 0) < 3)))
 except Exception:
     print(0)
 PY

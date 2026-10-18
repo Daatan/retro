@@ -402,8 +402,12 @@ served another model's cached answer.
   Drop-ins are hand-synced over SSM, not by deploy (the file's header has the command).
 - Batch lane (`truthmachine.service`): `EXTRACTOR_MODEL` in the box's `~/truthmachine/.env`,
   otherwise the `tm/config.py` default. Two places: change both, or decide not to.
-- `EXTRACTOR_MAX_TOKENS` (default 2200): raise it together with a thinking model — Gemini
-  3.8 Flash hit `finish_reason=length` at 2200 in the retro#909 re-test.
+- `EXTRACTOR_MAX_TOKENS` (default 8000 since retro#921, was 2200): raise it together with a
+  thinking model — Gemini 3.8 Flash hit `finish_reason=length` at 2200 in the retro#909
+  re-test, and Haiku 5.5 with thinking uses ~2.7k completion tokens per article.
+- `EXTRACTOR_THINKING` (default on, retro#921): Haiku 5.x reasons before answering. Without it
+  5.5 inverted the sign on negated questions; with it ~+5 s per call (median 12.6 s vs 7.9 s
+  for Haiku 4.5, p90 15.8 s vs 12.8 s) and ~2x completion tokens. No effect on other models.
 - One request can try a model without any switch: `/forecast` body field `model` (retro#652)
   overrides the extractor and the premise verifier for that call only.
 

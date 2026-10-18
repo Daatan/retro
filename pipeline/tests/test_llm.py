@@ -458,6 +458,18 @@ class TestTemperatureRejectingModels:
                                       max_tokens=10, timeout=5)
         assert "thinking" not in captured
 
+    async def test_haiku_5_thinking_opt_in_omits_the_disable_flag(self, monkeypatch):
+        """retro#921: the extractor opts in; the key must be absent (model default = adaptive)."""
+        captured = {}
+        async def fake_create(**kwargs):
+            captured.update(kwargs)
+            return ("OUT", SimpleNamespace(usage=None))
+        monkeypatch.setattr(llm.client.chat.completions, "create_with_completion", fake_create)
+        await llm.complete_structured("bedrock/us.anthropic.claude-haiku-5-5", dict, "P",
+                                      max_tokens=10, timeout=5, thinking=True)
+        assert "thinking" not in captured
+        assert "temperature" not in captured
+
     async def test_text_call_omits_temperature_for_rejecting_model(self, monkeypatch):
         captured = {}
         async def fake_acompletion(**kwargs):
@@ -650,16 +662,19 @@ class TestCallerDelegation:
         from tm.models import ExtractionOutput
 
         captured = {}
-        async def fake(model, response_model, prompt, *, max_tokens, timeout, cached_prefix=None):
+        async def fake(model, response_model, prompt, *, max_tokens, timeout, cached_prefix=None, thinking=False):
             captured.update(model=model, response_model=response_model,
-                            max_tokens=max_tokens, timeout=timeout, cached_prefix=cached_prefix)
+                            max_tokens=max_tokens, timeout=timeout, cached_prefix=cached_prefix,
+                            thinking=thinking)
             return ("OUT", {})
         monkeypatch.setattr(extractor, "complete_structured", fake)
 
         await extractor.extract_predictions("article", "src", "2024-01-01", "Event", "desc")
         assert captured["model"] == extractor.settings.extractor_model
         assert captured["response_model"] is ExtractionOutput
-        assert captured["max_tokens"] == 2200  # retro#803/#805: 1200/1500 both still truncated
+        # retro#803/#805: 1200/1500 both still truncated at 2200; retro#921 raised it for a thinking model
+        assert captured["max_tokens"] == extractor.settings.extractor_max_tokens >= 6000
+        assert captured["thinking"] is True
         assert captured["timeout"] == 180
         assert captured["cached_prefix"] == extractor.PROMPT_PREFIX
 
@@ -686,7 +701,8 @@ class TestCallerDelegation:
         ]
         out = await aggregator.aggregate_article_predictions(preds, "Event", "src", "2024-01-01")
         assert out is sentinel  # usage is discarded by the aggregator
-        assert captured["model"] == aggregator.settings.extractor_model
+        # Its own knob since retro#911; it only matched extractor_model while the defaults coincided.
+        assert captured["model"] == aggregator.settings.aggregator_model
         assert captured["response_model"] is PredictionExtraction
         assert captured["max_tokens"] == 1000
         assert captured["timeout"] == 120

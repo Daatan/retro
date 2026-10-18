@@ -1460,6 +1460,7 @@ async def extract_predictions(
             effective_model, ExtractionOutput, prompt, max_tokens=settings.extractor_max_tokens,
             timeout=180,
             cached_prefix=cached_prefix,
+            thinking=settings.extractor_thinking,
         )
 
     if cache_coordinator is not None:

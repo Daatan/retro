@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
@@ -30,6 +31,7 @@ from .leaderboard import (
 )
 from .resolution_feedback import ingest_resolution
 from .resolution_scorer import load_shadow_leaderboard, rescore_authors_from_disk, rescore_from_disk
+from .settings_deprecations import deprecated_env, unrecognized_env
 from .settlement_pin_ledger import load_ledger, record_settlement_pin
 from .stages import describe_stages
 from .pm_paper import build_report as build_pm_paper_report, render_markdown as render_pm_paper_markdown
@@ -68,6 +70,15 @@ async def lifespan(app: FastAPI):
         "event=stage_modes %s",
         " ".join(f"{name}={mode}" for name, mode in sorted(describe_stages(settings).items())),
     )
+    # extra="ignore" swallows a misspelled or removed flag silently (retro#947). Report only;
+    # this must never stop the service from starting.
+    try:
+        for name, hint in deprecated_env(os.environ):
+            logger.warning("event=deprecated_env name=%s hint=%s", name, hint)
+        for name in unrecognized_env(os.environ, type(settings).model_fields):
+            logger.warning("event=unrecognized_env name=%s (no matching ApiSettings field; ignored)", name)
+    except Exception:  # noqa: BLE001
+        logger.exception("env check failed")
     # The resolution-shadow board only feeds credibility when the cutover flag
     # is on, so skip the extra disk reads entirely when it isn't.
     shadow_board = shadow_feedback = None

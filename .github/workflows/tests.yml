@@ -7,24 +7,53 @@ name: Tests
 # supplies a dummy ORACLE_API_KEY so settings validation passes.
 
 on:
+  # No `paths:` filter here on purpose (retro#963): a workflow skipped by a path filter never
+  # reports a check, so a docs-only PR could not satisfy a required status check. The
+  # `changes` job below does the path matching instead, and `ci-gate` always reports.
   pull_request:
-    paths:
-      - api/**
-      - pipeline/**
-      - bayesoracle/**
-      - metaculus/**
-      - polymarket_paper/**
-      - manifold_paper/**
-      # The case studies are hand-edited data, and test_event_validation.py
-      # validates the committed set — so a bad edit to an event file alone must
-      # trigger this workflow, not just changes under pipeline/.
-      - data/events/**
-      - infra/**
-      - .github/workflows/tests.yml
   workflow_call:
 
+# A new push to a PR supersedes the previous run; never cancel when called from a deploy
+# (push to main). The group name differs from deploy-oracle.yml's on purpose — a called
+# workflow that shares its caller's group deadlocks.
+concurrency:
+  group: tests-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  changes:
+    # Same idea as changelog.yml: ask the API for the PR's file list instead of cloning this
+    # repo (atlas data commits make a full clone slow, retro#928). Anything that is not a PR
+    # (workflow_call from deploy-oracle.yml) always runs everything.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - name: Did code or infra change?
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [[ "$EVENT" != "pull_request" ]]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          CHANGED=$(gh api --paginate \
+            "repos/${{ github.repository }}/pulls/${PR}/files" --jq '.[].filename')
+          # Keep in step with what the test jobs below actually cover. The case studies are
+          # hand-edited data validated by test_event_validation.py, hence data/events/.
+          if grep -Eq '^(api/|pipeline/|bayesoracle/|metaculus/|polymarket_paper/|manifold_paper/|data/events/|infra/|\.github/workflows/tests\.yml$)' <<<"$CHANGED"; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no tested paths changed — test jobs will be skipped"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   infra-shell-tests:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # ec2_run.sh's sync/re-exec guards (retro#553) only run on the unhappy path
     # and had zero CI coverage before this job — an infra-only change never
     # matched this workflow's path filter at all. See the harness's own header
@@ -78,6 +107,8 @@ jobs:
         run: bash infra/tests/test_oracle_series_cron.sh
 
   pytest:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -101,3 +132,37 @@ jobs:
 
       - name: Run unit tests
         run: uv run pytest tests/ -v --tb=short
+
+  ruff-baseline:
+    # Informational only (retro#963): prints per-rule counts with ruff's default rules so there
+    # is a number to decide a rule set from. `--exit-zero` and not part of `ci-gate`.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+
+      - name: ruff statistics (non-blocking)
+        run: uvx ruff@0.8.6 check --statistics --exit-zero api pipeline
+
+  # The one check `main` should require. Runs even when the test jobs were skipped (docs-only
+  # PR) or failed, and is green only if every job it depends on passed or was skipped.
+  ci-gate:
+    name: ci-gate
+    if: always()
+    needs: [changes, infra-shell-tests, pytest]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every needed job to have passed or been skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needed job results: $RESULTS"
+          for r in $RESULTS; do
+            if [[ "$r" != "success" && "$r" != "skipped" ]]; then
+              echo "::error::a required job ended '$r'"; exit 1
+            fi
+          done

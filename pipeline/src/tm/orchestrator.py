@@ -37,6 +37,13 @@ class SearchMode(str, Enum):
 # invalidated automatically (see _negative_marker_is_current).
 EXTRACTION_PROMPT_VERSION = "v5"
 
+# A cell that ends `failed` this many passes in a row is parked: the orchestrator skips it
+# and the batch loop stops counting it as outstanding work. Without a cap, 6 permanently
+# failing reuters/nyt cells kept `ec2_run.sh` in "retry immediately" mode — ~1,640 no-op
+# atlas commits a day (retro#959). `--force-reextract` still reprocesses parked cells.
+MAX_FAILED_ATTEMPTS = 3
+
+
 class Orchestrator:
     def __init__(self, data_dir: Path, mode: SearchMode = SearchMode.mock, force_reextract: bool = False, retry_empty: bool = False):
         self.data_dir = data_dir
@@ -135,6 +142,12 @@ class Orchestrator:
                 skip_statuses = (CellStatus.done, CellStatus.no_predictions)
             if cell.status in skip_statuses:
                 continue
+            if (
+                cell.status == CellStatus.failed
+                and cell.failed_attempts >= MAX_FAILED_ATTEMPTS
+                and not self.force_reextract
+            ):
+                continue
 
             console.print(f"  [bold]Source:[/bold] {source['name']}")
 
@@ -196,7 +209,12 @@ class Orchestrator:
                 update_cell(event_id, source["id"], CellStatus.done, prediction_count=total_preds)
             else:
                 if had_errors:
-                    update_cell(event_id, source["id"], CellStatus.failed)
+                    update_cell(
+                        event_id,
+                        source["id"],
+                        CellStatus.failed,
+                        failed_attempts=cell.failed_attempts + 1,
+                    )
                 else:
                     update_cell(event_id, source["id"], CellStatus.no_predictions)
 

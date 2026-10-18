@@ -34,7 +34,7 @@ Snapshot as of last update:
 | Batch pipeline service | `truthmachine.service` — **running** |
 | Oracle API service | `oracle-api.service` — **running** (auto-deploys on merge to main via `.github/workflows/deploy-oracle.yml`) |
 
-The pipeline loop (`infra/ec2_run.sh`) runs continuously: it sleeps 300s between cycles **only when no cells are `pending` or `failed`** — otherwise it retries immediately. So if `progress.json` shows pending cells, expect rapid re-attempts; a 5-minute gap between commits implies a steady state.
+The pipeline loop (`infra/ec2_run.sh`) runs continuously: it sleeps 300s between cycles **unless a cell is `pending` or a `failed` cell is still under its retry cap** (`MAX_FAILED_ATTEMPTS = 3` consecutive failed passes, then the cell is parked — retro#959) — otherwise it retries immediately. So if `progress.json` shows pending cells, expect rapid re-attempts; a 5-minute gap between commits implies a steady state. Cycles whose only change is the `last_updated` / "Generated …" timestamp commit nothing.
 
 ### Oracle API (oracle.daatan.com)
 

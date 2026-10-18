@@ -1106,6 +1106,9 @@ class MatrixCell(BaseModel):
     status: CellStatus = CellStatus.pending
     prediction_count: int = 0
     error: Optional[str] = None
+    # Consecutive orchestrator passes that ended `failed`. Capped by
+    # MAX_FAILED_ATTEMPTS so a source that always errors is parked, not retried forever (retro#959).
+    failed_attempts: int = 0
 
 
 class MatrixState(BaseModel):

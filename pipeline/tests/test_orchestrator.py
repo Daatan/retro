@@ -730,6 +730,60 @@ class TestRunEvent:
         await orch.run_event("E1")
         assert called["search"] is True
 
+    async def test_failed_cell_at_retry_cap_is_parked(self, tmp_path, monkeypatch):
+        from tm.orchestrator import MAX_FAILED_ATTEMPTS
+        from tm.progress import update_cell
+        orch = _make_orch(tmp_path, retry_empty=True)
+        _make_event(tmp_path)
+        _make_source(tmp_path)
+        update_cell("E1", "ynet", CellStatus.failed, failed_attempts=MAX_FAILED_ATTEMPTS)
+
+        called = {"search": False}
+
+        async def fake_search(*a, **kw):
+            called["search"] = True
+            return []
+
+        monkeypatch.setattr(orch, "search_articles", fake_search)
+        await orch.run_event("E1")
+        assert called["search"] is False
+
+    async def test_failed_cell_below_cap_is_retried(self, tmp_path, monkeypatch):
+        from tm.orchestrator import MAX_FAILED_ATTEMPTS
+        from tm.progress import update_cell
+        orch = _make_orch(tmp_path, retry_empty=True)
+        _make_event(tmp_path)
+        _make_source(tmp_path)
+        update_cell("E1", "ynet", CellStatus.failed, failed_attempts=MAX_FAILED_ATTEMPTS - 1)
+
+        called = {"search": False}
+
+        async def fake_search(*a, **kw):
+            called["search"] = True
+            return []
+
+        monkeypatch.setattr(orch, "search_articles", fake_search)
+        await orch.run_event("E1")
+        assert called["search"] is True
+
+    async def test_force_reextract_reprocesses_parked_cell(self, tmp_path, monkeypatch):
+        from tm.orchestrator import MAX_FAILED_ATTEMPTS
+        from tm.progress import update_cell
+        orch = _make_orch(tmp_path, force_reextract=True)
+        _make_event(tmp_path)
+        _make_source(tmp_path)
+        update_cell("E1", "ynet", CellStatus.failed, failed_attempts=MAX_FAILED_ATTEMPTS)
+
+        called = {"search": False}
+
+        async def fake_search(*a, **kw):
+            called["search"] = True
+            return []
+
+        monkeypatch.setattr(orch, "search_articles", fake_search)
+        await orch.run_event("E1")
+        assert called["search"] is True
+
     async def test_no_articles_marks_no_predictions(self, tmp_path, monkeypatch):
         orch = _make_orch(tmp_path)
         _make_event(tmp_path)

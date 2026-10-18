@@ -32,6 +32,9 @@ class ApiSettings(BaseSettings):
     # per-(author, outlet) board replayed from the same feedback file's
     # author_signals (resolution_scorer.rescore_authors_from_disk).
     resolution_author_leaderboard_path: Path = Path("")  # empty = data_dir/resolution_author_leaderboard.json
+    # retro#973: prediction_id -> topic slugs, kept beside (not inside) the append-only feedback file so
+    # a re-push of an already-ingested prediction can add tags after the fact.
+    resolution_tags_path: Path = Path("")  # empty = data_dir/resolution_tags.json
     # Settlement-pin ledger (retro#361 Phase 1): append-only JSONL of every
     # settlement pin's snapshot (what the pin said) alongside the eventual
     # resolved outcome, written on POST /leaderboard/ingest whenever the
@@ -1127,6 +1130,12 @@ class ApiSettings(BaseSettings):
         if self.resolution_author_leaderboard_path != Path(""):
             return self.resolution_author_leaderboard_path
         return self.data_dir / "resolution_author_leaderboard.json"
+
+    @property
+    def resolved_resolution_tags_path(self) -> Path:
+        if self.resolution_tags_path != Path(""):
+            return self.resolution_tags_path
+        return self.data_dir / "resolution_tags.json"
 
     @property
     def resolved_settlement_pin_ledger_path(self) -> Path:

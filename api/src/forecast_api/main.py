@@ -29,8 +29,8 @@ from .leaderboard import (
     refresh_cache,
     refresh_shadow_cache,
 )
-from .resolution_feedback import ingest_resolution
-from .resolution_scorer import load_shadow_leaderboard, rescore_authors_from_disk, rescore_from_disk
+from .resolution_feedback import ingest_resolution, record_tags
+from .resolution_scorer import load_shadow_leaderboard, load_tag_board, rescore_authors_from_disk, rescore_from_disk
 from .settings_deprecations import deprecated_env, unrecognized_env
 from .settlement_pin_ledger import load_ledger, record_settlement_pin
 from .stages import describe_stages
@@ -248,7 +248,10 @@ async def leaderboard_ingest(
     """
     result = await ingest_resolution(settings.resolved_resolution_feedback_path, body)
     await record_settlement_pin(settings.resolved_settlement_pin_ledger_path, body)
-    if not result.already_ingested:
+    tags_changed = await asyncio.to_thread(
+        record_tags, settings.resolved_resolution_tags_path, body.prediction_id, body.tags
+    )
+    if not result.already_ingested or tags_changed:
         await asyncio.to_thread(
             rescore_from_disk,
             settings.resolved_resolution_feedback_path,
@@ -258,6 +261,7 @@ async def leaderboard_ingest(
             rescore_authors_from_disk,
             settings.resolved_resolution_feedback_path,
             settings.resolved_resolution_author_leaderboard_path,
+            settings.resolved_resolution_tags_path,
         )
         # Pick the freshly-scored board up immediately rather than waiting out
         # the daily refresh timer — otherwise live weights would lag a new
@@ -284,15 +288,22 @@ async def leaderboard_resolution_shadow(_: ApiKeyClient = Depends(verify_api_key
 
 
 @app.get("/leaderboard/author-shadow", tags=["Meta"])
-async def leaderboard_author_shadow(_: ApiKeyClient = Depends(verify_api_key)):
+async def leaderboard_author_shadow(tag: str | None = None, _: ApiKeyClient = Depends(verify_api_key)):
     """
     Author-scoring lane shadow board (author-scoring redesign, Phase 1 step
     3): per-(byline author, outlet) resolution-time Brier + OpenSkill over
     the ingested author_signals, recomputed from scratch on every
     /leaderboard/ingest call. Shadow only — nothing reads this into
     /forecast weighting or get_credibility_weight().
+
+    ``?tag=<slug>`` (retro#973) returns the same board scored over only the
+    resolutions carrying that Daatan topic tag; an unknown tag yields an empty
+    board. No param = the overall board.
     """
-    data = await asyncio.to_thread(load_shadow_leaderboard, settings.resolved_resolution_author_leaderboard_path)
+    if tag:
+        data = await asyncio.to_thread(load_tag_board, settings.resolved_resolution_author_leaderboard_path, tag)
+    else:
+        data = await asyncio.to_thread(load_shadow_leaderboard, settings.resolved_resolution_author_leaderboard_path)
     return {"authors": data, "count": len(data)}
 
 

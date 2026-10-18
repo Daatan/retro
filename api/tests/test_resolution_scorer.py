@@ -12,8 +12,10 @@ import httpx
 import pytest
 
 from forecast_api import resolution_scorer
+from forecast_api.resolution_feedback import record_tags
 from forecast_api.resolution_scorer import (
     load_shadow_leaderboard,
+    load_tag_board,
     rescore_authors_from_disk,
     rescore_from_disk,
 )
@@ -219,6 +221,33 @@ class TestRescoreAuthorsFromDisk:
         assert summary["resolutions_total"] == 0
         assert summary["authors_scored"] == 0
         assert json.loads((tmp_path / "out.json").read_text()) == []
+
+    def test_tag_boards_score_only_that_topics_resolutions(self, tmp_path):
+        """retro#973: a per-topic board replays just the tagged resolutions, so an author
+        right on finance and wrong on elections ranks differently on each."""
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            _author_record("p1", True, [_signal("Ann", 0.9), _signal("Bob", -0.9, outlet="maariv")]),
+            _author_record("p2", True, [_signal("Ann", -0.9), _signal("Bob", 0.9, outlet="maariv")]),
+        ])
+        tags = tmp_path / "tags.json"
+        tags.write_text(json.dumps({"p1": ["economy"], "p2": ["elections"]}))
+        out = tmp_path / "out.json"
+        summary = rescore_authors_from_disk(ingest, out, tags)
+
+        assert summary["tags_scored"] == 2
+        assert len(load_shadow_leaderboard(out)) == 2  # overall board unchanged in shape
+        eco = load_tag_board(out, "economy")
+        assert [a["author"] for a in eco][0] == "Ann" and eco[0]["predictions"] == 1
+        assert [a["author"] for a in load_tag_board(out, "elections")][0] == "Bob"
+        assert load_tag_board(out, "unknown") == []
+
+    def test_record_tags_is_idempotent_and_reports_change(self, tmp_path):
+        path = tmp_path / "tags.json"
+        assert record_tags(path, "p1", ["economy", " economy ", ""]) is True
+        assert record_tags(path, "p1", ["economy"]) is False
+        assert record_tags(path, "p1", []) is False
+        assert json.loads(path.read_text()) == {"p1": ["economy"]}
 
     def test_correct_author_outranks_wrong_author(self, tmp_path):
         ingest = tmp_path / "in.jsonl"

@@ -57,7 +57,7 @@ The pipeline loop (`infra/ec2_run.sh`) runs continuously: it sleeps 300s between
 
 | Item | Status |
 |------|--------|
-| TM vs PM Brier comparison section | ✅ Live — 13 events scored, TM wins 8/13; aggregate Brier: TM ~0.123 vs PM ~0.377; Oracul n=1–20 per event (PRs #82/#84); [daatan.github.io/retro/duel.html](https://daatan.github.io/retro/duel.html) |
+| TM vs PM Brier comparison section | ⛔ Retired 2026-10-16 (retro#937/#951: `duel.html` and the Polymarket harvest removed, Polymarket ToU §4.2). Last result: 13 events scored, TM wins 8/13; aggregate Brier TM ~0.123 vs PM ~0.377 |
 
 ### Why is it sleeping?
 
@@ -202,7 +202,7 @@ ec2_run.sh (systemd loop)
    - `pipeline/src/tm/backtest.py` — not yet run on EC2
    - Requires resolved events with known outcomes
 
-3. ~~**Wire TM into `duel.html`**~~ — ✅ Done (2026-05-06). PM price history harvested for 12 Atlas events; Oracul-driven TM probabilities computed; duel report live. TM wins 7/12. CLOB API ceiling reached at 12 events — pre-2023 markets (E01, E02, C01, C02, G01) not available in the CLOB system. Expanding beyond 12 requires newer events with sufficient PM CLOB history.
+3. ~~**Wire TM into `duel.html`**~~ — ✅ Done (2026-05-06). PM price history harvested for 12 Atlas events; Oracul-driven TM probabilities computed; duel report was live (retired 2026-10-16, retro#937). TM wins 7/12. CLOB API ceiling reached at 12 events — pre-2023 markets (E01, E02, C01, C02, G01) not available in the CLOB system. Expanding beyond 12 requires newer events with sufficient PM CLOB history.
 
 ---
 

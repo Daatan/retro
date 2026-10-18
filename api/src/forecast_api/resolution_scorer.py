@@ -282,28 +282,8 @@ def _load_identity_map() -> dict[str, str]:
         return {}
 
 
-def rescore_authors_from_disk(ingest_path: Path, output_path: Path) -> dict:
-    """
-    Author-scoring lane: replay every ingested resolution's author_signals
-    through a fresh PlackettLuce model and write per-(byline author, outlet)
-    shadow scores to output_path. Same replay-from-scratch pattern as
-    rescore_from_disk — which also means the byline-identity merge below
-    applies to all history on the next call, no re-ingest needed.
-
-    Byline identity: raw bylines are grouped through news-indexer's curated
-    Person/PersonAlias map (_load_identity_map()) before keying — the known
-    HE/EN duplicates and byline-parse artifacts collapse into one row when
-    curated there. An unmatched raw byline still keys on its own
-    whitespace-normalized string, same as before the map existed.
-
-    Two deliberate departures from the stance lane: opinion-class rows are
-    INCLUDED (author_lean is the author's own lean — opinion is the signal,
-    not noise), and within one resolution an author's rows are averaged first
-    so a prolific author is scored once per outcome, not once per article.
-    """
-    records = _load_records(ingest_path)
-    identity_map = _load_identity_map()
-
+def _score_author_board(records: list[dict], identity_map: dict) -> tuple[list[dict], int, int]:
+    """One from-scratch author replay over ``records`` → (board, scored, without_signals)."""
     skill_model = PlackettLuce()
     ratings: dict[tuple[str, str], object] = {}
     stats: dict[tuple[str, str], dict] = {}
@@ -364,17 +344,58 @@ def rescore_authors_from_disk(ingest_path: Path, output_path: Path) -> dict:
             "articles": s["articles"],
         })
     author_board.sort(key=lambda x: x["skill_conservative"], reverse=True)
+    return author_board, resolutions_scored, resolutions_without_signals
+
+
+
+def rescore_authors_from_disk(ingest_path: Path, output_path: Path, tags_path: Path | None = None) -> dict:
+    """
+    Author-scoring lane: replay every ingested resolution's author_signals
+    through a fresh PlackettLuce model and write per-(byline author, outlet)
+    shadow scores to output_path. Same replay-from-scratch pattern as
+    rescore_from_disk — which also means the byline-identity merge below
+    applies to all history on the next call, no re-ingest needed.
+
+    Byline identity: raw bylines are grouped through news-indexer's curated
+    Person/PersonAlias map (_load_identity_map()) before keying — the known
+    HE/EN duplicates and byline-parse artifacts collapse into one row when
+    curated there. An unmatched raw byline still keys on its own
+    whitespace-normalized string, same as before the map existed.
+
+    Two deliberate departures from the stance lane: opinion-class rows are
+    INCLUDED (author_lean is the author's own lean — opinion is the signal,
+    not noise), and within one resolution an author's rows are averaged first
+    so a prolific author is scored once per outcome, not once per article.
+    """
+    records = _load_records(ingest_path)
+    if tags_path is not None:
+        tag_map = load_tag_map(tags_path)
+        for r in records:
+            r["tags"] = tag_map.get(r.get("prediction_id"), [])
+    identity_map = _load_identity_map()
+
+    author_board, resolutions_scored, resolutions_without_signals = _score_author_board(records, identity_map)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     # ensure_ascii=False: byline keys are routinely Hebrew/Arabic — keep the
     # shadow file human-inspectable on the box.
     output_path.write_text(json.dumps(author_board, indent=2, ensure_ascii=False))
 
+    # retro#973: the same replay restricted to each topic's resolutions. A separate file so the
+    # overall board keeps its list shape for every existing reader.
+    by_tag: dict[str, list[dict]] = {}
+    for tag in sorted({t for r in records for t in r.get("tags") or []}):
+        tag_board, _, _ = _score_author_board([r for r in records if tag in (r.get("tags") or [])], identity_map)
+        if tag_board:
+            by_tag[tag] = tag_board
+    tag_output_path(output_path).write_text(json.dumps(by_tag, indent=2, ensure_ascii=False))
+
     summary = {
         "resolutions_total": len(records),
         "resolutions_scored": resolutions_scored,
         "resolutions_without_signals": resolutions_without_signals,
         "authors_scored": len(author_board),
+        "tags_scored": len(by_tag),
     }
     logger.info("event=author_shadow_scored %s", summary)
     return summary
@@ -384,3 +405,21 @@ def load_shadow_leaderboard(output_path: Path) -> list[dict]:
     if not output_path.exists():
         return []
     return json.loads(output_path.read_text())
+
+
+def tag_output_path(output_path: Path) -> Path:
+    return output_path.with_name(f"{output_path.stem}_by_tag.json")
+
+
+def load_tag_map(tags_path: Path) -> dict[str, list[str]]:
+    """prediction_id → topic slugs, the sidecar ``record_tags`` maintains."""
+    if not tags_path.exists():
+        return {}
+    return json.loads(tags_path.read_text())
+
+
+def load_tag_board(output_path: Path, tag: str) -> list[dict]:
+    path = tag_output_path(output_path)
+    if not path.exists():
+        return []
+    return json.loads(path.read_text()).get(tag, [])

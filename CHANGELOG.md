@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Changed
+- Docs: corrected the Jev drop-in statements (`jev-gate-enforce.conf` exists and sets `JEV_GATE_ENFORCE`; no `jev-gate-ab-enabled.conf`) and listed `extractor-shadow-haiku55.conf` in the deploy table (retro#979).
 - CI: blocking pyflakes lint gate (`ruff.toml`, `ruff-lint` job in `ci-gate`) and a guard test that the three `oracle_client.py` copies stay identical (retro#977); six unused-variable/duplicate-import findings removed, no behaviour change.
 
 ### Added

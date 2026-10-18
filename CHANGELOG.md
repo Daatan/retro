@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Added
+- Per-topic author/outlet boards (retro#973): `POST /leaderboard/ingest` accepts optional `tags` (Daatan topic slugs; re-sending an ingested `prediction_id` with tags records them and rescores — the backfill path), and `GET /leaderboard/author-shadow?tag=<slug>` serves the board scored over that topic's resolutions only. No param = the unchanged overall board. Shadow only.
 - Startup log notices for env vars `ApiSettings` silently ignores (retro#947, item 2): `event=unrecognized_env` for a variable with one of the service's own prefixes (`JEV_`, `SETTLEMENT_`, …) that matches no field — a typo or a flag removed without notice — and `event=deprecated_env` for entries in `DEPRECATED_ENV` (empty today). Report-only: no value changes, no exception can reach startup.
 
 ### Fixed

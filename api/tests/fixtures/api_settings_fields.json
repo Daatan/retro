@@ -105,6 +105,7 @@
 "resolution_shadow_min_global_predictions",
 "resolution_shadow_weight_max",
 "resolution_shadow_weight_min",
+"resolution_tags_path",
 "retry_relaxed_search_enabled",
 "retry_relaxed_search_enforce",
 "retry_relaxed_search_limit_multiplier",

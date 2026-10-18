@@ -1090,7 +1090,6 @@ class TestEventKeyDependenceCollapse:
 
     def test_three_way_echo_collapses_to_loudest_member(self):
         out = event_key_collapse_factors([0, 0, 0], [0.2, 0.5, 0.1], True)
-        total = sum(0.2 * out[0] + 0.5 * out[1] + 0.1 * out[2] for _ in [0])
         assert out[0] == out[1] == out[2] == pytest.approx(0.5 / 0.8)
         assert 0.2 * out[0] + 0.5 * out[1] + 0.1 * out[2] == pytest.approx(0.5)
 

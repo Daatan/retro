@@ -32,7 +32,6 @@ def audit(events_dir: Path) -> list[tuple[str, list[str], str]]:
         data = json.loads(path.read_text(encoding="utf-8"))
         eid = data.get("id", path.stem)
         criteria = (data.get("llm_referee_criteria") or "").strip()
-        name = data.get("name", "")
         issues: list[str] = []
         if not criteria:
             issues.append("empty_criteria")

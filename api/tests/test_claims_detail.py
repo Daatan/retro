@@ -29,8 +29,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from forecast_api.models import ClaimDetail
-
 from forecast_api import forecaster
 from forecast_api.aggregation import claim_weighted_stance, resolve_stance_certainty
 from forecast_api.models import (

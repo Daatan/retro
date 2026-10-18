@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Fixed
+- An atlas cell that ends `failed` now records why (retro#962): `run_event` keeps the first article error (runner error, 300 s timeout or exception) on the cell instead of overwriting it with `null`. The root cause of the 6 reuters/nyt failures is still open.
 - Batch loop no longer spins on permanently-failing cells (retro#959): a cell that ends `failed` 3 passes in a row (`MatrixCell.failed_attempts`, `MAX_FAILED_ATTEMPTS`) is parked and not counted as outstanding by `infra/ec2_run.sh`, and the loop skips the atlas/progress commit when only the `last_updated` / "Generated …" timestamps changed. Previously 6 reuters/nyt cells kept it in "retry immediately" mode — ~1,640 no-op commits and Pages deploys a day. `--force-reextract` still reprocesses parked cells.
 
 ### Added

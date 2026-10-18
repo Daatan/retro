@@ -167,6 +167,10 @@ class Orchestrator:
             # write and leaving the cell stuck at whatever in-progress state
             # runner.py last set.
             had_errors = False
+            # First error text per cell, so a `failed` cell records *why*
+            # (retro#962: the final update_cell below used to overwrite the
+            # runner's per-article error with None).
+            first_error: Optional[str] = None
             for raw_art in articles:
                 try:
                     result = await asyncio.wait_for(
@@ -175,14 +179,17 @@ class Orchestrator:
                     )
                     if result is not None and result.error:
                         had_errors = True
+                        first_error = first_error or result.error
                 except asyncio.TimeoutError:
                     console.print(f"    [bold red]Article timeout (300s), skipping[/bold red]")
                     had_errors = True
+                    first_error = first_error or "Article timeout (300s)"
                 except Exception as e:
                     console.print(
                         f"    [bold red]Article exception ({type(e).__name__}): {e}[/bold red]"
                     )
                     had_errors = True
+                    first_error = first_error or f"{type(e).__name__}: {e}"
                 await asyncio.sleep(3)
 
             self._write_cell_signal(event["id"], source["id"])
@@ -213,6 +220,7 @@ class Orchestrator:
                         event_id,
                         source["id"],
                         CellStatus.failed,
+                        error=(first_error or "unknown error (no message recorded)")[:500],
                         failed_attempts=cell.failed_attempts + 1,
                     )
                 else:

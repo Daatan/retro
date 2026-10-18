@@ -863,6 +863,7 @@ class TestRunEvent:
         state = load_state()
         cell = state.get("E1", "ynet")
         assert cell.status == CellStatus.failed
+        assert cell.error == "Article timeout (300s)"
 
     async def test_article_exception_marks_failed_when_no_predictions(self, tmp_path, monkeypatch):
         orch = _make_orch(tmp_path)
@@ -883,6 +884,37 @@ class TestRunEvent:
         state = load_state()
         cell = state.get("E1", "ynet")
         assert cell.status == CellStatus.failed
+        assert cell.error == "ValueError: boom"
+
+    async def test_runner_error_is_recorded_on_failed_cell(self, tmp_path, monkeypatch):
+        """retro#962: process_article() returns a PipelineResult with .error set
+        (runner.py swallowed the exception). The cell must keep that text instead
+        of ending `failed` with error=None."""
+        orch = _make_orch(tmp_path)
+        _make_event(tmp_path)
+        _make_source(tmp_path)
+
+        async def fake_search(*a, **kw):
+            return [
+                {"text": "x" * 600, "published_at": "2024-12-01", "url": "u1", "author": "a", "headline": "h1"},
+                {"text": "x" * 600, "published_at": "2024-12-01", "url": "u2", "author": "a", "headline": "h2"},
+            ]
+
+        async def fake_process(raw_art, event, source):
+            return PipelineResult(
+                article=None, is_prediction=False, gatekeeper_reason="",
+                error=f"bedrock throttled for {raw_art['url']}",
+            )
+
+        monkeypatch.setattr(orch, "search_articles", fake_search)
+        monkeypatch.setattr(orch, "process_article", fake_process)
+        monkeypatch.setattr(orch_mod.asyncio, "sleep", _instant_sleep)
+
+        await orch.run_event("E1")
+        cell = load_state().get("E1", "ynet")
+        assert cell.status == CellStatus.failed
+        assert cell.error == "bedrock throttled for u1"  # first error wins
+        assert cell.failed_attempts == 1
 
     async def test_partial_success_wins_over_had_errors(self, tmp_path, monkeypatch):
         """One article errors, another succeeds and writes a prediction —

@@ -2979,9 +2979,9 @@
     "A10:reuters": {
       "event_id": "A10",
       "source_id": "reuters",
-      "status": "failed",
+      "status": "no_predictions",
       "prediction_count": 0,
-      "error": null,
+      "error": "unprocessable article: <failed_attempts> <generation number=\"1\"> <exception> litellm.BadRequestError: BedrockException - {\"message\":\"The model returned the following errors: Input Tokens Exceeded: Number of input tokens exceeds maximum length. Please update the input to try again.\"} </exception> <completion> None </completion> </generation> </failed_attempts> <last_exception> litellm.BadRequestError: BedrockException - {\"message\":\"The model returned the following errors: Input Tokens Exceeded: N",
       "failed_attempts": 0
     },
     "A10:toi": {
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-10-18T16:13:46.245115"
+  "last_updated": "2026-10-18T16:15:46.499991"
 }

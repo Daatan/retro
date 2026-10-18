@@ -233,7 +233,7 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);font:12
     <div><h3>Search</h3><p>GDELT GKG via BigQuery over 122 domains: the sources news-indexer monitors, plus major world, Russian and Ukrainian outlets and think tanks. That gave 105,001 URLs. Gaps were filled from the Wayback archive, and key sceptics were found by hand.</p></div>
     <div><h3>Filter</h3><p>Title keywords kept 5,007 candidates, and Claude Haiku kept 2,432 of those on title alone. Full texts then dropped irrelevant pieces, repeats of one speaker on one day, and anything edited after 24 February. Dates were checked against the page itself.</p></div>
     <div><h3>Rating</h3><p>The model reads the text as of its publication date and returns the main voice's stance from −1 to +1, confidence, expected scope and a verbatim quote. Expecting a Donbas-only operation caps P at 0.35, and limited strikes cap it at 0.45.</p><div class="formula">P = 0.5 + 0.5 × stance</div></div>
-    <div><h3>Whose voice it is</h3><p>P belongs to the article's main voice, not the outlet: a Reuters piece relaying Biden gets Biden's P. P ≥ 0.6 counts as “expects invasion”, P ≤ 0.4 as “does not”, and everything in between as “unsure”.</p></div>
+    <div><h3>Whose voice it is</h3><p>P belongs to the article's main voice, not the outlet: a Reuters piece relaying Biden gets Biden's P. P ≥ 0.6 counts as “expects invasion”, P ≤ 0.4 as “does not”, and everything in between as “unsure”. The aggregates on this page use the full pool of 910 rated rows, published as <a href="pool.csv">pool.csv</a> (date, group, region, P, side).</p></div>
   </div>
   <div class="col" style="margin-top:36px"><h2 style="font-size:22px">What is missing</h2></div>
   <ul class="gaps">
@@ -244,7 +244,7 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);font:12
     <li>Telegram, social media and broadcasts are not covered. Ratings are by the model, with about 60 rows checked by hand.</li>
   </ul>
 </section>
-<footer><span>Daatan retro · E01</span><a href="articles.csv">CSV: 200 articles</a><span>built 23 Sep 2026</span><span>GDELT · Wayback · Claude Haiku 4.5</span></footer>
+<footer><span>Daatan retro · E01</span><a href="articles.csv">CSV: 200 articles</a><a href="pool.csv">CSV: 910 pool rows</a><span>built 23 Sep 2026</span><span>GDELT · Wayback · Claude Haiku 4.5</span></footer>
 </div>
 <div id="tip" hidden></div>
 

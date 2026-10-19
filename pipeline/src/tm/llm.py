@@ -241,6 +241,7 @@ async def complete_structured(
     timeout: int,
     cached_prefix: str | None = None,
     temperature: float | None = 0,
+    thinking: bool = False,
 ):
     """Make one structured-output LLM call and return ``(output, usage)``.
 
@@ -267,6 +268,12 @@ async def complete_structured(
     support Bedrock prompt caching (retro#650 — sending the cache block to one that
     doesn't hard-fails the whole call), ``content`` is the same flat string as
     before caching existed — behaviour is unchanged.
+
+    ``thinking`` (Haiku 5.x only; ignored for other models) lets the model reason before it
+    answers. Off by default because adaptive thinking spends ``max_tokens`` and a small cap
+    returns an empty body, so only a caller that also raises its cap opts in. The extractor
+    does (retro#921): without reasoning, 5.5 scores a negated question ("X will NOT happen")
+    as if it were the inner event.
     """
     if cached_prefix and settings.enable_prompt_cache and _model_supports_prompt_cache(model):
         cache_control = {"type": "ephemeral"}
@@ -294,9 +301,10 @@ async def complete_structured(
         max_retries=1,
     )
     _set_temperature(call_kwargs, model, temperature)
-    if "claude-haiku-5" in model:
+    if "claude-haiku-5" in model and not thinking:
         # Haiku 5.5 thinks adaptively by default; on a long structured prompt the
-        # thinking block ate max_tokens and returned an empty body (retro#921).
+        # thinking block ate max_tokens and returned an empty body (retro#921). A caller
+        # with a cap sized for it passes thinking=True and the key is simply omitted.
         call_kwargs["thinking"] = {"type": "disabled"}
         # litellm validates `thinking` against its model cost map; when the remote map
         # can't be fetched it falls back to a bundled copy that predates Haiku 5.5 and

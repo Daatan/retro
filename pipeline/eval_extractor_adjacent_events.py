@@ -182,7 +182,7 @@ async def _run_case(model: str, case: tuple) -> list[bool]:
         try:
             out, _ = await llm.complete_structured(
                 model, ExtractionOutput, prompt, max_tokens=settings.extractor_max_tokens, timeout=180,
-                cached_prefix=PROMPT_PREFIX,
+                cached_prefix=PROMPT_PREFIX, thinking=settings.extractor_thinking,
             )
         except Exception as exc:  # noqa: BLE001 — report, keep going
             print(f"    EXCEPTION: {type(exc).__name__}: {exc}")

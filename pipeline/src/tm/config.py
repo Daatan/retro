@@ -27,11 +27,20 @@ class Settings(BaseSettings):
     # config change. Accepted cost: batch stops producing Nova Lite rows, so the
     # Nova-vs-Haiku rater-disagreement signal (`confusion_flags.py`) disappears from
     # prod — a real trade Mark chose to make, not an oversight.
-    extractor_model: str = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
-    # Output cap for one extractor call (retro#911). 2200 fits Haiku; a thinking model
-    # spends part of it on reasoning (Gemini 3.8 Flash hit finish_reason=length at 2200 in
-    # the retro#909 re-test), so raise it together with EXTRACTOR_MODEL when switching.
-    extractor_max_tokens: int = 2200
+    #
+    # retro#921: Claude Haiku 5.5 (was Haiku 4.5), with adaptive thinking ON. Without it 5.5
+    # inverted the sign on negated questions ("X will NOT happen"): 31% correct on the
+    # twin-consistency check vs 100% with thinking (4.5: 76%); thinking costs ~2x completion
+    # tokens and ~+5 s per call, against ~9x lower list price.
+    extractor_model: str = "bedrock/us.anthropic.claude-haiku-5-5"
+    # Output cap for one extractor call (retro#911). A thinking model spends part of it on
+    # reasoning (Gemini 3.8 Flash hit finish_reason=length at 2200 in the retro#909 re-test;
+    # Haiku 5.5 thinking uses ~2.7k completion tokens per article), so it was raised together
+    # with EXTRACTOR_MODEL (retro#921). A cap is a ceiling, not a cost.
+    extractor_max_tokens: int = 8000
+    # Let Haiku 5.x reason before answering (llm.complete_structured ``thinking``). No effect on
+    # other models. Turning it off needs extractor_max_tokens back near 2200 only for speed.
+    extractor_thinking: bool = True
     # Batch aggregator (aggregator.py). Followed extractor_model until retro#911; pinned to
     # the same Haiku ID so the split changes nothing, and the extractor can now move alone.
     aggregator_model: str = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"

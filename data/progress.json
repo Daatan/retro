@@ -14739,8 +14739,8 @@
     "B14:calcalist": {
       "event_id": "B14",
       "source_id": "calcalist",
-      "status": "no_predictions",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 1,
       "error": null,
       "failed_attempts": 0
     },
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-10-18T21:03:12.538040"
+  "last_updated": "2026-10-19T08:07:00.137409"
 }

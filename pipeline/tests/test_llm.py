@@ -556,9 +556,9 @@ class TestCompleteStructuredPromptCaching:
         from litellm.llms.bedrock.chat.converse_transformation import AmazonConverseConfig
         block = {"type": "text", "text": "P", "cache_control": {"type": "ephemeral", "ttl": "1h"}}
         cfg = AmazonConverseConfig()
-        haiku = cfg._get_cache_point_block(block, "content_block",
-                                           model="us.anthropic.claude-haiku-4-5-20251001-v1:0")
-        nova = cfg._get_cache_point_block(block, "content_block", model="us.amazon.nova-micro-v1:0")
+        haiku = cfg.get_cache_point_block(block, "content_block",
+                                          model="us.anthropic.claude-haiku-4-5-20251001-v1:0")
+        nova = cfg.get_cache_point_block(block, "content_block", model="us.amazon.nova-micro-v1:0")
         assert haiku["cachePoint"] == {"type": "default", "ttl": "1h"}
         assert nova["cachePoint"] == {"type": "default"}
 

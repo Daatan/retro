@@ -13267,7 +13267,7 @@
     "H04:israel_hayom": {
       "event_id": "H04",
       "source_id": "israel_hayom",
-      "status": "no_predictions",
+      "status": "pending",
       "prediction_count": 0,
       "error": null,
       "failed_attempts": 0
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-10-19T08:07:00.137409"
+  "last_updated": "2026-10-19T22:08:04.102180"
 }

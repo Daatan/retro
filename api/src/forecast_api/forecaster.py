@@ -184,7 +184,6 @@ from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight
 from .models import (
     ArticleDebug,
-    ArticleInput,
     ClaimDetail,
     DebugInfo,
     ForecastRequest,

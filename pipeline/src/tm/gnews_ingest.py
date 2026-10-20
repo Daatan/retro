@@ -340,7 +340,7 @@ def _search_serperdev(query: str, domain: str, expected_date: Optional[datetime]
     )
     if r.status_code == 400:
         _SERPER_QUOTA_EXHAUSTED = True
-        raise RuntimeError(f"Serper quota/key error (400) — disabling for session")
+        raise RuntimeError("Serper quota/key error (400) — disabling for session")
     r.raise_for_status()
     for res in r.json().get("organic", []):
         if _filter_url(res.get("link", ""), domain, expected_date):
@@ -389,7 +389,7 @@ def resolve_url(
         try:
             r = safe_get(direct, headers=HEADERS, timeout=10)
             if r.status_code == 200 and len(r.text) > 500:
-                console.print(f"    [dim green]URL via slug[/dim green]")
+                console.print("    [dim green]URL via slug[/dim green]")
                 return str(r.url)
             elif r.status_code in (401, 403, 429):
                 # Paywalled/blocked — return URL so fetch_article_text can try Wayback.
@@ -495,7 +495,7 @@ async def search_newsdata(
             r = await client.get(NEWSDATA_ARCHIVE_API, params=params)
         if r.status_code == 429:
             _NEWSDATA_QUOTA_EXHAUSTED = True
-            console.print(f"    [yellow]Newsdata.io: quota exhausted[/yellow]")
+            console.print("    [yellow]Newsdata.io: quota exhausted[/yellow]")
             return []
         if r.status_code != 200:
             console.print(f"    [dim red]Newsdata.io: HTTP {r.status_code}[/dim red]")
@@ -770,7 +770,7 @@ async def fetch_article_text(url: str) -> str:
                 console.print(f"    [dim]HTTP {r.status_code}, trying Wayback...[/dim]")
                 wb_text = await _fetch_wayback(url, client)
                 if _is_stub_page(wb_text):
-                    console.print(f"    [dim]Wayback returned known stub page, skipping[/dim]")
+                    console.print("    [dim]Wayback returned known stub page, skipping[/dim]")
                     return ""
                 if len(wb_text) >= PAYWALL_THRESHOLD:
                     console.print(f"    [dim green]Wayback: {len(wb_text)} chars[/dim green]")

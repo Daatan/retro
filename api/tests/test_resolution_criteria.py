@@ -6,7 +6,6 @@ behavior (event_description=question) byte-for-byte unchanged.
 """
 from __future__ import annotations
 
-import pytest
 
 from forecast_api import forecaster
 from forecast_api.models import ArticleInput, ForecastRequest

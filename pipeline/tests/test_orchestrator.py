@@ -19,7 +19,6 @@ or LLM services.
 
 import json
 from datetime import datetime
-from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -29,7 +28,7 @@ from tm.config import settings as tm_settings
 from tm.models import CellStatus, ExtractionOutput, PredictionExtraction
 from tm.orchestrator import EXTRACTION_PROMPT_VERSION, Orchestrator, SearchMode
 from tm.progress import load_state
-from tm.runner import ArticleInput, PipelineResult
+from tm.runner import PipelineResult
 
 
 @pytest.fixture(autouse=True)

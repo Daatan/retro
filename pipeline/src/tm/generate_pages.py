@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 def load_json(path: Path) -> Dict:
     with open(path, "r") as f:

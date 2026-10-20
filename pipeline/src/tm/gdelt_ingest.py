@@ -20,7 +20,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 import httpx
 from bs4 import BeautifulSoup
@@ -100,7 +100,7 @@ async def _gdelt_query(
                     data = r.json()
                 except Exception:
                     # GDELT sometimes returns 200 with empty/whitespace body under load
-                    console.print(f"    [dim yellow]GDELT 200 but empty body — treating as rate-limit[/dim yellow]")
+                    console.print("    [dim yellow]GDELT 200 but empty body — treating as rate-limit[/dim yellow]")
                     _last_call = time.time()
                     continue
                 articles = []

@@ -85,7 +85,6 @@ Return JSON: {{"search_keywords": ["kw1", "kw2", ...]}}"""
 
 
 async def main():
-    from sys import argv
     data_dir = Path(os.environ.get("DATA_DIR", "/app/data"))
     events_dir = data_dir / "events"
 

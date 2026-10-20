@@ -57,7 +57,7 @@ from .utils import KNOWN_SOURCE_IDS, existing_articles, save_article, predates_o
 from .article_text import BROWSER_HEADERS, extract_article_body
 from .net_guard import safe_get_async, UnsafeURLError
 # Reuse the date/evergreen helpers rather than re-implement them.
-from .web_search_ingest import _is_evergreen_domain, _date_from_url, _date_from_html
+from .web_search_ingest import _is_evergreen_domain, _date_from_url
 # Keep the ingest window identical to the window the backtest actually scores.
 from .backtest import MIN_DAYS_BEFORE_EVENT, MAX_DAYS_BEFORE_EVENT
 

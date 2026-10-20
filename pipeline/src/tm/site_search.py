@@ -20,11 +20,10 @@ import asyncio
 import json
 import os
 import re
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Optional
-from urllib.parse import urlencode, quote_plus
+from typing import List, Optional
+from urllib.parse import quote_plus
 
 import httpx
 from bs4 import BeautifulSoup

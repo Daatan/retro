@@ -8,7 +8,6 @@ so callers can tell "search returned junk" from "extractor is erroring" from
 
 import asyncio
 
-import pytest
 
 from tm import web_search
 

@@ -13,7 +13,6 @@ criteria checkable rather than merely plausible:
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
 
 from tm.models import ExtractionOutput, GatekeeperOutput
 from tm.orchestrator import EXTRACTION_PROMPT_VERSION, Orchestrator

@@ -38,7 +38,7 @@ def test_render_matrix_escapes_event_name_and_polymarket_fields():
         "name": PAYLOAD,
         "outcome": True,
         "outcome_date": "2024-06-10",
-        "polymarket": {"url": f'"><script>x</script>', "question": PAYLOAD, "match_quality": "exact"},
+        "polymarket": {"url": '"><script>x</script>', "question": PAYLOAD, "match_quality": "exact"},
         "cells": [],
     }]
     out = _render_matrix(matrix_rows, search_status={}, competitive_scores={}, cell_articles={})

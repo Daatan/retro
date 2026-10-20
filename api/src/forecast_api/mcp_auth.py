@@ -21,7 +21,6 @@ import jwt
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 
-from .config import settings
 
 logger = logging.getLogger(__name__)
 

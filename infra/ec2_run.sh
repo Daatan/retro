@@ -222,6 +222,55 @@ reexec_if_self_changed() {
   return 0
 }
 
+# Liveness for daatan's evidence-health cron, served on Oracul /health as `batch_loop`
+# (retro#996). Atlas commits used to be that signal, but since retro#959 an idle loop
+# with a drained queue commits nothing, so "no commit for 12h" no longer meant "dead".
+#   last_cycle_ok_at   — advances only on a cycle that did not fail; a loop that keeps
+#                        cycling but refuses to sync (the index.lock class) goes stale here.
+#   oldest_unpushed_at — oldest local commit not on origin/main. A failing push is logged
+#                        but the cycle still counts as OK (sync_to_main, ahead-only), so
+#                        "runs but never publishes" (retro#838) is only visible here.
+# Untracked (.gitignore) — committing it would bring back retro#959's no-op commits.
+write_heartbeat() {
+  local ok="$1" head oldest
+  head="$(git -C "$WORKDIR" rev-parse HEAD 2>/dev/null || true)"
+  oldest="$(git -C "$WORKDIR" log --reverse --format=%cI origin/main..HEAD 2>/dev/null | head -n1 || true)"
+  HB_OK="$ok" HB_HEAD="$head" HB_OLDEST="$oldest" python3 - <<'PY'
+import json, os, tempfile
+from datetime import datetime, timezone
+d = os.environ["DATA_DIR"]
+path = os.path.join(d, "heartbeat.json")
+now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+try:
+    prev = json.load(open(path))
+except Exception:
+    prev = {}
+try:
+    cells = json.load(open(os.path.join(d, "progress.json"))).get("cells", {})
+    counts = {k: sum(1 for v in cells.values() if v.get("status") == k)
+              for k in ("done", "no_predictions", "failed", "pending")}
+except Exception:
+    counts = None
+ok = os.environ["HB_OK"] == "1"
+# dict(...) rather than a {...} literal: a lone `}` line would end this function for
+# infra/tests/test_ec2_run_guards.sh's extractor.
+hb = dict(
+    last_cycle_at=now,
+    last_cycle_ok=ok,
+    last_cycle_ok_at=now if ok else prev.get("last_cycle_ok_at"),
+    head=os.environ["HB_HEAD"] or None,
+    oldest_unpushed_at=os.environ["HB_OLDEST"] or None,
+    cells=counts,
+)
+# tmp + rename so /health never reads a half-written file
+fd, tmp = tempfile.mkstemp(dir=d, prefix=".heartbeat.", suffix=".tmp")
+with os.fdopen(fd, "w") as f:
+    json.dump(hb, f)
+os.chmod(tmp, 0o644)
+os.replace(tmp, path)
+PY
+}
+
 run_pipeline() {
   cd "$WORKDIR"
 
@@ -371,6 +420,8 @@ while true; do
 
   CYCLE_FAILED=0
   run_pipeline || { CYCLE_FAILED=1; log "ERROR: cycle failed, will retry next interval"; }
+  # `||` matters: errexit is live here, and a failed heartbeat write must not kill the loop.
+  write_heartbeat "$((1 - CYCLE_FAILED))" || log "WARNING: heartbeat write failed"
 
   # Skip sleep if there are still failed or pending cells
   OUTSTANDING=$(python3 - <<'PY'

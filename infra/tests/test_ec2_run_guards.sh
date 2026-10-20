@@ -42,7 +42,7 @@ LOG_LINE="$(grep -m1 '^log() {' "$EC2_RUN")"
 [[ -n "$LOG_LINE" ]] || { echo "FAIL: could not find log() in $EC2_RUN"; exit 1; }
 eval "$LOG_LINE"
 
-for fn in reap_stale_git_lock reap_stale_rebase_state sync_to_main reexec_if_self_changed; do
+for fn in reap_stale_git_lock reap_stale_rebase_state sync_to_main reexec_if_self_changed write_heartbeat; do
   body="$(extract_function "$fn")"
   [[ -n "$body" ]] || { echo "FAIL: could not extract ${fn}() from $EC2_RUN"; exit 1; }
   eval "$body"
@@ -320,6 +320,8 @@ EOF
     mkdir -p "$LOOP_DATA"
     echo '{"cells": {"A01|x": {"status": "failed"}}}' > "$LOOP_DATA/progress.json"
 
+    WORKDIR="$TMPROOT/wd-loop"
+    setup_clone "$WORKDIR"
     OUT="$( (
       export DATA_DIR="$LOOP_DATA"
       # Bounded: on a regression the loop never sleeps, and an unbounded stub
@@ -336,7 +338,68 @@ EOF
     else
       fail "failed-cycle-sleeps: starts=$starts — $OUT"
     fi
+    # retro#996: the loop itself writes the heartbeat, and a failed cycle says so.
+    hb_ok="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["last_cycle_ok"])' "$LOOP_DATA/heartbeat.json" 2>&1 || true)"
+    if [[ "$hb_ok" == "False" ]]; then
+      pass "failed-cycle-heartbeat: main loop wrote heartbeat with last_cycle_ok=false"
+    else
+      fail "failed-cycle-heartbeat: expected last_cycle_ok False, got: $hb_ok"
+    fi
   fi
+}
+
+# ── retro#996: heartbeat — liveness that does not depend on atlas commits ──
+# hb_field <file> <key> — prints the JSON value (Python repr; None for null).
+hb_field() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2]))' "$1" "$2"; }
+
+{
+  WORKDIR="$TMPROOT/wd-hb"
+  setup_clone "$WORKDIR"
+  HB_DATA="$TMPROOT/hb-data"
+  mkdir -p "$HB_DATA"
+  echo '{"cells": {"A01|x": {"status": "done"}, "A02|x": {"status": "pending"}}}' > "$HB_DATA/progress.json"
+  HB="$HB_DATA/heartbeat.json"
+
+  # OK cycle: both timestamps advance, head recorded, nothing unpushed.
+  rc=0
+  ( export DATA_DIR="$HB_DATA"; set -euo pipefail; write_heartbeat 1 ) || rc=$?
+  head="$(git -C "$WORKDIR" rev-parse HEAD)"
+  if [[ $rc -eq 0 && "$(hb_field "$HB" last_cycle_ok)" == "True" \
+        && "$(hb_field "$HB" last_cycle_ok_at)" == "$(hb_field "$HB" last_cycle_at)" \
+        && "$(hb_field "$HB" head)" == "$head" && "$(hb_field "$HB" oldest_unpushed_at)" == "None" \
+        && "$(hb_field "$HB" cells)" == "{'done': 1, 'no_predictions': 0, 'failed': 0, 'pending': 1}" ]]; then
+    pass "heartbeat-ok-cycle: ok_at == cycle_at, head + cells recorded, nothing unpushed"
+  else
+    fail "heartbeat-ok-cycle: rc=$rc — $(cat "$HB" 2>&1)"
+  fi
+
+  # Failed cycle: last_cycle_at advances, last_cycle_ok_at is carried forward untouched.
+  python3 - "$HB" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p)); d["last_cycle_ok_at"] = "2026-01-01T00:00:00+00:00"; json.dump(d, open(p, "w"))
+PY
+  rc=0
+  ( export DATA_DIR="$HB_DATA"; set -euo pipefail; write_heartbeat 0 ) || rc=$?
+  if [[ $rc -eq 0 && "$(hb_field "$HB" last_cycle_ok)" == "False" \
+        && "$(hb_field "$HB" last_cycle_ok_at)" == "2026-01-01T00:00:00+00:00" \
+        && "$(hb_field "$HB" last_cycle_at)" != "2026-01-01T00:00:00+00:00" ]]; then
+    pass "heartbeat-failed-cycle: cycle_at advances, ok_at carried forward"
+  else
+    fail "heartbeat-failed-cycle: rc=$rc — $(cat "$HB" 2>&1)"
+  fi
+
+  # Unpushed local commit (the retro#838 "runs but never publishes" shape) is reported.
+  echo "atlas" > "$WORKDIR/atlas-hb.html"
+  git -C "$WORKDIR" add atlas-hb.html
+  git -C "$WORKDIR" commit -q -m "atlas: local, unpushed"
+  ( export DATA_DIR="$HB_DATA"; set -euo pipefail; write_heartbeat 1 ) || true
+  oldest="$(hb_field "$HB" oldest_unpushed_at)"
+  if [[ "$oldest" == "$(git -C "$WORKDIR" log -1 --format=%cI)" ]]; then
+    pass "heartbeat-unpushed: oldest_unpushed_at = committer date of the local commit"
+  else
+    fail "heartbeat-unpushed: got '$oldest'"
+  fi
+  ls "$HB_DATA"/.heartbeat.*.tmp >/dev/null 2>&1 && fail "heartbeat: temp file left behind" || pass "heartbeat: no temp file left behind"
 }
 
 # ── propagation: a refusing sync aborts the cycle, not just logs ──────────

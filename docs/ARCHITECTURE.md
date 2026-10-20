@@ -489,6 +489,16 @@ Both checkouts read the same `data/` directory — the API's `.env` sets
 keeps API deploys trivial: they never have to reason about the pipeline's
 unpushed atlas commits. See [`docs/ORACLE_DEPLOY.md`](ORACLE_DEPLOY.md).
 
+**Batch-loop liveness (retro#996).** Atlas commits are not a liveness signal: since
+retro#959 an idle loop with a drained queue commits nothing for hours. Instead every
+cycle rewrites the untracked `data/heartbeat.json` (`last_cycle_at`,
+`last_cycle_ok_at` — advances only on a cycle that did not fail, `head`,
+`oldest_unpushed_at` — oldest local commit not on `origin/main`, cell counts), and
+the API serves it as `batch_loop` on the unauthenticated `/health` (`null` when the
+file is missing or unreadable). daatan's evidence-health cron reads it from there:
+a stale `last_cycle_ok_at` means dead or refusing to sync; a stale
+`oldest_unpushed_at` means running but not publishing (the retro#838 shape).
+
 ### Atlas durability (S3 snapshots)
 
 `data/atlas/` and `data/vault2/` (~14 MB of expensive-to-regenerate LLM output)

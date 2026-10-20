@@ -5,6 +5,9 @@ data/vault2/
 data/raw_ingest/
 data/pages/
 data/pm_harvest/
+# batch-loop liveness, rewritten every cycle (retro#996) — never commit, see retro#959
+data/heartbeat.json
+data/.heartbeat.*.tmp
 *.db
 
 # Infrastructure provisioning (Terraform state, secrets)

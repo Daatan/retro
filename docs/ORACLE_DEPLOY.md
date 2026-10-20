@@ -58,7 +58,6 @@ Rollback: delete the file on the host, daemon-reload, restart. What is actually 
 | `jev-openrouter.conf` | Jev URL/key/model = OpenRouter — fallback only; SSM `JEV_PROVIDER` decides (below) | retro#901 |
 | `jev-class-enabled.conf` | `JEV_CLASS_ENABLED=true`, `JEV_CLASS_ENFORCE=true` | retro#851 |
 | `jev-segment-v2.conf` | `JEV_SEGMENT_V2=true` | retro#943 |
-| `extractor-shadow-haiku55.conf` | `EXTRACTOR_SHADOW_MODEL` = Claude Haiku 5.5 (log-only shadow beside the live extractor) | retro#921 |
 
 ## Switching the Jev provider (retro#901)
 

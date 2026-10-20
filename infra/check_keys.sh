@@ -6,11 +6,6 @@
 INSTANCE="i-00ac444b94c5ff9b2"
 REGION="eu-central-1"
 
-SERPERDEV_KEY=$(aws ssm get-parameter \
-  --name /retro/prod/secrets/SERPER_API_KEY \
-  --with-decryption --region "$REGION" \
-  --query Parameter.Value --output text 2>/dev/null)
-
 ok()   { echo "  ✓  $1"; }
 fail() { echo "  ✗  $1"; }
 warn() { echo "  ⚠  $1"; }
@@ -42,17 +37,14 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # doesn't raise — the provider is just silently skipped, and the search chain
 # quietly degrades instead of failing. Assert existence explicitly.
 #
-# NEWSDATA_API_KEY, GOOGLE_CSE_API_KEY and GOOGLE_CSE_CX are included here for the
-# first time (docs#122) — they were previously excluded from this check even though
-# web_search.py reads them, so a missing/dead value for any of the three was
-# invisible until something noticed the provider going quiet.
+# Keep this list equal to the _secret() names in web_search.py — a name read there
+# but missing here is a provider whose disappearance nothing reports (docs#122).
 echo ""
 echo "  SECRET EXISTENCE (names read by pipeline/src/tm/web_search.py, in SSM)"
 MISSING=0
-for S in DATAFORSEO_API_KEY SERPAPI_API_KEY SERPER_API_KEY BRAVE_API_KEY BRIGHTDATA_API_KEY \
+for S in SERPAPI_API_KEY BRAVE_API_KEY BRIGHTDATA_API_KEY \
          NIMBLEWAY_API_KEY NEWSDATA_API_KEY TAVILY_API_KEY EXA_API_KEY \
-         GOOGLE_CSE_API_KEY GOOGLE_CSE_CX NEWS_INDEXER_URL NEWS_INDEXER_API_KEY \
-         GCP_SA_KEY_JSON; do
+         NEWS_INDEXER_URL NEWS_INDEXER_API_KEY GCP_SA_KEY_JSON; do
   if aws ssm get-parameter --name "/retro/prod/secrets/$S" --with-decryption --region "$REGION" \
        --query Parameter.Value --output text >/dev/null 2>&1; then
     ok "/retro/prod/secrets/$S"
@@ -63,22 +55,8 @@ for S in DATAFORSEO_API_KEY SERPAPI_API_KEY SERPER_API_KEY BRAVE_API_KEY BRIGHTD
 done
 [[ "$MISSING" -gt 0 ]] && warn "$MISSING secret(s) missing — the search chain is degraded, not broken, so nothing will alarm"
 
-# ── Serper.dev ──────────────────────────────────────────
 echo ""
 echo "  SEARCH KEYS"
-if [[ -n "$SERPERDEV_KEY" ]]; then
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://google.serper.dev/search" \
-    -H "X-API-KEY: $SERPERDEV_KEY" \
-    -H "Content-Type: application/json" \
-    -d '{"q":"test","num":1}' 2>/dev/null)
-  if [[ "$STATUS" == "200" ]]; then
-    ok "Serper.dev (HTTP $STATUS)"
-  else
-    fail "Serper.dev (HTTP $STATUS)"
-  fi
-else
-  warn "Serper.dev — key not found in SSM (/retro/prod/secrets/SERPER_API_KEY)"
-fi
 
 # ── Brave ───────────────────────────────────────────────
 BRAVE_KEY=$(aws ssm get-parameter \

@@ -15,7 +15,7 @@ pipeline/
     gnews_ingest.py        # GNews RSS → URL resolution → trafilatura + Wayback fallback
     gdelt_ingest.py        # GDELT Doc 2.0 API batch ingestor (sequential, rate-limited)
     site_search.py         # Direct site-search scraper (no API key, high reliability)
-    web_search.py          # Multi-provider search: news-indexer → GDELT → GDELT BQ → Google CSE → SerpAPI → Serper → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG → trusted-sites
+    web_search.py          # Multi-provider search: news-indexer → GDELT → GDELT BQ → SerpAPI → Brave → Exa → Tavily → Newsdata.io → BrightData → Nimbleway → DDG → trusted-sites
     polymarket.py          # Polymarket Gamma API: fetch market history per event
 
     # Elicitation
@@ -79,14 +79,12 @@ uv sync
 | `AWS_REGION` | No | AWS region for Bedrock (default: `us-east-1`) |
 | `OPENROUTER_API_KEY` | No | OpenRouter key — alternative LLM provider |
 | `SERPAPI_API_KEY` | No | SerpAPI — news search |
-| `SERPER_API_KEY` | No | Serper.dev — news search |
+| `EXA_API_KEY` | No | Exa — news search with published dates; free $10/month tier |
 | `TAVILY_API_KEY` | No | Tavily — news search with date windowing; 1 credit/call |
 | `BRAVE_API_KEY` | No | Brave News Search; also URL resolution fallback in gnews_ingest |
 | `BRIGHTDATA_API_KEY` | No | BrightData SERP API |
 | `NIMBLEWAY_API_KEY` | No | Nimbleway SERP API |
 | `NEWSDATA_API_KEY` | No | Newsdata.io archive search |
-| `DATAFORSEO_API_KEY` | No | DataForSEO — last-resort paid fallback |
-| `GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_CX` | No | Google Custom Search |
 | `NEWS_INDEXER_URL` / `NEWS_INDEXER_API_KEY` | No | news-indexer (first in the chain) |
 | `GCP_SA_KEY_JSON` | No | GCP service account JSON — enables GDELT BigQuery for historical queries (>90 days) |
 | `ORACLE_URL` / `ORACLE_API_KEY` | For `api` mode | Oracul `/search` endpoint (default `https://oracle.daatan.com`) and its key |

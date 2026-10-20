@@ -500,7 +500,7 @@ class ArticleDebug(BaseModel):
 
 class DebugInfo(BaseModel):
     search_query: str
-    search_provider: str = Field(description="Provider that returned results: serper | serpapi | brightdata | ddg | search_cache | caller | none")
+    search_provider: str = Field(description="Provider that returned results: news_indexer | serpapi | brave | exa | tavily | ddg | search_cache | caller | none")
     search_provider_chain: list[str] = Field(description="Full fallback chain attempted before a result was returned")
     gatekeeper_model: str
     extractor_model: str

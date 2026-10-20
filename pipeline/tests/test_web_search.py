@@ -255,12 +255,10 @@ class TestTavily432:
             _search_gdelt=MagicMock(side_effect=skip),
             _search_gdelt_bq=MagicMock(side_effect=skip),
             _search_serpapi_news=MagicMock(side_effect=skip),
-            _search_serper_news=MagicMock(side_effect=skip),
             _search_brave_news=MagicMock(side_effect=skip),
             _search_brightdata=MagicMock(side_effect=skip),
             _search_nimbleway=MagicMock(side_effect=skip),
             _search_newsdata_io=MagicMock(side_effect=skip),
-            _search_dataforseo=MagicMock(side_effect=skip),
             _search_ddg_news=MagicMock(return_value=[]),
         ):
             ws.search_articles("test")
@@ -437,15 +435,12 @@ class TestTrustedSitesFallback:
         # so an unpatched provider could actually serve and pre-empt the fallback).
         with patch.multiple(ws,
             _search_gdelt=MagicMock(return_value=[]),
-            _search_google_cse=MagicMock(return_value=[]),
             _search_serpapi_news=MagicMock(return_value=[]),
-            _search_serper_news=MagicMock(return_value=[]),
             _search_brave_news=MagicMock(return_value=[]),
             _search_tavily=MagicMock(return_value=[]),
             _search_brightdata=MagicMock(return_value=[]),
             _search_nimbleway=MagicMock(return_value=[]),
             _search_newsdata_io=MagicMock(return_value=[]),
-            _search_dataforseo=MagicMock(return_value=[]),
             _search_ddg_news=MagicMock(return_value=[]),       # plain DDG empty
             _search_trusted_sites=MagicMock(return_value=hit),  # trusted serves
             _search_gdelt_bq=bq_spy,
@@ -485,86 +480,6 @@ class _FakeResp:
         return self._payload
 
 
-@needs_deps
-class TestGoogleCseProvider:
-    def test_inert_when_unconfigured(self):
-        """Keys absent → _search_google_cse is never called and not in the chain.
-        This is the load-bearing guarantee: shipping CSE changes nothing until the
-        Google credentials are configured."""
-        ws = _fresh_ws()
-        ws.GOOGLE_CSE_API_KEY = None
-        ws.GOOGLE_CSE_CX = None
-        cse = MagicMock(return_value=[])
-        skip = RuntimeError("skip")
-        with patch.multiple(ws,
-            _search_google_cse=cse,
-            _search_gdelt=MagicMock(side_effect=skip),
-            _search_gdelt_bq=MagicMock(side_effect=skip),
-            _search_serpapi_news=MagicMock(side_effect=skip),
-            _search_serper_news=MagicMock(side_effect=skip),
-            _search_brave_news=MagicMock(side_effect=skip),
-            _search_tavily=MagicMock(side_effect=skip),
-            _search_brightdata=MagicMock(side_effect=skip),
-            _search_nimbleway=MagicMock(side_effect=skip),
-            _search_newsdata_io=MagicMock(side_effect=skip),
-            _search_dataforseo=MagicMock(side_effect=skip),
-            _search_ddg_news=MagicMock(return_value=[]),
-        ):
-            ws.search_articles("test query")
-        assert not cse.called, "_search_google_cse must not run when unconfigured"
-        assert "google_cse" not in ws.get_last_search_provider_chain()
-
-    def test_runs_before_serpapi_when_configured(self):
-        ws = _fresh_ws()
-        ws.GOOGLE_CSE_API_KEY = "k"
-        ws.GOOGLE_CSE_CX = "cx"
-        ws._GOOGLE_CSE_QUOTA_EXHAUSTED = False
-        ws.SERPAPI_API_KEY = "s"
-        ws._SERPAPI_QUOTA_EXHAUSTED = False
-        from tm.web_search import SearchResult
-        hit = [SearchResult(title="t", url="http://x", snippet="s")]
-        serp_spy = MagicMock(return_value=hit)
-        with patch.multiple(ws,
-            _search_gdelt=MagicMock(return_value=[]),
-            _search_gdelt_bq=MagicMock(side_effect=RuntimeError("skip")),
-            _search_google_cse=MagicMock(return_value=hit),
-            _search_serpapi_news=serp_spy,
-            _search_ddg_news=MagicMock(return_value=[]),
-        ):
-            res = ws.search_articles("Some live query")
-        assert res
-        assert ws.get_last_search_provider() == "google_cse"
-        assert not serp_spy.called, "CSE must short-circuit before SerpAPI"
-        chain = ws.get_last_search_provider_chain()
-        assert chain.index("google_cse") < chain.index("serpapi") if "serpapi" in chain else True
-
-    def test_parses_response_defensively(self, monkeypatch):
-        ws = _fresh_ws()
-        ws.GOOGLE_CSE_API_KEY = "k"
-        ws.GOOGLE_CSE_CX = "cx"
-        payload = {"items": [
-            {"title": "T1", "link": "https://a.com/1", "snippet": "S1", "displayLink": "a.com",
-             "pagemap": {"metatags": [{"article:published_time": "2026-06-01T10:00:00Z"}]}},
-            {"title": "T2", "link": "https://b.com/2", "snippet": "S2"},  # no pagemap/displayLink
-            {"title": "no link — dropped"},
-        ]}
-        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(200, payload))
-        out = ws._search_google_cse("q", 5)
-        assert [r.url for r in out] == ["https://a.com/1", "https://b.com/2"]
-        assert out[0].published_date == "2026-06-01"
-        assert out[1].snippet == "S2"
-
-    def test_429_sets_quota_exhausted(self, monkeypatch):
-        ws = _fresh_ws()
-        ws.GOOGLE_CSE_API_KEY = "k"
-        ws.GOOGLE_CSE_CX = "cx"
-        monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(429))
-        monkeypatch.setattr(ws, "_persist_quota_state", lambda: None)
-        with pytest.raises(RuntimeError, match="quota"):
-            ws._search_google_cse("q", 5)
-        assert ws._GOOGLE_CSE_QUOTA_EXHAUSTED is True
-
-
 # ---------------------------------------------------------------------------
 # news-indexer provider (requires import)
 # ---------------------------------------------------------------------------
@@ -584,13 +499,11 @@ class TestNewsIndexerProvider:
             _search_gdelt=MagicMock(return_value=[]),
             _search_gdelt_bq=MagicMock(return_value=[]),
             _search_serpapi_news=MagicMock(return_value=[]),
-            _search_serper_news=MagicMock(return_value=[]),
             _search_brave_news=MagicMock(return_value=[]),
             _search_tavily=MagicMock(return_value=[]),
             _search_brightdata=MagicMock(return_value=[]),
             _search_nimbleway=MagicMock(return_value=[]),
             _search_newsdata_io=MagicMock(return_value=[]),
-            _search_dataforseo=MagicMock(return_value=[]),
             _search_ddg_news=MagicMock(return_value=[]),
         ):
             ws.search_articles("test query")
@@ -686,13 +599,11 @@ class TestNewsIndexerProvider:
             _search_gdelt=MagicMock(return_value=[]),
             _search_gdelt_bq=MagicMock(return_value=[]),
             _search_serpapi_news=MagicMock(return_value=[]),
-            _search_serper_news=MagicMock(return_value=[]),
             _search_brave_news=MagicMock(return_value=[]),
             _search_tavily=MagicMock(return_value=[]),
             _search_brightdata=MagicMock(return_value=[]),
             _search_nimbleway=MagicMock(return_value=[]),
             _search_newsdata_io=MagicMock(return_value=[]),
-            _search_dataforseo=MagicMock(return_value=[]),
             _search_ddg_news=MagicMock(return_value=[]),
         ):
             ws.search_articles("some query")
@@ -924,13 +835,11 @@ class TestGdeltBqFallbackOrder:
             _search_gdelt=mk("gdelt"),
             _search_gdelt_bq=mk("gdelt_bq"),
             _search_serpapi_news=mk("serpapi"),
-            _search_serper_news=mk("serper"),
             _search_tavily=mk("tavily"),
             _search_brave_news=mk("brave"),
             _search_brightdata=mk("brightdata"),
             _search_nimbleway=mk("nimbleway"),
             _search_newsdata_io=mk("newsdata"),
-            _search_dataforseo=mk("dataforseo"),
             _search_ddg_news=mk("ddg"),
         )
 
@@ -992,13 +901,11 @@ class TestGdeltDocCircuitBreaker:
             _search_gdelt=MagicMock(side_effect=gdelt_side_effect),
             _search_gdelt_bq=MagicMock(side_effect=skip),
             _search_serpapi_news=MagicMock(side_effect=skip),
-            _search_serper_news=MagicMock(side_effect=skip),
             _search_tavily=MagicMock(side_effect=skip),
             _search_brave_news=MagicMock(side_effect=skip),
             _search_brightdata=MagicMock(side_effect=skip),
             _search_nimbleway=MagicMock(side_effect=skip),
             _search_newsdata_io=MagicMock(side_effect=skip),
-            _search_dataforseo=MagicMock(side_effect=skip),
             _search_ddg_news=MagicMock(return_value=[]),
         )
 
@@ -1167,7 +1074,7 @@ class TestSecretLoadingLogsLoudly:
     def test_log_unresolved_secrets_reports_missing_keys(self, caplog):
         """_log_unresolved_secrets() must name every unresolved provider secret in one line."""
         ws = _fresh_ws()
-        ws.DATAFORSEO_API_KEY = None
+        ws.BRIGHTDATA_API_KEY = None
         ws.SERPAPI_API_KEY = "present"
 
         caplog.clear()  # _fresh_ws() import may itself have logged real unresolved-secret warnings
@@ -1175,7 +1082,7 @@ class TestSecretLoadingLogsLoudly:
             ws._log_unresolved_secrets()
 
         messages = [r.message for r in caplog.records if r.levelname == "WARNING"]
-        assert any("/retro/prod/secrets/DATAFORSEO_API_KEY" in m for m in messages)
+        assert any("/retro/prod/secrets/BRIGHTDATA_API_KEY" in m for m in messages)
         assert not any("/retro/prod/secrets/SERPAPI_API_KEY" in m for m in messages)
 
     @needs_deps
@@ -1184,7 +1091,7 @@ class TestSecretLoadingLogsLoudly:
         ws = _fresh_ws()
         for name in ws._SECRET_GLOBALS:
             setattr(ws, name, "present")
-        ws.DATAFORSEO_API_KEY = None
+        ws.BRIGHTDATA_API_KEY = None
         ws.TAVILY_API_KEY = None
 
         caplog.clear()
@@ -1194,8 +1101,8 @@ class TestSecretLoadingLogsLoudly:
         events = [r.getMessage() for r in caplog.records
                   if "event=search_secret_missing" in r.getMessage()]
         assert sorted(events) == [
-            "event=search_secret_missing secret=DATAFORSEO_API_KEY "
-            "ssm=/retro/prod/secrets/DATAFORSEO_API_KEY",
+            "event=search_secret_missing secret=BRIGHTDATA_API_KEY "
+            "ssm=/retro/prod/secrets/BRIGHTDATA_API_KEY",
             "event=search_secret_missing secret=TAVILY_API_KEY "
             "ssm=/retro/prod/secrets/TAVILY_API_KEY",
         ]
@@ -1251,7 +1158,7 @@ class TestGoogleTbs:
 
 
 class TestRelativeDates:
-    """SerpAPI/Serper return '1 day ago'-style dates; _filter_by_date's
+    """SerpAPI returns '1 day ago'-style dates; _filter_by_date's
     %Y-%m-%d parse treated them as unparseable (kept), making the post-filter
     inert on exactly the legs that needed it (retro#562). Fixtures use a
     frozen `now` so they don't decay."""

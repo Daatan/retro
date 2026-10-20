@@ -1,9 +1,9 @@
 """
 Web Search batch ingestor — uses the same search stack as daatan.
 
-Provider chain: DataForSEO → SerpAPI → Serper → Brave (first available).
-All providers support date-filtered historical queries via Google's CDR parameter,
-giving much better pre-event article coverage than GDELT's domain filter.
+Provider chain: the shared web_search.py chain (SerpAPI → Brave → Exa → … first non-empty wins).
+The date window is passed to every leg (and post-filtered), giving much better
+pre-event article coverage than GDELT's domain filter.
 
 Results land in data/raw_ingest/web_search/{event_id}/, same schema as
 gdelt_ingest.py and site_search.py, so the orchestrator picks them up unchanged.
@@ -442,9 +442,8 @@ async def run_batch(
     _ws._refresh_keys_if_stale()
     configured = [
         name for name, key in [
-            ("dataforseo", _ws.DATAFORSEO_API_KEY),
             ("serpapi",    _ws.SERPAPI_API_KEY),
-            ("serper",     _ws.SERPER_API_KEY),
+            ("exa",        _ws.EXA_API_KEY),
             ("brave",      _ws.BRAVE_API_KEY),
         ] if key
     ]

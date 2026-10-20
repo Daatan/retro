@@ -100,51 +100,6 @@ async def _check_simple(key: Optional[str], exhausted: bool) -> ProviderStatus:
     return ProviderStatus(configured=True, exhausted=False, status="ok")
 
 
-async def _check_dataforseo() -> ProviderStatus:
-    if not _ws.DATAFORSEO_API_KEY:
-        return ProviderStatus(configured=False, exhausted=False, status="not_configured")
-    if _ws._DATAFORSEO_QUOTA_EXHAUSTED:
-        return ProviderStatus(configured=True, exhausted=True, status="exhausted")
-    try:
-        async with httpx.AsyncClient(timeout=5) as c:
-            r = await c.get(
-                "https://api.dataforseo.com/v3/appendix/user_data",
-                headers={"Authorization": f"Basic {_ws.DATAFORSEO_API_KEY}"},
-            )
-        if not r.is_success:
-            return ProviderStatus(configured=True, exhausted=False, status="error", error=f"HTTP {r.status_code}")
-        result = (r.json().get("tasks") or [{}])[0].get("result", [{}])[0]
-        balance = (result.get("money_data") or {}).get("balance")
-        credits = int(balance) if balance is not None else None
-        return ProviderStatus(configured=True, exhausted=False, status="ok", credits=credits)
-    except Exception as e:
-        return ProviderStatus(configured=True, exhausted=False, status="error", error=str(e))
-
-
-async def _check_serper() -> ProviderStatus:
-    if not _ws.SERPER_API_KEY:
-        return ProviderStatus(configured=False, exhausted=False, status="not_configured")
-    if _ws._SERPER_QUOTA_EXHAUSTED:
-        return ProviderStatus(configured=True, exhausted=True, status="exhausted")
-    try:
-        async with httpx.AsyncClient(timeout=5) as c:
-            r = await c.get(
-                "https://google.serper.dev/account",
-                headers={"X-API-KEY": _ws.SERPER_API_KEY},
-            )
-        if not r.is_success:
-            return ProviderStatus(configured=True, exhausted=False, status="error", error=f"HTTP {r.status_code}")
-        credits = r.json().get("balance")
-        # Serper reports a *negative* balance once the plan is overdrawn, so "not None"
-        # isn't enough — treat <= 0 as exhausted.
-        if credits is not None and credits <= 0:
-            _ws._SERPER_QUOTA_EXHAUSTED = True
-            return ProviderStatus(configured=True, exhausted=True, status="exhausted", credits=credits)
-        return ProviderStatus(configured=True, exhausted=False, status="ok", credits=credits)
-    except Exception as e:
-        return ProviderStatus(configured=True, exhausted=False, status="error", error=str(e))
-
-
 async def _check_serpapi() -> ProviderStatus:
     if not _ws.SERPAPI_API_KEY:
         return ProviderStatus(configured=False, exhausted=False, status="not_configured")
@@ -198,16 +153,6 @@ async def _check_gdelt_bq() -> ProviderStatus:
     return ProviderStatus(configured=True, exhausted=False, status="ok")
 
 
-async def _check_google_cse() -> ProviderStatus:
-    # Needs BOTH an API key and a search-engine id (cx). No live credit-check API,
-    # so we report configured + the in-process quota flag (like _check_simple).
-    if not (_ws.GOOGLE_CSE_API_KEY and _ws.GOOGLE_CSE_CX):
-        return ProviderStatus(configured=False, exhausted=False, status="not_configured")
-    if _ws._GOOGLE_CSE_QUOTA_EXHAUSTED:
-        return ProviderStatus(configured=True, exhausted=True, status="exhausted")
-    return ProviderStatus(configured=True, exhausted=False, status="ok")
-
-
 async def run_search_health() -> SearchHealthResponse:
     _ws._refresh_keys_if_stale()
     # Same TTL sweep the search chain runs, so /search/health can't report a provider
@@ -216,10 +161,7 @@ async def run_search_health() -> SearchHealthResponse:
 
     # Each entry: (provider_name, check_coroutine)
     provider_checks = [
-        ("dataforseo", _check_dataforseo()),
-        ("google_cse", _check_google_cse()),
         ("serpapi",    _check_serpapi()),
-        ("serper",     _check_serper()),
         ("tavily",     _check_simple(_ws.TAVILY_API_KEY, _ws._TAVILY_QUOTA_EXHAUSTED)),
         ("exa",        _check_simple(_ws.EXA_API_KEY, _ws._EXA_QUOTA_EXHAUSTED)),
         ("brave",      _check_simple(_ws.BRAVE_API_KEY, _ws._BRAVE_QUOTA_EXHAUSTED)),

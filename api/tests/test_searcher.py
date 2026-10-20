@@ -122,36 +122,13 @@ class TestCheckGdeltHealth:
         assert st.exhausted is False
 
 
-class TestCheckGoogleCse:
-    async def test_not_configured_without_both_keys(self, monkeypatch):
-        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_API_KEY", "k")
-        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_CX", None)  # cx missing
-        st = await searcher._check_google_cse()
-        assert st.configured is False and st.status == "not_configured"
-
-    async def test_ok_when_both_configured(self, monkeypatch):
-        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_API_KEY", "k")
-        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_CX", "cx")
-        monkeypatch.setattr(searcher._ws, "_GOOGLE_CSE_QUOTA_EXHAUSTED", False)
-        st = await searcher._check_google_cse()
-        assert st.configured is True and st.status == "ok"
-
-    async def test_exhausted(self, monkeypatch):
-        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_API_KEY", "k")
-        monkeypatch.setattr(searcher._ws, "GOOGLE_CSE_CX", "cx")
-        monkeypatch.setattr(searcher._ws, "_GOOGLE_CSE_QUOTA_EXHAUSTED", True)
-        st = await searcher._check_google_cse()
-        assert st.exhausted is True and st.status == "exhausted"
-
-
 class TestHealthIncludesTrustedSites:
     async def test_trusted_sites_present_and_not_counted_as_usable(self, monkeypatch):
         # Avoid network: stub the providers that would hit live credit APIs, and
         # null the key-only providers so they report not_configured fast.
         async def _na():
             return ProviderStatus(configured=False, exhausted=False, status="not_configured")
-        for fn in ("_check_dataforseo", "_check_serpapi", "_check_serper",
-                   "_check_google_cse"):
+        for fn in ("_check_serpapi",):
             monkeypatch.setattr(searcher, fn, _na)
         for k in ("TAVILY_API_KEY", "EXA_API_KEY", "BRAVE_API_KEY", "BRIGHTDATA_API_KEY",
                   "NIMBLEWAY_API_KEY", "NEWSDATA_API_KEY", "GCP_SA_KEY_JSON"):

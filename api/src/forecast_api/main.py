@@ -456,7 +456,7 @@ async def search(
 ):
     """
     Search for news articles using the provider fallback chain
-    (news-indexer → GDELT → Google CSE → SerpAPI → Serper → Brave → Tavily → … → DDG →
+    (news-indexer → GDELT → SerpAPI → Brave → Exa → Tavily → … → DDG →
     trusted sites; see `tm/web_search.py`). First non-empty provider wins, unless
     `min_results` > 0 and news-indexer served fewer hits than that — then the paid legs run
     too and their new URLs are appended (dedup by URL, up to `limit`). That second pass is
@@ -470,7 +470,7 @@ async def search(
 async def search_health(_: ApiKeyClient = Depends(verify_api_key)):
     """
     Per-provider search health: key configured, in-process quota flag, and live credit
-    count where the provider exposes a credit API (Serper, SerpAPI).
+    count where the provider exposes a credit API (SerpAPI).
     """
     return await run_search_health()
 

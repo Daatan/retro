@@ -5,18 +5,13 @@ Used by the Oracul API (retro/api) and the pipeline (retro/pipeline).
 Fallback order:
   1. GDELT Doc API                  (free, no key — primary; news-only, reliable dates)
   1b. GDELT BigQuery GKG            (free tier; historical coverage >3 months; entity-based)
-  1c. Google Custom Search JSON     GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX  (relevance-ranked;
-                                    100 queries/day free then paid; intended primary once
-                                    Google credits land — see _search_google_cse)
   2. SerpAPI (serpapi.com)          SERPAPI_API_KEY
-  3. Serper.dev /news endpoint      SERPER_API_KEY
   4. Brave News Search              BRAVE_API_KEY
   4a. Exa (category=news)          EXA_API_KEY          (free $10/month tier; returns published dates)
   4b. Tavily News Search            TAVILY_API_KEY       (after Brave: returns no published_date)
   4c. Newsdata.io                   NEWSDATA_API_KEY     (news API w/ dates; ahead of SERP scrapers)
   5. BrightData SERP API            BRIGHTDATA_API_KEY
   6. Nimbleway SERP API             NIMBLEWAY_API_KEY
-  9. DataForSEO Google News         DATAFORSEO_API_KEY  (last-resort paid fallback)
  10. DuckDuckGo Lite                (free, no key)
 
 GDELT rate limiting
@@ -170,19 +165,13 @@ def _secret(env_var: str, ssm_name: str) -> Optional[str]:
         return None
 
 
-DATAFORSEO_API_KEY: Optional[str] = _secret("DATAFORSEO_API_KEY", "/retro/prod/secrets/DATAFORSEO_API_KEY")
 SERPAPI_API_KEY: Optional[str] = _secret("SERPAPI_API_KEY", "/retro/prod/secrets/SERPAPI_API_KEY")
-SERPER_API_KEY: Optional[str] = _secret("SERPER_API_KEY", "/retro/prod/secrets/SERPER_API_KEY")
 BRAVE_API_KEY: Optional[str] = _secret("BRAVE_API_KEY", "/retro/prod/secrets/BRAVE_API_KEY")
 BRIGHTDATA_API_KEY: Optional[str] = _secret("BRIGHTDATA_API_KEY", "/retro/prod/secrets/BRIGHTDATA_API_KEY")
 NIMBLEWAY_API_KEY: Optional[str] = _secret("NIMBLEWAY_API_KEY", "/retro/prod/secrets/NIMBLEWAY_API_KEY")
 NEWSDATA_API_KEY: Optional[str] = _secret("NEWSDATA_API_KEY", "/retro/prod/secrets/NEWSDATA_API_KEY")
 TAVILY_API_KEY: Optional[str] = _secret("TAVILY_API_KEY", "/retro/prod/secrets/TAVILY_API_KEY")
 EXA_API_KEY: Optional[str] = _secret("EXA_API_KEY", "/retro/prod/secrets/EXA_API_KEY")
-# Google Programmable Search (Custom Search JSON API). Needs BOTH an API key and a
-# search-engine id (cx). Inert until both are configured — see _search_google_cse.
-GOOGLE_CSE_API_KEY: Optional[str] = _secret("GOOGLE_CSE_API_KEY", "/retro/prod/secrets/GOOGLE_CSE_API_KEY")
-GOOGLE_CSE_CX: Optional[str] = _secret("GOOGLE_CSE_CX", "/retro/prod/secrets/GOOGLE_CSE_CX")
 GCP_SA_KEY_JSON: Optional[str] = _secret("GCP_SA_KEY_JSON", "/retro/prod/secrets/GCP_SA_KEY_JSON")
 
 # news-indexer — local semantic index (https://scrapper.daatan.com)
@@ -247,24 +236,20 @@ def _refresh_keys_if_stale() -> None:
     pipeline can run for days) would use stale keys after rotation. This
     function is called at the top of search_articles() to catch that case.
     """
-    global DATAFORSEO_API_KEY, SERPAPI_API_KEY, SERPER_API_KEY, BRAVE_API_KEY
+    global SERPAPI_API_KEY, BRAVE_API_KEY
     global BRIGHTDATA_API_KEY, NIMBLEWAY_API_KEY, NEWSDATA_API_KEY
-    global TAVILY_API_KEY, EXA_API_KEY, GOOGLE_CSE_API_KEY, GOOGLE_CSE_CX
+    global TAVILY_API_KEY, EXA_API_KEY
     global GCP_SA_KEY_JSON, _BQ_CLIENT, _KEY_LOADED_AT
     if time.time() - _KEY_LOADED_AT < _KEY_MAX_AGE_SECONDS:
         return
     logger.info("Refreshing search API keys from SSM Parameter Store (>24h since last fetch)")
-    DATAFORSEO_API_KEY = _secret("DATAFORSEO_API_KEY", "/retro/prod/secrets/DATAFORSEO_API_KEY")
     SERPAPI_API_KEY = _secret("SERPAPI_API_KEY", "/retro/prod/secrets/SERPAPI_API_KEY")
-    SERPER_API_KEY = _secret("SERPER_API_KEY", "/retro/prod/secrets/SERPER_API_KEY")
     BRAVE_API_KEY = _secret("BRAVE_API_KEY", "/retro/prod/secrets/BRAVE_API_KEY")
     BRIGHTDATA_API_KEY = _secret("BRIGHTDATA_API_KEY", "/retro/prod/secrets/BRIGHTDATA_API_KEY")
     NIMBLEWAY_API_KEY = _secret("NIMBLEWAY_API_KEY", "/retro/prod/secrets/NIMBLEWAY_API_KEY")
     NEWSDATA_API_KEY = _secret("NEWSDATA_API_KEY", "/retro/prod/secrets/NEWSDATA_API_KEY")
     TAVILY_API_KEY = _secret("TAVILY_API_KEY", "/retro/prod/secrets/TAVILY_API_KEY")
     EXA_API_KEY = _secret("EXA_API_KEY", "/retro/prod/secrets/EXA_API_KEY")
-    GOOGLE_CSE_API_KEY = _secret("GOOGLE_CSE_API_KEY", "/retro/prod/secrets/GOOGLE_CSE_API_KEY")
-    GOOGLE_CSE_CX = _secret("GOOGLE_CSE_CX", "/retro/prod/secrets/GOOGLE_CSE_CX")
     new_gcp = _secret("GCP_SA_KEY_JSON", "/retro/prod/secrets/GCP_SA_KEY_JSON")
     if new_gcp != GCP_SA_KEY_JSON:
         GCP_SA_KEY_JSON = new_gcp
@@ -372,36 +357,30 @@ def _gdelt_acquire_slot() -> None:
         logger.debug("GDELT file lock unavailable (%s): rate limit unenforced", exc)
 
 
-_DATAFORSEO_QUOTA_EXHAUSTED: bool = False
 _SERPAPI_QUOTA_EXHAUSTED: bool = False
 _BRAVE_QUOTA_EXHAUSTED: bool = False
-_SERPER_QUOTA_EXHAUSTED: bool = False
 _BRIGHTDATA_QUOTA_EXHAUSTED: bool = False
 _NIMBLEWAY_QUOTA_EXHAUSTED: bool = False
 _NEWSDATA_QUOTA_EXHAUSTED: bool = False
 _TAVILY_QUOTA_EXHAUSTED: bool = False
 _EXA_QUOTA_EXHAUSTED: bool = False
-_GOOGLE_CSE_QUOTA_EXHAUSTED: bool = False
 
 _QUOTA_STATE_PATH = Path(tempfile.gettempdir()) / "quota_exhausted.json"
 
 # Provider name (as persisted) -> the module global holding its flag.
 _QUOTA_FLAG_GLOBALS: dict[str, str] = {
-    "dataforseo":  "_DATAFORSEO_QUOTA_EXHAUSTED",
     "serpapi":     "_SERPAPI_QUOTA_EXHAUSTED",
-    "serper":      "_SERPER_QUOTA_EXHAUSTED",
     "brave":       "_BRAVE_QUOTA_EXHAUSTED",
     "brightdata":  "_BRIGHTDATA_QUOTA_EXHAUSTED",
     "nimbleway":   "_NIMBLEWAY_QUOTA_EXHAUSTED",
     "newsdata":    "_NEWSDATA_QUOTA_EXHAUSTED",
     "tavily":      "_TAVILY_QUOTA_EXHAUSTED",
     "exa":         "_EXA_QUOTA_EXHAUSTED",
-    "google_cse":  "_GOOGLE_CSE_QUOTA_EXHAUSTED",
 }
 
 # A quota flag is sticky on purpose — once a provider answers "out of credit" we must
 # not re-ask it on every search. But it must not be *permanent*: provider quotas reset
-# on their own schedule (Google CSE daily, Serper/SerpAPI monthly), and any transient
+# on their own schedule (SerpAPI monthly, Exa/Brave monthly credit), and any transient
 # 401/429 trips the same flag. Nothing ever cleared it, so a single bad response
 # disabled a provider for the life of the host — and, because the flag is persisted,
 # for every process started afterwards. Re-probe once a flag is older than this.
@@ -582,7 +561,7 @@ _RELATIVE_DATE_UNIT_DAYS = {
 def _absolutize_relative_date(published: str, now: Optional[datetime] = None) -> str:
     """Convert a SERP relative date ('1 day ago', '3 weeks ago') to YYYY-MM-DD.
 
-    SerpAPI/Serper return relative strings that ``_filter_by_date``'s %Y-%m-%d
+    SerpAPI returns relative strings that ``_filter_by_date``'s %Y-%m-%d
     parse can't act on (ValueError → kept as benefit of the doubt), which made
     the post-filter inert on exactly the legs that needed it (retro#562).
     Anything unrecognized passes through unchanged, keeping the benefit of the
@@ -624,71 +603,6 @@ def _filter_by_date(
         except ValueError:
             out.append(r)
     return out
-
-
-# ──────────────────────────────────────────────
-# Provider: DataForSEO Google News
-# ──────────────────────────────────────────────
-
-def _search_dataforseo(
-    query: str,
-    limit: int,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
-) -> List[SearchResult]:
-    global _DATAFORSEO_QUOTA_EXHAUSTED
-    if not DATAFORSEO_API_KEY:
-        raise RuntimeError("DATAFORSEO_API_KEY not set")
-
-    task: dict = {
-        "keyword": query,
-        "language_code": "en",
-        "location_code": 2840,  # United States
-        "depth": min(limit, 100),
-    }
-    if date_from:
-        task["date_from"] = date_from.strftime("%Y-%m-%d")
-    if date_to:
-        task["date_to"] = date_to.strftime("%Y-%m-%d")
-
-    r = httpx.post(
-        "https://api.dataforseo.com/v3/serp/google/news/live/advanced",
-        headers={
-            "Authorization": f"Basic {DATAFORSEO_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json=[task],
-        timeout=20,
-    )
-    r.raise_for_status()
-    data = r.json()
-    api_task = (data.get("tasks") or [{}])[0]
-    task_code = api_task.get("status_code", 0)
-    # 40101 = account suspended, 40201/40202/40203 = insufficient funds / billing
-    if task_code in (40101, 40201, 40202, 40203):
-        _DATAFORSEO_QUOTA_EXHAUSTED = True
-        _persist_quota_state()
-        raise RuntimeError(f"DataForSEO billing/quota error: status_code={task_code}")
-    items = ((api_task.get("result") or [{}])[0].get("items")) or []
-    results = []
-    for item in items[:limit]:
-        url = item.get("url", "")
-        if not url:
-            continue
-        source = (item.get("source") or {}).get("name", "") or item.get("domain", "")
-        # DataForSEO returns "timestamp" (e.g. "2024-09-20 14:32:00 +00:00"), not "date_published"
-        raw_date = item.get("timestamp") or item.get("date_published", "")
-        published_date = raw_date[:10] if raw_date else ""
-        results.append(SearchResult(
-            title=item.get("title", ""),
-            url=url,
-            snippet=item.get("snippet", ""),
-            source=source,
-            published_date=published_date,
-        ))
-    # DataForSEO date_from/date_to params are not reliably enforced by Google News;
-    # post-filter to ensure we stay within the requested window.
-    return _filter_by_date(results, date_from, date_to)
 
 
 # ──────────────────────────────────────────────
@@ -746,132 +660,6 @@ def _search_serpapi_news(
         for item in items[:limit]
         if item.get("link")
     ]
-    return _filter_by_date(results, date_from, date_to)
-
-
-# ──────────────────────────────────────────────
-# Provider: Serper.dev /news
-# ──────────────────────────────────────────────
-
-def _search_serper_news(
-    query: str,
-    limit: int,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
-) -> List[SearchResult]:
-    global _SERPER_QUOTA_EXHAUSTED
-    if not SERPER_API_KEY:
-        raise RuntimeError("SERPER_API_KEY not set")
-
-    body: dict = {"q": query, "num": limit}
-    # Serper tbs date range: cdr:1[,cd_min:M/D/YYYY][,cd_max:M/D/YYYY] — either
-    # bound alone is valid (retro#562).
-    tbs = _google_tbs(date_from, date_to)
-    if tbs:
-        body["tbs"] = tbs
-
-    r = httpx.post(
-        "https://google.serper.dev/news",
-        json=body,
-        headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
-        timeout=10,
-    )
-    if r.status_code == 400 and "credits" in r.text.lower():
-        _SERPER_QUOTA_EXHAUSTED = True
-        _persist_quota_state()
-        raise RuntimeError("Serper quota exhausted (no credits)")
-    r.raise_for_status()
-    data = r.json()
-    items = data.get("news", [])
-
-    results = [
-        SearchResult(
-            title=item.get("title", ""),
-            url=item.get("link", ""),
-            snippet=item.get("snippet", ""),
-            source=_clean_source("", item.get("link", "")),
-            published_date=_absolutize_relative_date(item.get("date", "")),
-        )
-        for item in items[:limit]
-        if item.get("link")
-    ]
-    return _filter_by_date(results, date_from, date_to)
-
-
-# ──────────────────────────────────────────────
-# Provider: Google Programmable Search (Custom Search JSON API)
-# ──────────────────────────────────────────────
-
-def _cse_published_date(item: dict) -> str:
-    """Best-effort publish date from a CSE result's pagemap metatags. '' if absent."""
-    pagemap = item.get("pagemap") or {}
-    metatags = (pagemap.get("metatags") or [{}])[0] if isinstance(pagemap.get("metatags"), list) else {}
-    for key in ("article:published_time", "og:updated_time", "datepublished", "date"):
-        val = metatags.get(key)
-        if val:
-            return str(val)[:10]
-    return ""
-
-
-def _search_google_cse(
-    query: str,
-    limit: int,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
-) -> List[SearchResult]:
-    """Google Custom Search JSON API (Programmable Search Engine).
-
-    Requires BOTH GOOGLE_CSE_API_KEY and a search-engine id GOOGLE_CSE_CX; the
-    caller (search_articles) only invokes this when both are set, so it is inert
-    until configured. The engine (cx) is configured in Google's panel — set it to
-    "search the entire web" or scope it to news sites.
-
-    NOTE (unverified against the live API — no key until Google credits land):
-    the response shape and 429 quota behaviour are assumed from CSE docs and need
-    one live call to confirm before being trusted. Defensive parsing keeps a shape
-    surprise degrading to empty results rather than raising.
-
-    Caveats / follow-ups:
-      - CSE returns at most 10 results per request; `limit > 10` under-delivers
-        (pagination via `start` is a follow-up).
-      - No server-side date filtering: a malformed `sort=date:r:…` makes CSE 400
-        and silently kills the provider, so we send no date param and rely on
-        `_filter_by_date` post-hoc. Date-aware CSE is a follow-up once testable.
-      - Free tier is 100 queries/day, then HTTP 429 → quota-exhausted for the day.
-    """
-    global _GOOGLE_CSE_QUOTA_EXHAUSTED
-    if not (GOOGLE_CSE_API_KEY and GOOGLE_CSE_CX):
-        raise RuntimeError("GOOGLE_CSE_API_KEY / GOOGLE_CSE_CX not set")
-
-    r = httpx.get(
-        "https://www.googleapis.com/customsearch/v1",
-        params={
-            "key": GOOGLE_CSE_API_KEY,
-            "cx": GOOGLE_CSE_CX,
-            "q": query,
-            "num": min(limit, 10),  # CSE hard cap is 10 per request
-        },
-        timeout=10,
-    )
-    if r.status_code == 429:
-        _GOOGLE_CSE_QUOTA_EXHAUSTED = True
-        _persist_quota_state()
-        raise RuntimeError("Google CSE quota exhausted (429)")
-    r.raise_for_status()
-    data = r.json()
-
-    results = []
-    for item in (data.get("items") or [])[:limit]:
-        link = item.get("link") or ""
-        if not link:
-            continue
-        results.append(SearchResult(
-            title=item.get("title", "") or "",
-            url=link,
-            snippet=item.get("snippet", "") or "",
-            source=_clean_source(item.get("displayLink", "") or "", link),
-            published_date=_cse_published_date(item),
-        ))
     return _filter_by_date(results, date_from, date_to)
 
 
@@ -1863,7 +1651,7 @@ def _search_articles_chain(
 
     Tries providers in order, skipping any without a configured key or with
     an exhausted quota flag set for this process lifetime:
-      GDELT → SerpAPI → Serper.dev → Brave → Exa → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG
+      GDELT → SerpAPI → Brave → Exa → Tavily → Newsdata.io → BrightData → Nimbleway → DDG
 
     DDG is tried last; if AWS IPs are blocked by DDG/Yahoo it fails and is logged.
 
@@ -1928,7 +1716,7 @@ def _search_articles_chain(
             # every SERP leg honored it — backward-looking dated queries (resolution
             # research, MCP search_news) got answered with this week's coverage
             # (retro#559; the Brent-$100 resolution failure). Post-filter like the
-            # DataForSEO leg does; zero survivors fall through to the providers that
+            # SERP legs do; zero survivors fall through to the providers that
             # can actually scope by date.
             if hits and (date_from or date_to):
                 _pre = len(hits)
@@ -2009,7 +1797,7 @@ def _search_articles_chain(
     # low-relevance for a topical query. So it runs EARLY only for genuinely
     # historical queries (older than the Doc API's ~3-month window), where the
     # SERP providers have poor coverage; for live/recent queries it is a LAST
-    # resort (see below, after DataForSEO). Running it early for live queries
+    # resort (see below, after DDG). Running it early for live queries
     # short-circuited the chain with off-topic articles that the relevance
     # gatekeeper then discarded — leaving forecasts with no usable articles.
     _bq_tried = False
@@ -2039,24 +1827,6 @@ def _search_articles_chain(
         if _bq_results:
             return _bq_results
 
-    # 1c. Google Custom Search — relevance-ranked, independent quota. Placed right
-    # after GDELT so it is the primary keyed provider once configured (intended to
-    # be the workhorse when Google startup credits supply paid quota; on the free
-    # 100/day tier it will 429 and fall through). Inert until both keys are set.
-    if GOOGLE_CSE_API_KEY and GOOGLE_CSE_CX and not _GOOGLE_CSE_QUOTA_EXHAUSTED:
-        if _past_deadline("google_cse"):
-            return []
-        _provider_local.chain.append("google_cse")
-        _t0 = time.perf_counter()
-        try:
-            results = _search_google_cse(query, limit, date_from, date_to)
-            if results:
-                _provider_local.name = "google_cse"
-                return results
-            logger.debug("google_cse empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
-            logger.warning("google_cse failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
-
     # 2. SerpAPI
     if SERPAPI_API_KEY and not _SERPAPI_QUOTA_EXHAUSTED:
         if _past_deadline("serpapi"):
@@ -2071,21 +1841,6 @@ def _search_articles_chain(
             logger.debug("serpapi empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
             logger.warning("serpapi failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
-
-    # 3. Serper.dev news
-    if SERPER_API_KEY and not _SERPER_QUOTA_EXHAUSTED:
-        if _past_deadline("serper"):
-            return []
-        _provider_local.chain.append("serper")
-        _t0 = time.perf_counter()
-        try:
-            results = _search_serper_news(query, limit, date_from, date_to)
-            if results:
-                _provider_local.name = "serper"
-                return results
-            logger.debug("serper empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
-            logger.warning("serper failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 4. Brave News (returns published_date; higher free quota than Tavily)
     if BRAVE_API_KEY and not _BRAVE_QUOTA_EXHAUSTED:
@@ -2177,21 +1932,6 @@ def _search_articles_chain(
         except Exception as e:
             logger.warning("nimbleway failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
-
-    # 9. DataForSEO (paid — last-resort fallback only)
-    if DATAFORSEO_API_KEY and not _DATAFORSEO_QUOTA_EXHAUSTED:
-        if _past_deadline("dataforseo"):
-            return []
-        _provider_local.chain.append("dataforseo")
-        _t0 = time.perf_counter()
-        try:
-            results = _search_dataforseo(query, limit, date_from, date_to)
-            if results:
-                _provider_local.name = "dataforseo"
-                return results
-            logger.debug("dataforseo empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
-            logger.warning("dataforseo failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 10. DuckDuckGo (free, no key)
     if _past_deadline("ddg"):

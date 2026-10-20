@@ -64,8 +64,14 @@ jobs:
     steps:
       - name: Resolve deploy ref
         id: ref
+        env:
+          REF: ${{ github.event.inputs.ref || github.sha }}
         run: |
-          REF="${{ github.event.inputs.ref || github.sha }}"
+          # A branch/tag name or a commit SHA: no leading '-', no '..'.
+          if [[ ! "$REF" =~ ^[A-Za-z0-9._/-]+$ || "$REF" == -* || "$REF" == *..* ]]; then
+            echo "::error::ref must be a branch, tag or commit SHA ([A-Za-z0-9._/-], no leading '-', no '..')"
+            exit 1
+          fi
           echo "sha=${REF}" >> "$GITHUB_OUTPUT"
           echo "Deploying ${REF}"
 
@@ -78,14 +84,19 @@ jobs:
 
       - name: Send deploy command via SSM
         id: send
+        env:
+          REF: ${{ steps.ref.outputs.sha }}
         run: |
           set -euo pipefail
+          # REF was validated in the previous step; jq JSON-encodes it.
+          PARAMS=$(jq -nc --arg ref "$REF" \
+            '{commands: ["sudo -u ubuntu bash /home/ubuntu/oracle-api/infra/deploy_oracle.sh \($ref)"]}')
           CMD_ID=$(aws ssm send-command \
             --region "${AWS_REGION}" \
             --instance-ids "${ORACLE_INSTANCE_ID}" \
             --document-name AWS-RunShellScript \
-            --comment "gha deploy oracle-api ${{ steps.ref.outputs.sha }} (run ${{ github.run_id }})" \
-            --parameters "commands=[\"sudo -u ubuntu bash /home/ubuntu/oracle-api/infra/deploy_oracle.sh ${{ steps.ref.outputs.sha }}\"]" \
+            --comment "gha deploy oracle-api ${REF} (run ${GITHUB_RUN_ID})" \
+            --parameters "$PARAMS" \
             --output text --query 'Command.CommandId')
           echo "cmd_id=${CMD_ID}" >> "$GITHUB_OUTPUT"
           echo "SSM command: ${CMD_ID}"
@@ -108,6 +119,8 @@ jobs:
       # still want the box's stdout/stderr in the Actions log).
       - name: Fetch deploy output
         id: result
+        env:
+          REF: ${{ steps.ref.outputs.sha }}
         run: |
           set -euo pipefail
           aws ssm get-command-invocation \
@@ -129,7 +142,7 @@ jobs:
 
           echo "### Oracle API deploy: \`${STATUS}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ref: \`${{ steps.ref.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ref: \`${REF}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- instance: \`${ORACLE_INSTANCE_ID}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- ssm command: \`${{ steps.send.outputs.cmd_id }}\`" >> "$GITHUB_STEP_SUMMARY"
 

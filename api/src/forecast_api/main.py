@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from slowapi.errors import RateLimitExceeded
 
 from ._build import build_info
+from .batch_heartbeat import read_batch_heartbeat
 from .auth import ApiKeyClient, verify_api_key
 from .bayesoracle import compute_nodes, parse_node_observations
 from .cache import forecast_cache
@@ -31,6 +32,7 @@ from .leaderboard import (
 from .resolution_feedback import ingest_resolution, record_tags
 from .resolution_scorer import load_shadow_leaderboard, load_tag_board, rescore_authors_from_disk, rescore_from_disk
 from .settings_deprecations import deprecated_env, unrecognized_env
+from .settings_groups import grouped
 from .settlement_pin_ledger import load_ledger, record_settlement_pin
 from .stages import describe_stages
 from .pm_paper import build_report as build_pm_paper_report, render_markdown as render_pm_paper_markdown
@@ -350,6 +352,9 @@ async def health():
             "enabled": forecast_cache.enabled,
             **forecast_cache.stats().as_dict(),
         },
+        # Batch-loop liveness for daatan's evidence-health cron (retro#996); null when
+        # the heartbeat file is missing or unreadable.
+        "batch_loop": read_batch_heartbeat(grouped(settings).caches.data_dir),
     }
 
 

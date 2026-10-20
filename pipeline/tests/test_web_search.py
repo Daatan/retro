@@ -458,8 +458,7 @@ class TestTrustedSitesFallback:
         hit = [SearchResult(title="t", url="http://x", snippet="s")]
         ts_spy = MagicMock(return_value=hit)
         with patch.multiple(ws,
-            _search_gdelt=MagicMock(return_value=hit),  # serves first
-            _search_ddg_news=MagicMock(return_value=[]),
+            _search_ddg_news=MagicMock(return_value=hit),  # serves before trusted_sites
             _search_trusted_sites=ts_spy,
         ):
             ws.search_articles("q")
@@ -526,7 +525,8 @@ class TestNewsIndexerProvider:
         assert not gdelt_spy.called, "GDELT must not run when news-indexer returns hits"
 
     def test_falls_through_on_empty_list(self, monkeypatch):
-        """Empty list response → fall through to GDELT; 'news_indexer' still appears in chain."""
+        """Empty list response → fall through the chain (to GDELT Doc here, everything
+        else empty); 'news_indexer' still appears in chain."""
         ws = _fresh_ws()
         ws.NEWS_INDEXER_URL = "http://ni.local"
         ws.NEWS_INDEXER_API_KEY = "secret"
@@ -536,6 +536,8 @@ class TestNewsIndexerProvider:
         with patch.multiple(ws,
             _search_gdelt=MagicMock(return_value=gdelt_hit),
             _search_gdelt_bq=MagicMock(return_value=[]),
+            _search_ddg_news=MagicMock(return_value=[]),
+            _search_trusted_sites=MagicMock(return_value=[]),
         ):
             res = ws.search_articles("some query")
         assert res
@@ -625,6 +627,8 @@ class TestNewsIndexerProvider:
         with patch.multiple(ws,
             _search_gdelt=MagicMock(return_value=gdelt_hit),
             _search_gdelt_bq=MagicMock(return_value=[]),
+            _search_ddg_news=MagicMock(return_value=[]),
+            _search_trusted_sites=MagicMock(return_value=[]),
         ):
             res = ws.search_articles("some query")
         assert res
@@ -657,7 +661,7 @@ class TestNewsIndexerProvider:
     # providers that can actually scope by date.
 
     def test_out_of_window_hits_fall_through(self, monkeypatch):
-        """All ni hits outside the requested window → filtered to zero → GDELT serves."""
+        """All ni hits outside the requested window → filtered to zero → falls through (GDELT Doc serves here)."""
         from datetime import datetime
         ws = _fresh_ws()
         ws.NEWS_INDEXER_URL = "http://ni.local"
@@ -672,6 +676,8 @@ class TestNewsIndexerProvider:
         with patch.multiple(ws,
             _search_gdelt=MagicMock(return_value=gdelt_hit),
             _search_gdelt_bq=MagicMock(return_value=[]),
+            _search_ddg_news=MagicMock(return_value=[]),
+            _search_trusted_sites=MagicMock(return_value=[]),
         ):
             res = ws.search_articles(
                 "brent crosses 100", date_from=datetime(2026, 7, 20), date_to=datetime(2026, 7, 28),
@@ -1406,9 +1412,12 @@ class TestNewsIndexerTopUp:
         assert ws.get_last_search_provider_chain() == ["news_indexer", "serpapi"]
 
     def test_first_pass_still_runs_gdelt(self, monkeypatch):
+        """The first pass still reaches GDELT Doc — now at the tail, after DDG/trusted_sites."""
         ws = self._ws_with_index_and_serpapi(monkeypatch, [])
         gdelt_spy = MagicMock(return_value=self._serp(ws, "http://gdelt.com/1"))
-        with patch.multiple(ws, _search_gdelt=gdelt_spy, _search_serpapi_news=MagicMock(return_value=[])):
+        with patch.multiple(ws, _search_gdelt=gdelt_spy, _search_serpapi_news=MagicMock(return_value=[]),
+                            _search_ddg_news=MagicMock(return_value=[]),
+                            _search_trusted_sites=MagicMock(return_value=[])):
             res = ws.search_articles("brent crude", limit=10, min_results=5)
         assert [r.url for r in res] == ["http://gdelt.com/1"]
         assert ws.get_last_search_provider() == "gdelt"
@@ -1421,4 +1430,34 @@ class TestNewsIndexerTopUp:
         with patch.multiple(ws, _search_gdelt=MagicMock(return_value=[]), _search_serpapi_news=serp_spy):
             res = ws._search_articles_chain("brent crude", 10, skip_news_indexer=True)
         assert [r.url for r in res] == ["http://paid.com/1"]
-        assert ws.get_last_search_provider_chain() == ["gdelt", "serpapi"]
+        assert ws.get_last_search_provider_chain() == ["serpapi"]
+
+    def test_gdelt_doc_runs_after_trusted_sites_before_bq(self, monkeypatch):
+        """retro#990: GDELT Doc sits at the tail — after every keyed leg, DDG and
+        trusted_sites — and still ahead of the live-query gdelt_bq last resort."""
+        ws = _fresh_ws()
+        ws.SERPAPI_API_KEY = "s"
+        ws._SERPAPI_QUOTA_EXHAUSTED = False
+        ws.GCP_SA_KEY_JSON = "{}"
+        ws._GDELT_DOC_BROKEN_UNTIL = 0.0
+        ws._GDELT_COOLDOWN_UNTIL = 0.0
+        with patch.multiple(ws, _search_serpapi_news=MagicMock(return_value=[]),
+                            _search_ddg_news=MagicMock(return_value=[]),
+                            _search_trusted_sites=MagicMock(return_value=[]),
+                            _search_gdelt=MagicMock(return_value=[]),
+                            _search_gdelt_bq=MagicMock(return_value=[])):
+            ws._search_articles_chain("brent crude", 10, skip_news_indexer=True)
+        assert ws.get_last_search_provider_chain() == [
+            "serpapi", "ddg", "trusted_sites", "gdelt", "gdelt_bq",
+        ]
+
+    def test_keyed_leg_short_circuits_before_gdelt_doc(self, monkeypatch):
+        ws = _fresh_ws()
+        ws.SERPAPI_API_KEY = "s"
+        ws._SERPAPI_QUOTA_EXHAUSTED = False
+        gdelt_spy = MagicMock(return_value=self._serp(ws, "http://gdelt.com/1"))
+        with patch.multiple(ws, _search_gdelt=gdelt_spy,
+                            _search_serpapi_news=MagicMock(return_value=self._serp(ws, "http://paid.com/1"))):
+            res = ws._search_articles_chain("brent crude", 10, skip_news_indexer=True)
+        assert [r.url for r in res] == ["http://paid.com/1"]
+        assert not gdelt_spy.called

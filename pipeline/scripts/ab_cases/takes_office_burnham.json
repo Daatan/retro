@@ -1,0 +1,190 @@
+[
+ {
+  "id": "burnham-becomes-pm-jpost",
+  "event_name": "Andy Burnham will remain Prime Minister of the United Kingdom at least until July 20, 2028.",
+  "event_description": "Resolves YES if Andy Burnham continuously holds the office of UK Prime Minister from July 20, 2026 until at least July 20, 2028, per UK government or major news sources.",
+  "claim_deadline": "2028-07-20",
+  "article_date": "2026-07-20",
+  "source_name": "Test",
+  "journalist": "unknown",
+  "article_text": "Andy Burnham becomes UK prime minister promising political rewiring",
+  "expect": {
+   "stance_sign": 1
+  },
+  "tags": [
+   "retro-770",
+   "class2",
+   "title-only",
+   "defect"
+  ]
+ },
+ {
+  "id": "burnham-elected-labour-leader",
+  "event_name": "Andy Burnham will remain Prime Minister of the United Kingdom at least until July 20, 2028.",
+  "event_description": "Resolves YES if Andy Burnham continuously holds the office of UK Prime Minister from July 20, 2026 until at least July 20, 2028, per UK government or major news sources.",
+  "claim_deadline": "2028-07-20",
+  "article_date": "2026-07-19",
+  "source_name": "Test",
+  "journalist": "unknown",
+  "article_text": "Andy Burnham elected UK Labour leader, set to become PM",
+  "expect": {
+   "stance_sign": 1
+  },
+  "tags": [
+   "retro-770",
+   "class2",
+   "title-only",
+   "defect"
+  ]
+ },
+ {
+  "id": "burnham-de-neuer-premier",
+  "event_name": "Andy Burnham will remain Prime Minister of the United Kingdom at least until July 20, 2028.",
+  "event_description": "Resolves YES if Andy Burnham continuously holds the office of UK Prime Minister from July 20, 2026 until at least July 20, 2028, per UK government or major news sources.",
+  "claim_deadline": "2028-07-20",
+  "article_date": "2026-07-20",
+  "source_name": "Test",
+  "journalist": "unknown",
+  "article_text": "Andy Burnham ist neuer Premierminister in Großbritannien",
+  "expect": {
+   "stance_sign": 1
+  },
+  "tags": [
+   "retro-770",
+   "class2",
+   "title-only",
+   "defect"
+  ]
+ },
+ {
+  "id": "burnham-to-become-pm-upi",
+  "event_name": "Andy Burnham will remain Prime Minister of the United Kingdom at least until July 20, 2028.",
+  "event_description": "Resolves YES if Andy Burnham continuously holds the office of UK Prime Minister from July 20, 2026 until at least July 20, 2028, per UK government or major news sources.",
+  "claim_deadline": "2028-07-20",
+  "article_date": "2026-07-19",
+  "source_name": "Test",
+  "journalist": "unknown",
+  "article_text": "Andy Burnham to become British prime minister",
+  "expect": {
+   "stance_sign": 1
+  },
+  "tags": [
+   "retro-770",
+   "class2",
+   "title-only",
+   "defect"
+  ]
+ },
+ {
+  "id": "burnham-set-to-take-over",
+  "event_name": "Andy Burnham will remain Prime Minister of the United Kingdom at least until July 20, 2028.",
+  "event_description": "Resolves YES if Andy Burnham continuously holds the office of UK Prime Minister from July 20, 2026 until at least July 20, 2028, per UK government or major news sources.",
+  "claim_deadline": "2028-07-20",
+  "article_date": "2026-07-19",
+  "source_name": "Test",
+  "journalist": "unknown",
+  "article_text": "'Last chance': Labour's Andy Burnham set to take over as new British PM",
+  "expect": {
+   "stance_sign": 1
+  },
+  "tags": [
+   "retro-770",
+   "class2",
+   "title-only",
+   "defect"
+  ]
+ },
+ {
+  "id": "burnham-first-day",
+  "event_name": "Andy Burnham will remain Prime Minister of the United Kingdom at least until July 20, 2028.",
+  "event_description": "Resolves YES if Andy Burnham continuously holds the office of UK Prime Minister from July 20, 2026 until at least July 20, 2028, per UK government or major news sources.",
+  "claim_deadline": "2028-07-20",
+  "article_date": "2026-07-21",
+  "source_name": "Test",
+  "journalist": "unknown",
+  "article_text": "Tuesday briefing: Inside Andy Burnham's first day",
+  "expect": {
+   "stance_sign": 1
+  },
+  "tags": [
+   "retro-770",
+   "class2",
+   "title-only",
+   "defect"
+  ]
+ },
+ {
+  "id": "burnham-social-care",
+  "event_name": "Andy Burnham will remain Prime Minister of the United Kingdom at least until July 20, 2028.",
+  "event_description": "Resolves YES if Andy Burnham continuously holds the office of UK Prime Minister from July 20, 2026 until at least July 20, 2028, per UK government or major news sources.",
+  "claim_deadline": "2028-07-20",
+  "article_date": "2026-07-25",
+  "source_name": "Test",
+  "journalist": "unknown",
+  "article_text": "Andy Burnham vows to use his 'political capital' to fix social care",
+  "expect": {
+   "stance_sign": 1
+  },
+  "tags": [
+   "retro-770",
+   "class2",
+   "title-only",
+   "defect"
+  ]
+ },
+ {
+  "id": "burnham-pr-machine",
+  "event_name": "Andy Burnham will remain Prime Minister of the United Kingdom at least until July 20, 2028.",
+  "event_description": "Resolves YES if Andy Burnham continuously holds the office of UK Prime Minister from July 20, 2026 until at least July 20, 2028, per UK government or major news sources.",
+  "claim_deadline": "2028-07-20",
+  "article_date": "2026-07-24",
+  "source_name": "Test",
+  "journalist": "unknown",
+  "article_text": "Don't believe Andy Burnham's PR machine",
+  "expect": {
+   "stance_sign": 1
+  },
+  "tags": [
+   "retro-770",
+   "class2",
+   "title-only",
+   "defect"
+  ]
+ },
+ {
+  "id": "burnham-becomes-pm-jpost-ctl",
+  "event_name": "Andy Burnham will be Prime Minister of the United Kingdom on July 20, 2028.",
+  "event_description": "Resolves YES if Andy Burnham holds the office of UK Prime Minister from July 20, 2026 until at least July 20, 2028, per UK government or major news sources.",
+  "claim_deadline": "2028-07-20",
+  "article_date": "2026-07-20",
+  "source_name": "Test",
+  "journalist": "unknown",
+  "article_text": "Andy Burnham becomes UK prime minister promising political rewiring",
+  "expect": {
+   "stance_sign": 1
+  },
+  "tags": [
+   "retro-770",
+   "class2",
+   "control"
+  ]
+ },
+ {
+  "id": "burnham-elected-labour-leader-ctl",
+  "event_name": "Andy Burnham will be Prime Minister of the United Kingdom on July 20, 2028.",
+  "event_description": "Resolves YES if Andy Burnham holds the office of UK Prime Minister from July 20, 2026 until at least July 20, 2028, per UK government or major news sources.",
+  "claim_deadline": "2028-07-20",
+  "article_date": "2026-07-19",
+  "source_name": "Test",
+  "journalist": "unknown",
+  "article_text": "Andy Burnham elected UK Labour leader, set to become PM",
+  "expect": {
+   "stance_sign": 1
+  },
+  "tags": [
+   "retro-770",
+   "class2",
+   "control"
+  ]
+ }
+]

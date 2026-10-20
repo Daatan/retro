@@ -1,0 +1,48 @@
+version: 2
+updates:
+  # Every uv project here is covered by the pytest matrix in tests.yml.
+  - package-ecosystem: "uv"
+    directories:
+      - "/api"
+      - "/pipeline"
+      - "/bayesoracle"
+      - "/metaculus"
+      - "/polymarket_paper"
+      - "/manifold_paper"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+      production-dependencies:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # python:3.11-slim is a floating tag; a 3.x bump is a deliberate runtime
+  # upgrade, so only patch-level/digest updates are proposed.
+  - package-ecosystem: "docker"
+    directory: "/pipeline"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"

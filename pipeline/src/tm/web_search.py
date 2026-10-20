@@ -3,8 +3,7 @@ Multi-provider news search with fallback chain.
 Used by the Oracul API (retro/api) and the pipeline (retro/pipeline).
 
 Fallback order:
-  1. GDELT Doc API                  (free, no key — primary; news-only, reliable dates)
-  1b. GDELT BigQuery GKG            (free tier; historical coverage >3 months; entity-based)
+  1b. GDELT BigQuery GKG            (free tier; historical queries >3 months only; entity-based)
   2. SerpAPI (serpapi.com)          SERPAPI_API_KEY
   4. Brave News Search              BRAVE_API_KEY
   4a. Exa (category=news)          EXA_API_KEY          (free $10/month tier; returns published dates)
@@ -13,6 +12,9 @@ Fallback order:
   5. BrightData SERP API            BRIGHTDATA_API_KEY
   6. Nimbleway SERP API             NIMBLEWAY_API_KEY
  10. DuckDuckGo Lite                (free, no key)
+ 10b. Trusted-sites DDG fallback   (free, no key)
+ 10c. GDELT Doc API                (free, no key — tail since retro#990; ~7 s TLS stalls)
+ 11. GDELT BigQuery GKG            (last resort for live queries)
 
 GDELT rate limiting
 -------------------
@@ -1651,9 +1653,11 @@ def _search_articles_chain(
 
     Tries providers in order, skipping any without a configured key or with
     an exhausted quota flag set for this process lifetime:
-      GDELT → SerpAPI → Brave → Exa → Tavily → Newsdata.io → BrightData → Nimbleway → DDG
+      SerpAPI → Brave → Exa → Tavily → Newsdata.io → BrightData → Nimbleway → DDG
+      → trusted_sites → GDELT Doc → GDELT BigQuery
 
-    DDG is tried last; if AWS IPs are blocked by DDG/Yahoo it fails and is logged.
+    If AWS IPs are blocked by DDG/Yahoo, DDG fails and is logged. GDELT Doc runs
+    after DDG/trusted_sites (retro#990): it is slow and almost never wins.
 
     Args:
         query:     Search string. Include `site:domain.com` to restrict to a source.
@@ -1688,7 +1692,7 @@ def _search_articles_chain(
         return True
 
     # 0. news-indexer — local semantic index; first-in-chain, no SERP cost.
-    #    Returns [] (gating check runs server-side) → fall through to GDELT/SERP.
+    #    Returns [] (gating check runs server-side) → fall through to the SERP legs.
     #    Inert when NEWS_INDEXER_URL / NEWS_INDEXER_API_KEY are not configured.
     if NEWS_INDEXER_URL and NEWS_INDEXER_API_KEY and not skip_news_indexer:
         _provider_local.chain.append("news_indexer")
@@ -1743,54 +1747,13 @@ def _search_articles_chain(
         except Exception as exc:
             # ERROR, not WARNING (retro#459). Losing this provider is not a degraded
             # nicety: it silently moves every retro caller onto paid SERP, swapping the
-            # local semantic index for GDELT keyword matching. No counter moves when it
+            # local semantic index for SERP keyword matching. No counter moves when it
             # happens, so the log line is the only signal there is — it has to be one
             # that can alarm.
             logger.error(
                 "news_indexer failed, falling back to paid providers %dms: %s",
                 int((time.perf_counter() - _t0) * 1000), exc,
             )
-
-    # 1. GDELT Doc API (free, no key) — primary; news-only, reliable dates, 3-month window
-    if not skip_gdelt:
-        if _past_deadline("gdelt"):
-            return []
-        _provider_local.chain.append("gdelt")
-    _gdelt_cooldown_remaining = _GDELT_COOLDOWN_UNTIL - time.time()
-    _gdelt_broken_remaining = _GDELT_DOC_BROKEN_UNTIL - time.time()
-    if skip_gdelt:
-        pass  # paid-only pass (retro#826) — see the `skip_gdelt` docstring for the numbers
-    elif _gdelt_broken_remaining > 0:
-        logger.info(
-            "GDELT Doc skipped: circuit open for %.0fs more (repeated connection failures)",
-            _gdelt_broken_remaining,
-        )
-    elif _gdelt_cooldown_remaining > 0:
-        logger.info(
-            "GDELT skipped: 429 cooldown active for %.0fs more", _gdelt_cooldown_remaining
-        )
-    else:
-        _t0 = time.perf_counter()
-        try:
-            results = _search_gdelt(query, limit, date_from, date_to)
-            if results:
-                _GDELT_DOC_FAIL_COUNT = 0
-                _provider_local.name = "gdelt"
-                return results
-            logger.debug("gdelt empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-            _GDELT_DOC_FAIL_COUNT = 0  # empty result is not a connection failure
-        except _GDELTSlotBusy as e:
-            logger.info("GDELT skipped (slot busy): %s", e)
-        except Exception as e:
-            logger.warning("gdelt failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
-            _GDELT_DOC_FAIL_COUNT += 1
-            if _GDELT_DOC_FAIL_COUNT >= _GDELT_DOC_FAIL_THRESHOLD:
-                _GDELT_DOC_BROKEN_UNTIL = time.time() + _GDELT_DOC_BREAK_SECS
-                logger.warning(
-                    "GDELT Doc: %d consecutive failures — circuit open for %.0f min",
-                    _GDELT_DOC_FAIL_COUNT,
-                    _GDELT_DOC_BREAK_SECS / 60,
-                )
 
     # GDELT BigQuery GKG. It is the historical specialist (full-history entity
     # match), but its results are URL-slug-titled and recency-ranked, i.e.
@@ -1964,6 +1927,49 @@ def _search_articles_chain(
         logger.debug("trusted_sites empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
     except Exception as e:
         logger.warning("trusted_sites failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
+
+    # 10c. GDELT Doc API (free, no key) — moved to the tail (retro#990). It won 0 of
+    # ~310 searches in 30 days and cost ~7 s per attempt (TLS stall), so it now runs
+    # only after every keyed leg, DDG and trusted_sites came back empty.
+    if not skip_gdelt:
+        if _past_deadline("gdelt"):
+            return []
+        _provider_local.chain.append("gdelt")
+    _gdelt_cooldown_remaining = _GDELT_COOLDOWN_UNTIL - time.time()
+    _gdelt_broken_remaining = _GDELT_DOC_BROKEN_UNTIL - time.time()
+    if skip_gdelt:
+        pass  # paid-only pass (retro#826) — see the `skip_gdelt` docstring for the numbers
+    elif _gdelt_broken_remaining > 0:
+        logger.info(
+            "GDELT Doc skipped: circuit open for %.0fs more (repeated connection failures)",
+            _gdelt_broken_remaining,
+        )
+    elif _gdelt_cooldown_remaining > 0:
+        logger.info(
+            "GDELT skipped: 429 cooldown active for %.0fs more", _gdelt_cooldown_remaining
+        )
+    else:
+        _t0 = time.perf_counter()
+        try:
+            results = _search_gdelt(query, limit, date_from, date_to)
+            if results:
+                _GDELT_DOC_FAIL_COUNT = 0
+                _provider_local.name = "gdelt"
+                return results
+            logger.debug("gdelt empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
+            _GDELT_DOC_FAIL_COUNT = 0  # empty result is not a connection failure
+        except _GDELTSlotBusy as e:
+            logger.info("GDELT skipped (slot busy): %s", e)
+        except Exception as e:
+            logger.warning("gdelt failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
+            _GDELT_DOC_FAIL_COUNT += 1
+            if _GDELT_DOC_FAIL_COUNT >= _GDELT_DOC_FAIL_THRESHOLD:
+                _GDELT_DOC_BROKEN_UNTIL = time.time() + _GDELT_DOC_BREAK_SECS
+                logger.warning(
+                    "GDELT Doc: %d consecutive failures — circuit open for %.0f min",
+                    _GDELT_DOC_FAIL_COUNT,
+                    _GDELT_DOC_BREAK_SECS / 60,
+                )
 
     # 11. GDELT BigQuery — absolute last resort for live/recent queries, AFTER DDG.
     # Its URL-slug, recency-ranked results are low-relevance, so it must not

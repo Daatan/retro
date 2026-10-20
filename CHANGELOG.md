@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Changed
+- Search: GDELT Doc moved from right after news-indexer to the tail of the chain, after DDG/trusted_sites and before the live-query `gdelt_bq` last resort (retro#990). It won 0 of ~310 searches in 30 days and cost ~7 s per attempt (TLS stall), so every fall-through from news-indexer paid that before reaching a keyed leg. Circuit breaker, 429 cooldown and the top-up `skip_gdelt` are unchanged; the historical early `gdelt_bq` path still runs before SerpAPI.
 - Infra: removed the `extractor-shadow-haiku55.conf` drop-in and its deploy-table row (retro#921). Haiku 5.5 + thinking is now the live extractor (PR #965), so the log-only shadow would have been a 5.5-vs-5.5 double bill; it was already switched off on the box. The `EXTRACTOR_SHADOW_MODEL` mechanism itself stays (default off) for the next candidate model.
 - Dependencies: security bump of `uv.lock` in `api/` and `pipeline/` — litellm 1.87 -> 1.106, mcp 1.28 -> 1.30, pyjwt 2.13 -> 2.15, urllib3 -> 2.8, anyio, fsspec, multidict, soupsieve (pip-audit advisories; retro#981). litellm renamed its private `_get_cache_point_block` to `get_cache_point_block` — the 1h-TTL guard test follows. No runtime code change.
 - Docs: corrected the Jev drop-in statements (`jev-gate-enforce.conf` exists and sets `JEV_GATE_ENFORCE`; no `jev-gate-ab-enabled.conf`) and listed `extractor-shadow-haiku55.conf` in the deploy table (retro#979).

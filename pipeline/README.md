@@ -15,7 +15,7 @@ pipeline/
     gnews_ingest.py        # GNews RSS → URL resolution → trafilatura + Wayback fallback
     gdelt_ingest.py        # GDELT Doc 2.0 API batch ingestor (sequential, rate-limited)
     site_search.py         # Direct site-search scraper (no API key, high reliability)
-    web_search.py          # Multi-provider search: news-indexer → GDELT → GDELT BQ → SerpAPI → Brave → Exa → Tavily → Newsdata.io → BrightData → Nimbleway → DDG → trusted-sites
+    web_search.py          # Multi-provider search: news-indexer → (GDELT BQ, historical only) → SerpAPI → Brave → Exa → Tavily → Newsdata.io → BrightData → Nimbleway → DDG → trusted-sites → GDELT Doc → GDELT BQ
     polymarket.py          # Polymarket Gamma API: fetch market history per event
 
     # Elicitation

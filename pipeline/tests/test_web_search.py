@@ -269,6 +269,111 @@ class TestTavily432:
 
 
 # ---------------------------------------------------------------------------
+# Exa provider (retro#987, requires import)
+# ---------------------------------------------------------------------------
+
+@needs_deps
+class TestExa:
+    def _resp(self, status_code: int, payload: dict | None = None):
+        resp = MagicMock()
+        resp.status_code = status_code
+        resp.text = ""
+        resp.json.return_value = payload or {}
+        if status_code >= 400:
+            resp.raise_for_status.side_effect = Exception(f"HTTP {status_code}")
+        return resp
+
+    @pytest.mark.parametrize("status", [401, 402, 403])
+    def test_key_or_credit_error_sets_quota_flag(self, status):
+        ws = _fresh_ws()
+        ws.EXA_API_KEY = "fake-key"
+        ws._EXA_QUOTA_EXHAUSTED = False
+        with patch("httpx.post", return_value=self._resp(status)):
+            with pytest.raises(RuntimeError, match=str(status)):
+                ws._search_exa("test query", limit=5)
+        assert ws._EXA_QUOTA_EXHAUSTED is True
+
+    def test_429_is_transient_and_does_not_flag(self):
+        ws = _fresh_ws()
+        ws.EXA_API_KEY = "fake-key"
+        ws._EXA_QUOTA_EXHAUSTED = False
+        with patch("httpx.post", return_value=self._resp(429)):
+            with pytest.raises(Exception):
+                ws._search_exa("test query", limit=5)
+        assert ws._EXA_QUOTA_EXHAUSTED is False
+
+    def test_parses_results_and_request_shape(self):
+        from datetime import datetime
+        ws = _fresh_ws()
+        ws.EXA_API_KEY = "fake-key"
+        payload = {"results": [
+            {"title": "Ceasefire holds", "url": "https://www.reuters.com/world/x",
+             "publishedDate": "2026-10-19T08:00:00.000Z", "highlights": ["a", "b"]},
+            {"title": None, "url": "https://apnews.com/y", "publishedDate": None},
+            {"title": "no url"},
+        ]}
+        with patch("httpx.post", return_value=self._resp(200, payload)) as post:
+            results = ws._search_exa(
+                "Gaza ceasefire site:reuters.com", limit=25,
+                date_from=datetime(2026, 10, 1),
+            )
+        body = post.call_args.kwargs["json"]
+        assert body["category"] == "news"
+        assert body["numResults"] == 10, "capped at the 10 results the base price covers"
+        assert body["query"] == "Gaza ceasefire"
+        assert body["includeDomains"] == ["reuters.com"]
+        assert body["startPublishedDate"] == "2026-10-01T00:00:00Z"
+        assert post.call_args.kwargs["headers"]["x-api-key"] == "fake-key"
+        assert [r.url for r in results] == ["https://www.reuters.com/world/x", "https://apnews.com/y"]
+        assert results[0].published_date == "2026-10-19"
+        assert results[0].snippet == "a … b"
+        assert results[1].title == ""
+
+    def _chain_with(self, ws, winner: str):
+        from tm.web_search import SearchResult
+        ws.SERPAPI_API_KEY = ws.BRAVE_API_KEY = ws.EXA_API_KEY = ws.TAVILY_API_KEY = "fake"
+        # Other tests persist their quota flags to disk; the re-import reloads them.
+        ws._SERPAPI_QUOTA_EXHAUSTED = ws._BRAVE_QUOTA_EXHAUSTED = ws._TAVILY_QUOTA_EXHAUSTED = False
+        hit = [SearchResult(title="t", url="http://x", snippet="s")]
+
+        def mk(name):
+            return MagicMock(return_value=(hit if name == winner else []))
+
+        return patch.multiple(ws,
+            _search_gdelt=mk("gdelt"),
+            _search_gdelt_bq=mk("gdelt_bq"),
+            _search_serpapi_news=mk("serpapi"),
+            _search_brave_news=mk("brave"),
+            _search_exa=mk("exa"),
+            _search_tavily=mk("tavily"),
+            _search_ddg_news=mk("ddg"),
+        )
+
+    def test_runs_after_brave_before_tavily(self):
+        ws = _fresh_ws()
+        ws._EXA_QUOTA_EXHAUSTED = False
+        with self._chain_with(ws, winner="tavily"):
+            ws.search_articles("test")
+        chain = ws.get_last_search_provider_chain()
+        assert chain.index("brave") < chain.index("exa") < chain.index("tavily")
+
+    def test_exa_win_short_circuits_tavily(self):
+        ws = _fresh_ws()
+        ws._EXA_QUOTA_EXHAUSTED = False
+        with self._chain_with(ws, winner="exa"):
+            ws.search_articles("test")
+        assert ws.get_last_search_provider() == "exa"
+        assert "tavily" not in ws.get_last_search_provider_chain()
+
+    def test_exhausted_flag_skips_provider(self):
+        ws = _fresh_ws()
+        ws._EXA_QUOTA_EXHAUSTED = True
+        with self._chain_with(ws, winner="tavily"):
+            ws.search_articles("test")
+        assert "exa" not in ws.get_last_search_provider_chain()
+
+
+# ---------------------------------------------------------------------------
 # Trusted-sites last-resort fallback (requires import)
 # ---------------------------------------------------------------------------
 

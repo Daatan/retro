@@ -153,7 +153,7 @@ class TestHealthIncludesTrustedSites:
         for fn in ("_check_dataforseo", "_check_serpapi", "_check_serper",
                    "_check_google_cse"):
             monkeypatch.setattr(searcher, fn, _na)
-        for k in ("TAVILY_API_KEY", "BRAVE_API_KEY", "BRIGHTDATA_API_KEY",
+        for k in ("TAVILY_API_KEY", "EXA_API_KEY", "BRAVE_API_KEY", "BRIGHTDATA_API_KEY",
                   "NIMBLEWAY_API_KEY", "NEWSDATA_API_KEY", "GCP_SA_KEY_JSON"):
             monkeypatch.setattr(searcher._ws, k, None)
         # GDELT circuit/cooldown clear → its check is local (no network).

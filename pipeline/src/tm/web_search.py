@@ -11,6 +11,7 @@ Fallback order:
   2. SerpAPI (serpapi.com)          SERPAPI_API_KEY
   3. Serper.dev /news endpoint      SERPER_API_KEY
   4. Brave News Search              BRAVE_API_KEY
+  4a. Exa (category=news)          EXA_API_KEY          (free $10/month tier; returns published dates)
   4b. Tavily News Search            TAVILY_API_KEY       (after Brave: returns no published_date)
   4c. Newsdata.io                   NEWSDATA_API_KEY     (news API w/ dates; ahead of SERP scrapers)
   5. BrightData SERP API            BRIGHTDATA_API_KEY
@@ -177,6 +178,7 @@ BRIGHTDATA_API_KEY: Optional[str] = _secret("BRIGHTDATA_API_KEY", "/retro/prod/s
 NIMBLEWAY_API_KEY: Optional[str] = _secret("NIMBLEWAY_API_KEY", "/retro/prod/secrets/NIMBLEWAY_API_KEY")
 NEWSDATA_API_KEY: Optional[str] = _secret("NEWSDATA_API_KEY", "/retro/prod/secrets/NEWSDATA_API_KEY")
 TAVILY_API_KEY: Optional[str] = _secret("TAVILY_API_KEY", "/retro/prod/secrets/TAVILY_API_KEY")
+EXA_API_KEY: Optional[str] = _secret("EXA_API_KEY", "/retro/prod/secrets/EXA_API_KEY")
 # Google Programmable Search (Custom Search JSON API). Needs BOTH an API key and a
 # search-engine id (cx). Inert until both are configured — see _search_google_cse.
 GOOGLE_CSE_API_KEY: Optional[str] = _secret("GOOGLE_CSE_API_KEY", "/retro/prod/secrets/GOOGLE_CSE_API_KEY")
@@ -247,7 +249,7 @@ def _refresh_keys_if_stale() -> None:
     """
     global DATAFORSEO_API_KEY, SERPAPI_API_KEY, SERPER_API_KEY, BRAVE_API_KEY
     global BRIGHTDATA_API_KEY, NIMBLEWAY_API_KEY, NEWSDATA_API_KEY
-    global TAVILY_API_KEY, GOOGLE_CSE_API_KEY, GOOGLE_CSE_CX
+    global TAVILY_API_KEY, EXA_API_KEY, GOOGLE_CSE_API_KEY, GOOGLE_CSE_CX
     global GCP_SA_KEY_JSON, _BQ_CLIENT, _KEY_LOADED_AT
     if time.time() - _KEY_LOADED_AT < _KEY_MAX_AGE_SECONDS:
         return
@@ -260,6 +262,7 @@ def _refresh_keys_if_stale() -> None:
     NIMBLEWAY_API_KEY = _secret("NIMBLEWAY_API_KEY", "/retro/prod/secrets/NIMBLEWAY_API_KEY")
     NEWSDATA_API_KEY = _secret("NEWSDATA_API_KEY", "/retro/prod/secrets/NEWSDATA_API_KEY")
     TAVILY_API_KEY = _secret("TAVILY_API_KEY", "/retro/prod/secrets/TAVILY_API_KEY")
+    EXA_API_KEY = _secret("EXA_API_KEY", "/retro/prod/secrets/EXA_API_KEY")
     GOOGLE_CSE_API_KEY = _secret("GOOGLE_CSE_API_KEY", "/retro/prod/secrets/GOOGLE_CSE_API_KEY")
     GOOGLE_CSE_CX = _secret("GOOGLE_CSE_CX", "/retro/prod/secrets/GOOGLE_CSE_CX")
     new_gcp = _secret("GCP_SA_KEY_JSON", "/retro/prod/secrets/GCP_SA_KEY_JSON")
@@ -377,6 +380,7 @@ _BRIGHTDATA_QUOTA_EXHAUSTED: bool = False
 _NIMBLEWAY_QUOTA_EXHAUSTED: bool = False
 _NEWSDATA_QUOTA_EXHAUSTED: bool = False
 _TAVILY_QUOTA_EXHAUSTED: bool = False
+_EXA_QUOTA_EXHAUSTED: bool = False
 _GOOGLE_CSE_QUOTA_EXHAUSTED: bool = False
 
 _QUOTA_STATE_PATH = Path(tempfile.gettempdir()) / "quota_exhausted.json"
@@ -391,6 +395,7 @@ _QUOTA_FLAG_GLOBALS: dict[str, str] = {
     "nimbleway":   "_NIMBLEWAY_QUOTA_EXHAUSTED",
     "newsdata":    "_NEWSDATA_QUOTA_EXHAUSTED",
     "tavily":      "_TAVILY_QUOTA_EXHAUSTED",
+    "exa":         "_EXA_QUOTA_EXHAUSTED",
     "google_cse":  "_GOOGLE_CSE_QUOTA_EXHAUSTED",
 }
 
@@ -1358,6 +1363,68 @@ def _search_gdelt_bq(
 
 
 # ──────────────────────────────────────────────
+# Provider: Exa Search API
+# ──────────────────────────────────────────────
+
+_SITE_OPERATOR_RE = re.compile(r"\bsite:(\S+)")
+
+
+def _search_exa(
+    query: str,
+    limit: int,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+) -> List[SearchResult]:
+    global _EXA_QUOTA_EXHAUSTED
+    if not EXA_API_KEY:
+        raise RuntimeError("EXA_API_KEY not set")
+
+    # Exa has no site: operator; lift it into includeDomains.
+    domains = _SITE_OPERATOR_RE.findall(query)
+    body: dict = {
+        "query": _SITE_OPERATOR_RE.sub("", query).strip(),
+        "category": "news",
+        "type": "auto",
+        # The base price covers up to 10 results; more are billed per result.
+        "numResults": min(limit, 10),
+        "contents": {"highlights": {"maxCharacters": 500}},
+    }
+    if domains:
+        body["includeDomains"] = domains
+    if date_from:
+        body["startPublishedDate"] = date_from.strftime("%Y-%m-%dT%H:%M:%SZ")
+    if date_to:
+        body["endPublishedDate"] = date_to.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    r = httpx.post(
+        "https://api.exa.ai/search",
+        json=body,
+        headers={"x-api-key": EXA_API_KEY, "Content-Type": "application/json"},
+        timeout=15,
+    )
+    if r.status_code in (401, 402, 403):
+        # Bad key or out of credits (the free tier is a $10/month balance).
+        _EXA_QUOTA_EXHAUSTED = True
+        _persist_quota_state()
+        raise RuntimeError(f"Exa quota/key error ({r.status_code}) — disabling for session")
+    r.raise_for_status()
+
+    items = r.json().get("results", [])
+    results = [
+        SearchResult(
+            title=item.get("title") or "",
+            url=item.get("url", ""),
+            snippet=" … ".join(item.get("highlights") or []),
+            source=_clean_source("", item.get("url", "")),
+            published_date=(item.get("publishedDate") or "")[:10],
+        )
+        for item in items[:limit]
+        if item.get("url")
+    ]
+    return _filter_by_date(results, date_from, date_to)
+
+
+# ──────────────────────────────────────────────
 # Provider: Tavily Search API
 # ──────────────────────────────────────────────
 
@@ -1796,7 +1863,7 @@ def _search_articles_chain(
 
     Tries providers in order, skipping any without a configured key or with
     an exhausted quota flag set for this process lifetime:
-      GDELT → SerpAPI → Serper.dev → Brave → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG
+      GDELT → SerpAPI → Serper.dev → Brave → Exa → Tavily → Newsdata.io → BrightData → Nimbleway → DataForSEO → DDG
 
     DDG is tried last; if AWS IPs are blocked by DDG/Yahoo it fails and is logged.
 
@@ -2034,6 +2101,21 @@ def _search_articles_chain(
             logger.debug("brave empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
         except Exception as e:
             logger.warning("brave failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
+
+    # 4a. Exa news (free monthly tier; returns publishedDate, unlike Tavily)
+    if EXA_API_KEY and not _EXA_QUOTA_EXHAUSTED:
+        if _past_deadline("exa"):
+            return []
+        _provider_local.chain.append("exa")
+        _t0 = time.perf_counter()
+        try:
+            results = _search_exa(query, limit, date_from, date_to)
+            if results:
+                _provider_local.name = "exa"
+                return results
+            logger.debug("exa empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
+        except Exception as e:
+            logger.warning("exa failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 4b. Tavily news (after Brave: no published_date in API response; 1 credit/call)
     if TAVILY_API_KEY and not _TAVILY_QUOTA_EXHAUSTED:

@@ -13,7 +13,6 @@ import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
 
 from forecast_api import forecaster
 from forecast_api.config import settings as api_settings

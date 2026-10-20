@@ -11,7 +11,6 @@ from tm.models import (
     PredictionType,
     MatrixState,
     CellStatus,
-    Grounds,
     Quantity,
     ReaderConfidence,
     Voice,

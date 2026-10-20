@@ -378,7 +378,7 @@ async def fetch_event_prices(event: dict, cache_dir: Path) -> list[dict]:
         if market:
             console.print(f"  [dim green]URL lookup → {market.get('question','')[:60]}[/dim green]")
         else:
-            console.print(f"  [dim yellow]URL lookup failed, trying keyword search[/dim yellow]")
+            console.print("  [dim yellow]URL lookup failed, trying keyword search[/dim yellow]")
 
     if not market:
         market = await _lookup_by_keywords(event.get("search_keywords", []), event["name"])
@@ -403,7 +403,7 @@ async def fetch_event_prices(event: dict, cache_dir: Path) -> list[dict]:
         prices = await _fetch_price_history(clob_token, event["outcome_date"])
         console.print(f"  [dim]CLOB: {len(prices)} daily price points[/dim]")
     else:
-        console.print(f"  [dim yellow]No CLOB token found — no price history[/dim yellow]")
+        console.print("  [dim yellow]No CLOB token found — no price history[/dim yellow]")
 
     result = {
         "event_id": event["id"],

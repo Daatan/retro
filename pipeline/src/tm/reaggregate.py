@@ -15,7 +15,6 @@ from rich.console import Console
 
 from .aggregator import aggregate_article_predictions, STANCE_SPREAD_THRESHOLD
 from .models import PredictionExtraction
-from .config import settings
 
 console = Console()
 

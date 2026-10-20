@@ -535,7 +535,7 @@ def _print_self_resolved_summary(self_resolved_rows: list[dict]) -> None:
     n = len(self_resolved_rows)
     mean_brier = sum(r["oracle_brier"] for r in self_resolved_rows) / n
     mean_log = sum(r["oracle_log_score"] for r in self_resolved_rows) / n
-    print(f"\n--- Self-resolved (weaker evidence — retro#737, not a Metaculus resolution) ---")
+    print("\n--- Self-resolved (weaker evidence — retro#737, not a Metaculus resolution) ---")
     print(f"Oracle vs. our own settlement: mean Brier {mean_brier:.4f}, mean log score {mean_log:.4f} (n={n})")
 
 

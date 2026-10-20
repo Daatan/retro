@@ -8,7 +8,6 @@ stale settlement vote against (the 2026-07-16 audit's root defect D1/D3).
 claims to one representative anchor date; the field rides on SourceSignal so
 callers can persist it next to ``settled``.
 """
-import pytest
 
 from forecast_api import forecaster
 from forecast_api.config import settings as api_settings

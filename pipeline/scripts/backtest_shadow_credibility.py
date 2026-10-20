@@ -95,7 +95,7 @@ def main(path: Path) -> int:
     gate = settings.resolution_shadow_min_global_predictions
     print(f"Scoreable resolutions: {len(records)}   (global gate: {gate})")
     if len(records) < gate:
-        print(f"  NOTE: below the gate — with the flag on, every source would still get 1.0 today.")
+        print("  NOTE: below the gate — with the flag on, every source would still get 1.0 today.")
     print(f"Shrinkage prior_n={settings.resolution_shadow_brier_prior_n}, "
           f"slope={settings.resolution_shadow_brier_slope}, "
           f"clamps=[{settings.resolution_shadow_weight_min}, {settings.resolution_shadow_weight_max}]")

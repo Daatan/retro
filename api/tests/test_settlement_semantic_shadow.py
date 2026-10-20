@@ -7,7 +7,6 @@ verifier prompt (which would silently invalidate every cached verdict).
 """
 import logging
 
-import pytest
 
 from forecast_api import forecaster
 from forecast_api.config import settings as api_settings

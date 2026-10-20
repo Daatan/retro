@@ -252,7 +252,7 @@ async def run_score(args: argparse.Namespace) -> int:
 
     report = await scan(records, run_pool_aggregate, loo=not args.no_loo, on_progress=progress)
 
-    print(f"\n# Stage A outlier scan — retro#526")
+    print("\n# Stage A outlier scan — retro#526")
     print(f"records in dump : {report.total_input}")
     print(f"settlement match gate: "
           f"{'ENFORCING (as prod)' if args.settlement_verifier else 'OFF — pins prod vetoed may be re-applied'}")

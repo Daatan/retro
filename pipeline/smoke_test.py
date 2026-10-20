@@ -17,7 +17,6 @@ from rich import box
 
 from src.tm.runner import run_article, ArticleInput
 from src.tm.progress import render_matrix, load_state
-from src.tm.models import CellStatus
 
 console = Console()
 

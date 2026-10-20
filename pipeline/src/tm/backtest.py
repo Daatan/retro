@@ -362,7 +362,7 @@ def print_report(results: list[dict], calibrated: bool = False) -> None:
     if our_briers:
         # Brier of the trivial always-YES-at-base-rate baseline, for context.
         baseline_brier = np.mean([(base_rate - float(o)) ** 2 for o in outcomes])
-        console.print(f"\n[bold]Aggregate Brier Score[/bold]  (lower is better)")
+        console.print("\n[bold]Aggregate Brier Score[/bold]  (lower is better)")
         console.print(f"  Ours:           [cyan]{np.mean(our_briers):.4f}[/cyan]  ({len(our_briers)} events)")
         if cal_briers:
             console.print(f"  Ours (calib.):  [green]{np.mean(cal_briers):.4f}[/green]  (isotonic, in-sample)")

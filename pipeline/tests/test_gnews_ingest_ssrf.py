@@ -8,7 +8,6 @@ attacker-controlled) — this mirrors the code's own DNS dependency, not a
 testing shortcut."""
 
 import httpx
-import pytest
 
 from tm.gnews_ingest import _fetch_wayback, search_wayback_cdx
 from datetime import datetime

@@ -2,7 +2,6 @@
 Pipeline runner: orchestrates gatekeeper → extraction for one article.
 """
 
-import asyncio
 from dataclasses import dataclass
 from typing import Optional
 

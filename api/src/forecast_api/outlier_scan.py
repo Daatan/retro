@@ -52,12 +52,11 @@ import statistics
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Iterator, Optional, Sequence
+from typing import Awaitable, Callable, Iterator, Optional, Sequence
 
 from . import aggregation as _aggregation_mod
 from . import forecaster as _forecaster_mod
 from .aggregation import (
-    effective_sample_size,
     recency_weight,
     relevance_weight,
     settlement_vote_validity,

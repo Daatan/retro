@@ -12,19 +12,15 @@ Displays a compact event × source grid:
 Legend: ░ pending  ▒ in_progress  ▓ done  ✗ failed  · no predictions
 """
 
-import json
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
-from rich.panel import Panel
-from rich.columns import Columns
 from rich import box
 
-from .models import MatrixState, MatrixCell, CellStatus, CELL_CHAR, CELL_COLOR
+from .models import MatrixState, CellStatus, CELL_CHAR, CELL_COLOR
 from .config import settings
 
 console = Console()

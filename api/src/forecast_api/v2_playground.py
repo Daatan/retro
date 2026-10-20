@@ -36,7 +36,6 @@ from . import daatan_client
 from .config import settings
 from .forecaster import _question_hash, run_forecast, run_pool_aggregate
 from .models import ForecastRequest, ForecastResponse, PoolAggregateRequest, PoolSourceInput
-from tm.config import settings as _pipeline_settings
 from tm.llm import complete_text_once_with_usage
 
 logger = logging.getLogger(__name__)

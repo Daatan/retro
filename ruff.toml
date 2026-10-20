@@ -1,9 +1,8 @@
 # Blocking lint gate (retro#977). Pyflakes only: real bugs, no style churn.
-# F401 (unused-import) and F541 (f-string without placeholders) are ignored for now: ~57
-# existing hits, mostly autofixable, but across many prod files. Remove them from `ignore`
-# once a cleanup PR lands. The non-blocking `ruff-baseline` job still reports default-rule counts.
+# F401 (unused-import) and F541 (f-string without placeholders) are enforced too since the
+# cleanup of the ~57 existing hits (retro#977). The non-blocking `ruff-baseline` job still
+# reports default-rule counts.
 target-version = "py312"
 
 [lint]
 select = ["F"]
-ignore = ["F401", "F541"]

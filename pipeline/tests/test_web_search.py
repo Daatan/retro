@@ -11,7 +11,6 @@ boto3) are not installed in the test environment.
 """
 
 import ast
-import importlib
 import inspect
 import logging
 import re
@@ -498,7 +497,6 @@ class TestNewsIndexerProvider:
         ws = _fresh_ws()
         ws.NEWS_INDEXER_URL = "http://ni.local"
         ws.NEWS_INDEXER_API_KEY = "secret"
-        from tm.web_search import SearchResult
         hit = [{"title": "T", "url": "http://x.com/1", "snippet": "S", "source": "x.com", "published_date": "2026-06-01"}]
         monkeypatch.setattr(ws.httpx, "get", lambda *a, **k: _FakeResp(200, hit))
         gdelt_spy = MagicMock(return_value=[])
@@ -914,7 +912,7 @@ class TestGdeltDocCircuitBreaker:
 
         with self._patched_chain(ws, _fail):
             for _ in range(threshold):
-                ws.search_articles(f"query")
+                ws.search_articles("query")
 
             assert ws._GDELT_DOC_BROKEN_UNTIL > time.time(), "Circuit must be open"
 

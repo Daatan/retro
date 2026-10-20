@@ -13,7 +13,6 @@ import importlib.util
 import json
 from pathlib import Path
 
-import pytest
 
 _SPEC = importlib.util.spec_from_file_location(
     "score_settlement_ledger",

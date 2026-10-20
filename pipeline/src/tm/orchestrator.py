@@ -10,7 +10,7 @@ from enum import Enum
 from rich.console import Console
 from .config import settings
 from .dedup import SimhashIndex
-from .models import CellStatus, ExtractionOutput, PredictionExtraction, is_negative_marker
+from .models import CellStatus, PredictionExtraction, is_negative_marker
 from .aggregator import aggregate_predictions, needs_aggregation, aggregate_article_predictions
 from .archetype import select_extractor_model
 from .runner import run_article, ArticleInput, PipelineResult
@@ -211,7 +211,7 @@ class Orchestrator:
                             had_errors = True
                             first_error = first_error or result.error
                 except asyncio.TimeoutError:
-                    console.print(f"    [bold red]Article timeout (300s), skipping[/bold red]")
+                    console.print("    [bold red]Article timeout (300s), skipping[/bold red]")
                     had_errors = True
                     first_error = first_error or "Article timeout (300s)"
                 except Exception as e:
@@ -526,7 +526,7 @@ class Orchestrator:
             except Exception as e:
                 console.print(f"    [bold red]Failed to save negative marker:[/bold red] {str(e)}")
         else:
-            console.print(f"    [yellow]Extraction resulted in 0 predictions (error — will retry).[/yellow]")
+            console.print("    [yellow]Extraction resulted in 0 predictions (error — will retry).[/yellow]")
 
         return result
 
@@ -598,7 +598,6 @@ class Orchestrator:
             json.dump(link_data, f, indent=2)
 
 async def main():
-    import sys
     import argparse
 
     parser = argparse.ArgumentParser(description="TruthMachine Orchestrator")

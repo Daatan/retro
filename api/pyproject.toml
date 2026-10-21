@@ -25,6 +25,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "mypy==2.4.0",  # type-check gate (retro#977); pinned like ruff, a bump changes the error set
     "httpx>=0.27.0",  # for TestClient
 ]
 
@@ -41,3 +42,41 @@ packages = ["src/forecast_api"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+# Blocking type-check gate (retro#977), run by the `mypy` job in tests.yml, part of `ci-gate`.
+# Lenient on purpose: third-party stubs are not required, and unannotated functions are not an
+# error (disallow_untyped_defs would add ~55 no-untyped-def hits per package). Every module is
+# checked except the allowlist below, so a new file must type-check from day one.
+[tool.mypy]
+files = ["src/forecast_api"]
+ignore_missing_imports = true
+check_untyped_defs = true
+
+# tm (pipeline/) is type-checked by its own job against its own allowlist; here it is only
+# followed for types, so its errors are not reported twice.
+[[tool.mypy.overrides]]
+module = ["tm", "tm.*"]
+follow_imports = "silent"
+
+# Ratchet: modules that had mypy errors when the gate landed (2026-10-21, mypy 2.4.0,
+# 116 errors total; count per module in the comment). Fix a module, delete its line, never
+# add one. Blind spot: new errors inside a listed module are not caught until it is removed.
+[[tool.mypy.overrides]]
+module = [
+    "forecast_api.aggregation",  # 2
+    "forecast_api.config",  # 1
+    "forecast_api.forecaster",  # 61
+    "forecast_api.jev_class",  # 2
+    "forecast_api.jev_dates",  # 1
+    "forecast_api.jev_shadow",  # 8
+    "forecast_api.main",  # 4
+    "forecast_api.manifold_paper",  # 2
+    "forecast_api.mcp_dcr",  # 1
+    "forecast_api.mcp_server",  # 5
+    "forecast_api.outlier_scan",  # 4
+    "forecast_api.pm_paper",  # 6
+    "forecast_api.resolution_scorer",  # 13
+    "forecast_api.settlement_pin_ledger",  # 1
+    "forecast_api.v2_playground",  # 5
+]
+ignore_errors = true

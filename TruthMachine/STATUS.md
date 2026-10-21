@@ -76,8 +76,8 @@ ec2_run.sh (systemd loop)
   ├── 3. orchestrator local_file (batches of 5 events)
   │       └── for each article:
   │           ├── Gatekeeper (Nova Micro) → is_prediction?
-  │           ├── Extractor (Nova Lite) → PredictionExtraction × N
-  │           ├── Article aggregator (Nova Lite) → 1 signal if spread > 0.4
+  │           ├── Extractor (Haiku 5.5) → PredictionExtraction × N
+  │           ├── Article aggregator (Haiku 4.5) → 1 signal if spread > 0.4
   │           └── → vault2/extractions/{hash}_{event}_v1.json
   │               → atlas/{event}/{source}/entry_{hash[:8]}.json
   ├── 4. render_atlas → factum_atlas.html
@@ -85,9 +85,10 @@ ec2_run.sh (systemd loop)
 ```
 
 **Models:**
-- Gatekeeper: `bedrock/amazon.nova-micro-v1:0` (us-east-1)
-- Extractor: `bedrock/amazon.nova-lite-v1:0` (us-east-1)
-- Article aggregator: `bedrock/amazon.nova-lite-v1:0`
+_Models corrected 2026-10-21; the rest of this snapshot is as of its date._
+- Gatekeeper: `bedrock/us.amazon.nova-micro-v1:0`
+- Extractor: `bedrock/us.anthropic.claude-haiku-5-5`, adaptive thinking. Since retro#921; it was Haiku 4.5 from retro#778 and Nova Lite before that.
+- Article aggregator: `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0` (`aggregator_model`, retro#911)
 
 ---
 

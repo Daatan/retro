@@ -106,7 +106,8 @@ Tracks pipeline state for every (event, source) cell.
       "source_id": "toi",
       "status": "done",
       "prediction_count": 4,
-      "error": null
+      "error": null,
+      "failed_attempts": 0
     }
   }
 }
@@ -120,6 +121,10 @@ pending → no_predictions (articles found but gatekeeper/extractor returned 0 p
 pending → failed        (LLM returned invalid JSON after all retries)
 pending → in_progress   (currently being processed)
 ```
+
+A `failed` cell is retried on the next pass, but `failed_attempts` counts consecutive failed passes. At `MAX_FAILED_ATTEMPTS` (3, `orchestrator.py`) the cell is **parked**: the orchestrator skips it, and the batch loop stops counting it as outstanding work. `--force-reextract` still reprocesses a parked cell (retro#959).
+
+`error` holds the cell's first error text. Gatekeeper failures that belong to the article and recur on every pass are recorded as a stable marker, not the raw message. One example is a prompt over Nova Micro's context window (`UNPROCESSABLE_ERROR_MARKERS`). Those articles are not retried. A raw message embeds a fresh completion id, so it would rewrite `progress.json` on every pass (retro#959, retro#962).
 
 To re-process `no_predictions` cells: reset their status to `pending` and rerun the pipeline.
 

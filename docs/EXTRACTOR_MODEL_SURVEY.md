@@ -54,7 +54,7 @@ extractor produces enough to matter, and what would each candidate cost?
 | claude-sonnet-4.5 | Anthropic | $28.18 | public list price |
 | claude-opus-4.5 | Anthropic | $46.14 | public list price |
 | claude-3-haiku (legacy) | Anthropic | — | **not tested** — Bedrock use-case access not granted on this account |
-| nova-lite | Amazon | $0.27 | batch-pipeline default until retro#778 (2026-09-08) — batch now runs Haiku 4.5 like live |
+| nova-lite | Amazon | $0.27 | batch-pipeline default until retro#778 (2026-09-08). Batch then ran Haiku 4.5 like live, and both lanes have run Haiku 5.5 since retro#921. |
 | nova-micro | Amazon | $0.15 | current gatekeeper model (different task, tested separately below) |
 | nova-2-lite | Amazon | $2.54 | |
 | nova-pro | Amazon | $7.74 | |
@@ -296,7 +296,7 @@ cheaper candidates that looked competitive elsewhere do not reliably provide.
 A third extractor knob, alongside the config default and the `oracle-api` drop-in:
 **`threshold_extractor_model`** routes threshold-shaped *batch* events — the class where a
 number decides the stance — to a different model. Off unless set. The live lane is untouched
-either way (it passes its own `model=` per request and is already on Haiku 4.5).
+either way (it passes its own `model=` per request and is already on Haiku — 4.5 when this was written, 5.5 since retro#921).
 
 ### Where the seam turned out to be
 

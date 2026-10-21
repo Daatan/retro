@@ -24,7 +24,9 @@ is brought under terraform here to make it auditable and rebuildable.
   from SSM `/retro/prod/secrets/COGNITO_GOOGLE_OAUTH`; `plan` fails if that parameter is missing.
 - `monitoring.tf` — the Bedrock extractor CloudWatch alarms
   (`extractor_invocation_client_errors`, `extractor_invocations_zero`), notifying an existing
-  SNS topic looked up by name.
+  SNS topic looked up by name. Both key on `var.extractor_model_id` (`variables.tf`), which has to
+  follow every extractor model switch. It still names Haiku 4.5 after the retro#921 switch to
+  5.5 (retro#1008).
 
 ## Usage
 ```bash

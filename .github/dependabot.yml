@@ -12,6 +12,20 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # instructor 1.16 rewrote its providers ("v2") and changed the MD_JSON
+      # system text wrapped around the response schema on every Bedrock call.
+      # That is a live prompt edit, so it goes through the A/B harness
+      # (docs/AB_HARNESS.md), not a weekly bump. pipeline/pyproject.toml caps <1.16.
+      - dependency-name: "instructor"
+        versions: [">=1.16"]
+      # mcp 2.x renames FastMCP -> MCPServer, moves the transport settings,
+      # swaps httpx for httpx2 and ships a new streamable-HTTP implementation.
+      # The /mcp server is live behind Cognito OAuth (claude.ai connector), so
+      # the port is a deliberate change verified end to end, not a Dependabot
+      # bump (retro#1000). api/pyproject.toml caps mcp <2.
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         dependency-type: "development"

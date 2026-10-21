@@ -29,7 +29,7 @@ runs as soon as the deploy lands; `manifold-paper` (retro#918) does the same wit
 | `polymarket-paper` | 00:30/06:30/12:30/18:30 UTC | **Paper** scoreboard on the Knesset-election Polymarket cluster; ledger under `data/polymarket_paper/`, served by `GET /pm/paper` (retro#620) | [`../polymarket_paper/README.md`](../polymarket_paper/README.md) |
 | `manifold-paper` | 00:45/06:45/12:45/18:45 UTC | **Paper** calibration scorecard on liquid Manifold binary markets (read-only, no account/key); ledger under `data/manifold_paper/`, served by `GET /manifold/paper` (retro#918) | [`../manifold_paper/README.md`](../manifold_paper/README.md) |
 
-Kill switch for either: `sudo systemctl disable --now <unit>.timer` on the box; the next deploy
+Kill switch for any of them: `sudo systemctl disable --now <unit>.timer` on the box; the next deploy
 re-enables it unless the installer call is removed from `deploy_oracle.sh`.
 
 ## systemd drop-ins (not synced by deploy)
@@ -49,7 +49,7 @@ Rollback: delete the file on the host, daemon-reload, restart. What is actually 
 
 | Drop-in | Sets | Issue |
 |---|---|---|
-| `extractor-model.conf` | `EXTRACTOR_MODEL` = Haiku 4.5 (explicit pin; also the shared default since retro#778) | — |
+| `extractor-model.conf` | `EXTRACTOR_MODEL` = Haiku 5.5. An explicit pin, equal to the shared default. Haiku 4.5 until retro#921; the rollback line is in the file. | retro#921 |
 | `precursor-match-enabled.conf` | `PRECURSOR_MATCH_ENABLED=true` | retro#608 |
 | `retry-relaxed-search-enabled.conf` | `RETRY_RELAXED_SEARCH_ENABLED=true` | retro#621 |
 | `jev-shadow-enabled.conf` | `JEV_SHADOW_ENABLED=true` | retro#840 |
@@ -123,9 +123,9 @@ against the box, waits for completion, and prints the deploy script's stdout/std
 Actions log. A `no-op` fast-path in `deploy_oracle.sh` makes the workflow cheap when the resolved
 HEAD already matches what's on the box.
 
-The workflow's `test` job (`tests.yml`) runs first; the `deploy` job `needs` it, so a red suite blocks the deploy.
+The workflow's `test` job runs first. It calls the whole `tests.yml` (pytest, ruff, mypy, infra shell tests). The `deploy` job `needs` it, so any red job blocks the deploy.
 
-Manual trigger (for rollbacks or redeploying the same SHA): **Actions → Deploy Oracle API → Run workflow**, optionally pinning `ref` to a prior commit.
+Manual trigger (for rollbacks or redeploying the same SHA): **Actions → Deploy Oracle API → Run workflow**, optionally pinning `ref` to a prior commit. Since retro#995 the `ref` input reaches the shell only through an env var. It must match `[A-Za-z0-9._/-]+`, with no leading `-` and no `..`; anything else fails the job before AWS is touched. The SSM `commands` parameter is built with `jq`.
 
 #### 2. Ad-hoc via SSM (no SSH needed)
 

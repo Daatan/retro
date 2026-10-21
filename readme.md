@@ -72,7 +72,7 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 
 ## Appendix A: LLM & NLP Pipeline
 
-**Hybrid architecture:** High-volume filtering uses fast models (AWS Bedrock Nova Micro); nuanced forensic elicitation uses Claude Haiku 4.5 for both the batch pipeline and the live Oracul API (converged 2026-09-08, retro#778 — batch previously ran the cheaper Nova Lite, until measured call volume showed the cost gap between the two lanes was negligible). Heavy models are called only when necessary.
+**Hybrid architecture:** High-volume filtering uses fast models (AWS Bedrock Nova Micro); nuanced forensic elicitation uses Claude Haiku 5.5 with adaptive thinking for both the batch pipeline and the live Oracul API (since 2026-10-19, retro#921; Haiku 4.5 before). The two lanes were converged on 2026-09-08 (retro#778). Batch previously ran the cheaper Nova Lite, until measured call volume showed the cost gap between the two lanes was negligible. Heavy models are called only when necessary.
 
 **Multilingual elicitation:** The pipeline natively processes Hebrew and English, capturing signals in Israeli media before they surface in international coverage.
 
@@ -96,7 +96,11 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 
 **Orchestration:** `truthmachine.service` (batch pipeline loop) + `oracle-api.service` (FastAPI forecast API at `oracle.daatan.com`).
 
-**LLM:** AWS Bedrock — Nova Micro (gatekeeper) + Claude Haiku 4.5 (extractor, shared default for both the batch pipeline and the live Oracul API since 2026-09-08 — see `docs/PROMPT_CACHING.md`; the batch aggregator calls the same `extractor_model`). The live Oracul API additionally calls Jev (TypeSafe System One, not Bedrock) for shadow/gate/`evidence_class` stages — see `CLAUDE.md`.
+**LLM:** AWS Bedrock.
+- Nova Micro is the gatekeeper.
+- Claude Haiku 5.5 with adaptive thinking is the extractor. It has been the shared default for the batch pipeline and the live Oracul API since retro#921 (2026-10-19). Before that it was Haiku 4.5, shared since 2026-09-08.
+- The batch aggregator and the API's judge stages stay on Haiku 4.5 through their own settings (retro#911).
+- See `docs/PROMPT_CACHING.md` and `docs/EXTRACTOR_MODEL_SURVEY.md`. The live Oracul API additionally calls Jev (TypeSafe System One, not Bedrock) for shadow/gate/`evidence_class` stages — see `CLAUDE.md`.
 
 **Live pages:**
 - Factum Atlas: https://daatan.github.io/retro/

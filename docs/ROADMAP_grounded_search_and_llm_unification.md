@@ -2,6 +2,8 @@
 
 **Status:** proposed / not implemented. This is a design note to keep in mind, not a task to start.
 
+> **Note 2026-10-21.** The search chain below is as of writing. Since then the Google CSE, Serper and DataForSEO legs were removed (retro#989), an Exa leg was added after Brave (retro#987), and GDELT Doc moved to the tail (retro#990). The current order is in `pipeline/src/tm/web_search.py`'s module docstring and `docs/ARCHITECTURE.md`.
+
 Two related future directions, plus the cross-cutting rule they must both respect.
 
 1. **Grounded search via Gemini** — let a grounding LLM (Gemini with the built-in

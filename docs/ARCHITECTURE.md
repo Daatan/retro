@@ -21,6 +21,12 @@ retro/
 │   │   ├── leaderboard.py       # Load/cache leaderboard.json for credibility weights
 │   │   ├── models.py            # Pydantic request/response schemas
 │   │   ├── config.py            # Settings (extends tm.config pattern)
+│   │   ├── settings_groups.py   # Grouped read-only views over ApiSettings — new/touched code reads these (retro#947)
+│   │   ├── settings_deprecations.py # Startup report: event=deprecated_env / unrecognized_env (report-only)
+│   │   ├── batch_heartbeat.py   # Reads data/heartbeat.json for /health.batch_loop (retro#996)
+│   │   ├── extraction_memo_store.py # Raw-extraction memo, 24 h diskcache (retro#895)
+│   │   ├── extractor_shadow.py  # Candidate-extractor shadow, log-only, off unless extractor_shadow_model is set (retro#921)
+│   │   ├── pm_paper.py / manifold_paper.py # Public /pm/paper and /manifold/paper scorecards
 │   │   ├── aggregation.py       # Pool aggregation (Stage 4), shared with /pool/aggregate
 │   │   ├── stages.py            # Registry of shadow-then-promote stages → event=stage_modes (retro#866)
 │   │   ├── jev_shadow.py        # Jev shadow extraction + skip-gate pass 1 (retro#840/#850/#849)
@@ -84,7 +90,7 @@ retro/
 │   │   ├── articles/            # Deduplicated article cache by SHA-256 hash
 │   │   └── extractions/         # LLM extraction cache: {hash}_{event_id}_{EXTRACTION_PROMPT_VERSION}.json (currently v5)
 │   ├── atlas/                   # Atlas link files: atlas/{event_id}/{source_id}/entry_*.json
-│   └── progress.json            # Cell status: done/pending/no_predictions/failed
+│   └── progress.json            # Cell status: done/pending/no_predictions/failed (+ failed_attempts; parked after 3, retro#959)
 ├── infra/
 │   ├── ec2_bootstrap.sh         # One-time EC2 setup script (incl. restore_atlas before service start)
 │   ├── ec2_run.sh               # Continuous pipeline loop (runs on EC2; snapshots atlas at tail of cycle)
@@ -120,12 +126,13 @@ retro/
 ├── .github/workflows/
 │   ├── deploy-atlas.yml         # Deploy the root HTML pages, bayesoracle/ and studies/ to GitHub Pages
 │   ├── deploy-oracle.yml        # On push to main affecting api/, pipeline/, metaculus/, polymarket_paper/, manifold_paper/ or their infra units, redeploy Oracul via SSM (OIDC, no static keys)
-│   ├── tests.yml                # pytest suites (also the deploy gate)
+│   ├── tests.yml                # pytest (6 uv projects), ruff + mypy, infra shell tests; `ci-gate` is the required check (also the deploy gate)
 │   ├── changelog.yml            # Require a CHANGELOG line on api/** / pipeline/src/** PRs
 │   ├── release.yml              # v* tag → GitHub release from CHANGELOG
 │   ├── terraform-validate.yml   # fmt + validate on terraform/** PRs
 │   ├── metaculus-sync.yml       # Manual Metaculus sync (the schedule is the systemd timer)
 │   └── pm_analysis_refresh.yml  # bayesoracle/ PM-analysis data refresh — schedule OFF since retro#937, manual dispatch only (commits to main, see CLAUDE.md)
+│   (.github/dependabot.yml      # weekly uv / github-actions / docker version-update PRs, retro#994)
 ├── factum_atlas.html            # Generated atlas (committed by EC2 after each cycle)
 ├── oracle-test.html             # Oracul API test console (deployed to GitHub Pages)
 ├── oracle-v2-test.html          # Oracle 2.0 playground (key-based)
@@ -341,12 +348,12 @@ git push → GitHub Actions → GitHub Pages
 | Role | Model | Notes |
 |---|---|---|
 | Gatekeeper | `bedrock/us.amazon.nova-micro-v1:0` | Topic-relevance filter: is this article on-topic for the event? Uses a directive coarse-gate prompt that passes INDIRECT evidence (rival collapse, coalition dynamics, etc.), not just explicit predictions; regression-guarded by `pipeline/eval_gatekeeper.py`. |
-| Extractor | `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0` (config default since retro#778, 2026-09-08 — was Nova Lite on batch) | Structured extraction of up to 5 predictions per article (14 requested fields — see "Prediction (extracted by LLM)" above) |
-| Article Aggregator | same as Extractor (`settings.extractor_model`) | Collapses high-spread (>0.4) predictions within a single article into one editorial signal |
+| Extractor | `bedrock/us.anthropic.claude-haiku-5-5`, adaptive thinking on (`extractor_thinking`), `extractor_max_tokens` 8000. Config default since retro#921 (2026-10-19). Before that: Haiku 4.5 from retro#778 (2026-09-08); batch was on Nova Lite. | Structured extraction of up to 5 predictions per article (14 requested fields — see "Prediction (extracted by LLM)" above) |
+| Article Aggregator | `aggregator_model` = `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0`. Its own knob since retro#911, so the extractor can move alone. | Collapses high-spread (>0.4) predictions within a single article into one editorial signal |
 | Keywords | `bedrock/us.amazon.nova-micro-v1:0` (`gatekeeper_model`) | One-time: generate search keywords per event (via `tm.llm`) |
 | Jev skip-gate + shadow + `evidence_class` corrector (live lane only) | TypeSafe System One, pinned `jev_model` = `jev-1.13.0` (retro#863; `api/src/forecast_api/jev_shadow.py`, not Bedrock, not LiteLLM) | Typed judgments, no generation: one `noul` per sentence. Shadow extraction next to Haiku (retro#840, `JEV_SHADOW_ENABLED`) and, since retro#850, a skip-gate in front of the extractor — `max_noul` predicts an empty Haiku extraction at AUC 0.93; `JEV_GATE_ENABLED` logs the verdict, `JEV_GATE_ENFORCE` skips the call when set (committed `jev-gate-enforce.conf`, threshold 0.07; the live value is the `event=stage_modes` startup line); `JEV_GATE_AB_ENABLED` (retro#849) logs a second pass 1 on a core-event rewrite of the question. The shadow's pass 2 also logs Jev's `evidence_class` (retro#851) and, on Haiku-settled claims, an `event_date` picked from code-found candidates (`jev_dates.py`, retro#873). Since retro#851, `jev_class.py` re-reads each claim's quote with the whole article and picks its `evidence_class`: `JEV_CLASS_ENABLED` logs `event=jev_class`, `JEV_CLASS_ENFORCE` replaces Haiku's class before anchor provenance and the class weights (fail-open to Haiku's, `jev_class_timeout_seconds` 1.5). All default off; see the drop-ins in `docs/ORACLE_DEPLOY.md`. Key in SSM `/retro/prod/secrets/TYPESAFE_API_KEY`. See `docs/ORACLE_VARIABLES.md` 2026-09-22 onward. |
 
-All defaults via AWS Bedrock. Override via env vars in `pipeline/src/tm/config.py`. The `model_api_base` and `model_api_key` settings allow routing through any LiteLLM-compatible provider (OpenRouter, etc.).
+All defaults via AWS Bedrock. Override via env vars in `pipeline/src/tm/config.py`. The API-side Bedrock stages are settlement verifier, subject gate, premise verifier, event decomposition, v2 and `/llm`. They fall back to `judge_model` (Haiku 4.5), not to the extractor (retro#911). `/relevance` and query distillation have their own `RELEVANCE_MODEL` / `QUERY_DISTILL_MODEL`; unset, they use the gatekeeper's model. The full list is in `docs/EXTRACTOR_MODEL_SURVEY.md` ("Model choices elsewhere"). The `model_api_base` and `model_api_key` settings allow routing through any LiteLLM-compatible provider (OpenRouter, etc.).
 
 **[UPDATED 2026-09-08, retro#778] The Extractor row above is now the shared default for both
 lanes.** `oracle-api.service` (the `/forecast` path most callers hit) additionally pins

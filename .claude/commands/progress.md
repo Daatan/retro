@@ -88,3 +88,9 @@ Report back in this format:
 - **Cells:** X/N done | Y no_pred | Z failed | W pending
 - **Since last /progress:** +X done | +Y no_pred | +Z failed
 - **Last log lines:** (last 5 lines)
+
+Loop liveness without SSM: `curl -s https://oracle.daatan.com/health | jq .batch_loop` shows the
+heartbeat written at the end of every cycle (retro#996). Use `last_cycle_ok_at` to tell a dead
+loop from an idle one; an idle loop with a drained queue makes no atlas commits. A `failed`
+count that stays flat between calls may be cells parked after 3 failed passes (retro#959), not
+new failures.

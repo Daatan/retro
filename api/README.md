@@ -25,7 +25,10 @@ for deploy/rollback see [`docs/ORACLE_DEPLOY.md`](../docs/ORACLE_DEPLOY.md).
 | `article_fetch.py` / `polymarket_live.py` | `/fetch-url` extraction (shared with the MCP `fetch_article` tool); live Polymarket lookup for `polymarket_edge` |
 | `stages.py` | Registry of every shadow-then-promote stage (`*_enabled` / `*_enforce` pairs); logged once per worker as `event=stage_modes` |
 | `jev_shadow.py` / `jev_class.py` / `jev_dates.py` | Jev (TypeSafe System One) stages on `/forecast`: shadow extraction + skip-gate pass 1, the `evidence_class` corrector, the settled-claim `event_date` shadow — see [`../docs/ORACLE_VARIABLES.md`](../docs/ORACLE_VARIABLES.md) |
-| `pm_paper.py` | `/pm/paper` scorecard, rebuilt from the `polymarket_paper` ledger |
+| `pm_paper.py` / `manifold_paper.py` | `/pm/paper` and `/manifold/paper` scorecards, rebuilt from the `polymarket_paper` / `manifold_paper` ledgers |
+| `settings_groups.py` / `settings_deprecations.py` | Grouped read-only views over `ApiSettings` (new or touched code reads these, retro#947); startup `event=deprecated_env` / `unrecognized_env` report |
+| `batch_heartbeat.py` | Reads the batch loop's `data/heartbeat.json` for `/health`'s `batch_loop` field (retro#996) |
+| `extraction_memo_store.py` / `extractor_shadow.py` | 24 h raw-extraction memo (retro#895); candidate-extractor shadow, log-only, off unless `extractor_shadow_model` is set (retro#921) |
 
 It imports `tm.gatekeeper`, `tm.extractor`, `tm.web_search`, and `tm.net_guard`
 from the `pipeline/` package (a path dependency) — no code is duplicated.
@@ -70,7 +73,8 @@ cd api && uv run pytest        # no network/secrets needed
 ```
 
 `tests/conftest.py` sets a dummy `ORACLE_API_KEY` so the suite runs without a real
-secret. CI runs this on every PR and **gates the deploy** (see `.github/workflows/`).
+secret. CI runs this on every PR, together with `ruff` and `mypy` (`uv run mypy`, after
+`uv sync --extra dev`), behind the required `ci-gate` check, and the same suite **gates the deploy** (see `.github/workflows/`).
 
 ## Endpoints (summary)
 
@@ -79,15 +83,19 @@ secret. CI runs this on every PR and **gates the deploy** (see `.github/workflow
 `GET /bayes/nodes`, `GET /leaderboard`, `POST /leaderboard/ingest`,
 `GET /leaderboard/resolution-shadow`, `GET /leaderboard/author-shadow`,
 `GET /leaderboard/settlement-pin-report`,
-`GET /health`, `GET /version`, `GET /pm/paper`, `POST /v2/forecast` + `GET /v2/jobs/{id}`
+`GET /health`, `GET /version`, `GET /pm/paper`, `GET /manifold/paper`, `POST /v2/forecast` + `GET /v2/jobs/{id}`
 (the Oracle 2.0 playground, retro#595 — traced query-path runs behind
 `oracle-v2-test.html`). All require the `x-api-key`
-header **except** `/health`, `/version`, and the read-only
-`/pm/paper` (paper-trading
-scorecard, retro#620), and the deliberately-public
+header **except** `/health`, `/version`, the read-only scorecards `/pm/paper`
+(paper trading, retro#620) and `/manifold/paper` (paper calibration, retro#918), and the
+deliberately-public
 `/fetch-url` (which is rate-limited and SSRF-guarded — http(s) only, no
 private/loopback/link-local hosts). Full details in the
 [Oracle API contract](https://github.com/Daatan/docs/blob/main/oracle-api.md).
 
 Error-contract notes: `/search` returns **422** (not 500) on malformed date
 params rather than an opaque 500.
+
+`/health` also carries `batch_loop`: the batch pipeline's last-cycle heartbeat (timestamps, the
+sha it ran on, cell counts), or `null` when the file is missing. daatan's evidence-health cron
+reads liveness from there (see `docs/ARCHITECTURE.md`, retro#996).

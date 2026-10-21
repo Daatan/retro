@@ -3259,3 +3259,61 @@ re-ask the same question over the same articles, that is a consistency gain rath
 **Log:** `event=extract_memo result=hit|miss key=<16 hex> model=…` (`n_preds=` on a hit);
 `event=extract_memo_error op=get|put|parse` on a store failure (fail-open). The hit rate is
 `grep -c 'result=hit'` over `grep -c 'event=extract_memo '` on the Oracul log.
+
+## 2026-10-06 — each LLM stage owns its model knob (retro#911, PR#912/#913)
+
+Moving the extractor model now moves **only the extractor**. Before retro#911, six API stages
+fell back to `extractor_model`, so a model switch silently moved stages nobody had measured on
+the new model.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `judge_model` (`JUDGE_MODEL`, API) | Haiku 4.5 | Fallback for the settlement verifier, subject gate, premise verifier, event decomposition, v2 decompose / precursor match and `/llm`. Each stage's own `*_MODEL` still wins. |
+| `aggregator_model` (`AGGREGATOR_MODEL`, `tm`) | Haiku 4.5 | Batch article aggregator (`aggregator.py`), pinned to the ID it used to inherit. |
+| `relevance_model` / `query_distill_model` (API) | unset = `GATEKEEPER_MODEL` (Nova Micro) | `/relevance` (news-indexer's judge) and `/forecast`'s search keywords. |
+| `anchor_match_model` (API) | unset = `judge_model` | v2 playground Polymarket same-question check. |
+| `CALIBRATE_EDGES_MODEL` (env, `bayesoracle/calibrate_edges.py`) | Haiku 4.5 | Offline edge calibration. |
+
+`api/tests/test_model_decoupling.py` pins the fallbacks. The full map, including Jev and the
+daatan side, is in `docs/EXTRACTOR_MODEL_SURVEY.md` ("Model choices elsewhere").
+
+## 2026-10-13 — extractor model shadow, log-only (retro#921, PR#924)
+
+`extractor_shadow_model` (`EXTRACTOR_SHADOW_MODEL`, default empty = off) runs the same `/forecast`
+extraction on a candidate model in a background task (`extractor_shadow.py`,
+`extractor_shadow_timeout_seconds` 90). It logs one `event=extractor_shadow` line per article:
+prediction count, |stance|, settled, `fact_signal` fill, and the shadow's tokens and latency.
+Nothing reaches the response, the pool, the memo or any `enforce_*` step. It was used to measure
+Haiku 5.5 on live traffic before the switch below. Its drop-in was deleted after the switch
+(PR#983), so it is off in prod. The code stays for the next candidate.
+
+## 2026-10-16 — `quantity` corrected in code, not in the prompt (retro#935, PR#952/#953)
+
+Two `PredictionExtraction` validators in `pipeline/src/tm/models.py` post-process the elicited
+`quantity` (shadow field). There was no prompt change: earlier prose edits aimed at comparators
+made Nova Lite worse (retro#683 v9b/v9c).
+
+- **Bound verb → `>`.** Rewrites `comparator: "="` to `">"` when the quote has a bound verb
+  (topped, breached, crossed, exceeded, surpassed, passed) directly before the extracted number,
+  and the verb is not negated ("failed to top"). "hit"/"reached" are left alone. Logs
+  `event=quantity_comparator_from_verb`. A/B: Haiku 4.5 60→100%, Nova Lite 41→95% on the
+  `quantity_patterns` corpus.
+- **No number, no quantity.** Drops `quantity` when the quote has no digit and no spelled-out
+  cardinal ("a few billion", "hundreds of"). In those cases both raters had filled it with the
+  question's own threshold. Logs `event=quantity_dropped_no_number`.
+
+## 2026-10-19 — extractor on Claude Haiku 5.5 with adaptive thinking (retro#921, PR#965)
+
+`extractor_model` (`tm/config.py`) and the `oracle-api` pin (`extractor-model.conf`) are both
+`bedrock/us.anthropic.claude-haiku-5-5`. Haiku 4.5 was the extractor from 2026-09-08.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `extractor_thinking` (`EXTRACTOR_THINKING`) | `true` | Adaptive thinking on extractor calls. Without it, 5.5 inverted the sign on negated questions: 31% correct on the twin-consistency check, vs 100% with thinking and 76% for 4.5. Costs about 2x completion tokens and +5 s per call, against a ~9x lower list price. No effect on other models. |
+| `extractor_max_tokens` (`EXTRACTOR_MAX_TOKENS`) | `8000` | Output cap. Thinking spends part of it (~2.7k completion tokens per article). Turning thinking off would let it go back near 2200. |
+
+`tm.llm` omits `temperature` for models that reject it (retro#916/#922). For other callers on a
+Haiku 5.x model it sends `thinking: disabled`, so a small `max_tokens` is not eaten by a
+thinking block. Rollback to 4.5 is one line in `extractor-model.conf` (see its header) plus the
+config default; thinking is ignored for 4.5. The CloudWatch extractor alarms
+(`terraform/monitoring.tf`) are keyed on `extractor_model_id`, which still names 4.5 (retro#1008).

@@ -27,6 +27,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "mypy==2.4.0",  # type-check gate (retro#977); pinned like ruff, a bump changes the error set
     "pytest-mock>=3.12.0",
 ]
 
@@ -40,3 +41,34 @@ packages = ["src/tm"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+# Blocking type-check gate (retro#977), run by the `mypy` job in tests.yml, part of `ci-gate`.
+# Lenient on purpose: third-party stubs are not required, and unannotated functions are not an
+# error (disallow_untyped_defs would add ~55 no-untyped-def hits per package). Every module is
+# checked except the allowlist below, so a new file must type-check from day one.
+[tool.mypy]
+files = ["src/tm"]
+ignore_missing_imports = true
+check_untyped_defs = true
+
+# Ratchet: modules that had mypy errors when the gate landed (2026-10-21, mypy 2.4.0,
+# 51 errors total; count per module in the comment). Fix a module, delete its line, never
+# add one. Blind spot: new errors inside a listed module are not caught until it is removed.
+[[tool.mypy.overrides]]
+module = [
+    "tm.ab_harness",  # 1
+    "tm.aggregator",  # 1
+    "tm.backtest",  # 11
+    "tm.crawler",  # 2
+    "tm.extractor",  # 1
+    "tm.gdelt_bq_ingest",  # 1
+    "tm.gdelt_ingest",  # 1
+    "tm.gnews_ingest",  # 2
+    "tm.llm",  # 2
+    "tm.orchestrator",  # 1
+    "tm.scorer",  # 6
+    "tm.site_search",  # 19
+    "tm.web_search",  # 1
+    "tm.web_search_ingest",  # 2
+]
+ignore_errors = true

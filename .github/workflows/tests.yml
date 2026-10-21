@@ -162,12 +162,41 @@ jobs:
       - name: ruff check
         run: uvx ruff@0.8.6 check api pipeline
 
+  mypy:
+    # Blocking (retro#977): type-check api/ and pipeline/ with the [tool.mypy] config in each
+    # pyproject.toml. Modules that had errors when the gate landed are listed there with
+    # ignore_errors (a ratchet: delete lines, never add). Unlike ruff it needs each project's
+    # deps installed to resolve types, hence uv sync rather than uvx. Part of `ci-gate`.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [api, pipeline]
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: mypy
+        run: uv run mypy
+
   # The one check `main` should require. Runs even when the test jobs were skipped (docs-only
   # PR) or failed, and is green only if every job it depends on passed or was skipped.
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [changes, infra-shell-tests, pytest, ruff-lint]
+    needs: [changes, infra-shell-tests, pytest, ruff-lint, mypy]
     runs-on: ubuntu-latest
     steps:
       - name: Require every needed job to have passed or been skipped

@@ -27,6 +27,9 @@ is brought under terraform here to make it auditable and rebuildable.
   SNS topic looked up by name. Both key on `var.extractor_model_id` (`variables.tf`), which has to
   follow every extractor model switch. It still names Haiku 4.5 after the retro#921 switch to
   5.5 (retro#1008).
+- `backup.tf` — daily DLM snapshots of the box (03:00 UTC, keep 7) plus the DLM execution
+  role (Daatan/platform#42). Targets the **instance** by its `Name = truthmachine-pipeline`
+  tag, because the root volume carries no tags — keep that tag on any rebuild.
 
 ## Usage
 ```bash

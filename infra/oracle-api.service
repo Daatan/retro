@@ -1,3 +1,9 @@
+# Hand-synced: deploy_oracle.sh does NOT install this unit (it only SIGHUPs
+# gunicorn, which cannot pick up ExecStart changes anyway). To apply a change:
+#   sudo cp infra/oracle-api.service /etc/systemd/system/ && sudo systemctl daemon-reload \
+#     && sudo systemctl restart oracle-api
+# Drift as of 2026-10-24 (platform#42): the box still runs the pre-org-transfer
+# copy without --access-logformat; everything else matches.
 [Unit]
 Description=TruthMachine Oracle API
 Documentation=https://github.com/Daatan/retro/blob/main/docs/ORACLE_API.md

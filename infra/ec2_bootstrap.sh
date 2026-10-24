@@ -122,6 +122,12 @@ if [[ -x "$WORKDIR/infra/restore_atlas.sh" ]]; then
   log "Restoring atlas snapshot from S3..."
   WORKDIR="$WORKDIR" bash "$WORKDIR/infra/restore_atlas.sh" || log "restore_atlas exited non-zero (non-fatal, continuing)"
 fi
+# Paper-bot ledgers, Jev cache, oracle-series nodes (infra/snapshot_state.sh).
+# Restores only items that are missing locally.
+if [[ -x "$WORKDIR/infra/restore_state.sh" ]]; then
+  log "Restoring state snapshot from S3..."
+  WORKDIR="$WORKDIR" bash "$WORKDIR/infra/restore_state.sh" || log "restore_state exited non-zero (non-fatal, continuing)"
+fi
 
 # ── 7. Install systemd service ────────────────────────────────────────────────
 log "Installing systemd service..."

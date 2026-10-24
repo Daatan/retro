@@ -408,6 +408,11 @@ print(' '.join(empty))
   if [[ -x "$WORKDIR/infra/snapshot_atlas.sh" ]]; then
     bash "$WORKDIR/infra/snapshot_atlas.sh" || log "snapshot_atlas exited non-zero (non-fatal)"
   fi
+  # Small irreplaceable ledgers/series (paper bots, Jev cache, oracle-series)
+  # — platform#42 item B. Same non-fatal contract.
+  if [[ -x "$WORKDIR/infra/snapshot_state.sh" ]]; then
+    bash "$WORKDIR/infra/snapshot_state.sh" || log "snapshot_state exited non-zero (non-fatal)"
+  fi
 }
 
 # ── Main loop ─────────────────────────────────────────────────────────────────

@@ -71,6 +71,12 @@ jobs:
       - name: Run ec2_run.sh guard regression tests
         run: bash infra/tests/test_ec2_run_guards.sh
 
+      - name: shellcheck snapshot_state.sh / restore_state.sh
+        run: shellcheck -S error infra/snapshot_state.sh infra/restore_state.sh infra/tests/test_state_snapshot.sh
+
+      - name: Run state snapshot round-trip test
+        run: bash infra/tests/test_state_snapshot.sh
+
       # settlement_report.py is the tool that will answer "is it safe to enforce
       # the settlement gates" (retro#691). It runs on EC2, so no pytest suite
       # would ever reach it — these tests feed it synthetic log text here.

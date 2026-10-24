@@ -25,6 +25,7 @@ EC2 (truthmachine.service)
   ec2_bootstrap.sh (on fresh instance)  ←  restore_atlas.sh   ───────┘
 ```
 
+- **State archive** (`snapshots/state-<iso-ts>.tgz`, platform#42 item B): the small irreplaceable files — paper-bot ledgers (`data/polymarket_paper/` = the retro#620 scoreboard, `data/manifold_paper/`), `data/jev_values/`, the daatan-pushed resolution feedback / settlement-pin ledgers + their dedup caches, `data/*leaderboard*.json`, `data/resolution_tags.json`, and `~/oracle-series/nodes.jsonl`. A few MB per cycle. Written by [`infra/snapshot_state.sh`](../infra/snapshot_state.sh) right after the atlas snapshot; SQLite diskcache files are copied with the sqlite3 backup API (WAL-safe). No latest pointer — [`infra/restore_state.sh`](../infra/restore_state.sh) takes the newest `state-*` key and restores only items missing locally. **Never put `.env*` or any secret in this bucket.** Round-trip test: `infra/tests/test_state_snapshot.sh`.
 - **Per-cycle archive** (`snapshots/<iso-ts>.tgz`): written on every successful extraction cycle, expires after 30 days. Purpose: point-in-time recovery (e.g. "restore state as of two days ago because today's batch was poisoned").
 - **Latest pointer** (`latest.tgz`): overwritten each cycle. Versioning keeps the previous N for 7 days, so `aws s3api list-object-versions` can still pull a recent good version if the most recent upload is corrupt. Purpose: one-object restore on boot.
 
@@ -55,7 +56,8 @@ aws s3api put-bucket-versioning --bucket "$BUCKET" \
 aws s3api put-bucket-lifecycle-configuration --bucket "$BUCKET" --lifecycle-configuration '{
   "Rules": [
     { "ID": "expire-per-cycle-snapshots", "Status": "Enabled",
-      "Filter": {"Prefix": "snapshots/"}, "Expiration": {"Days": 30} },
+      "Filter": {"Prefix": "snapshots/"}, "Expiration": {"Days": 30},
+      "NoncurrentVersionExpiration": {"NoncurrentDays": 1} },
     { "ID": "prune-latest-history", "Status": "Enabled",
       "Filter": {"Prefix": "latest.tgz"},
       "NoncurrentVersionExpiration": {"NoncurrentDays": 7} }
@@ -144,7 +146,9 @@ aws s3api get-object --bucket truthmachine-atlas-snapshots-<ACCOUNT_ID> \
 
 ## Cost
 
-~14 MB compressed per snapshot. At one snapshot per cycle (~12–60 cycles/day depending on pending work), 30-day retention, the bucket sits at well under 10 GB. Cost in eu-central-1: **< $0.25/month** for storage + negligible PUT/GET fees.
+~31 MB (atlas) + a few MB (state) compressed per cycle, ~70 cycles/day, 30-day retention → ~70 GB steady state, ~$1.7/month.
+
+**The bucket is versioned, so `Expiration` alone never frees anything:** it turns each expired `snapshots/` object into a delete marker and keeps the data as a noncurrent version forever. Until the `NoncurrentVersionExpiration` line above was added (platform#42, 2026-10-24) the bucket had grown to ~457 GB (≈ $11/month) and was adding ~1.5 GB/day. Apply the lifecycle block above to an existing bucket the same way; the backlog is purged within ~1–2 days.
 
 ## Known limitations
 

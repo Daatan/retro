@@ -52,21 +52,28 @@ def _coerce_nested_json_string(data: Any, key: str) -> Any:
 
 
 class GatekeeperOutput(BaseModel):
-    is_prediction: bool
-    reason: str
-    prediction_count_estimate: int = Field(default=0, ge=0)
-    relevance_score: float = Field(
-        default=1.0, ge=0.0, le=1.0,
-        description="Graded topic relevance of the article to the event [0,1]; "
-                    "its square multiplies the source's aggregation weight. When "
-                    "a caller/model OMITS it entirely, the default is is_prediction- "
-                    "dependent: 1.0 (neutral) on a passing gate, 0.0 on a rejection — "
-                    "so an unscored rejection can never read as relevant to a caller "
-                    "(e.g. the /relevance endpoint response, or ledger analysis) that "
-                    "doesn't also check is_prediction. An EXPLICITLY supplied score is "
-                    "never overridden, at any value — a graded near-miss on a "
-                    "rejection (e.g. relevance=0.1) is meaningful and must survive.",
+    # Field order is prompt text: instructor (MD_JSON) renders this schema into the gate prompt,
+    # and the model fills fields in order. `reason` comes first so the model writes its reading
+    # of the article before committing to is_prediction/relevance_score (retro#1024: v1's
+    # verdict-first order scored contrary evidence 0 as "different matter" and passed short-form
+    # noise; reason-first cut both on Nova Micro at zero extra cost). Changing order or
+    # descriptions changes GATEKEEPER_SCHEMA_HASH -> bump GATEKEEPER_PROMPT_VERSION.
+    reason: str = Field(
+        description="One sentence: what the article is about, then whether and how it "
+                    "bears on the claim's outcome.",
     )
+    is_prediction: bool
+    # relevance_score: graded topic relevance of the article to the event [0,1]; its square
+    # multiplies the source's aggregation weight. When a caller/model OMITS it entirely, the
+    # default is is_prediction-dependent: 1.0 (neutral) on a passing gate, 0.0 on a rejection —
+    # so an unscored rejection can never read as relevant to a caller (e.g. the /relevance
+    # endpoint response, or ledger analysis) that doesn't also check is_prediction. An
+    # EXPLICITLY supplied score is never overridden, at any value — a graded near-miss on a
+    # rejection (e.g. relevance=0.1) is meaningful and must survive. (Kept as a comment, not a
+    # Field description, since v2: the description is rendered into the prompt and the A/B'd
+    # schema did not carry it.)
+    relevance_score: float = Field(default=1.0, ge=0.0, le=1.0)
+    prediction_count_estimate: int = Field(default=0, ge=0)
 
     @model_validator(mode="before")
     @classmethod

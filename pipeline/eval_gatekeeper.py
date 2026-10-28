@@ -8,17 +8,18 @@ noise:
     cd pipeline && AWS_REGION=us-east-1 .venv/bin/python eval_gatekeeper.py
 
 Labels are the expected `is_prediction` for the (claim, article) pair, spanning multiple
-claim domains. The current prompt should score 100% / 100% on this set; a regression here
+claim domains. Target is 100% / 100% on this set (retro#1024: v1 scored 3/6 REJ on the prod model id, v2 5/6); a regression here
 means the gate is back to rejecting indirect evidence (recall drop) or waving through
 off-topic noise (precision drop).
 """
+import os
 import asyncio
 
 from tm.gatekeeper import PROMPT_PREFIX, PROMPT_SUFFIX
 from tm.models import GatekeeperOutput
 from tm import llm
 
-GATE_MODEL = "bedrock/amazon.nova-micro-v1:0"
+GATE_MODEL = os.environ.get("GATE_MODEL", "bedrock/us.amazon.nova-micro-v1:0")  # prod id
 
 # (claim, article, expected_is_prediction)
 CASES = [

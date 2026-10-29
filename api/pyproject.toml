@@ -65,7 +65,6 @@ follow_imports = "silent"
 module = [
     "forecast_api.aggregation",  # 2
     "forecast_api.config",  # 1
-    "forecast_api.forecaster",  # 61
     "forecast_api.jev_class",  # 2
     "forecast_api.jev_dates",  # 1
     "forecast_api.jev_shadow",  # 8

@@ -11,34 +11,15 @@ If an instructor upgrade changes the serialisation, these fail. That is the inte
 outcome: the model's input changed, so the prompt hash should move and the version
 should be bumped.
 """
+import asyncio
 import json
 
 import pytest
 from pydantic import BaseModel, Field
 
+from tm import llm
 from tm.llm import rendered_response_schema
 from tm.models import ExtractionOutput, GatekeeperOutput
-
-
-def _handle_json_modes():
-    """instructor's mode handler, across the module move it made mid-2.x.
-
-    Deliberately raises rather than skipping when neither path exists: a skip here
-    would silently retire the only check that the hashed text is the sent text.
-    """
-    try:
-        from instructor.processing.response import handle_json_modes
-    except ImportError:  # pragma: no cover - older instructor
-        try:
-            from instructor.process_response import handle_json_modes
-        except ImportError as exc:  # pragma: no cover
-            raise AssertionError(
-                "instructor no longer exposes handle_json_modes at either known path, so "
-                "tm.llm.rendered_response_schema can't be verified against what is actually "
-                "sent. Re-derive the MD_JSON serialisation by hand before trusting the "
-                "prompt hashes again (retro#700)."
-            ) from exc
-    return handle_json_modes
 
 
 class _Probe(BaseModel):
@@ -47,30 +28,91 @@ class _Probe(BaseModel):
     verdict: str = Field(description="a distinctive field description ZQ7")
 
 
-def _injected_system_message(model) -> str:
+class _Captured(Exception):
+    """Raised by the fake transport once it has the request — nothing is sent anywhere."""
+
+
+def _sent_request(model, monkeypatch, *, cache: bool = True) -> dict:
+    """The kwargs instructor hands litellm for one real ``complete_structured`` call.
+
+    Captured at the litellm boundary (a fake ``acompletion`` behind a client built the
+    way ``tm.llm`` builds its own) rather than by calling an instructor handler: the
+    handler moved modules twice and 1.16 rewrote it, while the litellm call is the one
+    seam the model's input actually crosses (retro#1012).
+    """
     import instructor
 
-    _, kwargs = _handle_json_modes()(
-        model,
-        {"messages": [{"role": "user", "content": "hello"}]},
-        instructor.Mode.MD_JSON,
-    )
-    system = [m for m in kwargs["messages"] if m["role"] == "system"]
+    seen: dict = {}
+
+    async def fake_acompletion(*_args, **kwargs):
+        seen.update(kwargs)
+        raise _Captured
+
+    monkeypatch.setattr(llm, "client", instructor.from_litellm(fake_acompletion, mode=llm.client.mode))
+    monkeypatch.setattr(llm.settings, "enable_prompt_cache", cache)
+    monkeypatch.setattr(llm.settings, "prompt_cache_ttl", None)
+    with pytest.raises(Exception):
+        asyncio.run(llm.complete_structured(
+            "bedrock/us.anthropic.claude-haiku-5-5", model, "SUFFIX",
+            max_tokens=10, timeout=5, cached_prefix="PREFIX", thinking=True,
+        ))
+    assert seen, "instructor never reached litellm"
+    return seen
+
+
+def _text(content) -> str:
+    """A message body as plain text — 1.17 sends the system message as text blocks."""
+    if isinstance(content, str):
+        return content
+    return "".join(block["text"] for block in content)
+
+
+def _injected_system_message(model, monkeypatch) -> str:
+    system = [m for m in _sent_request(model, monkeypatch)["messages"] if m["role"] == "system"]
     assert system, "MD_JSON no longer prepends a system message"
-    return system[0]["content"]
+    return _text(system[0]["content"])
 
 
 class TestReproducesWhatInstructorSends:
     @pytest.mark.parametrize("model", [_Probe, GatekeeperOutput, ExtractionOutput],
                              ids=["probe", "gatekeeper", "extractor"])
-    def test_the_rendered_schema_appears_verbatim_in_the_prompt(self, model):
-        assert rendered_response_schema(model) in _injected_system_message(model)
+    def test_the_rendered_schema_appears_verbatim_in_the_prompt(self, model, monkeypatch):
+        assert rendered_response_schema(model) in _injected_system_message(model, monkeypatch)
 
-    def test_descriptions_and_docstrings_reach_the_model(self):
+    def test_descriptions_and_docstrings_reach_the_model(self, monkeypatch):
         """The two carriers that made retro#700 expensive, checked end to end."""
-        sent = _injected_system_message(_Probe)
+        sent = _injected_system_message(_Probe, monkeypatch)
         assert "a distinctive field description ZQ7" in sent
         assert "Pydantic copies into the schema" in sent
+
+
+class TestTheWrapperTextIsPinned:
+    """instructor's own words around the schema are prompt text too (retro#1012).
+
+    1.16 replaced them ("Parse the content and return a JSON object matching this
+    schema" became "As a genius expert..."); the schema hash cannot see that, so it is
+    pinned here in full. If this fails after an instructor bump, the model's input
+    changed: A/B it (docs/AB_HARNESS.md) before updating the expected text.
+    """
+
+    def test_the_whole_system_message(self, monkeypatch):
+        schema = rendered_response_schema(_Probe)
+        assert _injected_system_message(_Probe, monkeypatch) == (
+            "\n            As a genius expert, your task is to understand the content and provide\n"
+            "            the parsed objects in json that match the following json_schema:\n\n\n"
+            f"            {schema}\n\n"
+            "            Make sure to return an instance of the JSON, not the schema itself\n"
+        )
+
+    def test_the_user_turn_keeps_the_cached_prefix_and_gets_the_json_reminder(self, monkeypatch):
+        user = [m for m in _sent_request(_Probe, monkeypatch)["messages"] if m["role"] == "user"]
+        assert len(user) == 1
+        blocks = user[0]["content"]
+        assert blocks[0] == {"type": "text", "text": "PREFIX", "cache_control": {"type": "ephemeral"}}
+        assert [b["text"] for b in blocks[1:]] == [
+            "SUFFIX",
+            "Return the correct JSON response within a ```json codeblock. not the JSON_SCHEMA",
+        ]
 
 
 class TestTheApproximationsWeRejected:

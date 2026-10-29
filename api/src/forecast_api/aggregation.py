@@ -1113,7 +1113,7 @@ def event_key_collapse_factors(
     group's total contribution to the wider pool shrinks. That is
     mathematically identical to replacing the group with one collapsed row
     whose stance is the members' weighted mean and whose weight is their
-    max, which is the exact mechanism `scripts/measure_dependence_key_780.py`
+    max, which is the exact mechanism `scripts/archive/measure_dependence_key_780.py`
     measured to produce the approved effect sizes (2026-09-02: 2.3% row
     collapse, up to 11.51pp needle move, 1/120 pools >= 5pp) — reproduced
     here as a per-row multiplier instead of a row-merge so every other

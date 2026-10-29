@@ -909,7 +909,7 @@ its own singleton — missing text can never *cost* a source its vote.
 
 **Threshold tuned 2026-08-09 (retro#414):** the original 0.5 was never once reached live (max
 observed 0.457 across 24 pools), so the discount above could not fire regardless of the
-exponent. `api/scripts/eyeball_cluster_pairs.py` pulled the actual `claims_detail` text behind
+exponent. `api/scripts/archive/eyeball_cluster_pairs.py` pulled the actual `claims_detail` text behind
 every pairwise score in prod and printed it for review — the aggregate stats alone couldn't
 distinguish real echo from coincidence. Most pairs down to ~0.30 turned out to be genuine
 syndication of one report (the same Reuters/AP wire write-up run by several outlets, a Michael
@@ -1678,7 +1678,7 @@ Small-tasks breakdown, in order:
   originally 50 per retro#337's uncommitted simulation, corr ~0.97 there —
   but #341 found 50 unreachable in any useful timeframe on the real claim mix
   and that nobody had checked anything between n=6 and n=50.
-  `pipeline/scripts/simulate_shadow_gate_correlation.py` fills that gap
+  `pipeline/scripts/archive/simulate_shadow_gate_correlation.py` fills that gap
   against the real weight formula: corr reaches 0.91 by n=15, the lowest n
   clearing a 0.90 bound), holds every source at 1.0 until the dataset as a
   whole is worth trusting. The OpenSkill fields stay on the board for
@@ -2794,7 +2794,7 @@ one row (weighted-mean stance, max weight), without changing row count or breaki
 per-row-indexed machinery (`forecaster.py`'s settlement voting, evidence-window logging,
 `leave_one_source_out_sensitivity`) that assumes index correspondence.
 
-**Event-key-only, not the umbrella's original combined spec.** `scripts/measure_dependence_key_780.py`
+**Event-key-only, not the umbrella's original combined spec.** `scripts/archive/measure_dependence_key_780.py`
 (Step 0, merged in PR#788) measured both: the combined bar (event-key **and**
 `voice.attributed_to`/text-Jaccard corroboration) barely fires — 0.2% row collapse, 2.38pp max
 needle move, 0/120 pools ≥5pp — because `voice.attributed_to` fills only 2.7% of dominant claims

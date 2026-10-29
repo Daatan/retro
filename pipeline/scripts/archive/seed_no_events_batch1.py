@@ -4,7 +4,7 @@ class imbalance. Each is a well-documented non-event: confidently predicted at
 the time, did not happen by outcome_date. Pending Oracul in-window validation on
 the paced backfill batch — events that return no in-window coverage get pruned.
 
-Run from repo root:  python pipeline/scripts/seed_no_events_batch1.py
+Run from repo root:  python pipeline/scripts/archive/seed_no_events_batch1.py
 """
 
 import json

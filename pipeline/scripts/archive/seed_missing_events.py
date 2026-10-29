@@ -3,7 +3,7 @@ One-off seed: materialize the H (Israeli Tech) and I (Energy) domain events from
 TruthMachine/EVENTS.md that were never written to data/events/. Brings the JSON
 event set from 70 up to the 85 documented in the verified seed list.
 
-Run from the repo root:  python pipeline/scripts/seed_missing_events.py
+Run from the repo root:  python pipeline/scripts/archive/seed_missing_events.py
 """
 
 import json

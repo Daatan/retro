@@ -73,7 +73,7 @@ class ApiSettings(BaseSettings):
     # on the real claim mix (~3.7 scoreable resolutions/week) and that there
     # was no simulation data between n=6 (corr 0.81) and n=50 — so 50 wasn't
     # actually the lowest-n floor, just the only point anyone had checked.
-    # pipeline/scripts/simulate_shadow_gate_correlation.py fills that gap
+    # pipeline/scripts/archive/simulate_shadow_gate_correlation.py fills that gap
     # against the real weight formula: corr is already 0.91 by n=15, the
     # lowest n clearing a 0.90 bound — a deliberate trade of ~0.06 correlation
     # for reaching the gate in weeks instead of ~3 months. Revisit upward once
@@ -243,7 +243,7 @@ class ApiSettings(BaseSettings):
     # `cluster_jaccard_threshold` is the shingle-overlap bar for "same story". Tuned
     # 2026-08-09 (retro#414): 0.5 was never once reached live (max observed 0.457 across
     # 24 pools), so the discount above could never fire. Eyeballing the actual pair text
-    # (api/scripts/eyeball_cluster_pairs.py) at every score in [0.20, 0.50] found two
+    # (api/scripts/archive/eyeball_cluster_pairs.py) at every score in [0.20, 0.50] found two
     # separate reasons NOT to go as low as the 0.457 ceiling suggests: (1) three pairs at
     # 0.22–0.27 shared boilerplate lead-in text while reporting CONTRADICTORY claims (one
     # said a Patriot-missile license was granted, another that it was refused) — clustering
@@ -319,7 +319,7 @@ class ApiSettings(BaseSettings):
     # (actor, target, day) triple) to one row's worth of weight — see
     # `aggregation.event_key_collapse_factors`. Event-key-only, no
     # attribution/text-Jaccard corroboration required: `scripts/
-    # measure_dependence_key_780.py` measured the literal combined spec at
+    # archive/measure_dependence_key_780.py` measured the literal combined spec at
     # 0.2% row collapse / 2.38pp max needle move / 0/120 pools >= 5pp
     # (too weak — `voice.attributed_to` fills only 2.7% of dominant claims
     # today) versus event-key-only at 2.3% collapse / up to 11.51pp / 1/120

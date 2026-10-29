@@ -329,7 +329,7 @@ def main() -> int:
               f"max_abs={max(abs(d) for d in deltas):.2f}")
         print(f"pools with |delta| >= 5pp: {sum(1 for d in deltas if abs(d) >= 5.0)}/{len(deltas)}")
         print("\ntop 10 by |needle delta|:")
-        for abs_d, d, pid in sorted(abs_deltas, reverse=True)[:10]:
+        for _abs_d, d, pid in sorted(abs_deltas, reverse=True)[:10]:
             print(f"  pid={pid}  delta={d:+.2f}pp")
 
     ek_deltas = [r["event_key_only_delta_pp"] for r in results if r["event_key_only_delta_pp"] is not None]

@@ -151,7 +151,7 @@ async def fetch_article(url: str) -> dict:
     try:
         return (await fetch_and_extract(url)).model_dump()
     except ArticleFetchError as exc:
-        raise ValueError(exc.detail)
+        raise ValueError(exc.detail) from exc
 
 
 async def bayes_nodes(observations: str = "") -> dict:

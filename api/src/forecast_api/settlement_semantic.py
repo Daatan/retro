@@ -77,8 +77,8 @@ _REMAIN = re.compile(r"\b(remain|still be|continue to (?:be|serve)|hold(?:s)? of
 #: nouns — every political claim contains them.
 _ECHO_STOPWORDS = frozenset({
     "will", "the", "and", "for", "with", "from", "that", "this", "any", "all",
-    "least", "than", "least", "more", "less", "over", "under", "into", "onto",
-    "before", "after", "during", "until", "least", "part", "new", "next",
+    "least", "than", "more", "less", "over", "under", "into", "onto",
+    "before", "after", "during", "until", "part", "new", "next",
     "first", "second", "third", "year", "years", "date", "time", "times",
 })
 _ECHO_MIN_LEN = 5
@@ -351,7 +351,7 @@ def apply_gates(
     chosen = [(name, ALL_GATES[name]) for name in gates]
     for cand in candidates:
         reason = None
-        for name, fn in chosen:
+        for _name, fn in chosen:
             reason = fn(subject, cand, deadline=parsed)
             if reason:
                 break

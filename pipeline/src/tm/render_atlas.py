@@ -477,7 +477,7 @@ def _render_matrix(matrix_rows: list, search_status: dict,
     if competitive_scores:
         # Aggregate per source across all events
         src_scores: dict[str, list] = {}
-        for (eid, sid), s in competitive_scores.items():
+        for (_eid, sid), s in competitive_scores.items():
             src_scores.setdefault(sid, []).extend([s["brier"]] * s["n"])
 
         parts.append(

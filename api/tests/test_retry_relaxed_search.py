@@ -7,7 +7,7 @@ what it would have produced; retry_relaxed_search_enforce additionally lets a
 recovered result replace the empty response the caller sees. Both default
 False. LLM/network are never touched here — _run_forecast_inner itself is
 monkeypatched (same technique as test_run_forecast_guards.py), so these tests
-exercise only run_forecast's/​_maybe_retry_relaxed_search's orchestration.
+exercise only run_forecast's/_maybe_retry_relaxed_search's orchestration.
 """
 
 from forecast_api import forecaster

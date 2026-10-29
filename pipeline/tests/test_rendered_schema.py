@@ -51,7 +51,9 @@ def _sent_request(model, monkeypatch, *, cache: bool = True) -> dict:
     monkeypatch.setattr(llm, "client", instructor.from_litellm(fake_acompletion, mode=llm.client.mode))
     monkeypatch.setattr(llm.settings, "enable_prompt_cache", cache)
     monkeypatch.setattr(llm.settings, "prompt_cache_ttl", None)
-    with pytest.raises(Exception):
+    # instructor may re-wrap _Captured (retry exception), and the wrapper type moved between
+    # versions — any exception is fine, the assertion below is what matters.
+    with pytest.raises(Exception):  # noqa: B017
         asyncio.run(llm.complete_structured(
             "bedrock/us.anthropic.claude-haiku-5-5", model, "SUFFIX",
             max_tokens=10, timeout=5, cached_prefix="PREFIX", thinking=True,

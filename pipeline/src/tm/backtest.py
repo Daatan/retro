@@ -458,7 +458,7 @@ def run_backtest(event_ids: list[str], output_dir: Path, use_lgbm: bool = True) 
     use_lgbm_run = use_lgbm and HAS_LGB and len(all_event_data) >= 5
     if use_lgbm_run:
         console.print("[cyan]Training LightGBM model (leave-one-out)...[/cyan]")
-        for i, result in enumerate(results):
+        for result in results:
             event_id = result["event_id"]
             target_features = next(
                 (e["features"] for e in all_event_data if e["event_id"] == event_id), []

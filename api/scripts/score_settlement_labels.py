@@ -188,7 +188,7 @@ def main() -> int:
     print("  " + "-" * 66)
     for combo in combos:
         before = after = lost_true = 0
-        for pid, group in by_q.items():
+        for group in by_q.values():
             subject = claim_subject_from_question(group[0][0]["question"])
             all_c = [to_candidate(r) for r, _ in group]
             base = apply_gates(subject, all_c, gates=(), deadline=group[0][0].get("deadline"))

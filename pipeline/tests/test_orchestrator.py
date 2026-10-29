@@ -130,7 +130,7 @@ def _fake_async_client(response=None, exc=None):
                 raise exc
             if response is not None:
                 try:
-                    response.request
+                    _ = response.request
                 except RuntimeError:
                     response.request = httpx.Request("POST", "https://oracle.daatan.com/search")
             return response

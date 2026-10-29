@@ -289,7 +289,7 @@ async def _lookup_by_keywords(
             if not candidates:
                 continue
 
-            def rank(m: dict) -> tuple:
+            def rank(m: dict, raw: str = raw) -> tuple:
                 ratio = _relevance_ratio(raw, m.get("question", ""))
                 # `not m.get("closed", False)` is True for an open market, which
                 # sorts after False — so ties in ratio favor open. The ratio

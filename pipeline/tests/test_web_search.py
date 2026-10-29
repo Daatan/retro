@@ -296,7 +296,7 @@ class TestExa:
         ws.EXA_API_KEY = "fake-key"
         ws._EXA_QUOTA_EXHAUSTED = False
         with patch("httpx.post", return_value=self._resp(429)):
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="HTTP 429"):
                 ws._search_exa("test query", limit=5)
         assert ws._EXA_QUOTA_EXHAUSTED is False
 

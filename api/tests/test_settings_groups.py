@@ -49,6 +49,6 @@ def test_view_is_read_only_and_rejects_unknown_fields(monkeypatch):
     with pytest.raises(AttributeError):
         g.jev.jev_gate_enabled = True
     with pytest.raises(AttributeError):
-        g.jev.not_a_field
+        _ = g.jev.not_a_field
     assert set(GROUPS) == set(group_fields())
     assert group_of("jev_gate_enabled") == "jev" and group_of("something_new") == "core"

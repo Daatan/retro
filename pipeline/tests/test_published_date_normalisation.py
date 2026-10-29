@@ -47,8 +47,8 @@ class TestFormatsWeAccept:
         The marks are invisible, carry no date information, and defeat every parser.
         Removing them cannot change which date the string denotes.
         """
-        assert norm("16‏/09‏/2026", now=NOW) == "2026-09-16"
-        assert norm("﻿2026-02-24", now=NOW) == "2026-02-24"
+        assert norm("16\u200f/09\u200f/2026", now=NOW) == "2026-09-16"
+        assert norm("\ufeff2026-02-24", now=NOW) == "2026-02-24"
 
     def test_relative_dates_are_absolutized(self):
         """Brave hands its `age` field over raw, and it is often relative.
@@ -82,7 +82,7 @@ class TestUnambiguousNumericOnly:
 
 class TestRejected:
     @pytest.mark.parametrize(
-        "raw", [None, "", "   ", "‏​", "not a date", "yesterday",
+        "raw", [None, "", "   ", "\u200f\u200b", "not a date", "yesterday",
                 "Feb 24, 20", "24/2026", "0000-00-00"],
     )
     def test_non_dates_return_none(self, raw):

@@ -36,7 +36,7 @@ class TestNormalisation:
         assert forecaster._resolve_article_date(_result("Feb 24, 2026")) == "2026-02-24"
 
     def test_bidi_wrapped_date_is_recovered(self):
-        assert forecaster._resolve_article_date(_result("16‏/09‏/2026")) == "2026-09-16"
+        assert forecaster._resolve_article_date(_result("16\u200f/09\u200f/2026")) == "2026-09-16"
 
     def test_relative_provider_date_is_absolutized(self):
         """Brave's `age` field arrives raw and is frequently relative."""

@@ -155,7 +155,7 @@ jobs:
         run: uvx ruff@0.8.6 check --statistics --exit-zero api pipeline
 
   ruff-lint:
-    # Blocking (retro#977): pyflakes rules from ruff.toml. Part of `ci-gate`.
+    # Blocking (retro#977): bug-class rules from ruff.toml (F, B, PLE). Part of `ci-gate`.
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest

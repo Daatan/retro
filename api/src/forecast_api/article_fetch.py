@@ -45,10 +45,10 @@ async def fetch_and_extract(url: str) -> FetchUrlResponse:
             timeout=10.0,
             headers={"User-Agent": "Mozilla/5.0 (compatible; TruthMachine/1.0)"},
         )
-    except UnsafeURLError:
-        raise ArticleFetchError("URL must be a public http(s) address")
-    except Exception:
-        raise ArticleFetchError("Could not fetch URL")
+    except UnsafeURLError as exc:
+        raise ArticleFetchError("URL must be a public http(s) address") from exc
+    except Exception as exc:
+        raise ArticleFetchError("Could not fetch URL") from exc
 
     if resp.status_code != 200 or not resp.text:
         raise ArticleFetchError("Could not fetch URL")

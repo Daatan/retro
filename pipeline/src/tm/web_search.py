@@ -324,7 +324,7 @@ def _gdelt_acquire_slot() -> None:
                     break
                 except BlockingIOError:
                     if time.time() >= deadline:
-                        raise _GDELTSlotBusy("another worker holds the GDELT lock")
+                        raise _GDELTSlotBusy("another worker holds the GDELT lock") from None
                     time.sleep(0.05)
 
             # Lock held — read the last claimed timestamp.
@@ -1463,7 +1463,7 @@ def enrich_snippets(results: List[SearchResult], timeout: float = 8.0) -> List[S
         except TimeoutError:
             logger.warning("enrich_snippets: %ss wall hit, %d URLs incomplete",
                            timeout, sum(1 for f in futures if not f.done()))
-            for fut, idx in futures.items():
+            for _fut, idx in futures.items():
                 if idx not in fetched:
                     fetched[idx] = ""
 

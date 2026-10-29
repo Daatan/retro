@@ -10,6 +10,7 @@ Covers two observability fixes:
 import time
 
 import pytest
+from pydantic import ValidationError
 
 from forecast_api import searcher
 from forecast_api.models import ProviderStatus, SearchRequest
@@ -166,5 +167,5 @@ class TestRunSearchMinResults:
 
     def test_min_results_defaults_to_zero_and_is_bounded(self):
         assert SearchRequest(query="brent crude").min_results == 0
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             SearchRequest(query="brent crude", min_results=31)

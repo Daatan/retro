@@ -320,7 +320,7 @@ def _pick_claim_facets(claims_detail: Optional[Sequence]):
     best = None
     best_rank = None
     for i, c in enumerate(claims_detail or []):
-        def _get(name):
+        def _get(name, c=c):
             v = getattr(c, name, None)
             if v is None and isinstance(c, dict):
                 v = c.get(name)

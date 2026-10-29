@@ -13,12 +13,12 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     ignore:
-      # instructor 1.16 rewrote its providers ("v2") and changed the MD_JSON
-      # system text wrapped around the response schema on every Bedrock call.
-      # That is a live prompt edit, so it goes through the A/B harness
-      # (docs/AB_HARNESS.md), not a weekly bump. pipeline/pyproject.toml caps <1.16.
+      # instructor 2.x: a major can change the MD_JSON system text wrapped around
+      # every Bedrock call. Minors are allowed — pipeline/tests/test_rendered_schema.py
+      # pins that text in full, so a minor that edits it fails CI and goes through the
+      # A/B harness (docs/AB_HARNESS.md) instead of merging (retro#1012).
       - dependency-name: "instructor"
-        versions: [">=1.16"]
+        versions: [">=2"]
       # mcp 2.x renames FastMCP -> MCPServer, moves the transport settings,
       # swaps httpx for httpx2 and ships a new streamable-HTTP implementation.
       # The /mcp server is live behind Cognito OAuth (claude.ai connector), so

@@ -169,13 +169,13 @@ _JSON_RE = re.compile(r"\{.*\}", re.S)
 def _parse_json(text: str) -> Optional[dict]:
     try:
         return json.loads(text)
-    except Exception:
+    except (ValueError, TypeError):
         m = _JSON_RE.search(text)
         if not m:
             return None
         try:
             return json.loads(m.group(0))
-        except Exception:
+        except ValueError:
             return None
 
 
@@ -231,7 +231,7 @@ async def _decompose(job: dict, node: dict, req: V2ForecastRequest) -> list[dict
         parsed = _parse_json(text) or {}
         items = [p for p in parsed.get("precursors", []) if isinstance(p, dict) and isinstance(p.get("text"), str)]
         entry["parsed"] = items
-    except Exception as exc:  # fail-open: the node simply has no precursors
+    except Exception as exc:  # noqa: BLE001 - fail-open: the node simply has no precursors
         entry["error"] = f"{type(exc).__name__}: {exc}"
         items = []
     entry["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
@@ -256,7 +256,7 @@ async def _price_flat(job: dict, node: dict, req: V2ForecastRequest) -> Optional
         res = await run_forecast(
             ForecastRequest(question=node["text"], max_articles=req.max_articles, claim_deadline=req.claim_deadline)
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged, fail-open
         node["status"] = "failed"
         node["flat"] = {"reason": f"{type(exc).__name__}: {exc}"}
         _log(job, f"flat pricing failed: {exc}", node["id"])
@@ -282,7 +282,7 @@ async def _anchor(job: dict, node: dict) -> None:
         if market is _SENTINEL:
             job["calls"]["polymarket"] += 1
             market = await asyncio.wait_for(resolve_market(node["text"]), timeout=15)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged, fail-open
         _log(job, f"anchor lookup failed: {type(exc).__name__}", node["id"])
         return
     if not market or not is_binary_yesno(market):
@@ -336,7 +336,7 @@ async def _same_question(job: dict, node: dict, market_question: str) -> tuple[b
         parsed = _parse_json(text) or {}
         entry["parsed"] = parsed
         return bool(parsed.get("same")), parsed or None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - error recorded in the result, fail-open
         entry["error"] = f"{type(exc).__name__}: {exc}"
         return False, None
     finally:
@@ -397,7 +397,7 @@ async def _match_polymarket(job: dict, node: dict) -> dict:
 
         job["calls"]["polymarket"] += 1
         market = await asyncio.wait_for(resolve_market(node["text"]), timeout=15)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - error recorded in the result, fail-open
         return {"status": "error", "detail": f"{type(exc).__name__}: {exc}"}
     node["_polymarket_cache"] = market  # transient; popped by _anchor, never persisted
     if not market or not is_binary_yesno(market) or current_yes_price(market) is None:
@@ -414,7 +414,7 @@ async def _match_daatan(job: dict, node: dict) -> dict:
         )
     except daatan_client.DaatanLookupError as exc:
         return {"status": "error", "detail": str(exc)}
-    except Exception as exc:  # a bug here must never masquerade as "Daatan is down"
+    except Exception as exc:  # noqa: BLE001 - a bug here must never masquerade as "Daatan is down"
         return {"status": "error", "detail": f"{type(exc).__name__}: {exc}"}
     if not results:
         return {"status": "not_found"}
@@ -470,7 +470,7 @@ async def _classify_relation(job: dict, node: dict, candidate_text: str) -> Opti
         if parsed.get("relation_type") not in _RELATION_TYPES:
             return None
         return parsed
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - error recorded in the result, fail-open
         entry["error"] = f"{type(exc).__name__}: {exc}"
         return None
     finally:
@@ -555,7 +555,7 @@ async def _edge(job: dict, parent: dict, parent_res: ForecastResponse, child: di
                 "p": None if agg.insufficient_data else round(_prob(agg.mean), 4),
                 "articles_used": agg.articles_used, "reason": agg.reason, "insufficient_data": agg.insufficient_data,
             }
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - error recorded in the result, fail-open
             detail["yes" if polarity else "no"] = {"p": None, "reason": f"{type(exc).__name__}: {exc}"}
     edge["detail"] = detail
     py, pn = detail.get("yes", {}).get("p"), detail.get("no", {}).get("p")

@@ -106,7 +106,7 @@ async def main():
             for kw in new_kws:
                 console.print(f"        [dim]· {kw}[/dim]")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             console.print(f"  [red]{event['id']}  ERROR: {e}[/red]")
 
         await asyncio.sleep(0.3)

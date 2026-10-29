@@ -106,7 +106,7 @@ async def jev_evidence_classes(
             if label in EVIDENCE_CLASSES:
                 out["classes"][k], out["p"][k] = label, round(p, 3)
         out.update(tok_in=tok_in, err_n=err_n, jev_model=served_model(resps))
-    except Exception as exc:  # never let Jev affect /forecast
+    except Exception as exc:  # noqa: BLE001 - never let Jev affect /forecast
         out["err"] = repr(exc)[:200]
     finally:
         out["ms"] = round((time.perf_counter() - t0) * 1000)

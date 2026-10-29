@@ -74,7 +74,7 @@ class SimhashIndex:
             try:
                 self._index = json.loads(self._path.read_text())
                 logger.debug("SimhashIndex: loaded %d entries", len(self._index))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - logged, fail-open
                 logger.warning("SimhashIndex: could not load index: %s — starting empty", exc)
 
     def save(self) -> None:

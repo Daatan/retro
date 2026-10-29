@@ -99,7 +99,7 @@ async def _register(request: Request) -> JSONResponse:
     """
     try:
         body = await request.json()
-    except Exception:  # empty/malformed body — still return the static client
+    except Exception:  # noqa: BLE001 - empty/malformed body — still return the static client
         body = {}
     if not isinstance(body, dict):
         body = {}

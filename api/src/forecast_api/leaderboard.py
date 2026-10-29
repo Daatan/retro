@@ -126,12 +126,12 @@ async def background_refresh_loop(
         await asyncio.sleep(interval_seconds)
         try:
             await refresh_cache(path)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - logged, fail-open
             logger.error("Leaderboard refresh failed: %s", exc)
         if shadow_board_path is not None and shadow_feedback_path is not None:
             try:
                 await refresh_shadow_cache(shadow_board_path, shadow_feedback_path)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - logged, fail-open
                 logger.error("Resolution-shadow refresh failed: %s", exc)
 
 

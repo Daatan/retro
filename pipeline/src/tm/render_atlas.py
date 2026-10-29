@@ -112,7 +112,7 @@ def load_vault_urls(data_dir: Path) -> dict[str, str]:
             url = d.get("url", "")
             if url:
                 urls[fp.stem] = url
-        except Exception:
+        except Exception:  # noqa: BLE001 - skip an unreadable or malformed vault file
             pass
     return urls
 

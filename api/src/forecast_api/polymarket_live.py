@@ -29,7 +29,7 @@ async def _lookup_by_id(market_id: str) -> Optional[dict]:
             if r.status_code == 200 and r.json():
                 data = r.json()
                 return data[0] if isinstance(data, list) else data
-        except Exception:
+        except Exception:  # noqa: BLE001 - network call, fail-open to no market
             return None
     return None
 
@@ -69,7 +69,7 @@ def _json_list(raw) -> list:
         try:
             v = json.loads(raw)
             return v if isinstance(v, list) else []
-        except Exception:
+        except ValueError:
             return []
     return []
 

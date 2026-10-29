@@ -1216,7 +1216,7 @@ async def _distill_query(question: str) -> tuple[str, dict]:
             logger.info("query_distilled original=%r distilled=%r", question[:60], keywords)
             return keywords, usage
         return question, usage
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged, fail-open
         logger.warning("query distillation failed: %s", exc)
     return question, {}
 
@@ -1250,7 +1250,7 @@ def _fetch_archived_text(url: str) -> str | None:
         )
         resp.raise_for_status()
         return resp.json().get("text")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged, fail-open
         logger.debug("archived-text lookup failed for %s: %s", url, exc)
         return None
 
@@ -1354,7 +1354,7 @@ def _fetch_article_text(url: str, fallback: str, *, try_archived: bool = True) -
     except httpx.HTTPStatusError as exc:
         outcome = "http_error"
         status = exc.response.status_code
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged, fail-open
         outcome = "fetch_error"
         logger.debug("Article fetch failed for %s: %s", url, exc)
 
@@ -1750,7 +1750,7 @@ async def _process_article(
                 short_form=short_form,
                 language=language,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - logged, fail-open
             logger.warning("Gatekeeper failed for %s: %s", result.url, exc)
             gate_ms = (time.perf_counter() - gate_start) * 1000
             timings.append({
@@ -2092,7 +2092,7 @@ async def _process_article(
         extraction.predictions = audit_pushed_title_fragment(
             extraction.predictions, result.url, text,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged, fail-open
         logger.warning("Extractor failed for %s: %s", result.url, exc)
         extract_ms = (time.perf_counter() - extract_start) * 1000
         timings.append({
@@ -2525,7 +2525,7 @@ async def _run_forecast_inner(
                 search_results, search_provider, provider_chain = await asyncio.to_thread(
                     search_capturing, search_query, limit
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - logged, fail-open
                 logger.error("Search failed: %s", exc)
                 search_results, search_provider, provider_chain = [], "none", []
             # Recall safety: if distilled keywords found nothing, retry verbatim.
@@ -2535,7 +2535,7 @@ async def _run_forecast_inner(
                         search_capturing, verbatim, limit
                     )
                     search_query = verbatim
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - logged, fail-open
                     logger.error("Search (verbatim fallback) failed: %s", exc)
             _log_phase(
                 "search",

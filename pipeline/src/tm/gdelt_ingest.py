@@ -98,7 +98,7 @@ async def _gdelt_query(
             if r.status_code == 200:
                 try:
                     data = r.json()
-                except Exception:
+                except ValueError:
                     # GDELT sometimes returns 200 with empty/whitespace body under load
                     console.print("    [dim yellow]GDELT 200 but empty body — treating as rate-limit[/dim yellow]")
                     _last_call = time.time()
@@ -126,7 +126,7 @@ async def _gdelt_query(
                 console.print(f"    [dim red]GDELT {r.status_code}[/dim red]")
                 return []
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             _last_call = time.time()
             console.print(f"    [dim red]GDELT error: {e}[/dim red]")
             if attempt == retries - 1:
@@ -146,7 +146,7 @@ async def _fetch_text(url: str) -> str:
             if r.status_code != 200:
                 return ""
         return extract_article_body(BeautifulSoup(r.text, "html.parser"))
-    except Exception:
+    except Exception:  # noqa: BLE001 - network fetch + HTML parse, fail-open to empty text
         return ""
 
 

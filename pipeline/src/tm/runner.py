@@ -221,7 +221,7 @@ async def run_article(
             extractor_model=effective_model,
         )
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - error recorded in the result, fail-open
         error_msg = str(e)
         update_cell(article.event_id, article.source_id, CellStatus.failed, error=error_msg)
         return PipelineResult(

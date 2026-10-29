@@ -83,7 +83,7 @@ async def _lookup_by_url(pm_url: str) -> Optional[dict]:
             if r.status_code != 200 or not r.json():
                 return None
             ev_data = r.json()[0]
-        except Exception:
+        except Exception:  # noqa: BLE001 - network call, fail-open to no event
             return None
 
     markets = ev_data.get("markets", [])
@@ -227,7 +227,7 @@ async def _public_search(client: httpx.AsyncClient, q: str) -> list[dict]:
         if r.status_code != 200:
             return []
         data = r.json()
-    except Exception:
+    except Exception:  # noqa: BLE001 - network call, fail-open to no results
         return []
     if not isinstance(data, dict):
         return []
@@ -308,7 +308,7 @@ def _extract_clob_token(market: dict) -> Optional[str]:
     if isinstance(tokens, str):
         try:
             tokens = json.loads(tokens)
-        except Exception:
+        except ValueError:
             tokens = []
     return str(tokens[0]) if tokens else None
 
@@ -340,7 +340,7 @@ def _fetch_price_history_sync(clob_token_yes: str, outcome_date: str) -> list[di
                 if dt <= outcome_dt:
                     by_date[dt.strftime("%Y-%m-%d")] = round(float(prob), 4)
         return [{"date": d, "probability": v} for d, v in sorted(by_date.items())]
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - logged, fail-open
         console.print(f"    [dim red]CLOB price error: {e}[/dim red]")
         return []
 

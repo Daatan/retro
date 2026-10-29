@@ -163,7 +163,7 @@ async def load_ledger(path: Path) -> list[SettlementPinLedgerEntry]:
     for lineno, record in enumerate(records, start=1):
         try:
             entries.append(SettlementPinLedgerEntry(**record))
-        except Exception:
+        except Exception:  # noqa: BLE001 - logged, fail-open
             logger.warning("Skipping unparsable settlement-pin-ledger record %d in %s", lineno, path)
     return entries
 

@@ -120,7 +120,7 @@ async def _check_serpapi() -> ProviderStatus:
             _ws._SERPAPI_QUOTA_EXHAUSTED = True
         return ProviderStatus(configured=True, exhausted=exhausted,
                               status="exhausted" if exhausted else "ok", credits=credits)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - provider status probe; the error is returned
         return ProviderStatus(configured=True, exhausted=False, status="error", error=str(e))
 
 

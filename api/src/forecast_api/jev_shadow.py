@@ -539,7 +539,7 @@ async def jev_pass1(
         tok_in += sel.get("usage", {}).get("input_tokens", 0)
         nouls = [sel["answers"][f"s{i}"]["noul"] for i in range(len(sentences))]
         out.update(nouls=nouls, neg=neg, max_noul=max(nouls), tok_in=tok_in, jev_model=served_model([sel]))
-    except Exception as exc:  # never let Jev affect /forecast
+    except Exception as exc:  # noqa: BLE001 - never let Jev affect /forecast
         out["err"] = repr(exc)[:200]
     finally:
         out["ms"] = round((time.perf_counter() - t0) * 1000)
@@ -754,7 +754,7 @@ async def run_jev_shadow(
         if date_rows:
             payload["dates"] = date_rows
         payload["tok_in"] = tok_in
-    except Exception as exc:  # shadow: never let Jev affect /forecast
+    except Exception as exc:  # noqa: BLE001 - shadow: never let Jev affect /forecast
         payload["err"] = repr(exc)[:200]
     finally:
         payload["ms"] = round((time.perf_counter() - t0) * 1000)

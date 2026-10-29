@@ -125,7 +125,7 @@ def _load_vault2_articles(data_dir: Path, eid: str, cutoff_str: str) -> list[dic
         try:
             if is_negative_marker(json.loads(path.read_text())):
                 continue
-        except Exception:
+        except (OSError, ValueError):
             continue
         seen_hashes.add(article_hash)
         n_total += 1
@@ -181,7 +181,7 @@ def fetch_tm_probabilities_oracle(data_dir: Path, events: list[dict], t_days: in
                 Name="/daatan/shared/secrets/ORACLE_API_KEY", WithDecryption=True
             )["Parameter"]["Value"].strip()
             console.print("[dim]Oracul API key loaded from SSM Parameter Store[/dim]")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             console.print(f"[red]ORACLE_API_KEY not set and SSM fetch failed: {e}[/red]")
 
     if not api_key:
@@ -275,7 +275,7 @@ def fetch_tm_probabilities_oracle(data_dir: Path, events: list[dict], t_days: in
                     break
                 forecast = fr.json()
                 break
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - logged, fail-open
                 console.print(f"  [dim yellow]{eid}: /forecast error: {e}[/dim yellow]")
         if forecast is None:
             continue

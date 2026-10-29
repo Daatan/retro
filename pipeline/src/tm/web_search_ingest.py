@@ -231,7 +231,7 @@ def _date_from_html(soup: BeautifulSoup) -> Optional[str]:
     for script in soup.find_all("script", type="application/ld+json"):
         try:
             data = json.loads(script.string or "")
-        except Exception:
+        except ValueError:
             continue
         for entry in (data if isinstance(data, list) else [data]):
             if not isinstance(entry, dict):
@@ -297,7 +297,7 @@ async def _fetch_text(url: str) -> Tuple[str, Optional[str]]:
         # Read the publish date before extract_article_body() strips boilerplate.
         html_date = _date_from_html(full_soup)
         return extract_article_body(full_soup), html_date
-    except Exception:
+    except Exception:  # noqa: BLE001 - network fetch + HTML parse, fail-open to empty body
         return "", None
 
 
@@ -350,7 +350,7 @@ async def ingest_event(
             console.print(
                 f"  [dim]{eid} «{kw[:40]}»: {len(results)} hits via {provider}[/dim]"
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - error recorded in the result, fail-open
             search_errors += 1
             console.print(f"  [dim red]{eid} search error: {e}[/dim red]")
         await asyncio.sleep(1.0)

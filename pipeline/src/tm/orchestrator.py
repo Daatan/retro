@@ -100,7 +100,7 @@ class Orchestrator:
         try:
             with open(path, "r") as f:
                 return json.load(f)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             console.print(f"    [dim red]Unreadable extraction cache {path.name}: {e}[/dim red]")
             return None
 
@@ -132,7 +132,7 @@ class Orchestrator:
                     for s in soup(["script", "style", "nav", "footer", "header"]):
                         s.extract()
                     return soup.get_text(separator=" ", strip=True)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             console.print(f"    [dim red]Scrape failed: {str(e)}[/dim red]")
         return ""
 
@@ -214,7 +214,7 @@ class Orchestrator:
                     console.print("    [bold red]Article timeout (300s), skipping[/bold red]")
                     had_errors = True
                     first_error = first_error or "Article timeout (300s)"
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - logged, fail-open
                     console.print(
                         f"    [bold red]Article exception ({type(e).__name__}): {e}[/bold red]"
                     )
@@ -319,7 +319,7 @@ class Orchestrator:
                 )
                 r.raise_for_status()
                 data = r.json()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             console.print(f"    [dim red]Oracul /search failed: {e}[/dim red]")
             return []
 
@@ -476,7 +476,7 @@ class Orchestrator:
                     )
                     result.extraction.predictions = [agg]
                     console.print(f"    [cyan]Aggregated to 1 prediction (stance={agg.stance:.2f})[/cyan]")
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - logged, fail-open
                     console.print(f"    [dim red]Article aggregation failed, keeping originals: {e}[/dim red]")
 
             try:
@@ -497,7 +497,7 @@ class Orchestrator:
                     json.dump(data, f, indent=2)
                 console.print(f"    [dim]Saved to vault: {extract_path}[/dim]")
                 self.create_atlas_link(event["id"], source["id"], art_hash, extract_path, raw_art, event.get("outcome_date", ""))
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - logged, fail-open
                 console.print(f"    [bold red]Failed to save to vault:[/bold red] {str(e)}")
         elif result.error is None:
             # Definitive negative outcome (docs#57 item 2): the gatekeeper rejected
@@ -523,7 +523,7 @@ class Orchestrator:
                         "git_sha": git_sha()
                     }, f, indent=2)
                 console.print(f"    [dim]Negative marker saved: {extract_path}[/dim]")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - logged, fail-open
                 console.print(f"    [bold red]Failed to save negative marker:[/bold red] {str(e)}")
         else:
             console.print("    [yellow]Extraction resulted in 0 predictions (error — will retry).[/yellow]")
@@ -541,7 +541,8 @@ class Orchestrator:
                 data = json.loads(entry_file.read_text())
                 for p in data.get("predictions", []):
                     all_predictions.append(PredictionExtraction(**p))
-            except Exception:
+            except Exception as e:  # noqa: BLE001 - skip an unreadable or malformed entry file (logged)
+                console.print(f"    [dim red]Unreadable entry {entry_file.name} in {eid}/{sid}: {e}[/dim red]")
                 continue
         if not all_predictions:
             return
@@ -550,7 +551,7 @@ class Orchestrator:
             (cell_dir / "cell_signal.json").write_text(
                 json.dumps(signal.model_dump(), indent=2, ensure_ascii=False)
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             console.print(f"    [dim red]cell_signal failed {eid}/{sid}: {e}[/dim red]")
 
     def create_atlas_link(self, eid: str, sid: str, art_hash: str, extract_path: Path, raw_art: dict, event_date: str = ""):

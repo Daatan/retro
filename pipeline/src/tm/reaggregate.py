@@ -45,7 +45,7 @@ def find_problematic_entries(atlas_dir: Path, threshold: float) -> list[dict]:
                     "n": len(preds),
                     "data": data,
                 })
-        except Exception:
+        except Exception:  # noqa: BLE001 - skip an unreadable or malformed entry file
             continue
     entries.sort(key=lambda x: x["spread"], reverse=True)
     return entries
@@ -103,7 +103,7 @@ async def reaggregate(data_dir: Path, threshold: float, dry_run: bool):
             new_data["original_prediction_count"] = n
             entry["path"].write_text(json.dumps(new_data, indent=2, ensure_ascii=False))
             console.print(f"  [green]✓ aggregated to stance={agg.stance:.2f}[/green]")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             console.print(f"  [bold red]✗ failed: {e}[/bold red]")
 
         await asyncio.sleep(2)

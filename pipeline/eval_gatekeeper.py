@@ -71,7 +71,7 @@ async def main() -> None:
         try:
             o = await _gate(claim, text)
             got, rel = o.is_prediction, o.relevance_score
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - error recorded in the result, fail-open
             got, rel = f"ERR:{type(e).__name__}", "-"
         if expect and got is True:
             tp += 1

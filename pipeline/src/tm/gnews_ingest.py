@@ -200,7 +200,7 @@ def search_gnews_rss(
             # Peek at item count before full parse
             if "<item>" in r.text:
                 break
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             console.print(f"    [dim red]GNews RSS error: {e}[/dim red]")
             r = None
 
@@ -223,7 +223,7 @@ def search_gnews_rss(
 
             try:
                 pub_dt = parsedate_to_datetime(pubdate_str).replace(tzinfo=None)
-            except Exception:
+            except (TypeError, ValueError):
                 pub_dt = None
 
             # Strict date filter
@@ -397,7 +397,7 @@ def resolve_url(
                 return direct
             else:
                 console.print(f"    [dim]Slug → HTTP {r.status_code}[/dim]")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             console.print(f"    [dim]Slug failed: {type(e).__name__}[/dim]")
 
     query = f'site:{domain} {title[:80]}'
@@ -412,7 +412,7 @@ def resolve_url(
             console.print(f"    [dim]{name}: no results[/dim]")
         except RuntimeError as e:
             console.print(f"    [yellow]{name}: {e}[/yellow]")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             console.print(f"    [dim red]{name} error: {type(e).__name__}: {e}[/dim red]")
         finally:
             if name == "DDG":
@@ -448,7 +448,7 @@ async def _fetch_wayback(url: str, client: httpx.AsyncClient) -> str:
         if r.status_code != 200:
             return ""
         return await _scrape_html(r.text)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - logged, fail-open
         console.print(f"    [dim]Wayback failed: {e}[/dim]")
         return ""
 
@@ -507,7 +507,7 @@ async def search_newsdata(
                 _NEWSDATA_QUOTA_EXHAUSTED = True
             console.print(f"    [dim red]Newsdata.io error: {code or data.get('status')}[/dim red]")
             return []
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - logged, fail-open
         console.print(f"    [dim red]Newsdata.io error: {e}[/dim red]")
         return []
 
@@ -595,7 +595,7 @@ async def search_gdelt(
             return []
         data = r.json()
         _GDELT_CONSECUTIVE_ERRORS = 0  # reset on success
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - error recorded in the result, fail-open
         _GDELT_CONSECUTIVE_ERRORS += 1
         if _GDELT_CONSECUTIVE_ERRORS >= GDELT_MAX_CONSECUTIVE_ERRORS:
             _GDELT_BLOCKED = True
@@ -620,7 +620,7 @@ async def search_gdelt(
             seendate = item.get("seendate", "")
             try:
                 pub_dt = datetime.strptime(seendate[:8], "%Y%m%d")
-            except Exception:
+            except (TypeError, ValueError):
                 pub_dt = start_date
             try:
                 r = await safe_get_async(client, url)
@@ -636,7 +636,7 @@ async def search_gdelt(
                     "text": text,
                 })
                 await asyncio.sleep(0.5)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - logged, fail-open
                 console.print(f"    [dim]GDELT fetch failed: {e}[/dim]")
                 continue
 
@@ -685,7 +685,7 @@ async def search_wayback_cdx(
             console.print(f"    [dim red]CDX error: HTTP {r.status_code}[/dim red]")
             return []
         rows = r.json()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - logged, fail-open
         console.print(f"    [dim red]CDX error: {type(e).__name__}: {e}[/dim red]")
         return []
 
@@ -747,7 +747,7 @@ async def search_wayback_cdx(
                     "text":         text,
                 })
                 await asyncio.sleep(0.5)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - logged, fail-open
                 console.print(f"    [dim]CDX fetch failed: {e}[/dim]")
                 continue
 
@@ -787,7 +787,7 @@ async def fetch_article_text(url: str) -> str:
                     return wb_text
 
             return text
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - logged, fail-open
         console.print(f"    [dim red]scrape error: {e}[/dim red]")
         return ""
 

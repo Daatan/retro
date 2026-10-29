@@ -23,7 +23,7 @@ _CELL_FIELDS = ("done", "no_predictions", "failed", "pending")
 def read_batch_heartbeat(data_dir: Path) -> Optional[dict[str, Any]]:
     try:
         raw = json.loads((data_dir / HEARTBEAT_FILENAME).read_text())
-    except Exception:
+    except (OSError, ValueError):
         return None
     if not isinstance(raw, dict):
         return None

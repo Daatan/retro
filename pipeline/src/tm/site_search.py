@@ -55,7 +55,7 @@ async def _get(url: str, timeout: int = 20) -> Optional[BeautifulSoup]:
             r = await safe_get_async(client, url)
             if r.status_code == 200:
                 return BeautifulSoup(r.text, "html.parser")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - logged, fail-open
         console.print(f"    [dim red]fetch error: {e}[/dim red]")
     return None
 

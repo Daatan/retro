@@ -40,7 +40,7 @@ Three related systems, one repo:
 - Pipeline tests: `cd pipeline && uv run pytest -q` (LLM/network mocked)
 - API tests: `cd api && uv run pytest -q`
 - Lint and types are blocking in CI. Both feed the always-running `ci-gate` job in `tests.yml`, which is the required check under the `main-ci-gate` ruleset (retro#963):
-  - `uvx ruff@0.8.6 check api pipeline`: bug-class rules only (pyflakes, bugbear, pylint errors), per `ruff.toml`.
+  - `uvx ruff@0.8.6 check api pipeline`: bug-class rules only (pyflakes, bugbear, pylint errors, blind except), per `ruff.toml`. An intentional broad `except Exception` carries `# noqa: BLE001 - <reason>`.
   - `uv run mypy` in `api/` and in `pipeline/`. It needs `uv sync --extra dev` first. Modules that had errors when the gate landed are listed under `[[tool.mypy.overrides]]` in each `pyproject.toml`. That list is a ratchet: delete lines, never add (retro#977).
   - CI also runs pytest in `bayesoracle/`, `metaculus/`, `polymarket_paper/` and `manifold_paper/`, plus shellcheck and the shell tests under `infra/tests/`.
 - Search provider chain (the order matters): `pipeline/src/tm/web_search.py`.

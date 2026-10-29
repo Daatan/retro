@@ -62,7 +62,7 @@ async def run_all(
         for eid, event in events.items():
             try:
                 count = await gdelt_ingest.ingest_event(event, raw_ingest_dir, limit, force)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - logged, fail-open
                 console.print(f"    [dim red]GDELT {eid}: error, skipping — {e}[/dim red]")
                 continue
             total += count
@@ -79,7 +79,7 @@ async def run_all(
             for source_id in site_search.SEARCH_FNS:
                 try:
                     count = await site_search.ingest_cell(event, source_id, raw_ingest_dir, force)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - logged, fail-open
                     console.print(
                         f"    [dim red]site_search {eid}/{source_id}: error, skipping — {e}[/dim red]"
                     )
@@ -97,7 +97,7 @@ async def run_all(
         for eid, event in events.items():
             try:
                 count = await web_search_ingest.ingest_event(event, raw_ingest_dir, limit, force)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - logged, fail-open
                 console.print(f"    [dim red]web_search {eid}: error, skipping — {e}[/dim red]")
                 continue
             total += count

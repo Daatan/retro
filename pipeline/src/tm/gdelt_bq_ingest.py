@@ -94,7 +94,7 @@ def build_domain_map(sources_dir: Path) -> Dict[str, str]:
     for sf in sorted(sources_dir.glob("*.json")):
         try:
             src = json.loads(sf.read_text())
-        except Exception:
+        except (OSError, ValueError):
             continue
         sid = src.get("id")
         if sid not in KNOWN_SOURCE_IDS:
@@ -254,7 +254,7 @@ async def ingest_event(
         # e.g. no extractable entity terms (proper-noun heuristic over-filtered).
         console.print(f"  [dim yellow]{eid}: GKG query yielded nothing ({e})[/dim yellow]")
         return {}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - logged, fail-open
         console.print(f"  [dim red]{eid}: GKG query error: {e}[/dim red]")
         return {}
 

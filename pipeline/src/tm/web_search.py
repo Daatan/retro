@@ -158,7 +158,7 @@ def _secret(env_var: str, ssm_name: str) -> Optional[str]:
         val = client.get_parameter(Name=ssm_name, WithDecryption=True)["Parameter"]["Value"].strip()
         logger.info("Loaded %s from SSM Parameter Store", ssm_name)
         return val
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - logged, fail-open
         logger.warning(
             "Could not load %s from SSM Parameter Store (env %s not set either): %s "
             "— this provider is silently disabled",
@@ -405,7 +405,7 @@ def _load_quota_state() -> None:
     now = time.time()
     try:
         data = _json.loads(_QUOTA_STATE_PATH.read_text())
-    except Exception:
+    except (OSError, ValueError):
         return
     for name, attr in _QUOTA_FLAG_GLOBALS.items():
         entry = data.get(name, False)
@@ -439,7 +439,7 @@ def _persist_quota_state() -> None:
         payload[name] = {"exhausted": exhausted, "set_at": _QUOTA_SET_AT.get(name, 0.0)}
     try:
         _QUOTA_STATE_PATH.write_text(_json.dumps(payload))
-    except Exception:
+    except OSError:
         pass
 
 
@@ -873,7 +873,7 @@ def _search_gdelt(
                 # timeout here causes multi-second hangs on every throttled call.
                 timeout=httpx.Timeout(connect=2.0, read=10.0, write=2.0, pool=2.0),
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - error recorded in the result, fail-open
             last_err = e
             logger.debug("GDELT attempt %d network error: %s", attempt + 1, e)
             continue
@@ -902,7 +902,7 @@ def _search_gdelt(
 
         try:
             data = r.json()
-        except Exception as e:
+        except ValueError as e:
             last_err = RuntimeError(f"GDELT non-JSON body: {e}")
             continue
 
@@ -965,7 +965,7 @@ def _slug_to_title(url: str) -> str:
         # Title-case non-stopword segments; keep short segments as-is
         _stops = {"a", "an", "the", "and", "or", "of", "in", "on", "at", "to", "for", "with"}
         return " ".join(w.capitalize() if w.lower() not in _stops else w for w in words if w)
-    except Exception:
+    except Exception:  # noqa: BLE001 - best-effort title from the URL slug
         return ""
 
 
@@ -1343,7 +1343,7 @@ def _search_trusted_sites(
                 if r.url and r.url not in seen:
                     seen.add(r.url)
                     collected.append(r)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             logger.warning("trusted_sites batch %d failed: %s", i, e)
         if len(collected) >= limit:
             break
@@ -1436,7 +1436,7 @@ def _fetch_snippet(url: str) -> str:
             if not text:
                 text = soup.get_text(separator=" ", strip=True)
         return text[:600].strip() if text else ""
-    except Exception:
+    except Exception:  # noqa: BLE001 - best-effort snippet; fetch + HTML parse can raise anything
         return ""
 
 
@@ -1458,7 +1458,7 @@ def enrich_snippets(results: List[SearchResult], timeout: float = 8.0) -> List[S
                 idx = futures[fut]
                 try:
                     fetched[idx] = fut.result()
-                except Exception:
+                except Exception:  # noqa: BLE001 - worker failure means no snippet for that result
                     fetched[idx] = ""
         except TimeoutError:
             logger.warning("enrich_snippets: %ss wall hit, %d URLs incomplete",
@@ -1500,11 +1500,11 @@ def _warm_news_indexer(results: List[SearchResult]) -> None:
                     headers={"x-api-key": NEWS_INDEXER_API_KEY},
                     timeout=httpx.Timeout(connect=2.0, read=3.0, write=2.0, pool=2.0),
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - logged, fail-open
                 logger.debug("news_indexer warm failed (non-fatal): %s", exc)
 
         threading.Thread(target=_post, name="ni-warm", daemon=True).start()
-    except Exception as exc:  # warming must never perturb the search result
+    except Exception as exc:  # noqa: BLE001 - warming must never perturb the search result
         logger.debug("news_indexer warm skipped (non-fatal): %s", exc)
 
 
@@ -1549,7 +1549,7 @@ def _top_up_from_paid(
                 skip_news_indexer=True, skip_gdelt=True, deadline=deadline,
             )
             outcome["value"] = (extra, get_last_search_provider(), get_last_search_provider_chain())
-        except BaseException as exc:  # re-raised below, in the caller's thread
+        except BaseException as exc:  # noqa: BLE001 - re-raised below, in the caller's thread
             outcome["error"] = exc
 
     # A plain daemon thread, not an executor: a straggler must never hold up process exit
@@ -1744,7 +1744,7 @@ def _search_articles_chain(
                 "news_indexer: below threshold %dms: %s",
                 int((time.perf_counter() - _t0) * 1000), query[:60],
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - logged at ERROR, fail-open to the next provider
             # ERROR, not WARNING (retro#459). Losing this provider is not a degraded
             # nicety: it silently moves every retro caller onto paid SERP, swapping the
             # local semantic index for SERP keyword matching. No counter moves when it
@@ -1780,7 +1780,7 @@ def _search_articles_chain(
                 _provider_local.name = "gdelt_bq"
                 return results
             logger.debug("gdelt_bq empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             logger.warning("gdelt_bq failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
         return None
 
@@ -1802,7 +1802,7 @@ def _search_articles_chain(
                 _provider_local.name = "serpapi"
                 return results
             logger.debug("serpapi empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             logger.warning("serpapi failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 4. Brave News (returns published_date; higher free quota than Tavily)
@@ -1817,7 +1817,7 @@ def _search_articles_chain(
                 _provider_local.name = "brave"
                 return results
             logger.debug("brave empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             logger.warning("brave failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 4a. Exa news (free monthly tier; returns publishedDate, unlike Tavily)
@@ -1832,7 +1832,7 @@ def _search_articles_chain(
                 _provider_local.name = "exa"
                 return results
             logger.debug("exa empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             logger.warning("exa failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 4b. Tavily news (after Brave: no published_date in API response; 1 credit/call)
@@ -1847,7 +1847,7 @@ def _search_articles_chain(
                 _provider_local.name = "tavily"
                 return results
             logger.debug("tavily empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             logger.warning("tavily failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 4c. Newsdata.io — dedicated news API (published dates), ahead of the generic SERP scrapers.
@@ -1862,7 +1862,7 @@ def _search_articles_chain(
                 _provider_local.name = "newsdata"
                 return results
             logger.debug("newsdata empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             logger.warning("newsdata failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 5. BrightData SERP API
@@ -1877,7 +1877,7 @@ def _search_articles_chain(
                 _provider_local.name = "brightdata"
                 return results
             logger.debug("brightdata empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             logger.warning("brightdata failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 6. Nimbleway SERP API
@@ -1892,7 +1892,7 @@ def _search_articles_chain(
                 _provider_local.name = "nimbleway"
                 return results
             logger.debug("nimbleway empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             logger.warning("nimbleway failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
 
@@ -1907,7 +1907,7 @@ def _search_articles_chain(
             _provider_local.name = "ddg"
             return results
         logger.debug("ddg empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - logged, fail-open
         logger.warning("ddg failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 10b. Trusted-sites fallback — quota-free, last resort. When the whole chain
@@ -1925,7 +1925,7 @@ def _search_articles_chain(
             _provider_local.name = "trusted_sites"
             return results
         logger.debug("trusted_sites empty %dms: %s", int((time.perf_counter() - _t0) * 1000), query[:60])
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - logged, fail-open
         logger.warning("trusted_sites failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
 
     # 10c. GDELT Doc API (free, no key) — moved to the tail (retro#990). It won 0 of
@@ -1960,7 +1960,7 @@ def _search_articles_chain(
             _GDELT_DOC_FAIL_COUNT = 0  # empty result is not a connection failure
         except _GDELTSlotBusy as e:
             logger.info("GDELT skipped (slot busy): %s", e)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             logger.warning("gdelt failed %dms: %s", int((time.perf_counter() - _t0) * 1000), e)
             _GDELT_DOC_FAIL_COUNT += 1
             if _GDELT_DOC_FAIL_COUNT >= _GDELT_DOC_FAIL_THRESHOLD:
@@ -1991,7 +1991,7 @@ def _search_articles_chain(
 def _extract_domain(url: str) -> str:
     try:
         return re.sub(r"^www\.", "", __import__("urllib.parse", fromlist=["urlparse"]).urlparse(url).netloc)
-    except Exception:
+    except Exception:  # noqa: BLE001 - malformed URL means no domain
         return ""
 
 
@@ -2007,7 +2007,7 @@ def _date_from_url(url: str) -> str:
         y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
         if 2000 <= y <= 2100 and 1 <= mo <= 12 and 1 <= d <= 31:
             return f"{y:04d}-{mo:02d}-{d:02d}"
-    except Exception:
+    except ValueError:
         pass
     return ""
 

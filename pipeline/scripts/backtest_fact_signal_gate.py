@@ -138,7 +138,7 @@ def main(argv):
         try:
             a, _ns = aggregate(oracle, key, rr, "stance", cdir, cdl)
             b, _nf = aggregate(oracle, key, rr, "fact_signal", cdir, cdl)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - logged, fail-open
             print("ERR", d["pid"], repr(e)[:140])
             continue
         p_stance, p_fact = (a["mean"] + 1) / 2, (b["mean"] + 1) / 2

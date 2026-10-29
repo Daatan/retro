@@ -1046,7 +1046,7 @@ class ExtractionOutput(BaseModel):
                     if isinstance(obj, dict):
                         parsed.append(obj)
                         continue
-                except Exception:
+                except Exception:  # noqa: BLE001 - optional YAML fallback; import or parse can raise anything
                     pass
                 # Give up — keep as-is and let Pydantic report the error
                 parsed.append(p)

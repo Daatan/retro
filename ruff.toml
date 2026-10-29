@@ -1,12 +1,14 @@
 # Blocking lint gate (retro#977). Bug-class rules only, no style churn: pyflakes (F),
 # flake8-bugbear (B) and pylint errors (PLE). F401 (unused-import) and F541 (f-string without
 # placeholders) are enforced too since the cleanup of the ~57 existing hits. B and PLE went in
-# on 2026-10-29 after fixing their 26 existing hits. The non-blocking `ruff-baseline` job still
+# on 2026-10-29 after fixing their 26 existing hits. BLE (blind `except Exception`) went in
+# the same day: each existing site is either narrowed or carries
+# `# noqa: BLE001 - <reason>`, so a new blind except must state why. The non-blocking `ruff-baseline` job still
 # reports default-rule counts.
 target-version = "py312"
 
 [lint]
-select = ["F", "B", "PLE"]
+select = ["F", "B", "PLE", "BLE"]
 # B008 (call in a default argument) is FastAPI's `Depends(...)` idiom. B905 (zip without
 # strict=) needs a per-call-site decision about unequal lengths; it is not a mechanical fix.
 ignore = ["B008", "B905"]

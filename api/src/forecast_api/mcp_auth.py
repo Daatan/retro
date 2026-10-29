@@ -64,7 +64,7 @@ class CognitoTokenVerifier(TokenVerifier):
                 # Cognito access tokens carry no `aud`; client_id is checked below.
                 options={"verify_aud": False},
             )
-        except Exception as exc:  # invalid signature / expired / bad issuer / malformed
+        except Exception as exc:  # noqa: BLE001 - invalid signature / expired / bad issuer / malformed
             logger.info("mcp token rejected: %s", exc)
             return None
 

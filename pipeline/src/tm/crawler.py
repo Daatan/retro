@@ -76,7 +76,7 @@ def _find_sitemaps(domain: str, client: httpx.Client) -> list[str]:
                     url = line.split(":", 1)[1].strip()
                     if url not in sitemaps:
                         sitemaps.append(url)
-    except Exception:
+    except Exception:  # noqa: BLE001 - robots.txt is optional; safe_get also raises UnsafeURLError
         pass
     if not sitemaps:
         sitemaps = [f"https://{domain}{path}" for path in _SITEMAP_FALLBACKS]
@@ -142,7 +142,7 @@ def _parse_sitemap(
         if r.status_code != 200:
             return []
         root = ET.fromstring(r.text)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged, fail-open
         logger.debug("Sitemap %s: %s", url, exc)
         return []
 
@@ -178,7 +178,7 @@ def _fetch_article(url: str, pub_date: datetime, client: httpx.Client) -> Option
         if r.status_code != 200:
             return None
         html = r.text
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged, fail-open
         logger.debug("Article fetch %s: %s", url, exc)
         return None
 

@@ -277,7 +277,7 @@ def _load_identity_map() -> dict[str, str]:
                 if normalized:
                     identity_map[normalized] = canonical
         return identity_map
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged, fail-open
         logger.debug("news_indexer identity map fetch failed (non-fatal): %s", exc)
         return {}
 

@@ -436,7 +436,7 @@ async def relevance(
             language=body.language,
             model=settings.relevance_model,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged, fail-open
         logger.warning("relevance check failed claim=%.60s err=%s", body.claim, exc)
         return JSONResponse({"detail": f"Relevance check failed: {exc}"}, status_code=502)
     return RelevanceResponse(
@@ -520,7 +520,7 @@ async def llm_proxy(
             temperature=body.temperature,
             timeout=55,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged, fail-open
         logger.warning("llm proxy failed model=%s err=%s", model, exc)
         return JSONResponse({"detail": f"LLM call failed: {exc}"}, status_code=502)
     return LlmResponse(content=content, model=model, token_usage=TokenUsage.from_usages([usage]))

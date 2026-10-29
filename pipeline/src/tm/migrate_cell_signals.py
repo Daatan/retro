@@ -37,7 +37,7 @@ def migrate(data_dir: Path):
                     data = json.loads(entry_file.read_text())
                     for p in data.get("predictions", []):
                         all_predictions.append(PredictionExtraction(**p))
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - logged, fail-open
                     print(f"  WARN {eid}/{sid} {entry_file.name}: {e}")
 
             if not all_predictions:
@@ -50,7 +50,7 @@ def migrate(data_dir: Path):
                 out.write_text(json.dumps(signal.model_dump(), indent=2, ensure_ascii=False))
                 print(f"  {eid}/{sid}: {signal.claim_count} claims → stance={signal.stance:.2f}")
                 ok += 1
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - logged, fail-open
                 print(f"  FAIL {eid}/{sid}: {e}")
                 failed += 1
 

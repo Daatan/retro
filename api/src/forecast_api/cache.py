@@ -131,11 +131,11 @@ class ForecastCache:
             return None
         try:
             return self._cache.get(key, default=None)
-        except Exception:
+        except Exception:  # noqa: BLE001 - a pickle from an older model shape can raise anything; treat as a miss
             # Unreadable pickle from an older deploy's model shape — miss, not error.
             try:
                 self._cache.delete(key)
-            except Exception:
+            except Exception:  # noqa: BLE001 - best-effort eviction of an unreadable entry
                 pass
             return None
 

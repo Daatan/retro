@@ -110,7 +110,7 @@ Backfill the 78.5% empty Atlas cells and — the actual validity gate — **hunt
 NO-outcome events** (predicted-then-fizzled) to break the 69/70-YES imbalance.
 Re-run `backtest.py`; the results are now reproducible run-to-run.
 
-**Phase 3a — NO-event curation pass (retro#509). ✅ DONE (this PR).** `pipeline/scripts/seed_no_events_batch1.py`
+**Phase 3a — NO-event curation pass (retro#509). ✅ DONE (this PR).** `pipeline/scripts/archive/seed_no_events_batch1.py`
 had speculatively seeded 6 candidate NO-events (`A20`, `B14`, `C10`, `C11`, `C13`, `D07`)
 "pending Oracul in-window validation ... events that return no in-window coverage
 get pruned." Running that validation surfaced a tooling bug, not a coverage

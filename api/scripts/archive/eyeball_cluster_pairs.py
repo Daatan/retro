@@ -31,7 +31,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from forecast_api.clustering import cluster_text_for_claims, jaccard, shingles  # noqa: E402
 

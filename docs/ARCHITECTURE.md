@@ -94,11 +94,14 @@ retro/
 ├── infra/
 │   ├── ec2_bootstrap.sh         # One-time EC2 setup script (incl. restore_atlas before service start)
 │   ├── ec2_run.sh               # Continuous pipeline loop (runs on EC2; snapshots atlas at tail of cycle)
-│   ├── tests/
-│   │   └── test_ec2_run_guards.sh # CI regression coverage for ec2_run.sh's sync/re-exec guards (retro#557)
+│   ├── tests/                   # shell tests run in CI: ec2_run guards (retro#557), the three sidecar timers,
+│   │                            # oracle-series cron, settlement_report, state snapshot
 │   ├── logrotate/truthmachine   # logrotate rule for pipeline_log.txt (installed by hand, see file header)
 │   ├── snapshot_atlas.sh        # Tar data/atlas + data/vault2 → S3 (per-cycle + latest.tgz)
 │   ├── restore_atlas.sh         # Pull latest.tgz from S3 if data/atlas/ is empty (fresh boot only)
+│   ├── snapshot_state.sh / restore_state.sh  # Back up / restore the small non-rebuildable box state (ledgers, series) to S3 (PR#1015)
+│   ├── jev-provider.sh          # Show or switch the live Jev provider via SSM (retro#901)
+│   ├── install_oracle_series_cron.sh + oracle-series.crontab  # bayesoracle node-series cron (retro#577, #896)
 │   ├── deploy_oracle.sh         # Zero-downtime API deploy: fetch → reset → uv sync → reload, then a
 │   │                            # consecutive-200 health gate that escalates to a full restart if the
 │   │                            # reload isn't healthy (see docs/ORACLE_DEPLOY.md). Fails red on failure.
@@ -184,7 +187,7 @@ Used to compute per-category source accuracy scores for the forecasting model.
   "author": "...",
   "article_date": "2024-04-13",
   "event_date": "2024-04-14",
-  "extractor_model": "bedrock/amazon.nova-lite-v1:0",
+  "extractor_model": "bedrock/us.anthropic.claude-haiku-5-5",
   "gatekeeper_model": "bedrock/amazon.nova-micro-v1:0",
   "gatekeeper_reason": "Article directly predicts an imminent Iranian missile strike on Israel.",
   "predictions": [...]
@@ -197,7 +200,7 @@ Used to compute per-category source accuracy scores for the forecasting model.
   "status": "done",
   "extraction": { "predictions": [...] },
   "prompt_version": "v1",
-  "extractor_model": "bedrock/amazon.nova-lite-v1:0",
+  "extractor_model": "bedrock/us.anthropic.claude-haiku-5-5",
   "gatekeeper_model": "bedrock/amazon.nova-micro-v1:0",
   "gatekeeper_reason": "...",
   "run_date": "2026-04-14T12:00:00"
@@ -712,10 +715,10 @@ POST /forecast
   "provider_chain": ["news_indexer"],
   "distilled_query": null,
   "provenance": {
-    "schema_version": "1.2",
+    "schema_version": "1.6",
     "engine": "v1",
-    "oracle": { "version": "1.65.x", "git_sha": "…", "built_at": "…" },
-    "models": { "gatekeeper": "nova-micro", "extractor": "claude-haiku-4-5" },
+    "oracle": { "version": "1.4.x", "git_sha": "…", "built_at": "…" },
+    "models": { "gatekeeper": "nova-micro", "extractor": "claude-haiku-5-5" },
     "method": "live",
     "chain": ["news_indexer"],
     "inputs": [],

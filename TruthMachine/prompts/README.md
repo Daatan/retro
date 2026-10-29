@@ -4,7 +4,7 @@
 
 > ⚠️ **Reference / design library — NOT the prompts the live pipeline runs.**
 > The production pipeline uses **inline** prompt constants in `pipeline/src/tm/`
-> against **Bedrock Nova** models. The files here (and the models/stages and
+> against Bedrock models (Nova Micro gatekeeper, Claude Haiku extractor/aggregator). The files here (and the models/stages and
 > `registry.json` below) describe the original OSNC design and are kept for
 > reference; several stages were never wired into the running code. The running
 > code is authoritative — see the mapping table.
@@ -15,9 +15,9 @@ Each prompt corresponds to a pipeline stage. They are designed to be composed se
 
 | Reference file | Live counterpart | Live model | Notes |
 |---|---|---|---|
-| `01_gatekeeper.md` | `tm/gatekeeper.py` (`PROMPT`) | `bedrock/amazon.nova-micro-v1:0` | Live prompt is a **topic-relevance** filter (softened from "is_prediction" in PR #47) |
-| `02_forensic_extraction.md` | `tm/extractor.py` (`PROMPT`) | `bedrock/amazon.nova-lite-v1:0` | Live extracts 5 fields (quote, claim, stance, certainty, settled); 9 metrics dropped in PR #102 |
-| `02b_article_aggregator.md` | `tm/aggregator.py` (`AGGREGATOR_PROMPT`) | `bedrock/amazon.nova-lite-v1:0` | Article-level collapse of high-spread predictions |
+| `01_gatekeeper.md` | `tm/gatekeeper.py` (`PROMPT_PREFIX` / `PROMPT_SUFFIX`) | `bedrock/us.amazon.nova-micro-v1:0` | Live prompt is a **topic-relevance** filter (softened from "is_prediction" in PR #47); reason-first schema since retro#1024 |
+| `02_forensic_extraction.md` | `tm/extractor.py` (`PROMPT_PREFIX` / `PROMPT_SUFFIX`) | `bedrock/us.anthropic.claude-haiku-5-5` (adaptive thinking) | The live schema has grown well past the original 5 fields — `ExtractionOutput` in `tm/models.py` and `docs/PROMPT_VERSIONS.md` are authoritative |
+| `02b_article_aggregator.md` | `tm/aggregator.py` (`AGGREGATOR_PROMPT`) | `aggregator_model`, Claude Haiku 4.5 | Article-level collapse of high-spread predictions |
 | `03_consensus_meter.md` | — | — | **Reference only** — no live call-site |
 | `03_ground_truth.md` | — | — | **Reference only** — outcomes are set by hand in `data/events/*.json` |
 | `04_event_matching.md` | — | — | **Reference only** — live pipeline runs per (event, source) cell, no LLM matching |
@@ -25,7 +25,7 @@ Each prompt corresponds to a pipeline stage. They are designed to be composed se
 | `06_page_generation.md` | `tm/generate_pages.py` (no LLM) | — | Live page generation is deterministic JSON, not an LLM prompt |
 
 > **`registry.json` is stale**: it lists `gemini`/`deepseek` models the live
-> pipeline does not use (it uses Bedrock Nova, per `pipeline/src/tm/config.py`).
+> pipeline does not use (it uses Bedrock, per `pipeline/src/tm/config.py`).
 > The model/cost columns in the tables below are likewise aspirational.
 
 ---

@@ -369,6 +369,8 @@ match, retry-relaxed search) — listed in `docs/ORACLE_DEPLOY.md`.
 
 Before shipping ANY extractor prompt edit, run the A/B harness against a fixed case sample on the live model — see [`docs/AB_HARNESS.md`](./AB_HARNESS.md) (retro#470).
 
+Alternative extraction designs (question-agnostic claim store, quote-first, tool-use output, self-consistency) are compared in [`docs/CLAIM_EXTRACTION_ALTERNATIVES.md`](./CLAIM_EXTRACTION_ALTERNATIVES.md) (retro#984). That is exploration only; nothing in it is live.
+
 ---
 
 ## Scoring

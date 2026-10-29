@@ -15885,7 +15885,7 @@
       "source_id": "nyt",
       "status": "no_predictions",
       "prediction_count": 0,
-      "error": "unprocessable article: The output is incomplete due to a max_tokens length limit",
+      "error": null,
       "failed_attempts": 0
     },
     "I04:reuters": {
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-10-19T22:21:36.969428"
+  "last_updated": "2026-10-29T10:42:18.475029"
 }

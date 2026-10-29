@@ -109,7 +109,7 @@ def _article_value(out, field):
 
 
 async def _run_case(
-    case: Case, model: str, *, use_control: bool, runs: int,
+    case: Case, model: str, *, use_control: bool, runs: int, thinking: bool,
 ) -> tuple[list[list[dict]], list[dict], list[dict]]:
     """Returns (per-run predictions, per-run article-level fields, per-run token usage)."""
     description = case.control_event_description if use_control else case.event_description
@@ -131,8 +131,8 @@ async def _run_case(
     for _ in range(runs):
         try:
             out, usage = await llm.complete_structured(
-                model, ExtractionOutput, prompt, max_tokens=1200, timeout=180,
-                cached_prefix=PROMPT_PREFIX,
+                model, ExtractionOutput, prompt, max_tokens=settings.extractor_max_tokens,
+                timeout=180, cached_prefix=PROMPT_PREFIX, thinking=thinking,
             )
         except Exception as exc:  # noqa: BLE001 — report, keep going
             print(f"    [{case.id}] EXCEPTION: {type(exc).__name__}: {exc}")
@@ -143,10 +143,19 @@ async def _run_case(
     return runs_out, article_out, usage_out
 
 
+def _arm_thinking(*, no_thinking: bool) -> bool:
+    """Same call shape as the live extractor (extractor.py): thinking follows settings, as the
+    output cap does in `_run_case`, so an arm measures what ships (retro#1012). `--no-thinking`
+    is for a model that has none, e.g. a Haiku 4.5 comparison arm (retro#984)."""
+    return settings.extractor_thinking and not no_thinking
+
+
 async def _cmd_run(args: argparse.Namespace) -> None:
     cases = load_cases(Path(args.cases))
     model = args.model or settings.extractor_model
+    thinking = _arm_thinking(no_thinking=args.no_thinking)
     print(f"Running {len(cases)} cases x{args.runs_per_case} against {model}"
+          f" (thinking={'on' if thinking else 'off'})"
           f"{' (control description)' if args.use_control_description else ''}")
     results: dict[str, list[list[dict]]] = {}
     article: dict[str, list[dict]] = {}
@@ -155,6 +164,7 @@ async def _cmd_run(args: argparse.Namespace) -> None:
         case_runs = max(args.runs_per_case, VOLATILE_MIN_RUNS) if case.volatile else args.runs_per_case
         runs, article_runs, usage_runs = await _run_case(
             case, model, use_control=args.use_control_description, runs=case_runs,
+            thinking=thinking,
         )
         results[case.id] = runs
         article[case.id] = article_runs
@@ -165,6 +175,7 @@ async def _cmd_run(args: argparse.Namespace) -> None:
         "label": args.label,
         "git_commit": _git_commit(),
         "model": model,
+        "thinking": thinking,
         "use_control_description": args.use_control_description,
         "cases": {
             c.id: {
@@ -464,6 +475,8 @@ def main() -> None:
     p_run.add_argument("--out", required=True, help="Where to write the results JSON")
     p_run.add_argument("--label", required=True, help="Human label for this run (e.g. baseline, patched)")
     p_run.add_argument("--model", default=None, help="Override settings.extractor_model")
+    p_run.add_argument("--no-thinking", action="store_true",
+                       help="Turn off settings.extractor_thinking (a model without thinking)")
     p_run.add_argument("--runs-per-case", type=int, default=RUNS_PER_CASE)
     p_run.add_argument("--use-control-description", action="store_true",
                         help="Use each case's control_event_description instead of event_description")

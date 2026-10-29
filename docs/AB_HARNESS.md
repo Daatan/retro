@@ -38,7 +38,7 @@ AWS_REGION=us-east-1 .venv/bin/python scripts/ab_extractor_prompt.py \
 
 An arm calls the model the way the live extractor does: `thinking` follows
 `settings.extractor_thinking` and the output cap is `settings.extractor_max_tokens`,
-so the arm measures what is actually deployed. Before retro#1012 the driver hard-coded `max_tokens=1200` with
+so the arm measures what is actually deployed. Before PR#1028 (Refs retro#1012/#984) the driver hard-coded `max_tokens=1200` with
 no thinking, so every arm after the retro#921 switch measured a config nobody ships —
 re-run any pre-fix baseline instead of comparing against it. For a model without
 thinking (e.g. a Haiku 4.5 comparison arm, retro#984) pass

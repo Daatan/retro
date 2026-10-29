@@ -160,21 +160,21 @@ any real swap proposal should go through before shipping.
 All of the above covers **only** `extract_predictions()`. retro has at least
 five more LLM call sites that produce numbers/semantic judgments:
 
-| Task | Explanation | Model used |
+| Task | Explanation | Model used (as of 2026-10-29) |
 |---|---|---|
-| **Extractor** — *tested above* | Article → claims: extracts stance, certainty, settled, `quantitative_estimate`, `evidence_class` per prediction. Main "funnel" stage. | `extractor_model` — **Claude Haiku 4.5** for both live and batch as of retro#778 (2026-09-08; was Nova Lite on batch, live still additionally pins it via the `oracle-api` systemd drop-in), plus `threshold_extractor_model` for threshold-shaped batch events (retro#688, off by default — see below) |
-| **Gatekeeper** — *tested, see below* | Pre-filter: is this article even relevant to the forecast question? Produces `relevance_score` (0–1) and `prediction_count_estimate`. | `gatekeeper_model` — **Nova Micro** (own separate knob, no override anywhere) |
-| **Aggregator** | Collapses multiple predictions from one article into one combined read. | Reuses `extractor_model` (no separate knob) |
-| **Settlement verifier** — *tested, see below* | Vetoes false/premature "this claim is settled" calls before they pin the forecast. Built specifically for the false-settlement failure mode (retro#532). | `settlement_verifier_model` (config default `None`) → falls back to `extractor_model` |
-| **Premise verifier** | Checks whether a claim's premise still holds before using it as evidence. | `premise_verifier_model` (config default `None`) → falls back to `extractor_model` |
-| **Oracle 2.0 — decompose** | Experimental playground: breaks a compound question into sub-claims. Not in the live production path. | `decompose_model` (default `None`) → falls back to `extractor_model` |
-| **Oracle 2.0 — anchor match** | Experimental playground: matches an article to the nearest anchor event. | Directly uses `extractor_model` (no separate knob) |
-| **Oracle 2.0 — precursor match** | Experimental playground: matches an article to a precursor/related event. | `precursor_match_model` (default `None`) → falls back to `extractor_model` |
+| **Extractor** — *tested above* | Article → claims: extracts stance, certainty, settled, `quantitative_estimate`, `evidence_class` per prediction. Main "funnel" stage. | `extractor_model` — **Claude Haiku 5.5** with adaptive thinking, live and batch (retro#921, 2026-10; Haiku 4.5 from retro#778, Nova Lite before). Live additionally pins it via the `oracle-api` systemd drop-in. Plus `threshold_extractor_model` for threshold-shaped batch events (retro#688, off by default — see below) |
+| **Gatekeeper** — *tested, see below* | Pre-filter: is this article even relevant to the forecast question? Produces `relevance_score` (0–1) and `prediction_count_estimate`. | `gatekeeper_model` — **Nova Micro** (own separate knob) |
+| **Aggregator** | Collapses multiple predictions from one article into one combined read (batch). | `aggregator_model` — **Claude Haiku 4.5**, its own knob since retro#911 |
+| **Settlement verifier** — *tested, see below* | Vetoes false/premature "this claim is settled" calls before they pin the forecast. Built specifically for the false-settlement failure mode (retro#532). | `settlement_verifier_model` (default `None`) → falls back to `judge_model` (Haiku 4.5) |
+| **Premise verifier** | Checks whether a claim's premise still holds before using it as evidence. | `premise_verifier_model` (default `None`) → `judge_model` |
+| **Oracle 2.0 — decompose** | Experimental playground: breaks a compound question into sub-claims. Not in the live production path. | `decompose_model` (default `None`) → `judge_model` |
+| **Oracle 2.0 — anchor match** | Experimental playground: matches an article to the nearest anchor event. | `judge_model` |
+| **Oracle 2.0 — precursor match** | Experimental playground: matches an article to a precursor/related event. | `precursor_match_model` (default `None`) → `judge_model` |
 
-All of the above except the gatekeeper default to whatever `extractor_model`
-is set to, so today's results are directionally applicable to them — but
-aggregator, premise verifier, and the Oracle 2.0 playground steps were still
-never measured on their own.
+Since retro#911 (2026-10-06) only the extractor follows `extractor_model`; every other
+Oracle stage falls back to `judge_model` (see "Switching the extractor model" below). The
+results above therefore say nothing about the Haiku 4.5 stages, and the aggregator, premise
+verifier and Oracle 2.0 playground steps were never measured on their own.
 
 ## Gatekeeper stage results (2026-08-24 follow-up)
 

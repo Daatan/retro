@@ -234,7 +234,7 @@ cd /home/mark/projects/retro && git fetch && git log --oneline -10
 | AMI | Ubuntu 24.04 LTS arm64 |
 | Type | t4g.small |
 | IAM Role | `truthmachine-ec2-role` |
-| Permissions | SSM + Bedrock (Nova) + Secrets Manager (`daatan/*`) + S3 (`truthmachine-atlas-snapshots-*`) |
+| Permissions | SSM (incl. Parameter Store `/retro/prod/secrets/*`, docs#122) + Bedrock + Secrets Manager (`daatan/*`, only `openrouter-api-key` / `github-pat` remain there) + S3 (`truthmachine-atlas-snapshots-*`) |
 | Workdir | `/home/ubuntu/truthmachine/` |
 | Service | `systemctl status truthmachine` |
 | Log | `/home/ubuntu/truthmachine/pipeline_log.txt` |

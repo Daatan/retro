@@ -48,16 +48,16 @@ Key differences from the Doc API:
   - No full-text search — queries with only generic nouns will miss many articles
   - No rate limit; GCP free tier = 1 TB/month of query data
 
-Requires a GCP service-account JSON key stored in AWS Secrets Manager at:
-  daatan/gcp-service-account-key
+Requires a GCP service-account JSON key stored in SSM Parameter Store at:
+  /retro/prod/secrets/GCP_SA_KEY_JSON
 
 The key is loaded once at startup (same _secret() pattern as other providers) and
 used to construct a BigQuery client. When the secret is absent the provider is
 silently skipped. Queries target gkg_partitioned (DAY-partitioned by ingestion
 time) so _PARTITIONTIME pruning works correctly.
 
-All keys are loaded from the environment first, then from AWS Secrets Manager
-(daatan/* namespace) as a fallback. See _secret().
+All keys are loaded from the environment first, then from SSM Parameter Store
+(/retro/prod/secrets/*, docs#122) as a fallback. See _secret().
 
 Usage:
     from tm.web_search import search_articles

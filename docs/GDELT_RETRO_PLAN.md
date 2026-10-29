@@ -1,5 +1,7 @@
 # GDELT as a free, deterministic search for Duel / Bediavad — plan
 
+
+> **Update 2026-10-29:** the key now lives in SSM Parameter Store `/retro/prod/secrets/GCP_SA_KEY_JSON` (docs#122), not Secrets Manager `daatan/gcp-service-account-key` as written below. This plan is kept as written.
 > Goal: give the retro engines (Bediavad source-leaderboard + Duel) a **free,
 > reproducible, historical** article-discovery layer, **without changing the
 > Oracul `/search` API**. Date: 2026-07-11. Verified live from the Oracul host

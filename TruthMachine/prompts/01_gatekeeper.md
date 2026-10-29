@@ -4,7 +4,7 @@
 **Purpose:** Decide whether an article is relevant evidence for the related event.
 **Output:** `GatekeeperOutput` structured via instructor.
 
-**The live prompt is defined in `pipeline/src/tm/gatekeeper.py` (module constant `PROMPT`).**
+**The live prompt is defined in `pipeline/src/tm/gatekeeper.py` (module constants `PROMPT_PREFIX` / `PROMPT_SUFFIX`).**
 This document describes intent; always consult the source for the exact text.
 
 ---
@@ -37,9 +37,10 @@ and assigns its own certainty (low certainty ⇒ low weight in aggregation).
 ## Schema
 
 ```python
-class GatekeeperOutput(BaseModel):
+class GatekeeperOutput(BaseModel):   # pipeline/src/tm/models.py is authoritative
+    reason: str                    # stated FIRST since v2 (retro#1024): what the article says, before the verdict
     is_prediction: bool            # kept for backwards-compat; now means "is_useful_evidence"
-    reason: str                    # one-sentence justification
+    relevance_score: float         # 0–1
     prediction_count_estimate: int # how many predictive signals a reader could extract
 ```
 
@@ -48,6 +49,6 @@ class GatekeeperOutput(BaseModel):
 - If `is_prediction` is false, the article is discarded and never sent to Stage 2 (extractor).
 - `prediction_count_estimate` is purely informational; all aggregation weighting is done
   by the extractor's per-prediction certainty.
-- Prompt operates on ~2500 chars of article text (`article_text[200:2700]`).
+- The original design sliced ~2500 chars (`article_text[200:2700]`); `gatekeeper.py` no longer applies a fixed slice — check the caller for any truncation.
 - If you change the prompt, update the intent section above — the source is always
   the single source of truth.

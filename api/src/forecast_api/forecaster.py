@@ -17,7 +17,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, NamedTuple, Optional, Sequence
+from typing import Any, Callable, Literal, NamedTuple, Optional, Sequence
 from urllib.parse import urlparse
 
 import httpx
@@ -441,7 +441,7 @@ class ArticleReduction:
     stance: float
     certainty: float
     evidence_weight: float
-    evidence_class: Optional[str]
+    evidence_class: Optional[Literal["reported_fact", "cited_probability", "cited_share", "reporting", "opinion"]]
     settled: bool
     settlement_demoted: int
     settlement_event_date: Optional[str]
@@ -452,12 +452,12 @@ class ArticleReduction:
     event_target: Optional[str]
     is_occurrence: Optional[bool]
     verified: Optional[bool]
-    fact_signal_absent_reason: Optional[str]
-    facet: Optional[str]
-    tone: Optional[str]
+    fact_signal_absent_reason: Optional[Literal["no_fact_found", "contrary_below_anchor", "opinion"]]
+    facet: Optional[Literal["announcement", "denial", "neither"]]
+    tone: Optional[Literal["approve", "neutral", "alarm"]]
     voice: Optional[Voice]
     grounds: Optional[Grounds]
-    reader_confidence_level: Optional[str]
+    reader_confidence_level: Optional[Literal["high", "medium", "low"]]
     reader_confidence_traps: Optional[list[str]]
     # retro#568 (Phase 4 of docs/CONDITIONAL_CAPTURE.md) — the attenuated
     # counterpart of `stance`/`fact_signal`, computed only when
@@ -473,7 +473,7 @@ class ArticleReduction:
 
 def _reader_confidence_rollup(
     claims: list[ClaimDetail],
-) -> tuple[Optional[str], Optional[list[str]]]:
+) -> tuple[Optional[Literal["high", "medium", "low"]], Optional[list[str]]]:
     """Roll one article's per-claim `reader_confidence` up to the article level.
 
     A sixth reduction, and deliberately not shaped like the other five (retro#681):
@@ -615,9 +615,10 @@ def reduce_article(
     # aggregation. Mean-to-mean with stance so the offline fact-lane backtest
     # compares like with like; None when no scored claim carried a fact_signal.
     fact_claims = [c for c in scored if c.fact_signal is not None]
+    fact_signals = [c.fact_signal for c in fact_claims if c.fact_signal is not None]
     if fact_claims:
         fact_signal_unattenuated = claim_weighted_stance(
-            [c.fact_signal for c in fact_claims],
+            fact_signals,
             [c.certainty for c in fact_claims],
             [c.specificity for c in fact_claims],
         )
@@ -632,7 +633,7 @@ def reduce_article(
             ]
             if any(cc is not None for cc in fact_coefficients):
                 fact_signal_conditional_shadow = claim_weighted_stance(
-                    [c.fact_signal for c in fact_claims],
+                    fact_signals,
                     [c.certainty for c in fact_claims],
                     [c.specificity for c in fact_claims],
                     fact_coefficients,
@@ -645,7 +646,7 @@ def reduce_article(
         # `dominant` stays keyed on the raw (unattenuated) fact_signal magnitude —
         # attenuation only softens the article-level MEAN, it deliberately does not
         # change which claim's facets (event_actors/event_target/tone/...) ride along.
-        dominant = max(fact_claims, key=lambda c: abs(c.fact_signal))
+        dominant = max(fact_claims, key=lambda c: abs(c.fact_signal or 0.0))
         event_actors, event_target = dominant.event_actors, dominant.event_target
         is_occurrence, verified = dominant.is_occurrence, dominant.verified
         facet = dominant.facet
@@ -1129,7 +1130,7 @@ async def _apply_settlement_match_gate(
             # strict majority exists. A roll degraded by timeouts is a worse
             # decision procedure than the one configured, and caching it would
             # make its verdict permanent.
-            if key is not None and len(decided) == rolled:
+            if key is not None and store_path is not None and len(decided) == rolled:
                 await put_verdict(
                     store_path, key,
                     settles=verdict.settles, reason=verdict.reason,
@@ -1402,7 +1403,7 @@ class ArticleOutcome(NamedTuple):
     predictions: list
     author_lean: float | None
     author_lean_certainty: float | None
-    consensus_view: str | None
+    consensus_view: Literal["expects_yes", "expects_no", "divided"] | None
     # retro#697 — the extractor's decomposition of the RELATED EVENT. Question-level, so
     # identical across every article in one forecast IF the extractor is consistent; carried
     # per-source precisely so that "if" is measurable rather than assumed.
@@ -1847,7 +1848,7 @@ async def _process_article(
         would_skip, max_noul = evaluate_jev_gate(jev_pass1_result, settings.jev_gate_threshold)
         # An uncalibrated Jev provider (retro#901, e.g. Clef before it is measured) runs log-only.
         # Checked after pass 1: that call is what resolves the provider on a fresh worker.
-        if would_skip and current_provider().calibrated:
+        if would_skip and jev_pass1_result is not None and current_provider().calibrated:
             _log_jev_gate(jev_pass1_result, would_skip=True, n_preds=None, text=text,
                           language=language, url=result.url, prediction_id=prediction_id,
                           question=question)
@@ -1963,7 +1964,7 @@ async def _process_article(
         # whole article. After the shadow snapshot above (it keeps Haiku's raw class) and
         # before anchor provenance and the class weights read the class. Fail-open.
         if settings.jev_class_enabled and extraction.predictions:
-            jev_class_kwargs = dict(
+            jev_class_kwargs: dict[str, Any] = dict(
                 text=text, question=question,
                 quotes=[p.quote for p in extraction.predictions],
                 api_key=settings.typesafe_api_key,
@@ -2272,7 +2273,7 @@ async def run_forecast(
     # caller-supplied articles list, which used to bypass every cap. Applied
     # before hashing/caching so the cache reflects the effective inputs.
     cap = client.max_articles if client else None
-    if cap is not None:
+    if client is not None and cap is not None:
         if limit > cap:
             logger.info(
                 "event=per_key_cap client=%s limit=%d capped_to=%d",
@@ -2758,7 +2759,7 @@ async def _run_forecast_inner(
     evidence_class_counts: dict[str, int] = {}
 
     for result, outcome in zip(search_results, outcomes):
-        if isinstance(outcome, Exception):
+        if isinstance(outcome, BaseException):
             # Previously skipped silently — surface it so a systemic failure in
             # _process_article isn't invisible, and record it in the histogram.
             logger.warning("event=article_unhandled_error url=%s err=%r", result.url, outcome)
@@ -3007,7 +3008,7 @@ async def _run_forecast_inner(
     # — the two must see IDENTICAL per-row keys, or the log line would
     # describe a different pool than the one actually collapsed.
     _pool_event_keys = [_event_key_of(s) for s in source_signals]
-    _pool_kwargs = dict(
+    _pool_kwargs: dict[str, Any] = dict(
         relevance_weight_floor=settings.relevance_weight_floor,
         decisiveness_floor=settings.decisiveness_floor,
         thin_evidence_ci_inflation=settings.thin_evidence_ci_inflation,
@@ -3537,7 +3538,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
     # (`_cluster_ids`) and the live retro#780 discount (`_event_ids`) below —
     # same reasoning as the live /forecast path above.
     _pool_event_keys = [_event_key_of(s) for s in sources]
-    _pool_kwargs = dict(
+    _pool_kwargs: dict[str, Any] = dict(
         relevance_weight_floor=settings.relevance_weight_floor,
         decisiveness_floor=settings.decisiveness_floor,
         thin_evidence_ci_inflation=settings.thin_evidence_ci_inflation,

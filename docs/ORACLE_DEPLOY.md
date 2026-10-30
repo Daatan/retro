@@ -59,6 +59,7 @@ Rollback: delete the file on the host, daemon-reload, restart. What is actually 
 | `jev-class-enabled.conf` | `JEV_CLASS_ENABLED=true`, `JEV_CLASS_ENFORCE=true` | retro#851 |
 | `jev-segment-v2.conf` | `JEV_SEGMENT_V2=true` | retro#943 |
 | `pool-shadow-a.conf` | `POOL_SHADOW_A_ENABLED=true` (log-only Jev-weighted pool shadow; live since 2026-10-17) | retro#955 |
+| `relevance-model-vertex.conf` | `RELEVANCE_MODEL` = Gemini 3.5 Flash-Lite on Vertex + `VERTEXAI_PROJECT`/`VERTEXAI_LOCATION`/`GOOGLE_APPLICATION_CREDENTIALS` (WIF config, no key). `/relevance` only. Needs the GCP credential from the runbook first. | retro#1038 |
 
 ## Switching the Jev provider (retro#901)
 

@@ -215,6 +215,12 @@ qwen3-32b                        50            n/a                n/a           
 already tracks Haiku closely on this coarser task, at 1/16th Nova 2 Lite's
 cost and 1/65th Haiku's.
 
+**Update 2026-10-30 (retro#1038): for `/relevance`, this no longer holds.** On 400 real prod
+`relevance_judgment` pairs Nova Micro passed 148. The 128 that only Nova passed are noise, scored at
+relevance 0.3–0.5 with invented links. Gemini 3.5 Flash-Lite passed 21, all plausibly on topic.
+Most of Nova's noise sits below news-indexer's push bar (`relevance_bar` 0.7), so the downstream harm was bounded. Above the bar, 3 of 6 prod pairs were still noise. Gemini put 7 pairs above 0.7, and Nova 3. The synthetic set above did not catch this because it has one noise case Nova fails. `/relevance` now runs
+on Gemini. `/forecast` and batch stay on Nova Micro until they are measured on real pairs.
+
 ## Settlement verifier stage results (2026-08-24 follow-up)
 
 Unlike the extractor and gatekeeper, this stage has **real ground truth** to
@@ -387,7 +393,8 @@ served another model's cached answer.
 **Model choices elsewhere (not covered by these knobs)**
 - Gatekeeper `GATEKEEPER_MODEL` (Nova Micro). Since the retro#911 follow-up the two stages
   that shared it have their own knobs, unset = the gatekeeper's: `RELEVANCE_MODEL` (the
-  `/relevance` endpoint news-indexer's judge calls) and `QUERY_DISTILL_MODEL` (/forecast's
+  `/relevance` endpoint news-indexer's judge calls; live = `vertex_ai/gemini-3.5-flash-lite` since
+  2026-10-30, retro#1038) and `QUERY_DISTILL_MODEL` (/forecast's
   search keywords). v2 anchor match: `ANCHOR_MATCH_MODEL` (unset = `judge_model`).
 - Jev: `JEV_PROVIDER` picks provider + model together (all four Jev uses share it) — by
   design, a Jev model id only means something to its provider.

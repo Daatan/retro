@@ -3270,7 +3270,7 @@ the new model.
 |---|---|---|
 | `judge_model` (`JUDGE_MODEL`, API) | Haiku 4.5 | Fallback for the settlement verifier, subject gate, premise verifier, event decomposition, v2 decompose / precursor match and `/llm`. Each stage's own `*_MODEL` still wins. |
 | `aggregator_model` (`AGGREGATOR_MODEL`, `tm`) | Haiku 4.5 | Batch article aggregator (`aggregator.py`), pinned to the ID it used to inherit. |
-| `relevance_model` / `query_distill_model` (API) | unset = `GATEKEEPER_MODEL` (Nova Micro) | `/relevance` (news-indexer's judge) and `/forecast`'s search keywords. Any litellm id works, not only `bedrock/*`: `relevance-model-vertex.conf` points `/relevance` at `vertex_ai/gemini-3.5-flash-lite` (retro#1038). On 400 prod pairs Nova Micro passed 148 and Gemini 21, and the extra Nova passes were noise. |
+| `relevance_model` / `query_distill_model` (API) | unset = `GATEKEEPER_MODEL` (Nova Micro) | `/relevance` (news-indexer's judge) and `/forecast`'s search keywords. Any litellm id works, not only `bedrock/*`: `relevance-model-vertex.conf` points `/relevance` at `vertex_ai/gemini-3.5-flash-lite` (retro#1038, live since 2026-10-30). On 400 prod pairs Nova Micro passed 148 and Gemini 21, and the extra Nova passes were noise. |
 | `anchor_match_model` (API) | unset = `judge_model` | v2 playground Polymarket same-question check. |
 | `CALIBRATE_EDGES_MODEL` (env, `bayesoracle/calibrate_edges.py`) | Haiku 4.5 | Offline edge calibration. |
 

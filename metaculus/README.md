@@ -129,8 +129,9 @@ The service is gated on `ConditionPathExists=/home/ubuntu/truthmachine/.env.meta
 so **the schedule can be installed before the credentials exist** (retro#725):
 until that file is placed, each activation is skipped cleanly rather than
 failing every 20 minutes. That file holds `METACULUS_API_KEY`, `ORACLE_API_KEY`
-(the named capped relay key, never the primary) and `METACULUS_TOURNAMENT`; the
-box has no Secrets Manager access, so it is placed by hand.
+(the named capped relay key, never the primary) and `METACULUS_TOURNAMENT`. The
+box role can read `metaculus/*` in Secrets Manager (`infra/iam/README.md` section 3),
+but nothing pulls it automatically — the file is placed by hand.
 
 Logs go to the journal, **not** to `truthmachine/oracle_log.txt` — that file is
 the Oracul API's convention, is already ~341 MB and is unrotated, and a job that

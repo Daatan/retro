@@ -218,7 +218,7 @@ cost and 1/65th Haiku's.
 **Update 2026-10-30 (retro#1038): for `/relevance`, this no longer holds.** On 400 real prod
 `relevance_judgment` pairs Nova Micro passed 148. The 128 that only Nova passed are noise, scored at
 relevance 0.3–0.5 with invented links. Gemini 3.5 Flash-Lite passed 21, all plausibly on topic.
-The synthetic set above did not catch this because it has one noise case Nova fails. `/relevance` now runs
+Most of Nova's noise sits below news-indexer's push bar (`relevance_bar` 0.7), so the downstream harm was bounded. Above the bar, 3 of 6 prod pairs were still noise. Gemini put 7 pairs above 0.7, and Nova 3. The synthetic set above did not catch this because it has one noise case Nova fails. `/relevance` now runs
 on Gemini. `/forecast` and batch stay on Nova Micro until they are measured on real pairs.
 
 ## Settlement verifier stage results (2026-08-24 follow-up)

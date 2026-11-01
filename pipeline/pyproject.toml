@@ -30,7 +30,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
-    "mypy==2.4.0",  # type-check gate (retro#977); pinned like ruff, a bump changes the error set
+    "mypy==2.4.1",  # type-check gate (retro#977); pinned like ruff, a bump changes the error set
     "pytest-mock>=3.12.0",
 ]
 

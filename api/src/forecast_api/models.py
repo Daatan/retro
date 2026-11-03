@@ -888,6 +888,12 @@ class IngestResolutionRequest(BaseModel):
     claim_archetype: Optional[Literal["scheduled", "diffuse", "threshold", "none"]] = Field(default=None, description="Temporal archetype of the resolved claim, same enum as ForecastRequest.claim_archetype. Recorded so a resolved base rate can be conditioned on archetype (retro#356 — the shadow hazard prior drifts a `diffuse` by-deadline claim toward the base rate of resolved `diffuse` claims). Optional and fail-open: an older daatan that does not send it leaves the record unconditioned, and such records simply do not count toward any archetype's rate.")
 
 
+class UningestResolutionResponse(BaseModel):
+    feedback_removed: int = Field(description="Resolution-feedback lines removed; 0 when it was never ingested or already removed")
+    settlement_pins_removed: int
+    tags_removed: bool
+
+
 class IngestResolutionResponse(BaseModel):
     accepted: bool = Field(default=True)
     already_ingested: bool = Field(description="True when prediction_id was already on record — sources_recorded is 0 in that case, nothing was written")

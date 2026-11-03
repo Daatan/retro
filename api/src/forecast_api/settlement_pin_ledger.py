@@ -29,6 +29,7 @@ from pathlib import Path
 
 import diskcache
 
+from .ledger_files import append_line, remove_prediction_lines
 from .models import IngestResolutionRequest, SettlementPinLedgerEntry
 
 logger = logging.getLogger(__name__)
@@ -81,12 +82,6 @@ def _load_records_from_disk(path: Path) -> list[dict]:
     return records
 
 
-def _append_line_to_disk(path: Path, line: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a") as f:
-        f.write(line + "\n")
-
-
 async def _ensure_loaded(path: Path) -> None:
     """Backfill the dedup store from the JSONL file — needed once per store
     directory to cover prediction_ids recorded before this store existed (or
@@ -108,6 +103,13 @@ async def _ensure_loaded(path: Path) -> None:
         await asyncio.to_thread(_backfill)
         _loaded_paths.add(key)
         logger.info("Settlement-pin ledger backfilled: %d pins already on record", len(ids))
+
+
+async def forget_settlement_pin(path: Path, prediction_id: str) -> int:
+    """Undo ``record_settlement_pin`` for a reverted resolution (daatan#2077)."""
+    removed = await asyncio.to_thread(remove_prediction_lines, path, prediction_id)
+    await asyncio.to_thread(_get_store(path).delete, prediction_id)
+    return removed
 
 
 async def record_settlement_pin(path: Path, req: IngestResolutionRequest) -> bool:
@@ -144,7 +146,7 @@ async def record_settlement_pin(path: Path, req: IngestResolutionRequest) -> boo
         settlement_suppression_reason=snapshot.settlement_suppression_reason,
         contradicted=pin_direction != outcome_direction,
     )
-    await asyncio.to_thread(_append_line_to_disk, path, entry.model_dump_json())
+    await asyncio.to_thread(append_line, path, entry.model_dump_json())
 
     if entry.contradicted:
         logger.warning(

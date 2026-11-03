@@ -50,3 +50,11 @@ def test_event_markets_sends_user_agent_and_filters(likud_event):
 def test_unknown_event_is_empty():
     with GammaClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=[]))) as g:
         assert g.event_markets("nope") == []
+
+
+def test_neg_risk_is_read_per_market_and_defaults_false(likud_event):
+    raw = likud_event["markets"][0]
+    assert parse_market(raw, "e").neg_risk is False
+    assert parse_market(dict(raw, negRisk=True), "e").neg_risk is True
+    assert parse_market(dict(raw, negRisk=False), "e").neg_risk is False
+    assert parse_market(dict(raw, negRisk=None), "e").neg_risk is False

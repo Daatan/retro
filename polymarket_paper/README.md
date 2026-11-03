@@ -52,12 +52,36 @@ Resolution timing, so the scorecard is read correctly:
 | File | Role |
 |------|------|
 | `paper.py` | The run: universe → snapshots → Oracle calls → paper trades. Entry point. |
-| `gamma_client.py` | Gamma API client + `Market` parsing (prices, closed, resolved outcome). |
+| `gamma_client.py` | Gamma API client + `Market` parsing (prices, closed, resolved outcome, `negRisk`). |
 | `oracle_client.py` | Copy of `metaculus/oracle_client.py` — `POST /forecast` → `mean`. |
 | `ledger.py` | Append-only JSONL: `snapshots.jsonl`, `trades.jsonl`. |
 | `universe.py` | Default event slugs. |
 | `../api/src/forecast_api/pm_paper.py` | Reads the ledger and renders the scorecard for `GET /pm/paper`. |
 | `../infra/polymarket-paper.{service,timer}`, `install_polymarket_paper_timer.sh` | systemd oneshot, 00:30/06:30/12:30/18:30 UTC. |
+
+## Partitions: raw and coherent numbers (retro#831)
+
+The Oracle scores each bucket on its own, and neutral evidence maps to about
+0.5, so the YES numbers of mutually exclusive buckets can sum well past 1 (up
+to 3.08 on the Shas event). On those events the bot records and trades on
+`oracle_yes_coherent = p / Σp`:
+
+- **`oracle_yes` stays raw.** `decision_basis` on the trade row says which number
+  decided it, and `edge` on the trade row is the edge of that number.
+- **Only when Gamma's `negRisk` is true.** Sharing an event is not enough: the
+  "which parties win a seat" event has several YES outcomes and `negRisk` false.
+- **Every bucket needs a number, or the raw numbers stand.** Resolved NO counts as
+  0, resolved YES makes open buckets 0, and a closed unresolved bucket keeps the
+  whole event raw. A bucket outside the Oracle price band uses its market price.
+  A bucket inside the band with no Oracle number yet keeps the event raw, so the
+  first asks on a new partition can still trade raw if the per-run cap splits it.
+- **Siblings can be as-of different runs**, because each is asked on its own cycle.
+
+This makes the numbers consistent; it does not add skill. On the three seat
+events replayed over the ledger on 2026-11-03, mean Brier improved from raw but
+stayed behind the market and about level with 1/K; those 14 markets are one
+election, and the method was chosen after seeing them. The Oracle itself is
+unchanged, and `polymarket_edge` on the MCP server is single-market and still raw.
 
 ## Run parameters (environment)
 
@@ -109,7 +133,8 @@ Two views, both from the same ledger:
    snapshot*, both scored against the outcome. `brier_oracle < brier_market`
    is the only number that says the Oracle beats the market. With ~30
    markets, one election and heavily correlated questions, treat it as a
-   single data point, not a distribution.
+   single data point, not a distribution. `brier_coherent` covers only markets
+   with a normalised number, and sits next to raw and market on that same subset.
 
 What would count as a result on 10-28: Brier on the ~15 markets that resolve
 with the official count, plus MTM on the rest. What would not: any P&L
@@ -121,5 +146,5 @@ figure alone.
 cd polymarket_paper
 uv sync --frozen
 ORACLE_API_KEY=... DRY_RUN=1 uv run python paper.py      # no writes
-uv run pytest -q                                          # 34 tests, all offline
+uv run pytest -q                                          # all offline
 ```

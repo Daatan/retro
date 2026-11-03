@@ -98,16 +98,15 @@ def _parse_ts(value: str | None) -> Optional[datetime]:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def wants_oracle_call(m: Market, last: Optional[dict], p: Params, now: datetime) -> bool:
-    """Ask the Oracle about this market on this run?"""
+def wants_oracle_call(m: Market, last_asked: Optional[dict], p: Params, now: datetime) -> bool:
+    """Ask the Oracle about this market on this run? ``last_asked``: its last answered row."""
     if m.closed or not m.has_price:
         return False
     if not (p.oracle_price_min <= m.yes_price <= p.oracle_price_max):  # type: ignore[operator]
         return False
-    if last is None or last.get("oracle_yes") is None and last.get("oracle_reason") is None:
-        # never asked (or an earlier row was price-only)
+    if last_asked is None:
         return True
-    asked_at = _parse_ts(last.get("ts"))
+    asked_at = _parse_ts(last_asked.get("ts"))
     return asked_at is None or now - asked_at >= p.stale_after
 
 
@@ -244,7 +243,7 @@ def run(gamma: GammaClient, oracle: OracleClient, ledger: Ledger, slugs: tuple[s
     now = now or datetime.now(timezone.utc)
     run_id = now.strftime("%Y%m%dT%H%M%SZ")
     markets = gamma.universe(slugs)
-    latest = ledger.latest_snapshot_by_market()
+    last_asked = ledger.last_asked_by_market()
     oracle_by_market = ledger.last_oracle_by_market()
     open_ids = ledger.open_trade_market_ids()
     log.info("run %s: %d markets from %d events, params=%s", run_id, len(markets), len(slugs), p.as_dict())
@@ -264,7 +263,7 @@ def run(gamma: GammaClient, oracle: OracleClient, ledger: Ledger, slugs: tuple[s
             if not m.has_price:
                 stats["skipped_no_price"] += 1
                 continue
-            row = _forecast_market(m, oracle, latest.get(m.market_id), p, now, run_id, stats, dry_run)
+            row = _forecast_market(m, oracle, last_asked.get(m.market_id), p, now, run_id, stats, dry_run)
             if row["oracle_yes"] is not None:
                 oracle_by_market[m.market_id] = row["oracle_yes"]
             rows.append((m, row))
@@ -292,11 +291,11 @@ def run(gamma: GammaClient, oracle: OracleClient, ledger: Ledger, slugs: tuple[s
     return stats
 
 
-def _forecast_market(m: Market, oracle: OracleClient, last: Optional[dict], p: Params, now: datetime,
+def _forecast_market(m: Market, oracle: OracleClient, last_asked: Optional[dict], p: Params, now: datetime,
                      run_id: str, stats: dict, dry_run: bool) -> dict:
     """Ask the Oracle if this market is due (within the per-run cap) and build its row."""
     oracle_resp: Optional[dict] = None
-    if stats["asked"] < p.max_markets_per_run and wants_oracle_call(m, last, p, now):
+    if stats["asked"] < p.max_markets_per_run and wants_oracle_call(m, last_asked, p, now):
         stats["asked"] += 1
         if dry_run:
             log.info("DRY RUN would forecast %s %r", m.market_id, m.question)

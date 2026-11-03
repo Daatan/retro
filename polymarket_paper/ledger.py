@@ -61,12 +61,17 @@ class Ledger:
                 if line:
                     yield json.loads(line)
 
-    def latest_snapshot_by_market(self) -> dict[str, dict]:
-        """market_id → most recent snapshot row (file order == time order)."""
-        latest: dict[str, dict] = {}
+    def last_asked_by_market(self) -> dict[str, dict]:
+        """market_id → last row where the Oracle answered (file order == time order).
+
+        An answer is a number or an ``oracle_reason``. Price-only rows, including
+        those from a failed call, do not count.
+        """
+        asked: dict[str, dict] = {}
         for row in self.snapshots():
-            latest[row["market_id"]] = row
-        return latest
+            if row.get("oracle_yes") is not None or row.get("oracle_reason") is not None:
+                asked[row["market_id"]] = row
+        return asked
 
     def last_oracle_by_market(self) -> dict[str, float]:
         """market_id → last raw Oracle number; the latest row is often price-only."""

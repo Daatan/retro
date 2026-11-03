@@ -37,9 +37,6 @@ class TestWantsOracleCall:
     def test_never_asked(self):
         assert wants_oracle_call(mk(), None, P, NOW) is True
 
-    def test_price_only_row_counts_as_never_asked(self):
-        assert wants_oracle_call(mk(), {"ts": NOW.isoformat(), "oracle_yes": None, "oracle_reason": None}, P, NOW) is True
-
     def test_recent_answer_is_not_stale(self):
         last = {"ts": (NOW - timedelta(hours=6)).isoformat(), "oracle_yes": 0.3}
         assert wants_oracle_call(mk(), last, P, NOW) is False
@@ -287,6 +284,37 @@ def test_second_run_within_stale_window_makes_no_oracle_calls_and_no_duplicate_t
     assert len(list(led.trades())) == 2  # both markets had edge on run 1 (0.7 vs 0.153 and 0.415); none re-opened
     # price-only snapshots were still written on run 2 (the MTM series keeps going)
     assert len([s for s in led.snapshots() if s["run_id"].startswith("20260916T18")]) == 3
+
+
+def test_markets_are_re_asked_after_the_stale_window_not_after_a_price_only_row(tmp_path, likud_event):
+    # the 6h timer with a 20h window: asked at 0h, then not until 24h (retro#1047)
+    calls_at: list[int] = []
+    hour = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls_at.append(hour)
+        return _answer(0.4)
+
+    led = Ledger(tmp_path)
+    with _gamma(likud_event) as g, _oracle(handler) as o:
+        for hour in (0, 6, 12, 18, 24):
+            run(g, o, led, ("israel-election-likud-of-seats",), P, now=NOW + timedelta(hours=hour))
+    assert calls_at == [0, 0, 24, 24]  # two askable markets, each asked twice
+
+
+def test_a_failed_call_is_retried_on_the_next_run(tmp_path, likud_event):
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(500) if calls <= 2 else _answer(0.0)
+
+    led = Ledger(tmp_path)
+    with _gamma(likud_event) as g, _oracle(handler) as o:
+        first = run(g, o, led, ("israel-election-likud-of-seats",), P, now=NOW)
+        second = run(g, o, led, ("israel-election-likud-of-seats",), P, now=NOW + timedelta(hours=6))
+    assert first["errors"] == 2 and second["oracle_calls"] == 2
 
 
 def test_max_markets_per_run_caps_oracle_calls(tmp_path, likud_event):

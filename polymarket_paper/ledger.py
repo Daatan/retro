@@ -6,7 +6,9 @@ oracle box ``/home/ubuntu/truthmachine/data/polymarket_paper``):
   snapshots.jsonl  one row per (run, market): market price, Oracle probability,
                    edge, Oracle telemetry. Written for every market in the
                    universe on every run, Oracle call or not — the price series
-                   is what the mark-to-market view is built from.
+                   is what the mark-to-market view is built from. ``oracle_yes``
+                   stays the raw Oracle number; ``oracle_yes_coherent`` is the
+                   same number after partition normalisation (retro#831).
   trades.jsonl     one row per paper position opened. Never edited; a position
                    is "closed" by the market resolving, which the scorecard
                    reads off the latest snapshot.
@@ -65,6 +67,14 @@ class Ledger:
         for row in self.snapshots():
             latest[row["market_id"]] = row
         return latest
+
+    def last_oracle_by_market(self) -> dict[str, float]:
+        """market_id → last raw Oracle number; the latest row is often price-only."""
+        last: dict[str, float] = {}
+        for row in self.snapshots():
+            if row.get("oracle_yes") is not None:
+                last[row["market_id"]] = float(row["oracle_yes"])
+        return last
 
     def open_trade_market_ids(self) -> set[str]:
         return {t["market_id"] for t in self.trades()}

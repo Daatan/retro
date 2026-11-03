@@ -33,6 +33,11 @@ class Market:
     end_date: Optional[str]
     volume_usd: float
     resolved_outcome: Optional[str]  # "YES" | "NO" | None while open/unresolved
+    # Gamma's negRisk: the event's markets are mutually exclusive (at most one
+    # YES). Read per market: the event-level field is null on some events, and
+    # sharing an event is not enough (a "which parties win a seat" event has
+    # several YES outcomes and negRisk false).
+    neg_risk: bool = False
 
     @property
     def has_price(self) -> bool:
@@ -105,6 +110,7 @@ def parse_market(m: dict, event_slug: str) -> Optional[Market]:
         end_date=m.get("endDate"),
         volume_usd=volume,
         resolved_outcome=resolved_outcome(m),
+        neg_risk=m.get("negRisk") is True,
     )
 
 

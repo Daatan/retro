@@ -78,6 +78,40 @@ def test_positions_mark_to_market_then_settle(tmp_path):
     assert "| Q2 | NO | 0.200 | 1.000 | $400.00 | won |" in md
 
 
+def test_coherent_number_is_scored_on_its_own_subset_next_to_raw_and_market(tmp_path):
+    _write(tmp_path, "snapshots.jsonl", [
+        _snap("1", "2026-09-16T00:00:00+00:00", 0.40, oracle=0.80, oracle_yes_coherent=0.50, edge_coherent=0.10,
+              coherent_sum=1.6),
+        _snap("1", "2026-10-28T00:00:00+00:00", 0.0, outcome="NO", closed=True),
+        _snap("2", "2026-09-16T00:00:00+00:00", 0.90, oracle=0.60),         # no partition: raw only
+        _snap("2", "2026-10-28T00:00:00+00:00", 1.0, outcome="YES", closed=True),
+        _snap("3", "2026-09-16T00:00:00+00:00", 0.10, oracle=0.30),         # rows from before retro#831 have no field
+    ])
+    r = build_report(tmp_path)
+    s = r["summary"]
+    assert s["n_scored"] == 2 and s["n_scored_coherent"] == 1
+    assert s["brier_coherent"] == round(0.5 ** 2, 4)
+    assert s["brier_oracle_on_coherent"] == round(0.8 ** 2, 4)
+    assert s["brier_market_on_coherent"] == round(0.4 ** 2, 4)
+    m1 = next(m for m in r["markets"] if m["market_id"] == "1")
+    assert m1["oracle_yes"] == 0.80 and m1["oracle_yes_coherent"] == 0.50 and m1["coherent_sum"] == 1.6
+    m3 = next(m for m in r["markets"] if m["market_id"] == "3")
+    assert m3["oracle_yes_coherent"] is None and m3["brier_coherent"] is None
+    md = render_markdown(r)
+    assert "| Coherent |" in md and "0.500" in md and "(n=1)" in md
+
+
+def test_positions_carry_the_decision_basis(tmp_path):
+    _write(tmp_path, "snapshots.jsonl", [_snap("1", "2026-09-16T00:00:00+00:00", 0.20, oracle=0.70)])
+    _write(tmp_path, "trades.jsonl", [
+        {"trade_id": "a", "ts": "2026-09-16T00:00:00+00:00", "market_id": "1", "question": "Q1", "side": "YES",
+         "entry_price": 0.2, "shares": 500, "notional_usd": 100, "oracle_yes": 0.7, "oracle_yes_coherent": 0.5,
+         "decision_basis": "coherent", "market_yes": 0.2, "edge": 0.3},
+    ])
+    p = build_report(tmp_path)["positions"][0]
+    assert p["decision_basis"] == "coherent" and p["oracle_yes"] == 0.7 and p["oracle_yes_coherent"] == 0.5
+
+
 def test_torn_last_line_is_ignored(tmp_path):
     tmp_path.mkdir(exist_ok=True)
     (tmp_path / "snapshots.jsonl").write_text(json.dumps(_snap("1", "t", 0.4)) + "\n{\"market_id\": \"2\", \"ts\"", encoding="utf-8")
@@ -97,5 +131,5 @@ def test_route_serves_json_and_markdown(tmp_path, monkeypatch):
         assert r.status_code == 200 and r.json()["summary"]["n_markets"] == 1
         r = client.get("/pm/paper", params={"format": "md"})
         assert r.status_code == 200 and r.headers["content-type"].startswith("text/markdown")
-        assert "| Q1 | 0.400 | 0.700 | 0.300 | open |" in r.text
+        assert "| Q1 | 0.400 | 0.700 | — | 0.300 | open |" in r.text
         assert client.get("/pm/paper", params={"format": "xml"}).status_code == 422

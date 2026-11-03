@@ -8,6 +8,10 @@ by more than ``EDGE_THRESHOLD``. Positions are held to resolution; nothing is
 ever submitted anywhere. The scorecard is ``GET /pm/paper`` on the Oracle API,
 which reads the same ledger directory.
 
+The Oracle scores each bucket of a partition on its own, so the YES numbers of
+mutually exclusive buckets can sum well past 1. On those events the bot decides
+on the normalised number and keeps the raw one (see ``coherent_yes``, retro#831).
+
 Env vars:
     ORACLE_API_KEY          named Oracle relay key (required; the metaculus one
                             is fine — see README for its max_articles cap)
@@ -121,8 +125,50 @@ def trade_side(oracle_yes: float, market_yes: float, p: Params) -> Optional[str]
     return None
 
 
-def trade_row(m: Market, side: str, oracle_yes: float, p: Params, now: datetime, run_id: str) -> dict:
+def coherent_yes(event_markets: list[Market], oracle_by_market: dict[str, float],
+                 p: Params) -> Optional[tuple[dict[str, float], float]]:
+    """Sum-normalised YES numbers for one event's partition (retro#831).
+
+    Returns ``({market_id: p/Σp}, Σp)``, or None when the event is not a partition
+    whose every bucket has a number, in which case the raw numbers stand. Applies
+    only to negRisk events, because only there are the buckets mutually exclusive:
+
+    * resolved NO counts as 0; resolved YES makes every open bucket 0.
+    * closed but unresolved: the partition is unknown, so None.
+    * outside the Oracle price band the Oracle is never asked, so the market price
+      stands in for that bucket. It enters Σp but gets no coherent number of its own.
+    * inside the band with no Oracle number yet: None.
+
+    Numbers may be as-of different runs, since siblings are asked at different
+    times. Normalising removes the excess over 1 and adds no skill. The Oracle's
+    CI is not rescaled: it describes the raw number.
+    """
+    priced = [m for m in event_markets if m.has_price]
+    if len(priced) < 2 or not all(m.neg_risk for m in priced):
+        return None
+    closed = [m for m in priced if m.closed]
+    if any(m.resolved_outcome is None for m in closed):
+        return None
+    live = [m for m in priced if not m.closed]
+    if not live:
+        return None
+    in_band = [m for m in live if p.oracle_price_min <= m.yes_price <= p.oracle_price_max]  # type: ignore[operator]
+    if any(m.resolved_outcome == "YES" for m in closed):
+        return {m.market_id: 0.0 for m in in_band}, 1.0
+    if not in_band or any(m.market_id not in oracle_by_market for m in in_band):
+        return None
+    numbers = {m.market_id: oracle_by_market[m.market_id] for m in in_band}
+    total = sum(numbers.values()) + sum(m.yes_price for m in live if m.market_id not in numbers)  # type: ignore[misc]
+    if total <= 0.0:
+        return None
+    return {mid: round(v / total, 4) for mid, v in numbers.items()}, round(total, 4)
+
+
+def trade_row(m: Market, side: str, oracle_yes: float, p: Params, now: datetime, run_id: str,
+              coherent: Optional[float] = None) -> dict:
+    """``oracle_yes`` is always the raw number; ``edge`` is the one the decision used."""
     entry = m.yes_price if side == "YES" else 1.0 - m.yes_price  # type: ignore[operator]
+    decided_on = oracle_yes if coherent is None else coherent
     return {
         "ts": now.isoformat(),
         "run_id": run_id,
@@ -135,8 +181,10 @@ def trade_row(m: Market, side: str, oracle_yes: float, p: Params, now: datetime,
         "notional_usd": p.notional_usd,
         "shares": round(p.notional_usd / entry, 4),
         "oracle_yes": round(oracle_yes, 4),
+        "oracle_yes_coherent": coherent,
+        "decision_basis": "raw" if coherent is None else "coherent",
         "market_yes": round(m.yes_price, 4),  # type: ignore[arg-type]
-        "edge": round(oracle_yes - m.yes_price, 4),  # type: ignore[operator]
+        "edge": round(decided_on - m.yes_price, 4),  # type: ignore[operator]
         "paper": True,
     }
 
@@ -157,6 +205,9 @@ def snapshot_row(m: Market, oracle: Optional[dict], now: datetime, run_id: str) 
         "oracle_yes": None,
         "oracle_reason": None,
         "edge": None,
+        "oracle_yes_coherent": None,
+        "coherent_sum": None,
+        "edge_coherent": None,
     }
     if oracle is None:
         return row
@@ -194,51 +245,83 @@ def run(gamma: GammaClient, oracle: OracleClient, ledger: Ledger, slugs: tuple[s
     run_id = now.strftime("%Y%m%dT%H%M%SZ")
     markets = gamma.universe(slugs)
     latest = ledger.latest_snapshot_by_market()
+    oracle_by_market = ledger.last_oracle_by_market()
     open_ids = ledger.open_trade_market_ids()
     log.info("run %s: %d markets from %d events, params=%s", run_id, len(markets), len(slugs), p.as_dict())
 
-    calls = 0
     stats = {"markets": len(markets), "oracle_calls": 0, "oracle_insufficient": 0,
-             "trades_opened": 0, "price_only": 0, "skipped_no_price": 0, "errors": 0}
+             "trades_opened": 0, "price_only": 0, "skipped_no_price": 0, "errors": 0,
+             "asked": 0, "coherent_events": 0}
+    by_event: dict[str, list[Market]] = {}
     for m in markets:
-        if not m.has_price:
-            stats["skipped_no_price"] += 1
-            continue
-        oracle_resp: Optional[dict] = None
-        if calls < p.max_markets_per_run and wants_oracle_call(m, latest.get(m.market_id), p, now):
-            calls += 1
+        by_event.setdefault(m.event_slug, []).append(m)
+    # One event at a time: its rows and trades need every sibling's answer, but
+    # are still written before the next event's Oracle calls, so a crash loses
+    # at most one event's worth of them.
+    for event_markets in by_event.values():
+        rows: list[tuple[Market, dict]] = []
+        for m in event_markets:
+            if not m.has_price:
+                stats["skipped_no_price"] += 1
+                continue
+            row = _forecast_market(m, oracle, latest.get(m.market_id), p, now, run_id, stats, dry_run)
+            if row["oracle_yes"] is not None:
+                oracle_by_market[m.market_id] = row["oracle_yes"]
+            rows.append((m, row))
+        coherent = coherent_yes(event_markets, oracle_by_market, p)
+        if coherent is not None:
+            stats["coherent_events"] += 1
+        for m, row in rows:
+            _apply_coherent(row, m, coherent)
+            log.info("%s yes=%s oracle=%s coherent=%s edge=%s reason=%s %r", m.market_id, row["market_yes"],
+                     row["oracle_yes"], row["oracle_yes_coherent"], row["edge"], row["oracle_reason"], m.question[:70])
             if dry_run:
-                log.info("DRY RUN would forecast %s %r", m.market_id, m.question)
-            else:
-                try:
-                    oracle_resp = oracle.forecast(m.question, resolution_criteria(m))
-                    stats["oracle_calls"] += 1
-                except Exception as exc:  # one bad market must not end the run
-                    stats["errors"] += 1
-                    log.warning("forecast failed for %s: %s", m.market_id, exc)
-        else:
-            stats["price_only"] += 1
-
-        row = snapshot_row(m, oracle_resp, now, run_id)
-        if row["oracle_reason"]:
-            stats["oracle_insufficient"] += 1
-        log.info("%s yes=%s oracle=%s edge=%s reason=%s %r", m.market_id, row["market_yes"],
-                 row["oracle_yes"], row["edge"], row["oracle_reason"], m.question[:70])
-        if dry_run:
-            continue
-        ledger.append_snapshot(row)
-
-        if row["oracle_yes"] is not None and m.market_id not in open_ids and not m.closed:
-            side = trade_side(row["oracle_yes"], m.yes_price, p)  # type: ignore[arg-type]
-            if side:
-                t = trade_row(m, side, row["oracle_yes"], p, now, run_id)
-                ledger.append_trade(t)
-                open_ids.add(m.market_id)
-                stats["trades_opened"] += 1
-                log.info("PAPER TRADE %s %s @%.3f  oracle=%.3f market=%.3f  %r",
-                         side, m.market_id, t["entry_price"], t["oracle_yes"], t["market_yes"], m.question[:70])
+                continue
+            ledger.append_snapshot(row)
+            if row["oracle_yes"] is not None and m.market_id not in open_ids and not m.closed:
+                decided_on = row["oracle_yes"] if row["oracle_yes_coherent"] is None else row["oracle_yes_coherent"]
+                side = trade_side(decided_on, m.yes_price, p)  # type: ignore[arg-type]
+                if side:
+                    t = trade_row(m, side, row["oracle_yes"], p, now, run_id, coherent=row["oracle_yes_coherent"])
+                    ledger.append_trade(t)
+                    open_ids.add(m.market_id)
+                    stats["trades_opened"] += 1
+                    log.info("PAPER TRADE %s %s @%.3f  decided_on=%.3f (%s) market=%.3f  %r", side, m.market_id,
+                             t["entry_price"], decided_on, t["decision_basis"], t["market_yes"], m.question[:70])
     log.info("done %s", stats)
     return stats
+
+
+def _forecast_market(m: Market, oracle: OracleClient, last: Optional[dict], p: Params, now: datetime,
+                     run_id: str, stats: dict, dry_run: bool) -> dict:
+    """Ask the Oracle if this market is due (within the per-run cap) and build its row."""
+    oracle_resp: Optional[dict] = None
+    if stats["asked"] < p.max_markets_per_run and wants_oracle_call(m, last, p, now):
+        stats["asked"] += 1
+        if dry_run:
+            log.info("DRY RUN would forecast %s %r", m.market_id, m.question)
+        else:
+            try:
+                oracle_resp = oracle.forecast(m.question, resolution_criteria(m))
+                stats["oracle_calls"] += 1
+            except Exception as exc:  # one bad market must not end the run
+                stats["errors"] += 1
+                log.warning("forecast failed for %s: %s", m.market_id, exc)
+    else:
+        stats["price_only"] += 1
+    row = snapshot_row(m, oracle_resp, now, run_id)
+    if row["oracle_reason"]:
+        stats["oracle_insufficient"] += 1
+    return row
+
+
+def _apply_coherent(row: dict, m: Market, coherent: Optional[tuple[dict[str, float], float]]) -> None:
+    if coherent is None or m.market_id not in coherent[0]:
+        return
+    value = coherent[0][m.market_id]
+    row["oracle_yes_coherent"] = value
+    row["coherent_sum"] = coherent[1]
+    row["edge_coherent"] = None if m.yes_price is None else round(value - m.yes_price, 4)
 
 
 def _required_env(name: str) -> str:

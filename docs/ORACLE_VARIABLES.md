@@ -1553,6 +1553,8 @@ Small-tasks breakdown, in order:
   in-memory guard, reloaded from disk at first use, same lazy-cache shape as
   `leaderboard.py`'s `_cache`) — a fire-and-forget retry from daatan can
   never double-count a source's history.
+  `DELETE /leaderboard/ingest/{prediction_id}` undoes one ingest when an admin reverts a
+  mistaken resolution (daatan#2077): it removes the lines, clears the dedup keys and rescores.
 - **`evidence_class` exposed on `/forecast`'s `SourceSignal`** — retro #255
   (merged): found while scoping the resolution hook below — daatan's
   `EvidencePoolArticle` only ever persisted the *resolved* `evidence_weight`
@@ -1665,8 +1667,6 @@ Small-tasks breakdown, in order:
   20% of the time by ~9%, noise against `class_weight` (16×) and recency (50×).
   The *ranking* is fine (corr +0.98 with true accuracy); the absolute scale is
   not. Brier separates properly (corr −0.98, ~2.5× spread at 100 resolutions):
-  `DELETE /leaderboard/ingest/{prediction_id}` undoes one ingest when an admin reverts a
-  mistaken resolution (daatan#2077): it removes the lines, clears the dedup keys and rescores.
 
       b_shrunk = (brier_mean·n + prior_n·0.25) / (n + prior_n)
       weight   = clamp(1.0 + (0.25 − b_shrunk)·slope, w_min, w_max)

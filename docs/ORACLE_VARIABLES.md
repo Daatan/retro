@@ -1553,6 +1553,8 @@ Small-tasks breakdown, in order:
   in-memory guard, reloaded from disk at first use, same lazy-cache shape as
   `leaderboard.py`'s `_cache`) — a fire-and-forget retry from daatan can
   never double-count a source's history.
+  `DELETE /leaderboard/ingest/{prediction_id}` undoes one ingest when an admin reverts a
+  mistaken resolution (daatan#2077): it removes the lines, clears the dedup keys and rescores.
 - **`evidence_class` exposed on `/forecast`'s `SourceSignal`** — retro #255
   (merged): found while scoping the resolution hook below — daatan's
   `EvidencePoolArticle` only ever persisted the *resolved* `evidence_weight`

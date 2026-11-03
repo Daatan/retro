@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Changed
+- `DELETE /leaderboard/ingest/{prediction_id}` undoes an ingest for a resolution an admin reverted: removes it from the feedback, settlement-pin and tags files, clears both dedup keys and rescores the boards (daatan#2077). The ledger files now take a lock on every write, because removal rewrites them.
 - `GET /pm/paper` shows the paper bot's coherent partition estimate beside the raw Oracle number, and scores it next to raw and market on the same subset (retro#831).
 - Dependencies (security): pyasn1 0.6.4 -> 0.6.5 in `api/uv.lock`, which is the live Oracul env; it closes Dependabot alerts #46–#49 (high). `pipeline/` got the same bump in #1041. certifi 2026.7.22 -> 2026.10.23 in `manifold_paper/uv.lock`, closing alert #32 (critical). Lockfile only, no code change.
 - Docs: refreshed stale model, secret-location and link references after the 2026-10-29 docs review — `EXTRACTOR_MODEL_SURVEY.md` stage table (Haiku 5.5 extractor, stages fall back to `judge_model` since retro#911), `TruthMachine/prompts` mapping + gatekeeper schema (reason-first), `web_search.py` docstring (keys in SSM `/retro/prod/secrets/*`), `ARCHITECTURE.md` examples + infra tree, `ORACLE_DEPLOY.md` drop-in table (`pool-shadow-a.conf`), `CLAUDE.md` Oracle API link + latency line. Comment/docstring only, no runtime change.

@@ -29,11 +29,11 @@ from .leaderboard import (
     refresh_cache,
     refresh_shadow_cache,
 )
-from .resolution_feedback import ingest_resolution, record_tags
+from .resolution_feedback import forget_resolution, ingest_resolution, record_tags, remove_tags
 from .resolution_scorer import load_shadow_leaderboard, load_tag_board, rescore_authors_from_disk, rescore_from_disk
 from .settings_deprecations import deprecated_env, unrecognized_env
 from .settings_groups import grouped
-from .settlement_pin_ledger import load_ledger, record_settlement_pin
+from .settlement_pin_ledger import forget_settlement_pin, load_ledger, record_settlement_pin
 from .stages import describe_stages
 from .pm_paper import build_report as build_pm_paper_report, render_markdown as render_pm_paper_markdown
 from .manifold_paper import build_report as build_manifold_paper_report, render_markdown as render_manifold_paper_markdown
@@ -44,7 +44,7 @@ from .article_fetch import ArticleFetchError, fetch_and_extract
 from .limiter import limiter
 from .mcp_auth import SCOPE_FORECAST, SCOPE_READ
 from .mcp_server import build_mcp
-from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, IngestResolutionRequest, IngestResolutionResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, RelevanceRequest, RelevanceResponse, SearchRequest, SearchResponse, SearchHealthResponse, SettlementPinReportResponse, TokenUsage, VersionResponse
+from .models import ForecastRequest, ForecastResponse, FetchUrlRequest, FetchUrlResponse, IngestResolutionRequest, IngestResolutionResponse, UningestResolutionResponse, LlmRequest, LlmResponse, PoolAggregateRequest, PoolAggregateResponse, RelevanceRequest, RelevanceResponse, SearchRequest, SearchResponse, SearchHealthResponse, SettlementPinReportResponse, TokenUsage, VersionResponse
 from .searcher import run_search, run_search_health
 from .v2_playground import V2ForecastRequest, V2JobCreated, get_job, start_job
 
@@ -253,26 +253,56 @@ async def leaderboard_ingest(
         record_tags, settings.resolved_resolution_tags_path, body.prediction_id, body.tags
     )
     if not result.already_ingested or tags_changed:
-        await asyncio.to_thread(
-            rescore_from_disk,
-            settings.resolved_resolution_feedback_path,
-            settings.resolved_resolution_leaderboard_path,
-        )
-        await asyncio.to_thread(
-            rescore_authors_from_disk,
-            settings.resolved_resolution_feedback_path,
-            settings.resolved_resolution_author_leaderboard_path,
-            settings.resolved_resolution_tags_path,
-        )
-        # Pick the freshly-scored board up immediately rather than waiting out
-        # the daily refresh timer — otherwise live weights would lag a new
-        # resolution by up to leaderboard_refresh_seconds.
-        if settings.resolution_shadow_credibility_enabled:
-            await refresh_shadow_cache(
-                settings.resolved_resolution_leaderboard_path,
-                settings.resolved_resolution_feedback_path,
-            )
+        await _rescore_resolution_boards()
     return result
+
+
+@app.delete("/leaderboard/ingest/{prediction_id}", response_model=UningestResolutionResponse, tags=["Meta"])
+@limiter.limit("60/minute")
+async def leaderboard_uningest(
+    request: Request,  # required by slowapi
+    prediction_id: str,
+    _: ApiKeyClient = Depends(verify_api_key),
+):
+    """
+    Undo POST /leaderboard/ingest for a resolution an admin reverted (daatan#2077):
+    drops the prediction from the feedback, settlement-pin and tags files, clears both
+    dedup keys so a later re-resolution is accepted as new, and replays the boards.
+
+    Idempotent. It always rescores, even with nothing to remove, so a retry after a
+    crash between the removal and the replay still repairs the boards.
+    """
+    feedback_removed = await forget_resolution(settings.resolved_resolution_feedback_path, prediction_id)
+    settlement_pins_removed = await forget_settlement_pin(settings.resolved_settlement_pin_ledger_path, prediction_id)
+    tags_removed = await asyncio.to_thread(remove_tags, settings.resolved_resolution_tags_path, prediction_id)
+    await _rescore_resolution_boards()
+    return UningestResolutionResponse(
+        feedback_removed=feedback_removed,
+        settlement_pins_removed=settlement_pins_removed,
+        tags_removed=tags_removed,
+    )
+
+
+async def _rescore_resolution_boards() -> None:
+    await asyncio.to_thread(
+        rescore_from_disk,
+        settings.resolved_resolution_feedback_path,
+        settings.resolved_resolution_leaderboard_path,
+    )
+    await asyncio.to_thread(
+        rescore_authors_from_disk,
+        settings.resolved_resolution_feedback_path,
+        settings.resolved_resolution_author_leaderboard_path,
+        settings.resolved_resolution_tags_path,
+    )
+    # Pick the freshly-scored board up immediately rather than waiting out
+    # the daily refresh timer — otherwise live weights would lag a change in
+    # resolutions by up to leaderboard_refresh_seconds.
+    if settings.resolution_shadow_credibility_enabled:
+        await refresh_shadow_cache(
+            settings.resolved_resolution_leaderboard_path,
+            settings.resolved_resolution_feedback_path,
+        )
 
 
 @app.get("/leaderboard/resolution-shadow", tags=["Meta"])

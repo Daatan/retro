@@ -26,6 +26,7 @@ from pathlib import Path
 
 import diskcache
 
+from .ledger_files import append_line, locked, remove_prediction_lines
 from .models import IngestResolutionRequest, IngestResolutionResponse
 
 logger = logging.getLogger(__name__)
@@ -61,12 +62,6 @@ def _load_ids_from_disk(path: Path) -> set[str]:
         except (json.JSONDecodeError, KeyError):
             logger.warning("Skipping malformed resolution-feedback line %d in %s", lineno, path)
     return ids
-
-
-def _append_line_to_disk(path: Path, line: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a") as f:
-        f.write(line + "\n")
 
 
 async def _ensure_loaded(path: Path) -> None:
@@ -112,7 +107,7 @@ async def ingest_resolution(path: Path, req: IngestResolutionRequest) -> IngestR
         # guessed into one.
         "claim_archetype": req.claim_archetype,
     }
-    await asyncio.to_thread(_append_line_to_disk, path, json.dumps(record))
+    await asyncio.to_thread(append_line, path, json.dumps(record))
 
     return IngestResolutionResponse(
         already_ingested=False,
@@ -121,20 +116,44 @@ async def ingest_resolution(path: Path, req: IngestResolutionRequest) -> IngestR
     )
 
 
+async def forget_resolution(path: Path, prediction_id: str) -> int:
+    """Undo ``ingest_resolution`` for a reverted resolution (daatan#2077), so a later
+    re-resolution is accepted as new. Returns the lines removed. The dedup key goes
+    last and unconditionally: a retry after a crash between the two still clears it."""
+    removed = await asyncio.to_thread(remove_prediction_lines, path, prediction_id)
+    await asyncio.to_thread(_get_store(path).delete, prediction_id)
+    return removed
+
+
 def record_tags(path: Path, prediction_id: str, tags: list[str]) -> bool:
     """Store a prediction's topic slugs in the sidecar map. True when it changed."""
     clean = sorted({t.strip() for t in tags if t and t.strip()})
     if not clean:
         return False
-    current = json.loads(path.read_text()) if path.exists() else {}
-    if current.get(prediction_id) == clean:
-        return False
-    current[prediction_id] = clean
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(current, ensure_ascii=False))
-    tmp.replace(path)
+    with locked(path):
+        current = json.loads(path.read_text()) if path.exists() else {}
+        if current.get(prediction_id) == clean:
+            return False
+        current[prediction_id] = clean
+        _write_tags(path, current)
     return True
+
+
+def remove_tags(path: Path, prediction_id: str) -> bool:
+    """Drop a prediction from the sidecar map. True when it was there."""
+    with locked(path):
+        current = json.loads(path.read_text()) if path.exists() else {}
+        if prediction_id not in current:
+            return False
+        del current[prediction_id]
+        _write_tags(path, current)
+    return True
+
+
+def _write_tags(path: Path, tags: dict[str, list[str]]) -> None:
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(tags, ensure_ascii=False))
+    tmp.replace(path)
 
 
 def ingested_count(path: Path) -> int:

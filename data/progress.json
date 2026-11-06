@@ -9747,10 +9747,10 @@
     "B07:nyt": {
       "event_id": "B07",
       "source_id": "nyt",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
-      "error": "unprocessable article: Input Tokens Exceeded",
-      "failed_attempts": 0
+      "error": "litellm.ServiceUnavailableError: BedrockException - {}",
+      "failed_attempts": 1
     },
     "B08:aljazeera": {
       "event_id": "B08",
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-10-29T10:42:18.475029"
+  "last_updated": "2026-11-06T20:19:55.147698"
 }

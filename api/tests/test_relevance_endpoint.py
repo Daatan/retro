@@ -11,7 +11,11 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from forecast_api.forecaster import GATEKEEPER_PROMPT_HASH, GATEKEEPER_PROMPT_VERSION
+from forecast_api.forecaster import (
+    GATEKEEPER_PROMPT_HASH,
+    RELEVANCE_GATEKEEPER_PROMPT_HASH,
+    RELEVANCE_GATEKEEPER_PROMPT_VERSION,
+)
 from forecast_api.main import app
 from tm.models import GatekeeperOutput
 
@@ -63,8 +67,19 @@ def test_relevance_reports_the_gatekeeper_prompt_version():
     with patch("forecast_api.main.check_is_prediction", new=AsyncMock(return_value=(_verdict(), {}))):
         r = client.post("/relevance", json=BODY, headers=HEADERS)
     body = r.json()
-    assert body["gatekeeper_prompt_version"] == GATEKEEPER_PROMPT_VERSION
-    assert body["gatekeeper_prompt_hash"] == GATEKEEPER_PROMPT_HASH
+    # retro#1054: /relevance's prefix carries the numeric-bar exception, so it reports its own
+    # label/hash — never /forecast's, or the two prompts would be indistinguishable in the data.
+    assert body["gatekeeper_prompt_version"] == RELEVANCE_GATEKEEPER_PROMPT_VERSION
+    assert body["gatekeeper_prompt_hash"] == RELEVANCE_GATEKEEPER_PROMPT_HASH
+    assert body["gatekeeper_prompt_hash"] != GATEKEEPER_PROMPT_HASH
+
+
+def test_relevance_opts_into_the_numeric_bar_exception():
+    # retro#1054: the threshold rule is /relevance-only; /forecast keeps the base prefix.
+    spy = AsyncMock(return_value=(_verdict(), {}))
+    with patch("forecast_api.main.check_is_prediction", new=spy):
+        client.post("/relevance", json=BODY, headers=HEADERS)
+    assert spy.await_args.kwargs["numeric_bar_exception"] is True
 
 
 def test_relevance_passes_the_claim_through_as_the_event_name():

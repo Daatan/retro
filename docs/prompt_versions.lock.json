@@ -7,6 +7,11 @@
     "schema_hash": "39423e650a6122a5",
     "schema_chars": 711
   },
+  "gatekeeper_relevance": {
+    "_comment": "retro#1054: /relevance's own prefix (tm.gatekeeper.RELEVANCE_PROMPT_PREFIX = PROMPT_PREFIX + the numeric-bar exception). Same schema and tail blocks as `gatekeeper`.",
+    "version": "v3-r1",
+    "hash": "6e3dadbf24c34f77"
+  },
   "extractor": {
     "version": "v16",
     "hash": "24ceed7a33ebfe63",

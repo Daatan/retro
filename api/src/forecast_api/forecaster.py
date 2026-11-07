@@ -33,6 +33,7 @@ from tm.gatekeeper import (
     has_no_article_page,
     is_short_form,
     PROMPT_PREFIX as _GATEKEEPER_PROMPT_PREFIX,
+    RELEVANCE_PROMPT_PREFIX as _RELEVANCE_GATEKEEPER_PROMPT_PREFIX,
     PROMPT_SUFFIX as _GATEKEEPER_PROMPT_SUFFIX,
     _SHORT_FORM_OVERRIDE as _GATEKEEPER_SHORT_FORM_BLOCK,
     _LANGUAGE_HINT as _GATEKEEPER_LANGUAGE_HINT_BLOCK,
@@ -99,6 +100,13 @@ GATEKEEPER_PROMPT_VERSION = "v3"
 EXTRACTOR_PROMPT_VERSION = "v16"
 GATEKEEPER_PROMPT_HASH = hashlib.sha256(GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
 EXTRACTOR_PROMPT_HASH = hashlib.sha256(EXTRACTOR_PROMPT.encode()).hexdigest()[:16]
+
+# retro#1054: /relevance runs its own gatekeeper prefix (the numeric-bar exception, see
+# tm.gatekeeper.RELEVANCE_PROMPT_PREFIX), so it gets its own label and hash — /forecast's
+# GATEKEEPER_PROMPT_* above stay what /forecast actually sends. Same schema and tail blocks.
+RELEVANCE_GATEKEEPER_PROMPT = _RELEVANCE_GATEKEEPER_PROMPT_PREFIX + _GATEKEEPER_PROMPT_SUFFIX
+RELEVANCE_GATEKEEPER_PROMPT_VERSION = "v3-r1"
+RELEVANCE_GATEKEEPER_PROMPT_HASH = hashlib.sha256(RELEVANCE_GATEKEEPER_PROMPT.encode()).hexdigest()[:16]
 
 # retro#700: the hashes above cover the hand-written prompt only, and that is not all the
 # text the model sees. Both calls are structured calls through instructor's MD_JSON mode,

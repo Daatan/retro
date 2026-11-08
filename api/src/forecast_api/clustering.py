@@ -26,6 +26,7 @@ miss the pairwise bar.
 from __future__ import annotations
 
 import re
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
@@ -147,11 +148,18 @@ def cluster_texts_with_stats(
 ) -> tuple[tuple[int, ...], ClusterStats]:
     """:func:`cluster_texts`, plus what the pass saw below the threshold.
 
-    **The statistics are free.** The pairwise loop already computes every
-    ``jaccard(...)`` and today discards each score the instant it fails the
-    ``>= threshold`` test. Recording the max and a band count adds no pass, no
-    allocation beyond one fixed-size counter list, and no comparison — it keeps a
-    number that was being thrown away.
+    **The statistics are free.** Every pair that shares at least one shingle is
+    scored exactly, and the max and band counts are kept from those scores.
+
+    **Only pairs sharing a shingle are scored (retro#1056).** A pair with no
+    shingle in common has Jaccard exactly 0.0, which is below any positive
+    threshold and lands in band 0. An inverted index (shingle -> earlier rows)
+    finds the overlapping pairs and their intersection sizes. The 0.0 pairs are
+    then counted into band 0 by subtraction from ``C(textful, 2)``. Ids,
+    ``pairs``, ``max_jaccard`` and ``histogram`` are bit-identical to the
+    all-pairs loop, whose cost was quadratic (~650k comparisons on a 1,150-row
+    pool). ``tests/test_clustering.py`` pins the equivalence. ``threshold <= 0``
+    would merge 0.0 pairs too, so that degenerate case keeps the all-pairs loop.
 
     Deliberately returns the stats rather than logging them. This module is the
     documented swap seam and the replay harness depends on it being pure and
@@ -175,23 +183,49 @@ def cluster_texts_with_stats(
             parent[max(rx, ry)] = min(rx, ry)
 
     max_jaccard = 0.0
-    pairs = 0
     histogram = [0] * SIMILARITY_BANDS
+    textful = sum(1 for st in sets if st)
+    pairs = textful * (textful - 1) // 2
 
-    for i in range(n):
-        if not sets[i]:
-            continue
-        for j in range(i + 1, n):
-            if not sets[j]:
+    def record(score: float) -> None:
+        nonlocal max_jaccard
+        if score > max_jaccard:
+            max_jaccard = score
+        # An exact 1.0 would index one past the end; it belongs in the top band.
+        histogram[min(int(score * SIMILARITY_BANDS), SIMILARITY_BANDS - 1)] += 1
+
+    if threshold <= 0.0:
+        for i in range(n):
+            if not sets[i]:
                 continue
-            score = jaccard(sets[i], sets[j])
-            pairs += 1
-            if score > max_jaccard:
-                max_jaccard = score
-            # An exact 1.0 would index one past the end; it belongs in the top band.
-            histogram[min(int(score * SIMILARITY_BANDS), SIMILARITY_BANDS - 1)] += 1
-            if score >= threshold:
-                union(i, j)
+            for j in range(i + 1, n):
+                if not sets[j]:
+                    continue
+                score = jaccard(sets[i], sets[j])
+                record(score)
+                if score >= threshold:
+                    union(i, j)
+    else:
+        postings: defaultdict[tuple[str, ...], list[int]] = defaultdict(list)
+        scored = 0
+        for i in range(n):
+            a = sets[i]
+            if not a:
+                continue
+            inter: Counter[int] = Counter()
+            for sh in a:
+                earlier = postings.get(sh)
+                if earlier:
+                    inter.update(earlier)
+                postings[sh].append(i)  # only rows < i are ever in a posting
+            for j, common in inter.items():
+                # == jaccard(a, sets[j]): the same two ints, the same division.
+                score = common / (len(a) + len(sets[j]) - common)
+                scored += 1
+                record(score)
+                if score >= threshold:
+                    union(i, j)
+        histogram[0] += pairs - scored
 
     ids: dict[int, int] = {}
     out: list[int] = []

@@ -28,6 +28,19 @@ def test_gatekeeper_hash_matches_lock_file():
     )
 
 
+def test_relevance_gatekeeper_hash_matches_lock_file():
+    # retro#1054: /relevance sends its own gatekeeper prefix, so it is locked separately.
+    lock = _lock()["gatekeeper_relevance"]
+    assert lock["version"] == forecaster.RELEVANCE_GATEKEEPER_PROMPT_VERSION, (
+        "RELEVANCE_GATEKEEPER_PROMPT_VERSION changed but docs/prompt_versions.lock.json wasn't updated to match"
+    )
+    assert lock["hash"] == forecaster.RELEVANCE_GATEKEEPER_PROMPT_HASH, (
+        "/relevance's gatekeeper prompt text changed (hash mismatch) without bumping "
+        "RELEVANCE_GATEKEEPER_PROMPT_VERSION. Bump it, add a row to docs/PROMPT_VERSIONS.md, "
+        "and update docs/prompt_versions.lock.json."
+    )
+
+
 def test_extractor_hash_matches_lock_file():
     lock = _lock()["extractor"]
     assert lock["version"] == forecaster.EXTRACTOR_PROMPT_VERSION, (

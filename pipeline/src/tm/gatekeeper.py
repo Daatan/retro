@@ -117,6 +117,26 @@ their relevance_score is capped: score them 0.3–0.5, never 0.7 or higher. Rese
 0.7–1.0 for reporting that favors or disfavors a specific outcome.
 """
 
+
+# retro#1054: the /relevance path (news-indexer's judge, Gemini since retro#1038) only. On threshold
+# claims ("Brent will reach $130") the base prompt reads a report of TODAY'S value of the barred
+# quantity as a "different matter" and scores it ~0: offline on 126 Gemini-era prod pairs, 0/9 clear
+# misses passed. As an EXCEPTION inside the rejection rule — where the decision is made, not in the
+# preamble — 7/9 pass, with no new noise on t.me, low-cosine or non-threshold controls. On Nova
+# Micro (the /forecast gatekeeper) the same text gained nothing and passed a few more noise rows,
+# so /forecast keeps PROMPT_PREFIX byte-for-byte; this is opt-in via `numeric_bar_exception`.
+_REJECTION_ANCHOR = "  topic — or it merely shares a name/keyword with the claim.\n"
+_NUMERIC_BAR_EXCEPTION = """\
+  EXCEPTION — numeric bars: when the claim asks whether a quantity (a price, index, rating,
+  rank, count or percentage) will reach, exceed or fall below a value, an article that reports
+  the current or recent value or direction of THAT SAME quantity is NOT a different matter, even
+  if it never mentions the bar — it shows how far the quantity now stands from it. Pass it and
+  score it 0.5–1.0. This covers only the same quantity for the same subject (the same asset,
+  index, list or person); a different asset, person or measure does not qualify.
+"""
+assert PROMPT_PREFIX.count(_REJECTION_ANCHOR) == 1, "retro#1054 anchor moved"
+RELEVANCE_PROMPT_PREFIX = PROMPT_PREFIX.replace(_REJECTION_ANCHOR, _REJECTION_ANCHOR + _NUMERIC_BAR_EXCEPTION)
+
 PROMPT_SUFFIX = """\
 Article:
 <article>
@@ -240,6 +260,7 @@ async def check_is_prediction(
     short_form: bool = False,
     language: str | None = None,
     model: str | None = None,
+    numeric_bar_exception: bool = False,
 ) -> tuple["GatekeeperOutput", dict]:
     """Returns (GatekeeperOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
 
@@ -251,6 +272,10 @@ async def check_is_prediction(
     `language` (retro#417) is an optional caller-supplied hint ("Hebrew", "ru", …) appended to the
     prompt so the model is told the text is non-English instead of having to notice. Also
     append-only; None keeps the prompt unchanged.
+
+    `numeric_bar_exception` (retro#1054) swaps in RELEVANCE_PROMPT_PREFIX, which adds the
+    numeric-bar exception to the rejection rule. Only /relevance sets it; False (the default and
+    /forecast) sends PROMPT_PREFIX unchanged.
 
     Input that carries no proposition is rejected here without an LLM call — see
     `carries_proposition`. That guard sits in front of BOTH callers on purpose: /relevance is the
@@ -277,5 +302,5 @@ async def check_is_prediction(
         prompt += _LANGUAGE_HINT.format(language=language)
     return await complete_structured(
         model or settings.gatekeeper_model, GatekeeperOutput, prompt, max_tokens=200, timeout=90,
-        cached_prefix=PROMPT_PREFIX,
+        cached_prefix=RELEVANCE_PROMPT_PREFIX if numeric_bar_exception else PROMPT_PREFIX,
     )

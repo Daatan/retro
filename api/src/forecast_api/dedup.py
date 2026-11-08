@@ -15,7 +15,9 @@ word ("Anthropic", "Mythos") are *not* merged — only true re-prints are.
 
 from __future__ import annotations
 
+import math
 import re
+from collections import Counter, defaultdict
 from typing import Callable, Sequence, TypeVar
 
 T = TypeVar("T")
@@ -74,21 +76,59 @@ def dedupe_syndicated(
     ``>= threshold``. Within a cluster the item with the greatest ``priority_of``
     (e.g. source credibility) is kept; ties resolve to the first seen, preserving
     input order. ``threshold <= 0`` disables clustering (URL-dedup still applies).
+
+    **Exact prefix filtering (retro#1056).** The original loop compared every item
+    against every representative, which is quadratic: 618k Jaccard calls on a
+    1,150-row ``/pool/aggregate`` pool. It now only compares candidates that can
+    reach the threshold, and the result is bit-identical:
+
+    * ``J(a, b) >= t`` implies ``|a & b| >= ceil(t * |a|)``, so at most
+      ``|a| - ceil(t * |a|)`` of ``a``'s tokens can be missing from ``b``. Any
+      ``|a| - ceil(t * |a|) + 1`` tokens of ``a`` must therefore include one that
+      ``b`` has. Each representative is indexed under its rarest such *prefix*
+      (one global rarest-first order), and two sets that pass have to share a
+      prefix token.
+    * ``J(a, b) >= t`` also implies ``t * |a| <= |b| <= |a| / t`` (length filter).
+    * Each surviving candidate still gets the exact ``_jaccard``. Candidates are
+      walked in ascending representative index under the same ``sim >= best``
+      rule, so ties pick the same representative as the quadratic loop.
+
+    ``tests/test_dedup.py`` pins equivalence against the quadratic reference.
     """
+    tokens_of: list[frozenset[str]] = []
+    rank: dict[str, int] = {}
+    if threshold > 0.0:
+        tokens_of = [_title_tokens(title_of(item)) for item in results]
+        freq = Counter(t for ts in tokens_of for t in ts)
+        rank = {t: k for k, t in enumerate(sorted(freq, key=lambda t: (freq[t], t)))}
+
+    def prefix(tokens: frozenset[str]) -> list[str]:
+        # Rounded DOWN by an epsilon: a shorter overlap bound means a longer
+        # prefix, which can only add candidates, never drop a true match.
+        min_overlap = math.ceil(threshold * len(tokens) - 1e-9)
+        return sorted(tokens, key=rank.__getitem__)[: len(tokens) - min_overlap + 1]
+
     reps: list[T] = []
     rep_tokens: list[frozenset[str]] = []
     url_to_cluster: dict[str, int] = {}
+    postings: defaultdict[str, list[int]] = defaultdict(list)
 
-    for item in results:
+    for k, item in enumerate(results):
         url = (url_of(item) or "").strip()
         idx: int | None = url_to_cluster.get(url) if url else None
 
         if idx is None:
-            tokens = _title_tokens(title_of(item))
-            if threshold > 0.0 and len(tokens) >= _MIN_CLUSTER_TOKENS:
+            tokens = tokens_of[k] if threshold > 0.0 else frozenset()
+            clusterable = threshold > 0.0 and len(tokens) >= _MIN_CLUSTER_TOKENS
+            pre: list[str] = []
+            if clusterable:
+                pre = prefix(tokens)
+                lo = threshold * len(tokens) - 1e-9
+                hi = len(tokens) / threshold + 1e-9
                 best = threshold
-                for i, rt in enumerate(rep_tokens):
-                    if len(rt) < _MIN_CLUSTER_TOKENS:
+                for i in sorted({i for t in pre for i in postings.get(t, ())}):
+                    rt = rep_tokens[i]
+                    if not lo <= len(rt) <= hi:
                         continue
                     sim = _jaccard(tokens, rt)
                     if sim >= best:
@@ -98,6 +138,10 @@ def dedupe_syndicated(
                 idx = len(reps)
                 reps.append(item)
                 rep_tokens.append(tokens)
+                # Short-title representatives are never matched (the quadratic
+                # loop skipped them), so they are never indexed.
+                for t in pre:
+                    postings[t].append(idx)
                 if url:
                     url_to_cluster[url] = idx
                 continue

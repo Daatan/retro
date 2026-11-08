@@ -20,6 +20,8 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Changed
+- `/pool/aggregate` (and `/forecast`'s syndication dedupe): `dedupe_syndicated` and `cluster_texts_with_stats` no longer compare every pair. A rarest-first token prefix filter (dedupe) and a shingle inverted index (clustering) skip only pairs that provably cannot reach the threshold. Results, cluster ids and the `evidence_clusters` stats are bit-identical (pinned against the old quadratic loops); a 1,150-row pool recomputes in ~0.6 s instead of ~10 s (retro#1056).
+- `/relevance` (news-indexer's judge, Gemini) now runs its own gatekeeper prefix with a numeric-bar exception: a report of the current value of the same quantity a threshold claim's bar is set on is no longer rejected as a "different matter". `/forecast` keeps the v3 prompt byte-for-byte; `/relevance` reports `gatekeeper_prompt_version` v3-r1 (retro#1054).
 - `DELETE /leaderboard/ingest/{prediction_id}` undoes an ingest for a resolution an admin reverted: removes it from the feedback, settlement-pin and tags files, clears both dedup keys and rescores the boards (daatan#2077). The ledger files now take a lock on every write, because removal rewrites them.
 - `GET /pm/paper` shows the paper bot's coherent partition estimate beside the raw Oracle number, and scores it next to raw and market on the same subset (retro#831).
 - Dependencies (security): pyasn1 0.6.4 -> 0.6.5 in `api/uv.lock`, which is the live Oracul env; it closes Dependabot alerts #46–#49 (high). `pipeline/` got the same bump in #1041. certifi 2026.7.22 -> 2026.10.23 in `manifold_paper/uv.lock`, closing alert #32 (critical). Lockfile only, no code change.

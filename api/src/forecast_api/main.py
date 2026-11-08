@@ -15,9 +15,9 @@ from .bayesoracle import compute_nodes, parse_node_observations
 from .cache import forecast_cache
 from .config import settings
 from .forecaster import (
-    GATEKEEPER_PROMPT_HASH,
     GATEKEEPER_SCHEMA_HASH,
-    GATEKEEPER_PROMPT_VERSION,
+    RELEVANCE_GATEKEEPER_PROMPT_HASH,
+    RELEVANCE_GATEKEEPER_PROMPT_VERSION,
     run_forecast,
     run_pool_aggregate,
 )
@@ -465,6 +465,7 @@ async def relevance(
             short_form=body.short_form,
             language=body.language,
             model=settings.relevance_model,
+            numeric_bar_exception=True,  # retro#1054
         )
     except Exception as exc:  # noqa: BLE001 - logged, fail-open
         logger.warning("relevance check failed claim=%.60s err=%s", body.claim, exc)
@@ -475,8 +476,8 @@ async def relevance(
         reason=out.reason,
         prediction_count_estimate=out.prediction_count_estimate,
         model=settings.relevance_model or _pipeline_settings.gatekeeper_model,
-        gatekeeper_prompt_version=GATEKEEPER_PROMPT_VERSION,
-        gatekeeper_prompt_hash=GATEKEEPER_PROMPT_HASH,
+        gatekeeper_prompt_version=RELEVANCE_GATEKEEPER_PROMPT_VERSION,
+        gatekeeper_prompt_hash=RELEVANCE_GATEKEEPER_PROMPT_HASH,
         gatekeeper_schema_hash=GATEKEEPER_SCHEMA_HASH,
         token_usage=TokenUsage.from_usages([usage]),
     )

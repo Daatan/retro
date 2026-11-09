@@ -419,10 +419,10 @@
     "B13:reuters": {
       "event_id": "B13",
       "source_id": "reuters",
-      "status": "no_predictions",
+      "status": "failed",
       "prediction_count": 0,
-      "error": "unprocessable article: Input Tokens Exceeded",
-      "failed_attempts": 0
+      "error": "litellm.ServiceUnavailableError: BedrockException - {\"message\":\"Too many connections, please wait before trying again.\"}",
+      "failed_attempts": 1
     },
     "B13:toi": {
       "event_id": "B13",
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-11-06T21:31:56.097627"
+  "last_updated": "2026-11-09T16:49:41.951417"
 }

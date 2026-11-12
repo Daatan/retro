@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Changed
+- Extractor prompt v17: a demonstrated deciding majority (recorded vote won in that body, or threshold signatures filed) with the deciding vote scheduled before the deadline is scored as the last stage (+0.6…+0.8), not as capped intent; status-quo restatements are not negative claims (retro#1063). See `docs/PROMPT_VERSIONS.md`.
 - Dependencies (security): pydantic 2.14.1 -> 2.14.2 in `api/` and `pipeline/` (GHSA-qpmf-fgh3-ff25, GHSA-3r8g-cqwr-jr29), google-cloud-bigquery 3.46.2 -> 3.47.0 in `pipeline/` (Dependabot #1053). Lockfile only, no code change.
 - `/pool/aggregate` (and `/forecast`'s syndication dedupe): `dedupe_syndicated` and `cluster_texts_with_stats` no longer compare every pair. A rarest-first token prefix filter (dedupe) and a shingle inverted index (clustering) skip only pairs that provably cannot reach the threshold. Results, cluster ids and the `evidence_clusters` stats are bit-identical (pinned against the old quadratic loops); a 1,150-row pool recomputes in ~0.6 s instead of ~10 s (retro#1056).
 - `/relevance` (news-indexer's judge, Gemini) now runs its own gatekeeper prefix with a numeric-bar exception: a report of the current value of the same quantity a threshold claim's bar is set on is no longer rejected as a "different matter". `/forecast` keeps the v3 prompt byte-for-byte; `/relevance` reports `gatekeeper_prompt_version` v3-r1 (retro#1054).

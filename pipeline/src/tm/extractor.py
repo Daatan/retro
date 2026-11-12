@@ -56,7 +56,10 @@ post-assumption governance and conduct has no bearing on the arrival claim at al
 If the article, read honestly, contains no sentence that implies THIS outcome is more or \
 less likely, return an empty predictions list. Reporting that the underlying process or \
 contest will take place (a date confirmed, a deadline announced, rules of procedure) is \
-NOT a directional signal about which outcome it will produce. Do not manufacture a lean \
+NOT a directional signal about which outcome it will produce. (Exception: when the claim \
+is a yes/no change decided by one vote, and the side seeking the change has demonstrated \
+the votes, scheduling THAT vote before the deadline is the final stage of the change — see \
+"A demonstrated deciding majority" below.) Do not manufacture a lean \
 from neutral facts — stance 0.0 with low claim_strength, or extracting nothing at all, is a \
 correct and valuable answer.
 
@@ -102,6 +105,31 @@ Examples — related event: "Company X will launch a commercial quantum computer
                                                → stance +0.2, claim_strength 0.3, settled false (a capability milestone, not a commercial launch)
   "Company X opened orders for its first commercial quantum system" \
                                                → stance +0.9, claim_strength 0.8, settled false (the launch itself, imminent — not yet an accomplished fact)
+
+## A demonstrated deciding majority with the deciding vote scheduled is the last stage, not intent
+The cap above is for a subject that wants or can do something. It does NOT cover the case where \
+the related event is decided by a VOTE of a body (a parliament, a board, a committee), and the \
+article reports BOTH (a) that the side seeking the event has already DEMONSTRATED the votes it \
+needs — a recorded vote it won in that same body, or formally filed signatures meeting the \
+procedural threshold — AND (b) that the deciding vote itself is scheduled, or procedurally due, \
+before the deadline. Together those are the final stage before the event, the "opened orders" \
+case above: score each such claim stance +0.6 to +0.8, claim_strength 0.6 to 0.7, settled false. \
+Both parts must be reported facts. A side that only SAYS it has the votes, a majority shown \
+only in polls or seat projections, or a vote that cannot be held before the deadline stays \
+under the intent cap (or is a negative precursor, if the vote falls after the deadline). \
+A restatement that the incumbent STILL holds the post or controls the agenda, while the vote \
+to replace them is scheduled, is the status quo the claim is about to test — it is not \
+contrary evidence; do not extract it as a negative claim.
+
+Examples — related event: "The board of Company C removes its chair by date D":
+  "Activist shareholders, who won last month's proxy vote on two board seats 58% to 42%, \
+have filed the requisitions needed for a special meeting; the vote on removing the chair is set \
+for March 3, before D" \
+                                               → stance +0.7, claim_strength 0.7, settled false (majority demonstrated in a recorded vote, deciding vote scheduled before D)
+  "The activists say they have the support to oust the chair and will act 'in the coming weeks'" \
+                                               → stance +0.3, claim_strength 0.3, settled false (majority only claimed, nothing filed or scheduled)
+  "The chair still runs board meetings ahead of the March 3 vote on her removal" \
+                                               → no extraction (status quo restated, not evidence against the change)
 
 ## The capability/intent cap applies PER CLAIM, not to the article's overall urgency
 Do not let an article that reads as urgent, on-topic, or saturated with intent signals lift the \

@@ -588,3 +588,45 @@ class TestProvenance:
         assert resp.reason == "no_matching_antecedent"
         assert resp.provenance is not None
         assert resp.provenance.method == "pool"
+
+
+class TestDiagnosticsStub:
+    """retro#1067 (Oracle 1.5 Phase 2 item 2.3): every return path carries the
+    diagnostics block, and every field in it is null until Phase 3 fills it.
+    Null means "not computed", so a zero here would be a lie."""
+
+    DIAG_FIELDS = {"n_eff_event", "echo_ratio", "width_disagreement", "width_strength", "shape", "movement"}
+
+    def _assert_all_null(self, resp):
+        d = resp.model_dump()["diagnostics"]
+        assert set(d) == self.DIAG_FIELDS
+        assert all(v is None for v in d.values())
+
+    async def test_normal_pool(self):
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[_source(stance=0.6), _source(stance=0.4)],
+        ))
+        self._assert_all_null(resp)
+
+    async def test_no_sources(self):
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(sources=[]))
+        assert resp.reason == "no_sources"
+        self._assert_all_null(resp)
+
+    async def test_insufficient(self):
+        resp = await forecaster.run_pool_aggregate(PoolAggregateRequest(
+            sources=[_source(relevance_score=0.05), _source(relevance_score=0.05)],
+        ))
+        assert resp.insufficient_data is True
+        self._assert_all_null(resp)
+
+    async def test_numbers_unchanged_by_the_block(self):
+        """No number changes: the estimate fields are exactly what they were
+        without the block (it adds keys, it does not touch existing ones)."""
+        req = PoolAggregateRequest(sources=[_source(stance=0.6), _source(stance=-0.2)])
+        resp = await forecaster.run_pool_aggregate(req)
+        dumped = resp.model_dump()
+        dumped.pop("diagnostics")
+        again = (await forecaster.run_pool_aggregate(req)).model_dump()
+        again.pop("diagnostics")
+        assert dumped == again

@@ -595,7 +595,11 @@ class FetchUrlResponse(BaseModel):
 # 1.6 (Oracle 1.5 Phase 1, retro#763): ClaimDetail carries `grounds` {kind, basis} and
 # SourceSignal the dominant claim's. Additive and shadow, so a minor bump; a caller wanting
 # it gates on >= 1.6.
-PROVENANCE_SCHEMA_VERSION = "1.6"
+# 1.7 (Oracle 1.5 Phase 2 item 2.3, retro#1067, umbrella daatan#1644): ForecastResponse and
+# PoolAggregateResponse carry a `diagnostics` block (see Diagnostics). Every field in it is
+# null until Phase 3 (retro#678) fills it. Additive, so a minor bump. The Phase 2 plan named
+# this "1.5", but 1.5 and 1.6 had already been taken by Phase 1 bumps, so it is 1.7.
+PROVENANCE_SCHEMA_VERSION = "1.7"
 
 
 class ProvenanceOracle(BaseModel):
@@ -670,6 +674,23 @@ class Provenance(BaseModel):
     upstream: list[ProvenanceUpstreamCall] = Field(default_factory=list, description="v2 calling v1 only; empty on v1")
 
 
+# ── Diagnostics (Oracle 1.5 Phase 2 item 2.3, retro#1067) ─────────────────────
+#
+# Reporting fields Phase 3 (retro#678) will compute. Every field is null until then: this
+# PR only ships the shape, so a caller can start reading it null-safe and nothing that sets
+# a number changes. Each field gets a value only once the statistic has survived one scripted
+# monthly report (plan: "scripts before endpoints"). Callers must treat null as "not
+# computed", never as zero.
+
+class Diagnostics(BaseModel):
+    n_eff_event: Optional[float] = Field(default=None, description="Effective number of independent event reports (n_eff over event clusters rather than rows). Null until Phase 3.")
+    echo_ratio: Optional[float] = Field(default=None, description="Share of the pool's weight that echoes another row (syndication/rewrite) rather than adding an independent report. Null until Phase 3.")
+    width_disagreement: Optional[float] = Field(default=None, description="Part of the interval width attributable to sources disagreeing. Null until Phase 3.")
+    width_strength: Optional[float] = Field(default=None, description="Part of the interval width attributable to weak/hedged evidence. Null until Phase 3.")
+    shape: Optional[str] = Field(default=None, description="Shape label of the stance distribution (e.g. unimodal / bimodal). Null until Phase 3.")
+    movement: Optional[float] = Field(default=None, description="How far the estimate moved relative to the previous one on the same question. Null until Phase 3.")
+
+
 # ── Forecast ──────────────────────────────────────────────────────────────────
 
 class ForecastResponse(BaseModel):
@@ -696,6 +717,7 @@ class ForecastResponse(BaseModel):
     n_eff: float = Field(default=0.0, description="Kish's effective sample size of the voting weights (aggregation.effective_sample_size) — exactly articles_used for equal weights, shrinking toward 1 as one row dominates the pool (retro#458 Phase 2). 0.0 on an insufficient-data response.")
     age_adjusted_mass: float = Field(default=0.0, description="evidence_mass recomputed with recency decay switched off — how much this pool would weigh if nothing had aged (retro#458 Phase 2). Equal to evidence_mass on a pool with no time decay in play; always >= evidence_mass. 0.0 on an insufficient-data response.")
     provenance: Optional[Provenance] = Field(default=None, description="retro#593: engine/model/build identity this forecast was produced with, replayable independent of provider_chain/relevance_bar/version. Optional/additive — null only on a response built before this field existed (there is no such path going forward).")
+    diagnostics: Diagnostics = Field(default_factory=Diagnostics, description="Oracle 1.5 Phase 2 reporting block (retro#1067). Always present; every field null until Phase 3 (retro#678). Read null-safe; gate on provenance.schema_version >= 1.7.")
     fallback_path: Literal["primary", "retry-relaxed"] = Field(default="primary", description="retro#621: which rung of the no-usable-forecast fallback ladder produced this response. 'primary' = the ordinary live search+pool run (the overwhelming majority of responses). 'retry-relaxed' = the primary run returned insufficient_data and a second, wider-limit retry (gated by retry_relaxed_search_enabled+_enforce) recovered a usable forecast instead. A caller publishing this forecast's rationale MUST surface this field — never present a retry-relaxed result as an ordinary Oracle forecast.")
 
     @computed_field  # type: ignore[prop-decorator]
@@ -813,6 +835,7 @@ class PoolAggregateResponse(BaseModel):
     n_eff: float = Field(default=0.0, description="Kish's effective sample size of the voting weights (aggregation.effective_sample_size) — exactly articles_used for equal weights, shrinking toward 1 as one row dominates the pool (retro#458 Phase 2). 0.0 when insufficient_data (or no_sources).")
     age_adjusted_mass: float = Field(default=0.0, description="evidence_mass recomputed with recency decay switched off — how much this pool would weigh if nothing had aged (retro#458 Phase 2). Equal to evidence_mass on a pool with no time decay in play; always >= evidence_mass. 0.0 when insufficient_data (or no_sources).")
     provenance: Optional[Provenance] = Field(default=None, description="retro#593: engine/build identity this recompute was produced with. method is always 'pool' here (no search, no LLM call) — see ForecastResponse.provenance for the /forecast counterpart.")
+    diagnostics: Diagnostics = Field(default_factory=Diagnostics, description="See ForecastResponse.diagnostics (retro#1067): always present, every field null until Phase 3.")
 
     @computed_field  # type: ignore[prop-decorator]
     @property

@@ -43,6 +43,13 @@ class TestEmptyResponseForwardsProvider:
         assert r.provenance.method == "live"
         assert r.provenance.chain == ["gdelt", "ddg"]
 
+    def test_carries_null_diagnostics(self):
+        """retro#1067: the diagnostics block is present on /forecast responses,
+        every field null until Phase 3."""
+        r = _empty_response("q?")
+        d = r.model_dump()["diagnostics"]
+        assert d and all(v is None for v in d.values())
+
     def test_carries_the_effective_article_ceiling(self):
         """retro#652: the ceiling this attempt ran with is recorded even on a
         timeout/empty-result exit, since it's known before search runs."""

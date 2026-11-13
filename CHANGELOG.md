@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Changed
+- `/forecast` and `/pool/aggregate` responses carry a `diagnostics` block (`n_eff_event`, `echo_ratio`, `width_disagreement`, `width_strength`, `shape`, `movement`). Every field is null until Oracle 1.5 Phase 3 fills it. `provenance.schema_version` 1.6 -> 1.7 (additive). The Phase 2 plan called this "1.5", but that number was already taken by a Phase 1 bump. No estimate changes (retro#1067, daatan#1644 item 2.3).
 - Extractor post-processing: a `quantity` whose `as_of` is more than a day after the article's date is dropped (`enforce_quantity_observed_date`, live `/forecast` and batch). Such a figure is an analyst's projection ("UBS sees Brent at $110 at the end of the year" -> `110 "=" as_of 2026-12-31`), not an observation; 6 of 352 dated quantities on prod in the 14 days to 2026-11-13, all projections (retro#935 pattern 3). Code-side, no prompt change. `quantity` is still shadow, so no estimate moves.
 - Extractor prompt v17: a demonstrated deciding majority (recorded vote won in that body, or threshold signatures filed) with the deciding vote scheduled before the deadline is scored as the last stage (+0.6…+0.8), not as capped intent; status-quo restatements are not negative claims (retro#1063). See `docs/PROMPT_VERSIONS.md`.
 - Dependencies (security): pydantic 2.14.1 -> 2.14.2 in `api/` and `pipeline/` (GHSA-qpmf-fgh3-ff25, GHSA-3r8g-cqwr-jr29), google-cloud-bigquery 3.46.2 -> 3.47.0 in `pipeline/` (Dependabot #1053). Lockfile only, no code change.

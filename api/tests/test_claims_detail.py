@@ -990,7 +990,7 @@ def test_the_provenance_schema_version_is_pinned():
     has to be deliberate — schema_version is what daatan gates on."""
     from forecast_api.models import PROVENANCE_SCHEMA_VERSION
 
-    assert PROVENANCE_SCHEMA_VERSION == "1.6"
+    assert PROVENANCE_SCHEMA_VERSION == "1.7"
 
 
 class TestClaimDecompositionThreading:

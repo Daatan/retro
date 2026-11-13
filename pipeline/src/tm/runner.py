@@ -15,6 +15,7 @@ from .extractor import (
     enforce_interested_party_certainty,
     enforce_interested_party_stance_cap,
     enforce_precursor_cap,
+    enforce_quantity_observed_date,
     enforce_relative_date_resolution,
     enforce_settlement_event_date,
     enforce_settlement_fact_signal_agreement,
@@ -135,6 +136,10 @@ async def run_article(
         # only an event. Omitting it fails open, which is the intended behaviour on
         # this path, not an oversight.
         extraction.predictions = enforce_settlement_event_date(
+            extraction.predictions, article.article_date,
+        )
+        # A figure dated after the article is a forecast, not an observation (retro#935).
+        extraction.predictions = enforce_quantity_observed_date(
             extraction.predictions, article.article_date,
         )
         extraction.predictions = enforce_precursor_cap(extraction.predictions)

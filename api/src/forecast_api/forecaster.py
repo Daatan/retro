@@ -47,6 +47,7 @@ from tm.extractor import (
     enforce_interested_party_certainty,
     enforce_interested_party_stance_cap,
     enforce_precursor_cap,
+    enforce_quantity_observed_date,
     enforce_relative_date_resolution,
     enforce_settlement_event_date,
     enforce_settlement_fact_signal_agreement,
@@ -2012,6 +2013,10 @@ async def _process_article(
         # writing a `settled` bit the pooling layer will discount anyway.
         extraction.predictions = enforce_settlement_event_date(
             extraction.predictions, article_date, claim_created_at,
+        )
+        # A figure dated after the article is a forecast, not an observation (retro#935).
+        extraction.predictions = enforce_quantity_observed_date(
+            extraction.predictions, article_date,
         )
         # A fact that merely PRECEDES the event is capped at |0.3| by the prompt and
         # by 24.4% of live pool rows ignored it (retro#367). Magnitude is estimator

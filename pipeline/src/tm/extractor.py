@@ -1802,6 +1802,47 @@ def enforce_settlement_event_date(
     return predictions
 
 
+def enforce_quantity_observed_date(
+    predictions: list[PredictionExtraction],
+    article_date: Optional[str],
+) -> list[PredictionExtraction]:
+    """A reported figure cannot describe a date after the article was written.
+
+    retro#935 pattern 3. The extractor records forecasts as if they were observations:
+    "UBS sees the benchmark at $110 per barrel at the end of the current year" came back
+    as ``{value: 110, comparator: "=", as_of: "2026-12-31"}`` on an article dated
+    2026-11-02. A consumer comparing that against a "$130 by year-end" bar reads an
+    analyst's target as the price. Prod, 14 days to 2026-11-13: 6 of 352 dated
+    quantities, every one of them a projection (Goldman, UBS, Redwood).
+
+    An ``as_of`` later than the article's own date is the projection's signature, and
+    it is checkable in code, so the whole ``quantity`` is dropped. Clearing only
+    ``as_of`` would be worse: the undated remainder reads as a current level. The
+    claim itself, its stance and its ``quantitative_estimate`` are untouched.
+
+    One day of slack absorbs time-zone and publication-date drift (an article dated
+    10-31 reporting a figure "as of" 11-01). Fails open on a missing or unparseable
+    date on either side, like :func:`enforce_settlement_event_date`.
+    """
+    article = _parse_iso_date(article_date)
+    if article is None:
+        return predictions
+    limit = article + timedelta(days=1)
+    for p in predictions:
+        q = p.quantity
+        if q is None:
+            continue
+        as_of = _parse_iso_date(q.as_of)
+        if as_of is None or as_of <= limit:
+            continue
+        logger.info(
+            "event=quantity_dropped_future_as_of as_of=%s article_date=%s value=%r claim=%r",
+            q.as_of, article.isoformat(), q.value, p.claim[:120],
+        )
+        p.quantity = None
+    return predictions
+
+
 def enforce_precursor_cap(
     predictions: list[PredictionExtraction],
 ) -> list[PredictionExtraction]:

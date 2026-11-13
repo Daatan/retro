@@ -3303,6 +3303,14 @@ made Nova Lite worse (retro#683 v9b/v9c).
 - **No number, no quantity.** Drops `quantity` when the quote has no digit and no spelled-out
   cardinal ("a few billion", "hundreds of"). In those cases both raters had filled it with the
   question's own threshold. Logs `event=quantity_dropped_no_number`.
+- **Dated after the article → projection, dropped** (2026-11-13, pattern 3).
+  `enforce_quantity_observed_date` in `pipeline/src/tm/extractor.py` runs on both the live
+  `/forecast` path and the batch path. It needs the article's date, so it is a step after
+  extraction, not a model validator. It drops `quantity` when `as_of` is more than one day after
+  the article's date. Example: "UBS sees Brent at $110 at the end of the year" was stored as
+  `110 "=" as_of 2026-12-31`. On prod this was 6 of 352 dated quantities in 14 days, and all
+  six were projections. The whole field goes, because an undated remainder would read as a
+  current level. It fails open on a missing date. Logs `event=quantity_dropped_future_as_of`.
 
 ## 2026-10-19 — extractor on Claude Haiku 5.5 with adaptive thinking (retro#921, PR#965)
 

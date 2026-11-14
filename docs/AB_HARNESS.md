@@ -200,9 +200,9 @@ measurement.
 
 What `run` prints instead is a diagnostic, over the cases that carry a
 `question_threshold` — the bar the QUESTION sets, hand-declared on the case
-rather than parsed, because the live parse (`question_quantity`) is Oracle 1.5
-Phase 2 and a second unmeasured parser here would just be something for Phase 2
-to disagree with:
+rather than parsed. The live parse (`question_quantity`, daatan#2176) lives in
+daatan and reaches retro as a request field; a second parser here would just be
+something for it to disagree with:
 
 ```
 Quantity vs question threshold — rater: patched

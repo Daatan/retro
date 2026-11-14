@@ -2457,7 +2457,7 @@ estimate is computed: `_run_forecast_inner` (live `/forecast`) and `run_pool_agg
 | rule | fires when | status |
 |---|---|---|
 | `trapped_strong_claim` | `reader_confidence.trap` is set **and** `claim_strength >= 0.8` | **live** — retro#681 landed `reader_confidence` on 08-28 |
-| `stance_vs_quantity` | the claim's own number and its stance sign disagree about a threshold question | **inert** — the claim side landed with retro#683 (08-30); the question side has not, see below |
+| `stance_vs_quantity` | the claim's own number and its stance sign disagree about a threshold question | **live when the caller sends `question_quantity`** — claim side retro#683 (08-30), question side daatan#2176 (11-14), see below |
 | `unsure_settlement` | `settled is True` **and** `reader_confidence.level != "high"` | **live** |
 
 `trapped_strong_claim` is keyed on `trap`, not on `level`. A trap is a *named* class with
@@ -2472,28 +2472,35 @@ source's commitment and the reader's, and this rule could not have been written.
 differently" is not an acceptable margin, since a settlement can pin a forecast outright.
 Phase 4 turns it into settlement's second bar (`level == "high"` required); here it counts.
 
-**`stance_vs_quantity` is still inert, but for one reason now rather than two.** It needs
-a claim-side number (`quantity`, retro#683) and a question-side threshold (Phase 2's
-`question_quantity`). **The claim side landed on 2026-08-30** — `quantity` is elicited,
-projected and persisted, and the rule reads it via `getattr` exactly as designed, so no
-edit was needed here for it. The question side does not exist, so the rule still yields no
-flag on every row; it self-activates the moment Phase 2 lands `question_quantity`, which is
-also when the comparison itself moves to `tm.threshold_compare` (retro#683 wired the
-code-side comparison; retro#748 widened the `is_threshold_shaped` detector that routes to
-it). One caveat carried from #683's measurement and not to be lost here: on **Nova Lite**
-`quantity.comparator` is wrong 18% of the time — a movement verb written as a bound — so
-this rule must gate on the RATER, not merely on the field being non-null, or it will flag
-on the extractor's own error rather than on the article's. `ClaimDetail.quantitative_estimate`
-is **not** that number and must not be substituted for it — it is a probability in [0,1]
-cited *for the event*, so comparing it against a question threshold ($100, 61 seats) would
-compare two different quantities and flag on noise. The comparison direction is a
-parameter rather than inferred from question wording: guessing "exceeds" vs "falls below"
-is the kind of judgement this module exists to avoid making.
+**`stance_vs_quantity` needs both sides, and both now exist.** The claim side is
+`quantity` (retro#683, 2026-08-30): elicited, projected, persisted. The question side is
+`question_quantity` on `ForecastRequest` and `PoolAggregateRequest` (daatan#2176, Oracle 1.5
+item 2.5): `{comparator, value, unit, value_hi?}`, the same shape as `quantity` and as
+`tm.threshold_compare.QuestionThreshold`. daatan parses it deterministically from the
+question text and sends it only for `threshold`-archetype questions whose text states a bar,
+so most pools still arrive without it. The per-pool `event=confusion_flags` line reports
+`question_quantity=present|absent`, which separates "no contradictions" from "nothing to
+compare against". A malformed value is dropped with `event=question_quantity_dropped`, never
+a 422.
+
+The comparison is `tm.threshold_compare.compare` with **the question's own unit**. Before
+daatan#2176 the rule took a bare float plus an `at_least|at_most` direction and borrowed the
+claim's unit, which would have compared un-normalised scales blindly ("$1 trillion" against
+`950 / "billion USD"`). Now any unit or scale mismatch returns `unit_mismatch` and the rule
+abstains. That costs recall and protects precision, which is the right trade for a sampling
+filter. A claim sitting exactly on the bar still decides nothing (retro#687's carve-out).
+
+One caveat carried from #683's measurement: on **Nova Lite** `quantity.comparator` is wrong
+18% of the time, since a movement verb gets written as a bound. Read this rule's counts **per
+rater** (`extractor_model` on every `event=confusion_flag` line), or it measures the
+extractor's error rather than the article's. `ClaimDetail.quantitative_estimate` is **not**
+the claim's number and must not be substituted for it: it is a probability in [0,1] cited
+*for the event*.
 
 **Null-safety is the design constraint, not a defensive habit.** Two of the three rules
 read a shadow field that a row extracted before retro#681 does not have, and rule 2's
-inputs do not exist at all — so "input missing" is the common case in production right
-now, not an edge case. A rule with a missing input yields **no flag**: never a default,
+question side arrives only for threshold questions with a parseable bar — so "input
+missing" is the common case in production, not an edge case. A rule with a missing input yields **no flag**: never a default,
 never a guess. The module therefore activates rule by rule as the fields land.
 
 ### The lines

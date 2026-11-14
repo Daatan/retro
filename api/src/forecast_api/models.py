@@ -1,5 +1,6 @@
+import logging
 from typing import Any, Literal, Optional
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import BaseModel, Field, ValidationError, computed_field, field_validator, model_validator
 
 from .aggregation import confidence_bucket
 
@@ -102,6 +103,58 @@ class ArticleInput(BaseModel):
     )
 
 
+class QuestionQuantity(BaseModel):
+    """The numeric bar a threshold-shaped question sets (daatan#2176, Oracle 1.5
+    item 2.5), parsed by the CALLER from the question text.
+
+    Same fields and comparator vocabulary as ``tm.threshold_compare.QuestionThreshold``
+    and the claim-side ``Quantity``: the question and the article's report are the
+    same kind of object, and confusion-flag rule 2 compares one with the other.
+    ``unit`` is the question's own unit, never borrowed from a claim, so a scale or
+    unit the two sides state differently abstains (``unit_mismatch``) instead of
+    producing a confident sign.
+
+    Log-only: confusion-flag rule 2 is the sole reader, and nothing in the
+    estimate reads it.
+    """
+
+    comparator: Literal["=", "<", "<=", ">", ">=", "between"]
+    value: float
+    unit: str = Field(..., min_length=1, max_length=80)
+    value_hi: Optional[float] = None
+
+    @model_validator(mode="after")
+    def _check_bounds(self) -> "QuestionQuantity":
+        if self.comparator == "between":
+            if self.value_hi is None or self.value_hi <= self.value:
+                raise ValueError("comparator 'between' requires value_hi > value")
+        elif self.value_hi is not None:
+            raise ValueError("value_hi is only meaningful with comparator 'between'")
+        return self
+
+
+def _drop_malformed_question_quantity(value: Any, handler: Any) -> Optional["QuestionQuantity"]:
+    """Fail open: a malformed ``question_quantity`` is dropped and logged, never a
+    422. It feeds a log-only diagnostic, and a bad parse on the caller's side must
+    not cost a forecast."""
+    try:
+        return handler(value)
+    except ValidationError as exc:
+        logging.getLogger(__name__).warning(
+            "event=question_quantity_dropped reason=invalid errors=%d", exc.error_count(),
+        )
+        return None
+
+
+_QUESTION_QUANTITY_DESCRIPTION = (
+    "The question's numeric bar, parsed by the caller from the question text "
+    "(daatan#2176): {comparator, value, unit, value_hi?}, the same shape as a claim's "
+    "`quantity`. Sent only for threshold-archetype questions with a parseable bar; "
+    "omitted otherwise. Log-only: confusion-flag rule 2 (stance vs the claim's own "
+    "number) is its only reader. Fail-open: a malformed value is dropped, not a 422."
+)
+
+
 class ForecastRequest(BaseModel):
     question: str = Field(..., min_length=5, max_length=500, description="Binary question to forecast")
     max_articles: Optional[int] = Field(default=None, ge=1, le=30)
@@ -150,6 +203,13 @@ class ForecastRequest(BaseModel):
     prediction_id: Optional[str] = Field(
         default=None,
         description="Caller's identifier for the prediction this forecast relates to (e.g. daatan's context_snapshots key). Log correlation only — never used in scoring.",
+    )
+    question_quantity: Optional[QuestionQuantity] = Field(
+        default=None, description=_QUESTION_QUANTITY_DESCRIPTION,
+    )
+
+    _question_quantity_fail_open = field_validator("question_quantity", mode="wrap")(
+        _drop_malformed_question_quantity
     )
     resolution_criteria: Optional[str] = Field(
         default=None,
@@ -798,6 +858,13 @@ class PoolAggregateRequest(BaseModel):
     claim_deadline: Optional[str] = Field(default=None)
     claim_created_at: Optional[str] = Field(default=None, description="See ForecastRequest.claim_created_at")
     claim_archetype: Optional[Literal["scheduled", "diffuse", "threshold", "none"]] = Field(default=None, description="See ForecastRequest.claim_archetype")
+    question_quantity: Optional[QuestionQuantity] = Field(
+        default=None, description="See ForecastRequest.question_quantity",
+    )
+
+    _question_quantity_fail_open = field_validator("question_quantity", mode="wrap")(
+        _drop_malformed_question_quantity
+    )
     antecedent_query: Optional[str] = Field(
         default=None,
         description="Filter this pool to claims conditional on this antecedent before pooling (retro#573, "

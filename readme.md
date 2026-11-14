@@ -39,7 +39,7 @@ For every article in scope, a multi-stage LLM pipeline elicits a forensic predic
 - **Contrarianism** — how far the prediction deviates from the consensus of peers at the same moment in time
 - ...and more proprietary dimensions
 
-Each prediction is matched to a seed event, scored against historical ground truth, and used to update the source's **Brier Score** (calibration accuracy) and **ELO rating** (relative rank).
+Each prediction is matched to a seed event, scored against historical ground truth, and used to update the source's **Brier Score** (calibration accuracy) and **ELO rating** (relative rank). *Status: this backtest scorer (`tm.scorer`) last ran on 2026-03-28 and covered 5 Israeli outlets. Public per-source Brier scores now come from resolved Daatan forecasts (daatan.com/leaderboard/sources).*
 
 The resulting dataset — thousands of scored predictions, ranked sources, and verified outcomes — becomes the training corpus for **The TruthMachine**.
 
@@ -60,7 +60,7 @@ This shifts Daatan from a media-auditing tool into a forward-looking intelligenc
 - **Prediction market participants** — data-driven edge for Polymarket and similar platforms
 - **Corporate & government risk desks** — calibrated probability estimates for geopolitical and economic planning
 
-The TruthMachine inference layer is exposed as the **Oracle API** (`oracle.daatan.com`) — a FastAPI microservice that accepts a binary question and returns a calibrated probability distribution, with per-source credibility weighting derived from the Factum Atlas. See [`docs/ORACLE_API.md`](docs/ORACLE_API.md) and the [live test console](https://daatan.github.io/retro/oracle-test.html).
+The TruthMachine inference layer is exposed as the **Oracle API** (`oracle.daatan.com`) — a FastAPI microservice that accepts a binary question and returns a probability aggregated from a pool of news evidence. The aggregation has a per-source credibility multiplier, but today it is close to neutral. On 2026-11-14, 86% of source weights in live forecast snapshots were exactly 1.0, and the rest were at most 1.054 (why: see `api/src/forecast_api/leaderboard.py` and `docs/ORACLE_VARIABLES.md`). Calibration against an external crowd is measured on Manifold; see [`manifold_paper/README.md`](manifold_paper/README.md). See [`docs/ORACLE_API.md`](docs/ORACLE_API.md) and the [live test console](https://daatan.github.io/retro/oracle-test.html).
 
 ---
 

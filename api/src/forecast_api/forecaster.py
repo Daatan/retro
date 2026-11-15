@@ -188,7 +188,7 @@ from .clustering import (
     cluster_texts_with_stats,
     event_key_for_row,
 )
-from .confusion_flags import log_confusion_flags
+from .confusion_flags import log_confusion_flags, question_threshold
 from .dedup import dedupe_syndicated
 from .leaderboard import get_credibility_weight
 from .models import (
@@ -3087,6 +3087,7 @@ async def _run_forecast_inner(
         extractor_model=effective_extractor_model,
         claim_strength_min=settings.confusion_flag_claim_strength_min,
         prediction_id=req.prediction_id,
+        question_quantity=question_threshold(req.question_quantity),
     )
     agg = aggregate_pool(all_stances, all_weights, relevances, all_settled, **_pool_kwargs)
     if agg is not None:
@@ -3481,6 +3482,7 @@ async def run_pool_aggregate(req: PoolAggregateRequest) -> PoolAggregateResponse
         question_hash=_question_hash(req.question or ""),
         extractor_model="unknown",
         claim_strength_min=settings.confusion_flag_claim_strength_min,
+        question_quantity=question_threshold(req.question_quantity),
     )
     stances: list[float] = []
     weights: list[float] = []

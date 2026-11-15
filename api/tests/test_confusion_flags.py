@@ -22,8 +22,10 @@ from forecast_api.confusion_flags import (
     flags_for_claim,
     flags_for_rows,
     log_confusion_flags,
+    question_threshold,
 )
-from forecast_api.models import ClaimDetail, ReaderConfidence
+from forecast_api.models import ClaimDetail, ForecastRequest, PoolAggregateRequest, ReaderConfidence
+from tm.threshold_compare import QuestionThreshold
 
 BAR = 0.8
 
@@ -36,6 +38,14 @@ def _claim(**overrides) -> ClaimDetail:
 
 def _rc(level="high", trap=None) -> ReaderConfidence:
     return ReaderConfidence(level=level, trap=trap)
+
+
+def _bar(value, comparison, unit="USD per barrel") -> QuestionThreshold:
+    """The question's threshold, in the vocabulary the old float+direction
+    signature used: `at_least` is ">=", `at_most` is "<="."""
+    return QuestionThreshold(
+        comparator=">=" if comparison == "at_least" else "<=", value=value, unit=unit,
+    )
 
 
 def _flags(claim, **kw) -> list[str]:
@@ -111,7 +121,7 @@ def _with_quantity(stance, value, comparator="=", unit="USD per barrel", **over)
 ])
 def test_a_stance_contradicting_its_own_number_is_flagged(stance, quantity, comparison):
     claim = _with_quantity(stance, quantity)
-    assert _flags(claim, question_quantity=100.0, comparison=comparison) == [
+    assert _flags(claim, question_quantity=_bar(100.0, comparison)) == [
         RULE_STANCE_VS_QUANTITY
     ]
 
@@ -123,7 +133,7 @@ def test_a_stance_contradicting_its_own_number_is_flagged(stance, quantity, comp
 ])
 def test_a_stance_agreeing_with_its_number_is_not_flagged(stance, quantity, comparison):
     claim = _with_quantity(stance, quantity)
-    assert _flags(claim, question_quantity=100.0, comparison=comparison) == []
+    assert _flags(claim, question_quantity=_bar(100.0, comparison)) == []
 
 
 def test_a_number_exactly_on_the_threshold_decides_nothing():
@@ -131,14 +141,14 @@ def test_a_number_exactly_on_the_threshold_decides_nothing():
     bar, so the comparison alone would call 100 satisfied and flag the negative
     stance; the rule keeps declining to read a claim sitting exactly on it."""
     claim = _with_quantity(-0.9, 100.0)
-    assert _flags(claim, question_quantity=100.0, comparison="at_least") == []
+    assert _flags(claim, question_quantity=_bar(100.0, "at_least")) == []
 
 
 def test_a_zero_stance_is_not_a_direction():
     """No sign to contradict — flagging it would report an inconsistency that
     isn't there."""
     claim = _with_quantity(0.0, 93.0)
-    assert _flags(claim, question_quantity=100.0, comparison="at_least") == []
+    assert _flags(claim, question_quantity=_bar(100.0, "at_least")) == []
 
 
 # --- what the object shape buys, which a bare float could not (retro#683) ---
@@ -152,7 +162,7 @@ def test_a_bounded_report_with_no_value_of_its_own_still_decides(comparator, val
     on one side of the bar. The pre-#683 float shape could not express this at
     all, so a positive stance on it went unflagged."""
     claim = _with_quantity(0.8, value, comparator=comparator)
-    assert _flags(claim, question_quantity=value, comparison=comparison) == [
+    assert _flags(claim, question_quantity=_bar(value, comparison)) == [
         RULE_STANCE_VS_QUANTITY
     ]
 
@@ -162,13 +172,13 @@ def test_a_report_spanning_both_answers_is_not_flagged():
     abstention is not a contradiction, and a rule that flagged here would be
     reporting an inconsistency the claim does not contain."""
     claim = _with_quantity(0.8, 93.0, comparator=">")
-    assert _flags(claim, question_quantity=100.0, comparison="at_least") == []
+    assert _flags(claim, question_quantity=_bar(100.0, "at_least")) == []
 
 
 def test_a_reported_range_inside_the_bar_agrees():
     claim = _with_quantity(-0.8, 60.0, comparator="between")
     claim.quantity.value_hi = 80.0
-    assert _flags(claim, question_quantity=100.0, comparison="at_most") == [
+    assert _flags(claim, question_quantity=_bar(100.0, "at_most")) == [
         RULE_STANCE_VS_QUANTITY
     ]
 
@@ -178,7 +188,7 @@ def test_rule_2_is_inert_without_the_question_threshold():
     `question_quantity` does not exist, so there is nothing to compare against."""
     claim = _with_quantity(0.8, 93.0)
     assert _flags(claim) == []
-    assert _flags(claim, comparison="at_least") == []
+    assert _flags(claim, question_quantity=None) == []
 
 
 def test_rule_2_is_inert_when_the_claim_reports_no_figure():
@@ -187,7 +197,7 @@ def test_rule_2_is_inert_when_the_claim_reports_no_figure():
     row for this rule's purposes."""
     claim = _claim(stance=0.8)
     assert claim.quantity is None
-    assert _flags(claim, question_quantity=100.0, comparison="at_least") == []
+    assert _flags(claim, question_quantity=_bar(100.0, "at_least")) == []
 
 
 def test_quantitative_estimate_is_not_the_claim_quantity():
@@ -196,7 +206,67 @@ def test_quantitative_estimate_is_not_the_claim_quantity():
     Comparing them would flag nearly every claim, since 0.85 < 100 always."""
     claim = _claim(stance=0.8, quantitative_estimate=0.85)
     assert claim.quantitative_estimate == 0.85
-    assert _flags(claim, question_quantity=100.0, comparison="at_least") == []
+    assert _flags(claim, question_quantity=_bar(100.0, "at_least")) == []
+
+
+def test_the_question_unit_is_used_not_the_claims():
+    """daatan#2176: the bar carries its own unit. A claim reporting in another
+    unit (or the same unit at another scale) abstains instead of producing a
+    confident sign — before, the rule borrowed the claim's unit and could not."""
+    claim = _with_quantity(0.8, 950.0, unit="billion USD")
+    assert _flags(claim, question_quantity=_bar(1e12, "at_least", unit="USD")) == []
+
+
+def test_a_range_bar_uses_both_edges_for_the_on_the_bar_carve_out():
+    claim = _with_quantity(-0.8, 80.0)
+    bar = QuestionThreshold(comparator="between", value=60.0, value_hi=80.0, unit="USD per barrel")
+    assert _flags(claim, question_quantity=bar) == []
+
+
+# ── question_quantity on the wire (daatan#2176) ──────────────────────────────
+_GOOD = {"comparator": ">=", "value": 100, "unit": "USD per barrel"}
+
+
+@pytest.mark.parametrize("model,extra", [
+    (ForecastRequest, {"question": "Will Brent reach $100?"}),
+    (PoolAggregateRequest, {}),
+])
+def test_both_request_models_accept_question_quantity(model, extra):
+    req = model(**extra, question_quantity=_GOOD)
+    bar = question_threshold(req.question_quantity)
+    assert bar == QuestionThreshold(comparator=">=", value=100.0, unit="USD per barrel")
+
+
+@pytest.mark.parametrize("bad", [
+    {"comparator": "~", "value": 1, "unit": "x"},
+    {"comparator": "between", "value": 5, "unit": "x"},
+    {"comparator": ">", "value": 5, "unit": "x", "value_hi": 9},
+    {"comparator": ">", "value": "lots", "unit": "x"},
+    {"comparator": ">", "value": 5, "unit": ""},
+    "100 dollars",
+])
+@pytest.mark.parametrize("model,extra", [
+    (ForecastRequest, {"question": "Will Brent reach $100?"}),
+    (PoolAggregateRequest, {}),
+])
+def test_a_malformed_question_quantity_is_dropped_not_a_422(model, extra, bad, caplog):
+    """It feeds a log-only diagnostic; a bad parse on daatan's side must never
+    cost a forecast."""
+    with caplog.at_level(logging.WARNING):
+        req = model(**extra, question_quantity=bad)
+    assert req.question_quantity is None
+    assert "event=question_quantity_dropped" in caplog.text
+
+
+def test_question_quantity_is_optional_and_absent_by_default():
+    assert ForecastRequest(question="Will Brent reach $100?").question_quantity is None
+    assert question_threshold(None) is None
+
+
+def test_question_threshold_accepts_a_plain_mapping():
+    assert question_threshold(_GOOD) == QuestionThreshold(
+        comparator=">=", value=100.0, unit="USD per barrel",
+    )
 
 
 # ── rule 3: a settlement the reader was unsure of ────────────────────────────
@@ -300,6 +370,22 @@ def test_rows_with_no_claim_layer_are_counted_apart_from_clean_ones(caplog):
         )
     summary = next(r.getMessage() for r in caplog.records if "event=confusion_flags " in r.getMessage())
     assert "rows=2 evaluable=1 claims=1 flagged=0" in summary
+
+
+def test_the_summary_says_whether_the_question_side_arrived(caplog):
+    """daatan#2176's post-deploy check: without this, zero rule-2 flags cannot be
+    told apart from the field never reaching the rule."""
+    row = _Row([_with_quantity(0.8, 93.0)])
+    with caplog.at_level(logging.INFO, logger="forecast_api.confusion_flags"):
+        log_confusion_flags([row], question_hash="q", extractor_model="m", claim_strength_min=BAR)
+        log_confusion_flags(
+            [row], question_hash="q", extractor_model="m", claim_strength_min=BAR,
+            question_quantity=_bar(100.0, "at_least"),
+        )
+    summaries = [r.getMessage() for r in caplog.records if "event=confusion_flags " in r.getMessage()]
+    assert "question_quantity=absent" in summaries[0]
+    assert "question_quantity=present" in summaries[1]
+    assert f"{RULE_STANCE_VS_QUANTITY}=1" in summaries[1]
 
 
 def test_an_empty_pool_still_logs_a_summary(caplog):

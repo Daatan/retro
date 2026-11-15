@@ -17,7 +17,8 @@ excluded from the credibility bill, never re-weighted up.
 
 Null-safety is the design constraint, not a defensive habit: two of the three
 inputs are shadow fields that a row extracted before retro#681 simply does not
-have, and rule 2's inputs do not exist at all yet (see below). A rule with a
+have, and rule 2's question side arrives only for threshold questions whose
+text states a bar (daatan#2176). A rule with a
 missing input yields no flag — never a default, never a guess. So this module
 activates rule by rule as the fields land, with no follow-up edit here.
 """
@@ -26,7 +27,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Literal, Mapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 from tm.models import Quantity
 from tm.threshold_compare import QuestionThreshold, compare
@@ -88,8 +89,7 @@ def _trapped_strong_claim(claim: ClaimDetail, *, claim_strength_min: float) -> b
 def _stance_vs_quantity(
     claim: ClaimDetail,
     *,
-    question_quantity: Optional[float],
-    comparison: Optional[Literal["at_least", "at_most"]],
+    question_quantity: Optional[QuestionThreshold],
 ) -> bool:
     """Rule 2 — the stance sign contradicts the arithmetic.
 
@@ -98,40 +98,35 @@ def _stance_vs_quantity(
     nonetheless leans positive is internally inconsistent, and that inconsistency
     is checkable in code with no LLM call.
 
-    **Still inert on the live path**, but no longer for both reasons. retro#683
-    landed the claim side, so ``quantity`` now exists — as the ``{value, unit,
-    comparator, ...}`` OBJECT the extractor is asked for, not the bare float this
-    rule was first written against. The question side is still a parameter no
-    caller passes; Phase 2's ``question_quantity`` parse is what supplies it.
-    Both absent ⇒ no flag, which is the null-safe path the acceptance criteria
-    ask to be tested rather than a placeholder.
+    Both sides are now real inputs. retro#683 landed the claim side
+    (``ClaimDetail.quantity``); daatan#2176 (Oracle 1.5 item 2.5) supplies the
+    question side as ``question_quantity``, parsed by the caller from the question
+    text and sent only when the text states a bar. Either absent ⇒ no flag.
 
-    The arithmetic is delegated to ``tm.threshold_compare``, which the same issue
-    ships and which the A/B harness already exercises — one comparison, one set
-    of boundary rules, rather than a second inequality chain here free to drift
-    from it. That also makes a BOUNDED claim usable: "exports stayed below 40
-    million tonnes" carries no value to compare with ``>``, and still decides a
-    question about exceeding 40 million tonnes.
+    The arithmetic is delegated to ``tm.threshold_compare.compare`` — one
+    comparison, one set of boundary rules, shared with the A/B harness. That also
+    makes a BOUNDED claim usable: "exports stayed below 40 million tonnes" carries
+    no value to compare with ``>``, and still decides a question about exceeding
+    40 million tonnes.
+
+    **The question's own unit is used, never the claim's.** Before #2176 the rule
+    took a bare float and borrowed the claim's unit to satisfy ``compare``'s unit
+    check. With a real threshold that would compare un-normalised scales blindly
+    ("$1 trillion" against a claim of ``950 / "billion USD"``) and emit a
+    confident wrong sign. With the question's unit, any mismatch, scale included,
+    returns ``unit_mismatch`` and the rule abstains: precision over recall, since a
+    false flag is worse than a missed one for a sampling filter.
 
     Abstention is not a contradiction. When the reported interval spans both
     answers ("above 5%" against a bar at 9%), the comparison returns no sign and
-    this rule does not fire — flagging there would report an inconsistency that
-    the claim does not contain.
+    this rule does not fire.
 
-    The comparison direction is a parameter rather than something inferred from
-    the question text: guessing "exceeds" vs "falls below" from wording is the
-    kind of judgement this module exists to avoid making. The parameter is a bare
-    number, so it carries no unit and the unit check in ``compare`` is satisfied
-    from the claim's own — a caller passing 100 for "$100/barrel" against a claim
-    counting seats is a caller error Phase 2's parse has to prevent, not
-    something this rule can detect.
-
-    ``ClaimDetail.quantitative_estimate`` is NOT this number and must not be
-    substituted for it: it is a probability in [0, 1] the source cited *for the
+    ``ClaimDetail.quantitative_estimate`` is NOT the claim's number and must not
+    be substituted for it: it is a probability in [0, 1] the source cited *for the
     event*, so comparing it against a question threshold ($100, 61 seats) would
     compare two different quantities and flag on noise.
     """
-    if question_quantity is None or comparison is None:
+    if question_quantity is None:
         return False
     quantity = getattr(claim, "quantity", None)
     if quantity is None:
@@ -141,20 +136,39 @@ def _stance_vs_quantity(
         return False
     if isinstance(quantity, Mapping):
         quantity = Quantity.model_validate(quantity)
-    # A claim sitting exactly ON the threshold decides nothing either way —
-    # retro#687's carve-out, kept deliberately. `at_least`/`at_most` both include
-    # the bar, so the comparison alone would call it satisfied.
-    if quantity.comparator == "=" and quantity.value == question_quantity:
+    # A claim sitting exactly ON the bar decides nothing either way — retro#687's
+    # carve-out, kept deliberately: whether "reaches 100" includes 100 is the
+    # question's wording, not something the claim's stance can be wrong about.
+    bar_edges = {question_quantity.value}
+    if question_quantity.value_hi is not None:
+        bar_edges.add(question_quantity.value_hi)
+    if quantity.comparator == "=" and quantity.value in bar_edges:
         return False
-    threshold = QuestionThreshold(
-        comparator=">=" if comparison == "at_least" else "<=",
-        value=question_quantity,
-        unit=quantity.unit,
-    )
-    sign = compare(quantity, threshold).sign
+    sign = compare(quantity, question_quantity).sign
     if sign is None:
         return False
     return (sign > 0) != (claim.stance > 0)
+
+
+def question_threshold(raw: object) -> Optional[QuestionThreshold]:
+    """The request's ``question_quantity`` as the comparison's threshold, or None.
+
+    Accepts the pydantic ``QuestionQuantity`` the request models carry, a plain
+    mapping, or None. Fail-open: anything ``QuestionThreshold`` rejects yields
+    None, because this feeds a log-only diagnostic and must never fail a forecast.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        dump = getattr(raw, "model_dump", None)
+        if dump is None:
+            return None
+        raw = dump()
+    try:
+        return QuestionThreshold.from_mapping(raw)
+    except (KeyError, TypeError, ValueError):
+        logger.warning("event=question_quantity_dropped reason=unusable_threshold")
+        return None
 
 
 def _unsure_settlement(claim: ClaimDetail) -> bool:
@@ -180,8 +194,7 @@ def flags_for_claim(
     claim: ClaimDetail,
     *,
     claim_strength_min: float,
-    question_quantity: Optional[float] = None,
-    comparison: Optional[Literal["at_least", "at_most"]] = None,
+    question_quantity: Optional[QuestionThreshold] = None,
 ) -> list[str]:
     """Every rule this claim trips, in ``CONFUSION_RULES`` order.
 
@@ -192,7 +205,7 @@ def flags_for_claim(
     fired: list[str] = []
     if _trapped_strong_claim(claim, claim_strength_min=claim_strength_min):
         fired.append(RULE_TRAPPED_STRONG_CLAIM)
-    if _stance_vs_quantity(claim, question_quantity=question_quantity, comparison=comparison):
+    if _stance_vs_quantity(claim, question_quantity=question_quantity):
         fired.append(RULE_STANCE_VS_QUANTITY)
     if _unsure_settlement(claim):
         fired.append(RULE_UNSURE_SETTLEMENT)
@@ -203,8 +216,7 @@ def flags_for_rows(
     rows: Sequence[object],
     *,
     claim_strength_min: float,
-    question_quantity: Optional[float] = None,
-    comparison: Optional[Literal["at_least", "at_most"]] = None,
+    question_quantity: Optional[QuestionThreshold] = None,
 ) -> list[ConfusionFlag]:
     """Flags over any sequence of rows carrying ``claims_detail`` and ``url``.
 
@@ -224,7 +236,6 @@ def flags_for_rows(
                 claim,
                 claim_strength_min=claim_strength_min,
                 question_quantity=question_quantity,
-                comparison=comparison,
             ):
                 out.append(ConfusionFlag(rule=rule, url=url, claim_index=i))
     return out
@@ -245,8 +256,7 @@ def log_confusion_flags(
     extractor_model: str,
     claim_strength_min: float,
     prediction_id: Optional[str] = None,
-    question_quantity: Optional[float] = None,
-    comparison: Optional[Literal["at_least", "at_most"]] = None,
+    question_quantity: Optional[QuestionThreshold] = None,
 ) -> list[ConfusionFlag]:
     """Emit the per-row lines and the per-pool summary; return the flags.
 
@@ -260,7 +270,6 @@ def log_confusion_flags(
         rows,
         claim_strength_min=claim_strength_min,
         question_quantity=question_quantity,
-        comparison=comparison,
     )
     for flag in flags:
         logger.info(
@@ -273,8 +282,10 @@ def log_confusion_flags(
     evaluable = sum(1 for row in rows if getattr(row, "claims_detail", None))
     logger.info(
         "event=confusion_flags question=%s prediction_id=%s extractor_model=%s "
-        "rows=%d evaluable=%d claims=%d flagged=%d %s",
-        question_hash, prediction_id, extractor_model, len(rows), evaluable,
+        "question_quantity=%s rows=%d evaluable=%d claims=%d flagged=%d %s",
+        question_hash, prediction_id, extractor_model,
+        "present" if question_quantity is not None else "absent",
+        len(rows), evaluable,
         sum(len(getattr(r, "claims_detail", None) or []) for r in rows),
         len(flags),
         " ".join(f"{rule}={counts[rule]}" for rule in CONFUSION_RULES),

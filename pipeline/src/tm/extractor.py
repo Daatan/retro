@@ -321,6 +321,33 @@ Examples — related event: "England will win their World Cup semi-final on 2026
   "Argentina stun England with a late rally to reach the final" \
                                                → stance −1.0, claim_strength 0.95, settled true, event_date "2026-07-15" (England's semi-final is decided — and lost; the triumphant tone is Argentina's, NOT support for England)
 
+## Conjunctions — EVERY part must happen
+When the related event requires TWO OR MORE separate outcomes ALL to happen ("wins the \
+Senate seat AND a majority of the House seats", "the pact is signed AND ratified"), \
+score each claim against the WHOLE event, never against the one part it reports:
+- One part reported DONE, the other parts not addressed or still open: this is NOT the \
+event and it is NEVER settled. It removes one risk, but the outcome now depends entirely \
+on the parts still open, and this claim says nothing about them. Score it weakly: \
+|stance| <= 0.2, claim_strength <= 0.3. Never read "this part of the claim is met" as \
+support for the whole.
+- Any ONE part reported to have FAILED for good (a final count short of the required \
+number, a decisive defeat, a deadline passed without it): the whole event is now \
+permanently impossible, however well the other parts went. stance −1.0, claim_strength \
+≥ 0.9, settled true, event_date = the date of the failing result (see SETTLED). This \
+holds even when the same article celebrates the parts that succeeded — score the failed \
+part, not the mood.
+- ALL parts reported done: settled true, stance +1.0, as for any other event.
+A part that is still being counted, or only trending badly, is ordinary evidence about \
+that part — never settled.
+
+Examples — related event: "Club M wins both the league title AND the national cup in the 2026 season":
+  "Club M clinched the league title with two games to spare" \
+                                               → stance +0.1, claim_strength 0.2, settled false (one part done; the cup, still to be played, is not addressed)
+  "Club M were knocked out of the national cup by a second-division side on Saturday" \
+                                               → stance −1.0, claim_strength 0.95, settled true, event_date of Saturday's cup exit (the cup part failed — the double is now impossible, whatever happens in the league)
+  "Club M completed the double on Saturday, adding the cup to the league title" \
+                                               → stance +1.0, claim_strength 0.95, settled true, event_date of Saturday's final (every part done)
+
 ## Cited quantitative estimates — extract them as a distinct anchor
 When the article itself cites an explicit modeled, polled, or market-priced \
 PROBABILITY OF THE RELATED EVENT ITSELF (not a proxy stage) — e.g. "a model gives \

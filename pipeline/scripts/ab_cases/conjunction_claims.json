@@ -1,0 +1,112 @@
+[
+  {
+    "id": "conjunction-one-part-met-other-unreported",
+    "event_name": "Party D wins the State Q governorship and a majority of State Q's 30 legislative-council seats in the 2026 election",
+    "event_description": "Both parts must happen: Party D's candidate wins the State Q governor's race AND Party D wins at least 16 of the 30 State Q legislative-council seats in the same election. Winning only one of the two does not count.",
+    "claim_deadline": "2026-11-30",
+    "article_date": "2026-11-04",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Party D's Ana Ruiz won the State Q governor's race on Tuesday, defeating the two-term incumbent by four points and becoming the first Party D governor in the state in three decades. Ruiz declared victory shortly after midnight before a crowd of several thousand supporters in the capital. Turnout was the highest in twenty years, driven by younger voters and suburban precincts that had leaned toward Party R in the last two cycles. Party R's chairman conceded the governor's race in a short statement and congratulated Ruiz.",
+    "expect": {
+      "settled": false,
+      "stance_band": "none"
+    },
+    "control_event_description": null,
+    "tags": ["retro-1075", "conjunction", "one-part-met", "texas-shape"]
+  },
+  {
+    "id": "conjunction-one-part-failed",
+    "event_name": "Party D wins the State Q governorship and a majority of State Q's 30 legislative-council seats in the 2026 election",
+    "event_description": "Both parts must happen: Party D's candidate wins the State Q governor's race AND Party D wins at least 16 of the 30 State Q legislative-council seats in the same election. Winning only one of the two does not count.",
+    "claim_deadline": "2026-11-30",
+    "article_date": "2026-11-06",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "With every district now called, Party D will hold 11 of the 30 seats on the State Q legislative council, up from nine, while Party R keeps its majority with 19. The election board certified the final council results on Thursday, two days after the November 3 vote. Party D strategists had targeted six suburban districts but flipped only two, and the redrawn district map left most of the remaining seats safely in Party R hands.",
+    "expect": {
+      "stance_sign": -1,
+      "settled": true
+    },
+    "control_event_description": null,
+    "tags": ["retro-1075", "conjunction", "one-part-failed"]
+  },
+  {
+    "id": "conjunction-mixed-one-met-one-failed",
+    "event_name": "Party D wins the State Q governorship and a majority of State Q's 30 legislative-council seats in the 2026 election",
+    "event_description": "Both parts must happen: Party D's candidate wins the State Q governor's race AND Party D wins at least 16 of the 30 State Q legislative-council seats in the same election. Winning only one of the two does not count.",
+    "claim_deadline": "2026-11-30",
+    "article_date": "2026-11-07",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "The blue wave reached State Q on November 3: Party D's Ana Ruiz won the governor's race and the party swept every statewide office for the first time since 1994. Lower down the ballot, though, the redrawn map held. Party D flipped two council districts but finished with 11 of the 30 legislative-council seats, so Party R keeps control of the council with 19. Analysts credited the shift among suburban voters for Ruiz's win and the district lines for Party R's council majority.",
+    "expect": {
+      "stance_sign": -1,
+      "settled": true
+    },
+    "control_event_description": null,
+    "tags": ["retro-1075", "conjunction", "mixed", "abc-shape"]
+  },
+  {
+    "id": "conjunction-all-parts-met",
+    "event_name": "Party D wins the State Q governorship and a majority of State Q's 30 legislative-council seats in the 2026 election",
+    "event_description": "Both parts must happen: Party D's candidate wins the State Q governor's race AND Party D wins at least 16 of the 30 State Q legislative-council seats in the same election. Winning only one of the two does not count.",
+    "claim_deadline": "2026-11-30",
+    "article_date": "2026-11-06",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Party D completed a clean sweep in State Q on Thursday when the last two council districts were called in its favour, giving the party 17 of the 30 legislative-council seats and control of the council for the first time in a generation. The result follows Ana Ruiz's win in the governor's race on November 3, so Party D will hold both the governorship and the council majority when the new term begins in January.",
+    "expect": {
+      "stance_sign": 1,
+      "settled": true
+    },
+    "control_event_description": null,
+    "tags": ["retro-1075", "conjunction", "all-met", "regression-guard"]
+  },
+  {
+    "id": "conjunction-one-part-met-other-still-counting",
+    "event_name": "Party D wins the State Q governorship and a majority of State Q's 30 legislative-council seats in the 2026 election",
+    "event_description": "Both parts must happen: Party D's candidate wins the State Q governor's race AND Party D wins at least 16 of the 30 State Q legislative-council seats in the same election. Winning only one of the two does not count.",
+    "claim_deadline": "2026-11-30",
+    "article_date": "2026-11-04",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Party D's Ana Ruiz has won the State Q governor's race, networks projected early Wednesday. The legislative council is still being counted: of the 22 districts called so far, Party D has won 12 and Party R 10, with eight districts too close to call. Party D needs 16 seats for a council majority, so it must win four of the eight outstanding districts, several of which lean Party R on the new map.",
+    "expect": {
+      "settled": false
+    },
+    "control_event_description": null,
+    "tags": ["retro-1075", "conjunction", "one-part-met", "count-open"]
+  },
+  {
+    "id": "conjunction-non-election-one-part-met",
+    "event_name": "Country K and Country L sign the coastal trade pact and Country K's parliament ratifies it by 2026-12-31",
+    "event_description": "Both must happen by December 31, 2026: the two governments sign the pact AND Country K's parliament votes to ratify it. Signature alone does not count.",
+    "claim_deadline": "2026-12-31",
+    "article_date": "2026-10-20",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "The foreign ministers of Country K and Country L signed the coastal trade pact in a ceremony on Monday, ending four years of negotiations. Country K's parliament must still ratify the agreement; the speaker's office said no date has been set for a ratification debate, and two coalition parties have said they want changes to the fisheries annex before they would vote for it.",
+    "expect": {
+      "settled": false
+    },
+    "control_event_description": null,
+    "tags": ["retro-1075", "conjunction", "one-part-met", "non-election"]
+  },
+  {
+    "id": "control-single-claim-governor-won",
+    "event_name": "Party D's candidate wins the 2026 State Q governor's race",
+    "event_description": "Party D's candidate must win the State Q governor's race in the November 3, 2026 election.",
+    "claim_deadline": "2026-11-30",
+    "article_date": "2026-11-04",
+    "source_name": "Test",
+    "journalist": "unknown",
+    "article_text": "Party D's Ana Ruiz won the State Q governor's race on Tuesday, defeating the two-term incumbent by four points and becoming the first Party D governor in the state in three decades. Ruiz declared victory shortly after midnight before a crowd of several thousand supporters in the capital. Party R's chairman conceded the governor's race in a short statement and congratulated Ruiz.",
+    "expect": {
+      "stance_sign": 1,
+      "settled": true
+    },
+    "control_event_description": null,
+    "tags": ["retro-1075", "control", "single-claim", "regression-guard"]
+  }
+]

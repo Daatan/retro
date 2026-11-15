@@ -10,7 +10,7 @@
     "article_text": "Party D's Ana Ruiz won the State Q governor's race on Tuesday, defeating the two-term incumbent by four points and becoming the first Party D governor in the state in three decades. Ruiz declared victory shortly after midnight before a crowd of several thousand supporters in the capital. Turnout was the highest in twenty years, driven by younger voters and suburban precincts that had leaned toward Party R in the last two cycles. Party R's chairman conceded the governor's race in a short statement and congratulated Ruiz.",
     "expect": {
       "settled": false,
-      "stance_band": "none"
+      "stance_band": "weak"
     },
     "control_event_description": null,
     "tags": ["retro-1075", "conjunction", "one-part-met", "texas-shape"]

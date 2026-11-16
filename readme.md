@@ -90,7 +90,7 @@ Daatan's goal is to create a definitive reliability layer for the information ec
 
 ## Appendix C: Infrastructure
 
-**Compute:** AWS EC2 t4g.small (Graviton, ARM), `eu-central-1` (Frankfurt). Access via AWS SSM only (port 22 blocked).
+**Compute:** AWS EC2 t4g.small (Graviton, ARM), `eu-central-1` (Frankfurt). Access via AWS SSM only (the instance has no SSH key pair).
 
 **Storage (MVP):** Filesystem JSON — one file per event/source pair (~900 atlas entries). Migrates to PostgreSQL + pgvector as data volume and API demand grows.
 

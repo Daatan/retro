@@ -25,8 +25,8 @@ is brought under terraform here to make it auditable and rebuildable.
 - `monitoring.tf` — the Bedrock extractor CloudWatch alarms
   (`extractor_invocation_client_errors`, `extractor_invocations_zero`), notifying an existing
   SNS topic looked up by name. Both key on `var.extractor_model_id` (`variables.tf`), which has to
-  follow every extractor model switch. It still names Haiku 4.5 after the retro#921 switch to
-  5.5 (retro#1008).
+  follow every extractor model switch. It names Haiku 5.5 (`us.anthropic.claude-haiku-5-5`)
+  since retro#1010, applied 2026-10-21 (retro#1008).
 - `backup.tf` — daily DLM snapshots of the box (03:00 UTC, keep 7) plus the DLM execution
   role (Daatan/platform#42). Targets the **instance** by its `Name = truthmachine-pipeline`
   tag, because the root volume carries no tags — keep that tag on any rebuild.

@@ -57,9 +57,10 @@ sudo systemctl restart truthmachine
 
 Inline policy for the existing `truthmachine-ec2-role` — the live source of truth for
 which Bedrock models the Oracul/pipeline may invoke. Nova (gatekeeper)
-plus Claude Haiku 4.5 (extractor; both the cross-region inference profiles and
+plus Claude Haiku 5.5 (extractor since retro#921) and Haiku 4.5 (the `aggregator_model` /
+`judge_model` stages, retro#911) — both the cross-region inference profiles and
 the underlying foundation-model ARN, which cross-region routing requires in every member
-region — hence the `*` region), and Claude Sonnet 4.5 (`us.` profile only) for daatan's
+region — hence the `*` region — and Claude Sonnet 4.5 and 5.5 (`us.` profile only) for daatan's
 `evidence-second-opinion` re-reads (`EVIDENCE_SECOND_OPINION_MODEL`, daatan#1636) — it was
 missing until retro#904, so that detector silently produced nothing from 08-27 to 10-05.
 Adding a new extractor model — **including a shadow-only one** (retro#921: Haiku 5.5 shadow
@@ -83,9 +84,9 @@ aws iam put-role-policy \
 
 **Related host config (not IAM):** the extractor model override is committed at
 [`infra/oracle-api.service.d/extractor-model.conf`](../oracle-api.service.d/extractor-model.conf)
-— sets `Environment=EXTRACTOR_MODEL=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0`,
-scoped to `oracle-api.service`. As of retro#778 (2026-09-08) `tm/config.py`'s
-`extractor_model` default is this same Haiku ID, so the batch `truthmachine.service`
+— sets `Environment=EXTRACTOR_MODEL=bedrock/us.anthropic.claude-haiku-5-5` (Haiku 4.5 until
+retro#921), scoped to `oracle-api.service`. Since retro#778 (2026-09-08) `tm/config.py`'s
+`extractor_model` default has been the same Haiku ID as the drop-in, so the batch `truthmachine.service`
 (no override, no `.env` entry needed) picks it up too — Mark's decision was to converge
 both lanes onto one model/prompt once the cost gap (batch is ~2-3% of live's call
 volume) was measured as immaterial. The drop-in above is now redundant with the shared

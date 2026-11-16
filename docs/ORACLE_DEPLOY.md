@@ -111,7 +111,7 @@ No-op fast-path: if `git reset` produces the same SHA as before, the script skip
 
 ### Invocation
 
-There are three supported ways to deploy. **Normal operation is path 1 — do nothing; merge to `main` and let the workflow run.**
+There are two supported ways to deploy. **Normal operation is path 1 — do nothing; merge to `main` and let the workflow run.**
 
 #### 1. Automatic: merge to `main`
 
@@ -127,11 +127,11 @@ HEAD already matches what's on the box.
 
 The workflow's `test` job runs first. It calls the whole `tests.yml` (pytest, ruff, mypy, infra shell tests). The `deploy` job `needs` it, so any red job blocks the deploy.
 
-Manual trigger (for rollbacks or redeploying the same SHA): **Actions → Deploy Oracle API → Run workflow**, optionally pinning `ref` to a prior commit. Since retro#995 the `ref` input reaches the shell only through an env var. It must match `[A-Za-z0-9._/-]+`, with no leading `-` and no `..`; anything else fails the job before AWS is touched. The SSM `commands` parameter is built with `jq`.
+Manual trigger (for rollbacks or redeploying the same SHA): **Actions → Deploy Oracle API → Run workflow**, optionally pinning `ref` to a prior commit. Leave "Use workflow from" on `main`: since retro#1078 the deploy role trusts only runs on `main` (`infra/iam/README.md`), so a run dispatched from another branch fails at the AWS login. The `ref` input still picks what is deployed. Since retro#995 the `ref` input reaches the shell only through an env var. It must match `[A-Za-z0-9._/-]+`, with no leading `-` and no `..`; anything else fails the job before AWS is touched. The SSM `commands` parameter is built with `jq`.
 
-#### 2. Ad-hoc via SSM (no SSH needed)
+#### 2. Ad-hoc via SSM
 
-When you want to poke the box from a laptop with AWS creds but without opening port 22:
+When you want to deploy from a laptop with AWS creds:
 
 ```bash
 aws ssm send-command \
@@ -148,14 +148,7 @@ aws ssm get-command-invocation --region eu-central-1 \
 
 This is exactly what the GH Actions workflow does internally; it's the canonical way to reach the box.
 
-#### 3. On the box (SSH, if available)
-
-```bash
-ssh ubuntu@<oracle-public-ip>
-bash /home/ubuntu/oracle-api/infra/deploy_oracle.sh
-```
-
-SSH isn't guaranteed to be open — the security group may block port 22, and key rotation history is spotty. Prefer path 1 or 2.
+For an interactive shell on the box, use `aws ssm start-session --region eu-central-1 --target i-00ac444b94c5ff9b2`. There is no SSH path: the instance has no key pair, and access is SSM only (workspace rule).
 
 ## Why the split?
 

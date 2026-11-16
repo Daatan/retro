@@ -81,6 +81,7 @@ secret. CI runs this on every PR, together with `ruff` and `mypy` (`uv run mypy`
 `POST /forecast`, `POST /search`, `GET /search/health`, `POST /llm`,
 `POST /fetch-url`, `POST /pool/aggregate`, `POST /relevance`,
 `GET /bayes/nodes`, `GET /leaderboard`, `POST /leaderboard/ingest`,
+`DELETE /leaderboard/ingest/{prediction_id}` (undo an ingest for a reverted resolution, daatan#2077),
 `GET /leaderboard/resolution-shadow`, `GET /leaderboard/author-shadow`,
 `GET /leaderboard/settlement-pin-report`,
 `GET /health`, `GET /version`, `GET /pm/paper`, `GET /manifold/paper`, `POST /v2/forecast` + `GET /v2/jobs/{id}`

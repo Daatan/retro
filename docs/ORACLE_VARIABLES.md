@@ -633,6 +633,17 @@ by then asserting that month-old coverage may pin. Their dates are now relative 
 `api/tests/test_settlement_revalidation.py`; quality-floor fixtures:
 `TestQualityFloor` in the same file.
 
+#### As-of requests — `ForecastRequest.as_of` (retro#1077)
+
+Every "today" above (deadline passed or not, the glide, the shadow hazard) and the
+`/forecast` path's recency `ref_date` and premise-verifier TODAY line normally read the wall
+clock. A request with `as_of=YYYY-MM-DD` answers *as of that date* instead: a retro /
+post-factum simulation (daatan#2217). It requires caller-supplied `articles` (Oracul's own
+search is not date-bounded, so the caller pre-filters evidence to before `as_of`) and is
+folded into the cache key. It is distinct from `claim_created_at`, which live callers send on
+every request. Absent `as_of` means wall clock, so live behaviour is unchanged. `/pool/aggregate`
+does not take it.
+
 #### The residual the floor does not close — `verified=null` pins (retro#449)
 
 The floor scores **mass**, not provenance, so a pin carried entirely by claims the extractor

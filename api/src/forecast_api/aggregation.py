@@ -1475,6 +1475,7 @@ def settlement_decision(
     settlement_post_deadline_grace_days: int = 14,
     settlement_quality_floor: float = 0.0,
     cluster_ids: Optional[Sequence[int]] = None,
+    today: Optional[str] = None,
 ) -> SettlementDecision:
     """Count the settlement votes and decide whether they pin the estimate.
 
@@ -1519,6 +1520,7 @@ def settlement_decision(
                 settlement_event_dates[i] if settlement_event_dates else None,
                 published_dates[i] if published_dates else None,
                 claim_direction, claim_deadline, claim_created_at, claim_archetype,
+                today=today,
                 post_deadline_grace_days=settlement_post_deadline_grace_days,
             )
             if reason is not None:
@@ -1586,7 +1588,7 @@ def settlement_decision(
             if (
                 direction != 0.0
                 and max(pos, neg) >= settlement_min_sources
-                and not settlement_direction_allowed(direction, claim_direction, claim_deadline)
+                and not settlement_direction_allowed(direction, claim_direction, claim_deadline, today=today)
             ):
                 # Temporally incoherent early settlement (e.g. "won't happen"
                 # pinned months before an arrival claim's deadline — the F-35
@@ -1646,6 +1648,7 @@ def aggregate_pool(
     evidence_window_lookback_days: int = -1,
     hazard_shadow_base_rate: Optional[float] = None,
     hazard_shadow_half_life_fraction: float = 0.5,
+    today: Optional[str] = None,
 ) -> Optional[PoolAggregateResult]:
     """Pool a set of already-extracted, already-weighted per-source signals
     into a final estimate: the relevance off-topic safety net, logit
@@ -1851,13 +1854,14 @@ def aggregate_pool(
             base_rate=hazard_shadow_base_rate,
             half_life_fraction=hazard_shadow_half_life_fraction,
             occurrence_seen=_occurrence_seen,
+            today=_parse_date(today),
         )
     # Glide-eligible AND still running: a deadline-shaped question whose
     # deadline has not passed. After it passes there is no glide left to
     # protect, so the carve-out below stops applying and a stale pool may
     # abstain like any other.
     _deadline = _parse_date(claim_deadline)
-    glide_active = _deadline is not None and _deadline >= datetime.now().date()
+    glide_active = _deadline is not None and _deadline >= (_parse_date(today) or datetime.now().date())
     # F14 (design rule R3): every source weighs exactly nothing — every one of
     # them was blocked by credibility, or zeroed by relevance, or both. Pooling
     # anyway means falling through pool_sources' zero-total guard, which
@@ -1916,6 +1920,7 @@ def aggregate_pool(
         # non-zero) — but the settlement COUNT spends it unconditionally
         # (retro#372): two rows echoing one report are one settling source.
         cluster_ids=cluster_ids,
+        today=today,
     )
 
     if all_off_topic or no_usable_weight or no_decisive_signal:

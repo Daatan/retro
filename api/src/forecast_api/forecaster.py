@@ -2274,6 +2274,9 @@ def build_claim_meta(req: ForecastRequest) -> Optional[str]:
     if req.antecedent_query:
         parts.append(req.antecedent_query)
         parts.append(str(req.antecedent_query_polarity))
+    if req.as_of:
+        # retro#1077: an as-of answer must never be served to a live request.
+        parts.append(f"as_of={req.as_of}")
     return "|".join(parts) if any(parts) else None
 
 
@@ -2646,9 +2649,10 @@ async def _run_forecast_inner(
             ],
             model=settings.premise_verifier_model or req.model or settings.judge_model,
             timeout_s=settings.premise_verifier_timeout_seconds,
+            today=req.as_of,
         ))
         if settings.premise_verifier_enabled
-        and premise_check_triggered(req.claim_deadline, req.claim_archetype)
+        and premise_check_triggered(req.claim_deadline, req.claim_archetype, today=req.as_of)
         else None
     )
 
@@ -2765,7 +2769,8 @@ async def _run_forecast_inner(
     all_settlement_dates: list[Optional[str]] = []
     all_published_dates: list[Optional[str]] = []
     all_source_ids: list[Optional[str]] = []
-    ref_date = datetime.now().strftime("%Y-%m-%d")
+    # retro#1077: recency decays against the as-of date for a retro run.
+    ref_date = req.as_of or datetime.now().strftime("%Y-%m-%d")
     # S2 cutover (retro docs/ORACLE_VARIABLES.md §5) — evidence_class now drives
     # `weight` below via evidence_class_weight(); this dict remains for
     # operational visibility into real-traffic classification coverage/mix.
@@ -3036,6 +3041,7 @@ async def _run_forecast_inner(
         published_dates=all_published_dates,
         claim_created_at=req.claim_created_at,
         claim_archetype=req.claim_archetype,
+        today=req.as_of,  # retro#1077 — None on live requests = wall clock
         # retro#356 shadow hazard — reporting-only, gated off by default.
         hazard_shadow_base_rate=_hazard_shadow_base_rate(),
         hazard_shadow_half_life_fraction=settings.hazard_shadow_half_life_fraction,

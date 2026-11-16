@@ -245,9 +245,9 @@ async def verify_premise(
     the pool would otherwise price normally must not be flagged dead because
     an LLM was unavailable.
 
-    ``today`` is test-only (mirrors ``premise_check_triggered``'s own
-    parameter) — production callers never pass it, so the prompt's stated
-    "TODAY" fact is always the real date.
+    ``today`` is ``ForecastRequest.as_of`` on a retro run (retro#1077) and
+    ``None`` on every live request, so the prompt's stated "TODAY" fact is the
+    as-of date there and the real date everywhere else.
     """
     if not results:
         return Verdict(dead=False, reason="no results to check", errored=True)

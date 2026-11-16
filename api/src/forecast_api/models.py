@@ -204,6 +204,27 @@ class ForecastRequest(BaseModel):
         default=None,
         description="Caller's identifier for the prediction this forecast relates to (e.g. daatan's context_snapshots key). Log correlation only — never used in scoring.",
     )
+    as_of: Optional[str] = Field(
+        default=None,
+        description="retro#1077: answer as of this past date (YYYY-MM-DD) instead of today — a retro / post-factum simulation. Every \"today\" the pipeline reads (recency decay, settlement timing guards, glide, the premise verifier's TODAY line, the shadow hazard) uses it. Requires caller-supplied `articles`: Oracul's own search is not date-bounded, so the caller must pre-filter evidence to before `as_of`. Distinct from `claim_created_at`, which live callers set on every request. Absent = today (live behaviour, unchanged).",
+    )
+
+    @field_validator("as_of")
+    @classmethod
+    def _normalise_as_of(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        from datetime import date
+        try:
+            return date.fromisoformat(v.strip()[:10]).isoformat()
+        except ValueError as exc:
+            raise ValueError("as_of must be an ISO date (YYYY-MM-DD)") from exc
+
+    @model_validator(mode="after")
+    def _as_of_needs_articles(self) -> "ForecastRequest":
+        if self.as_of is not None and not self.articles:
+            raise ValueError("as_of requires caller-supplied articles (Oracul's own search is not date-bounded)")
+        return self
     question_quantity: Optional[QuestionQuantity] = Field(
         default=None, description=_QUESTION_QUANTITY_DESCRIPTION,
     )

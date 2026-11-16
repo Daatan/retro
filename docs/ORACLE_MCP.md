@@ -58,7 +58,7 @@ signature via JWKS) and maps `scope` claims to tools.
   `oracle-mcp/forecast` (the two expensive tools).
 - **Humans** authenticate with Authorization Code + PKCE via the Cognito hosted
   UI — either a native Cognito account (admin-invite only) or self-service
-  Google sign-in, once Google federation is applied (see Provisioning §1). See
+  Google sign-in (Google federation, live since 2026-07-28; see Provisioning §1). See
   the DCR façade below. **Services** (e.g. daatan's own agents, or an
   individually-provisioned trader M2M client) use the `client_credentials`
   grant.
@@ -109,8 +109,8 @@ port (`http://localhost:8080/callback`, registered on the client) if you need it
 
 ### Adding to a client
 
-Once Google federation is applied (§1), a human needs **no prior account** —
-they just sign in with their own Google account on first connect (see below).
+Google federation is live (since 2026-07-28, §1), so a human needs **no prior
+account** — they just sign in with their own Google account on first connect (see below).
 This is the self-service trader path.
 
 Native Cognito accounts remain available as an admin-invite alternative (e.g.
@@ -126,7 +126,7 @@ aws cognito-idp admin-create-user --region eu-central-1 \
 Then in **claude.ai** (or Claude Desktop): Settings → Connectors → Add custom
 connector → `https://oracle.daatan.com/mcp`, and complete the Cognito login when
 prompted — **Sign in with Google** appears alongside the native username/password
-form once §1 is applied. (Claude Code's `claude mcp add --transport http oracle
+form. (Claude Code's `claude mcp add --transport http oracle
 https://oracle.daatan.com/mcp` also works, but its ephemeral loopback port must be
 pinned to a registered callback — see the DCR façade note above.)
 
@@ -168,6 +168,9 @@ End-to-end steps to flip `/mcp` from inert 404 to live. All AWS work is
 **SSM-only, no SSH**.
 
 ### 1. Google federation (self-service trader sign-in)
+
+**Applied 2026-07-28** — the pool's `Google` IdP exists and the claude client lists
+`COGNITO` + `Google` as supported providers. The steps below are kept for a rebuild.
 
 `terraform/cognito.tf` already carries the Google IdP resource and the claude
 client's `supported_identity_providers` — nothing to uncomment. This step is

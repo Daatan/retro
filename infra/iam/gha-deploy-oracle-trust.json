@@ -11,13 +11,8 @@
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:repository_id": "1184236342"
-        },
-        "StringLike": {
-          "token.actions.githubusercontent.com:sub": [
-            "repo:*:ref:refs/heads/main",
-            "repo:*:environment:*"
-          ]
+          "token.actions.githubusercontent.com:repository_id": "1184236342",
+          "token.actions.githubusercontent.com:sub": "repo:Daatan/retro:ref:refs/heads/main"
         }
       }
     }

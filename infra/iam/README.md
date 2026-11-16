@@ -107,7 +107,7 @@ Before applying:
 
 ## Scope rationale
 
-- **Trust**: `token.actions.githubusercontent.com` pinned to this repo by its immutable `repository_id` (`1184236342`, stable across org transfer / rename) plus a `sub` restricted to `ref:refs/heads/main` and `environment:*` — so only workflow runs on `main` (including a `workflow_dispatch` dispatched from `main`; one dispatched from another branch carries that branch's `sub` and is refused) can assume the role. A PR branch cannot. This matches our deploy trigger.
+- **Trust**: `token.actions.githubusercontent.com` pinned to this repo by its immutable `repository_id` (`1184236342`, stable across org transfer / rename) plus `sub` = `repo:Daatan/retro:ref:refs/heads/main` (StringEquals; the former `environment:*` arm was dropped in retro#1078 — any branch job naming an environment would have matched it) — so only workflow runs on `main` (including a `workflow_dispatch` dispatched from `main`; one dispatched from another branch carries that branch's `sub` and is refused) can assume the role. A PR branch cannot. This matches our deploy trigger.
 - **Permissions**: `ssm:SendCommand` is the sharp tool — anyone with it can run arbitrary shell as root on the target instance. We scope it two ways: the instance ARN is restricted to the one oracle box, and the document ARN is restricted to `AWS-RunShellScript` (blocks e.g. `AWS-RunPowerShellScript` or custom documents). `ssm:GetCommandInvocation` / `ssm:ListCommandInvocations` / `ssm:ListCommands` use `Resource: "*"` — not per-command (the command-id is only known after `SendCommand` returns).
 
 ### Why `SendCommand` is two separate statements

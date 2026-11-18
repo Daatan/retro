@@ -2,7 +2,7 @@
 name = "truthmachine-pipeline"
 version = "1.4.0"
 description = "TruthMachine — retroactive media prediction analysis pipeline"
-requires-python = ">=3.11"
+requires-python = ">=3.11.5"
 dependencies = [
     # 1.17 (v2 providers) wraps our schema in different MD_JSON system text than 1.15 did;
     # A/B'd in retro#1012. The exact text is pinned by tests/test_rendered_schema.py, so a

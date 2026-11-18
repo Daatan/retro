@@ -13411,8 +13411,8 @@
     "H05:haaretz": {
       "event_id": "H05",
       "source_id": "haaretz",
-      "status": "pending",
-      "prediction_count": 0,
+      "status": "done",
+      "prediction_count": 2,
       "error": null,
       "failed_attempts": 0
     },
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-11-18T22:47:23.113464"
+  "last_updated": "2026-11-18T23:01:57.511484"
 }

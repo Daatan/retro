@@ -14195,7 +14195,7 @@
     "I01:maariv": {
       "event_id": "I01",
       "source_id": "maariv",
-      "status": "pending",
+      "status": "no_predictions",
       "prediction_count": 0,
       "error": null,
       "failed_attempts": 0
@@ -16073,5 +16073,5 @@
       "failed_attempts": 0
     }
   },
-  "last_updated": "2026-11-18T23:12:09.636783"
+  "last_updated": "2026-11-18T23:30:28.093164"
 }

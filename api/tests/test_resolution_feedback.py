@@ -133,6 +133,23 @@ class TestIngestResolution:
         assert record["author_signals"][0]["author"] == "Ben Caspit"
         assert record["author_signals"][0]["author_lean"] == 0.9
 
+    async def test_author_signal_consensus_fields_persist(self, tmp_path):
+        """daatan#2259: the consensus inputs are stored with the signal, since a ledger entry is
+        never rewritten; a signal without them stores None."""
+        _reset_module_state()
+        path = tmp_path / "resolution_feedback.jsonl"
+        req = _req(author_signals=[
+            AuthorSignalInput(author="Ann", outlet_name="ynet", author_lean=0.6, published_date="2026-11-01",
+                              consensus_snapshot_prob=0.42, consensus_prior_prob=0.55, consensus_prior_n=4),
+            AuthorSignalInput(author="Bob", outlet_name="ynet", author_lean=-0.3),
+        ])
+
+        await resolution_feedback.ingest_resolution(path, req)
+
+        ann, bob = json.loads(path.read_text().splitlines()[0])["author_signals"]
+        assert (ann["published_date"], ann["consensus_snapshot_prob"], ann["consensus_prior_prob"], ann["consensus_prior_n"]) == ("2026-11-01", 0.42, 0.55, 4)
+        assert bob["consensus_prior_prob"] is None and bob["published_date"] is None
+
     async def test_omitted_author_signals_default_to_empty(self, tmp_path):
         """An old-daatan payload with no author_signals key must keep
         working — the field is optional end to end."""

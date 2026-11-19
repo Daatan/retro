@@ -7,6 +7,7 @@ or writes leaderboard.json / get_credibility_weight().
 from __future__ import annotations
 
 import json
+import math
 
 import httpx
 import pytest
@@ -271,6 +272,33 @@ class TestRescoreAuthorsFromDisk:
         rescore_authors_from_disk(ingest, tmp_path / "out.json")
         board = load_shadow_leaderboard(tmp_path / "out.json")
         assert [a["author"] for a in board] == ["Pundit"]
+
+    def test_bits_reward_a_confident_correct_call_over_a_cautious_one(self, tmp_path):
+        """daatan#2259: bits = log2(P(outcome) / 0.5), summed. Both called it right; the 0.9 call
+        earns more than the 0.73 one, the hedge earns nothing, the wrong call loses."""
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            _author_record("p1", True, [_signal("Bold", 0.8), _signal("Cautious", 0.46), _signal("Hedger", 0.0), _signal("Wrong", -0.8)]),
+        ])
+        rescore_authors_from_disk(ingest, tmp_path / "out.json")
+        bits = {a["author"]: a["bits"] for a in load_shadow_leaderboard(tmp_path / "out.json")}
+        assert bits["Bold"] == pytest.approx(math.log2(0.9 / 0.5), abs=1e-3)       # +0.848
+        assert bits["Cautious"] == pytest.approx(math.log2(0.73 / 0.5), abs=1e-3)   # +0.546
+        assert bits["Hedger"] == 0
+        assert bits["Wrong"] == pytest.approx(math.log2(0.1 / 0.5), abs=1e-3)       # -2.322
+
+    def test_bits_sum_over_resolutions_and_clip_certainty(self, tmp_path):
+        """One scored prediction per resolution at the mean lean, summed across resolutions. A
+        lean of ±1 is clipped to p 0.95/0.05, so a single wrong certainty costs -3.32, not -inf."""
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            _author_record("p1", True, [_signal("Ann", 0.6), _signal("Ann", 1.0)]),   # mean 0.8 -> p 0.9
+            _author_record("p2", False, [_signal("Ann", 1.0)]),                       # p 1 -> clipped 0.95
+        ])
+        rescore_authors_from_disk(ingest, tmp_path / "out.json")
+        (ann,) = load_shadow_leaderboard(tmp_path / "out.json")
+        assert ann["bits"] == pytest.approx(math.log2(0.9 / 0.5) + math.log2(0.05 / 0.5), abs=1e-3)
+        assert resolution_scorer.bits_vs_coin(1.0, False) == pytest.approx(math.log2(0.1), abs=1e-9)
 
     def test_same_author_rows_average_within_one_resolution(self, tmp_path):
         """Three articles by one author on one prediction = ONE scored

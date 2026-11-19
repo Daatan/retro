@@ -965,6 +965,14 @@ class AuthorSignalInput(BaseModel):
     author_lean: float = Field(ge=-1.0, le=1.0, description="The author's lean toward the claim resolving YES, at extraction time")
     author_lean_certainty: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     evidence_class: Optional[Literal["reported_fact", "cited_probability", "cited_share", "reporting", "opinion"]] = Field(default=None, description="Recorded for later analysis, never filtered on in this lane")
+    # daatan#2259 phase 2: the consensus the author's lean is later scored against ("bits vs
+    # consensus"). Captured at ingest because the ledger entry is never rewritten: a resolution
+    # pushed without these can't be scored against consensus later. Recorded only; nothing
+    # scores them yet. All optional, so an older daatan still ingests.
+    published_date: Optional[str] = Field(default=None, description="The article's publication date as daatan has it (ISO date or datetime)")
+    consensus_snapshot_prob: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Daatan's published probability for the claim at its last evidence snapshot strictly before the article's date; None when the article predates the forecast's first estimate")
+    consensus_prior_prob: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Mean (stance+1)/2 over the forecast's other pool articles dated strictly before this one: the press consensus the author wrote into")
+    consensus_prior_n: Optional[int] = Field(default=None, ge=0, description="How many earlier pool articles consensus_prior_prob averages")
 
 
 class SettlementSnapshotInput(BaseModel):

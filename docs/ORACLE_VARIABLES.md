@@ -1632,6 +1632,27 @@ Small-tasks breakdown, in order:
   author's rows are **averaged first** (one Brier per author per outcome —
   the shape validated on gate datapoint #1). Shadow only: nothing reads it
   into `/forecast` weighting.
+- **Author `bits` (daatan#2259, 2026-11-19)** — each author-board row also
+  carries `bits`, the author's log score against a coin flip summed over
+  their scored resolutions: `log2(P(outcome) / 0.5)` per resolution, with
+  `P = (mean_lean + 1) / 2` clipped to `[0.05, 0.95]` (`BITS_PROB_CLIP`).
+  A correct 0.9 call earns +0.85, a correct 0.73 call +0.55, a hedge (0.5)
+  0, and a wrong 0.9 call −2.32. The clip caps one wrong certainty at
+  −3.32. Unlike Skill (sign only) and the averaged Brier, it pays for
+  confidence when right. Same records and the same per-resolution mean
+  as the rest of the board; it appears on the board file at the next
+  ingest's replay.
+- **Consensus inputs on `author_signals` (daatan#2259 phase 2,
+  2026-11-19)** — four optional, recorded-only fields per signal:
+  - `published_date`;
+  - `consensus_snapshot_prob`: daatan's published probability at its last
+    evidence snapshot strictly before the article;
+  - `consensus_prior_prob` and `consensus_prior_n`: the mean `(stance+1)/2`
+    of the forecast's earlier pool articles, and how many there were.
+
+  They exist so a later "bits vs consensus" can score against what was
+  believed when the author wrote. They are captured at ingest because
+  ledger entries are never rewritten. Nothing scores them yet.
 - **Known residual in `author_lean` (retro #326 — documented, deliberately
   not fixed)** — the Behrendt/tagesschau class: commentary that *concedes the
   event is happening* but imports its downstream-consequence worry as a

@@ -21,6 +21,7 @@ resolution_author_leaderboard.json.
 """
 import json
 import logging
+import math
 import re
 from pathlib import Path
 
@@ -233,6 +234,18 @@ def rescore_from_disk(ingest_path: Path, output_path: Path) -> dict:
 
 NO_BYLINE = "(no byline)"
 
+# daatan#2259: an author's log score against a coin flip, in bits, summed over resolutions, so a
+# confident correct call (p 0.9: +0.85) earns clearly more than a cautious one (p 0.73: +0.55)
+# and a hedge (p 0.5) earns 0. A lean of ±1 is p 0 or 1, infinite in log terms, so p is clipped
+# first: at 0.05 one wrong call costs at most log2(0.05/0.5) = -3.32 bits and one right call earns
+# at most log2(0.95/0.5) = +0.93. The extractor's leans currently top out at |0.9| (p 0.95).
+BITS_PROB_CLIP = 0.05
+
+
+def bits_vs_coin(prob: float, outcome: bool) -> float:
+    p = min(max(prob, BITS_PROB_CLIP), 1 - BITS_PROB_CLIP)
+    return math.log2((p if outcome else 1 - p) / 0.5)
+
 # Hebrew cantillation/niqqud marks (U+0591-U+05C7) and geresh/gershayim
 # (U+05F3-U+05F4) — stripped so e.g. "שילה פריד" and "שילֹה פריד" (a stray
 # gershayim mark) normalize to the same key. The exact case ni#161 hand-
@@ -311,10 +324,11 @@ def _score_author_board(records: list[dict], identity_map: dict) -> tuple[list[d
             mean_lean = sum(leans) / len(leans)
             if key not in ratings:
                 ratings[key] = skill_model.rating()
-                stats[key] = {"predictions": 0, "articles": 0, "brier_total": 0.0}
+                stats[key] = {"predictions": 0, "articles": 0, "brier_total": 0.0, "bits": 0.0}
             stats[key]["predictions"] += 1
             stats[key]["articles"] += len(leans)
             stats[key]["brier_total"] += brier_score(stance_to_prob(mean_lean), outcome)
+            stats[key]["bits"] += bits_vs_coin(stance_to_prob(mean_lean), outcome)
             event_predictions.append((key, mean_lean))
 
         winners = [k for k, lean in event_predictions if (lean > 0) == outcome]
@@ -340,6 +354,7 @@ def _score_author_board(records: list[dict], identity_map: dict) -> tuple[list[d
             "skill_mu": round(r.mu, 2),
             "skill_sigma": round(r.sigma, 2),
             "skill_conservative": round(r.mu - 3 * r.sigma, 2),
+            "bits": round(s["bits"], 3),
             "predictions": s["predictions"],
             "articles": s["articles"],
         })

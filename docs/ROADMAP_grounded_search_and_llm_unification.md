@@ -63,7 +63,10 @@ Three different ways to call a model today, and Gemini is already reached two of
 > model). None of the three calls OpenRouter over raw `httpx` any more; the only OpenRouter traffic
 > left in retro is Jev (`jev_shadow.py`, typed judgments, not an LLM dispatch path, via the
 > `JEV_PROVIDER` `openrouter` preset). The one non-Bedrock litellm
-> model live is `/relevance` on Vertex Gemini (retro#1038). The table above is kept as written.
+> model live is `/relevance` on Vertex Gemini (retro#1038). Row B's ids are stale too: the live
+> ids carry the `us.` prefix (`bedrock/us.amazon.nova-micro-v1:0`), and the extractor is now
+> Haiku 5.5 and the aggregator Haiku 4.5, not Nova. The row-C guard note below refers to calls
+> that no longer exist. The table above is kept as written.
 
 > **Guard note (row C).** The raw-`httpx` calls above are acceptable only because
 > they target a single *fixed, trusted* LLM endpoint. Do **not** copy that pattern

@@ -83,6 +83,11 @@ only logs, whatever the flags say — the 0.07 threshold was measured on Jev 1.1
 in the environment overrides SSM; with neither, the explicit `JEV_SHADOW_API_URL` / `JEV_MODEL` /
 `JEV_API_KEY_SSM_NAME` apply. Presets live in `api/src/forecast_api/jev_shadow.py` `PROVIDERS`.
 
+**Key precedence hazard.** `forecaster.py` passes `settings.typesafe_api_key` to every Jev call,
+and a non-empty value wins over the active provider's own key. Setting `TYPESAFE_API_KEY` in the
+service environment would therefore send the TypeSafe key to whichever provider is live
+(OpenRouter, Cloudflare); prod leaves it unset, so each provider reads its own SSM key.
+
 ## Deploy flow
 
 `infra/deploy_oracle.sh` runs on the box and does:

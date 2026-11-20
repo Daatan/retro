@@ -2951,8 +2951,8 @@ expected-value stance never reaches ±1 while argmax over-saturates, so both are
 | `typesafe_api_key` | `""` | TypeSafe API key. Empty → SSM `jev_api_key_ssm_name`, read once per process; neither → `skip=no_key` on every article. |
 | `jev_provider` | `""` | retro#901: one of `typesafe`, `openrouter`, `clef-flash`, `clef` — sets URL, model and key together. Overrides the SSM parameter below. See `docs/ORACLE_DEPLOY.md` § Switching the Jev provider. |
 | `jev_provider_ssm_name` | `/retro/prod/secrets/JEV_PROVIDER` | SSM parameter naming the provider, re-read every `jev_provider_ttl_seconds` (60). Unset/unreadable → the explicit settings. Uncalibrated providers (Clef) never enforce. |
-| `jev_api_key_ssm_name` | `/retro/prod/secrets/TYPESAFE_API_KEY` | SSM SecureString the Jev key is read from. Since 2026-10-04 Jev bills through OpenRouter: `/retro/prod/secrets/OPENROUTER_JEV_API_KEY` with `jev_shadow_api_url` = `https://openrouter.ai/api/v1/systemone` and the OpenRouter slug in `jev_model` (drop-in `jev-openrouter.conf`). |
-| `jev_shadow_api_url` | TypeSafe `/v1/systemone` | OpenRouter's `https://openrouter.ai/api/v1/systemone` takes the identical request (with an OpenRouter key). |
+| `jev_api_key_ssm_name` | `/retro/prod/secrets/TYPESAFE_API_KEY` | SSM SecureString the Jev key is read from. Since 2026-10-04 Jev bills through OpenRouter: `/retro/prod/secrets/OPENROUTER_JEV_API_KEY` with `jev_shadow_api_url` = `https://openrouter.ai/api/v1/systemone` and the OpenRouter slug in `jev_model` (drop-in `jev-openrouter.conf`). **2026-11-20:** legacy provider path only (no `JEV_PROVIDER` in env or SSM); a named preset carries its own key parameter and ignores this. |
+| `jev_shadow_api_url` | TypeSafe `/v1/systemone` | OpenRouter's `https://openrouter.ai/api/v1/systemone` takes the identical request (with an OpenRouter key). **2026-11-20:** legacy provider path only (no `JEV_PROVIDER` in env or SSM); a named preset carries its own URL and ignores this. |
 | `jev_shadow_select_bar` | `0.3` | Pass-1 noul that makes a sentence a pass-2 candidate beyond the top `min_top`. |
 | `jev_shadow_min_top` | `3` | The best-ranked sentences always scored, whatever their noul (retro#845: rank is reliable, the absolute noul scale is not). |
 | `jev_shadow_max_candidates` | `25` | Cap on pass-2 calls per article. |
@@ -3233,7 +3233,7 @@ from this PR, which has no key access), so that is the pin.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `jev_model` (`JEV_MODEL`) | `jev-1.13.0` | The model every Jev call requests — shadow passes 1 and 2, the skip-gate's pass 1, the gate A/B's second pass 1, and the `evidence_class` corrector. Movable with a `.env`/drop-in line and a restart, no deploy. **Before moving it:** re-run the offline bench (the retro#850 gate replay and the retro#851 class gold) on the new version and re-derive `jev_gate_threshold` from it; a threshold carried across versions unmeasured is exactly what this pin prevents. |
+| `jev_model` (`JEV_MODEL`) | `jev-1.13.0` | The model every Jev call requests — shadow passes 1 and 2, the skip-gate's pass 1, the gate A/B's second pass 1, and the `evidence_class` corrector. Movable with a `.env`/drop-in line and a restart, no deploy. **Before moving it:** re-run the offline bench (the retro#850 gate replay and the retro#851 class gold) on the new version and re-derive `jev_gate_threshold` from it; a threshold carried across versions unmeasured is exactly what this pin prevents. **2026-11-20:** since the retro#901 provider switch this applies only on the legacy provider path (no `JEV_PROVIDER` in env or SSM). A named preset (`typesafe`, `openrouter`, `clef*`) hard-codes its own model in `jev_shadow.PROVIDERS` and ignores `JEV_MODEL`. Prod goes through OpenRouter (`typesafe/jev-1.13` on either path). |
 
 **Served version on every line.** `_ask` reads the `model` field of each response:
 

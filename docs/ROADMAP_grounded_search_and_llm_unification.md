@@ -56,6 +56,18 @@ Three different ways to call a model today, and Gemini is already reached two of
 | B | retro `tm.llm` | litellm + instructor | Bedrock Nova (`bedrock/amazon.nova-{micro,lite}`) — gatekeeper / extractor / aggregator / forecaster keyword-distill |
 | C | retro raw `httpx` → OpenRouter | direct REST | `/llm` IBI proxy (pass-through), `calibrate_edges.py` (`anthropic/claude-haiku-4.5`), `improve_keywords.py` (`openrouter/google/gemini-2.0-flash-001`) |
 
+> **Status 2026-11-20 (rows B/C): done on the retro side.** Row C no longer exists: the `/llm`
+> proxy, `calibrate_edges.py` and `improve_keywords.py` all go through `tm.llm` → litellm like
+> row B, with Bedrock ids by default (`/llm` takes `body.model`, else `JUDGE_MODEL`, Haiku 4.5;
+> `calibrate_edges.py` `CALIBRATE_EDGES_MODEL`, Haiku 4.5; `improve_keywords.py` the gatekeeper
+> model). None of the three calls OpenRouter over raw `httpx` any more; the only OpenRouter traffic
+> left in retro is Jev (`jev_shadow.py`, typed judgments, not an LLM dispatch path, via the
+> `JEV_PROVIDER` `openrouter` preset). The one non-Bedrock litellm
+> model live is `/relevance` on Vertex Gemini (retro#1038). Row B's ids are stale too: the live
+> ids carry the `us.` prefix (`bedrock/us.amazon.nova-micro-v1:0`), and the extractor is now
+> Haiku 5.5 and the aggregator Haiku 4.5, not Nova. The row-C guard note below refers to calls
+> that no longer exist. The table above is kept as written.
+
 > **Guard note (row C).** The raw-`httpx` calls above are acceptable only because
 > they target a single *fixed, trusted* LLM endpoint. Do **not** copy that pattern
 > to fetch external or user-/search-influenced URLs — those must go through

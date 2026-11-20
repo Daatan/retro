@@ -492,6 +492,68 @@ class TestTemperatureRejectingModels:
         await llm.complete_text_once("bedrock/us.anthropic.claude-sonnet-4-6", "p",
                                      max_tokens=5, temperature=0)
         assert captured["temperature"] == 0
+        assert "allowed_openai_params" not in captured
+
+
+class TestGeminiTemperatureAllowed:
+    """retro#1090: litellm >= 1.108 rejects `temperature` for Gemini 3.5+ client-side
+    (UnsupportedParamsError), which made every /relevance call 502. Vertex accepts it, so
+    the parameter is allowed explicitly and temperature=0 still reaches the provider."""
+
+    GEMINI = "vertex_ai/gemini-3.5-flash-lite"
+
+    async def test_structured_call_sends_and_allows_temperature(self, monkeypatch):
+        captured = {}
+        async def fake_create(**kwargs):
+            captured.update(kwargs)
+            return ("OUT", SimpleNamespace(usage=None))
+        monkeypatch.setattr(llm.client.chat.completions, "create_with_completion", fake_create)
+        await llm.complete_structured(self.GEMINI, dict, "P", max_tokens=10, timeout=5)
+        assert captured["temperature"] == 0
+        assert captured["allowed_openai_params"] == ["temperature"]
+
+    async def test_text_call_sends_and_allows_temperature(self, monkeypatch):
+        captured = {}
+        async def fake_acompletion(**kwargs):
+            captured.update(kwargs)
+            msg = SimpleNamespace(content="ok")
+            return SimpleNamespace(choices=[SimpleNamespace(message=msg)], usage=None)
+        monkeypatch.setattr(llm.litellm, "acompletion", fake_acompletion)
+        await llm.complete_text_once(self.GEMINI, "p", max_tokens=5, temperature=0)
+        assert captured["temperature"] == 0
+        assert captured["allowed_openai_params"] == ["temperature"]
+
+    async def test_no_temperature_means_nothing_allowed(self, monkeypatch):
+        captured = {}
+        async def fake_acompletion(**kwargs):
+            captured.update(kwargs)
+            msg = SimpleNamespace(content="ok")
+            return SimpleNamespace(choices=[SimpleNamespace(message=msg)], usage=None)
+        monkeypatch.setattr(llm.litellm, "acompletion", fake_acompletion)
+        await llm.complete_text_once(self.GEMINI, "p", max_tokens=5)
+        assert "temperature" not in captured
+        assert "allowed_openai_params" not in captured
+
+    def test_gemini_is_not_a_rejecting_model(self):
+        assert llm._model_rejects_temperature(self.GEMINI) is False
+
+    def test_allow_param_keeps_existing_entries(self):
+        kwargs = {"allowed_openai_params": ["thinking"]}
+        llm._allow_param(kwargs, "temperature")
+        llm._allow_param(kwargs, "temperature")
+        assert kwargs["allowed_openai_params"] == ["thinking", "temperature"]
+
+    def test_real_litellm_accepts_the_kwargs_for_gemini(self):
+        """The guard the mocks above can't give: litellm's own param check must pass on the
+        kwargs we build. Before the fix this raised UnsupportedParamsError on 1.109.1."""
+        kwargs = {"model": self.GEMINI}
+        llm._set_temperature(kwargs, self.GEMINI, 0)
+        from litellm.utils import get_optional_params
+        params = get_optional_params(
+            model="gemini-3.5-flash-lite", custom_llm_provider="vertex_ai",
+            temperature=kwargs["temperature"], allowed_openai_params=kwargs["allowed_openai_params"],
+        )
+        assert params.get("temperature") == 0
 
 
 class TestCompleteStructuredPromptCaching:

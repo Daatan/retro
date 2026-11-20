@@ -68,6 +68,23 @@ def _model_rejects_temperature(model: str) -> bool:
     return any(marker in model for marker in _TEMPERATURE_REJECTING_MARKERS)
 
 
+# litellm >= 1.108 marks Gemini 3.5+ as not supporting `temperature` in its own model
+# map and raises UnsupportedParamsError client-side, before any request is sent. Vertex
+# itself accepts the parameter: probed 2026-11-20 on litellm 1.109.1, gemini-3.5-flash-lite
+# answered and the request's generationConfig carried temperature 0. The bump made every
+# /relevance call 502 for ~41 h (retro#1090). These are not rejecting models (the list
+# above). The parameter is allowed explicitly, so temperature=0 still reaches the provider.
+_TEMPERATURE_ALLOWLISTED_MARKERS = ("gemini",)
+
+
+def _allow_param(kwargs: dict, param: str) -> None:
+    """Add ``param`` to litellm's ``allowed_openai_params`` without dropping existing entries."""
+    allowed = list(kwargs.get("allowed_openai_params") or [])
+    if param not in allowed:
+        allowed.append(param)
+    kwargs["allowed_openai_params"] = allowed
+
+
 def _set_temperature(kwargs: dict, model: str, temperature: float | None) -> None:
     """Put ``temperature`` on ``kwargs`` unless it is None or ``model`` rejects it."""
     if temperature is None:
@@ -76,6 +93,8 @@ def _set_temperature(kwargs: dict, model: str, temperature: float | None) -> Non
         logger.debug("event=temperature_omitted_unsupported_model model=%s", model)
         return
     kwargs["temperature"] = temperature
+    if any(marker in model for marker in _TEMPERATURE_ALLOWLISTED_MARKERS):
+        _allow_param(kwargs, "temperature")
 
 # litellm reads this global for OpenAI-compatible backends. For ``bedrock/*``
 # models (the default) litellm ignores it and authenticates with AWS
@@ -309,7 +328,7 @@ async def complete_structured(
         # litellm validates `thinking` against its model cost map; when the remote map
         # can't be fetched it falls back to a bundled copy that predates Haiku 5.5 and
         # raises UnsupportedParamsError (seen live 2026-10-12). Allow it explicitly.
-        call_kwargs["allowed_openai_params"] = ["thinking"]
+        _allow_param(call_kwargs, "thinking")
     kwargs = apply_routing(call_kwargs)
     output, completion = await client.chat.completions.create_with_completion(**kwargs)
     return output, extract_usage(completion)

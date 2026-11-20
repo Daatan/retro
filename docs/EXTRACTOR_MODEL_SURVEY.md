@@ -416,7 +416,10 @@ served another model's cached answer.
   5.5 inverted the sign on negated questions; with it ~+5 s per call (median 12.6 s vs 7.9 s
   for Haiku 4.5, p90 15.8 s vs 12.8 s) and ~2x completion tokens. No effect on other models.
 - One request can try a model without any switch: `/forecast` body field `model` (retro#652)
-  overrides the extractor and the premise verifier for that call only.
+  overrides, for that call only, the extractor plus the premise verifier, event decomposition
+  and subject card — each of those three only where its own `*_MODEL` setting is unset (the
+  subject card also yields to `SETTLEMENT_VERIFIER_MODEL`). It does not reach the gatekeeper
+  or the settlement verifier. daatan's evidence second-opinion cron is the caller that sends it.
 
 **Gates before a switch** (all offline, nothing in prod changes)
 1. `pipeline/scripts/ab_extractor_prompt.py` on the retro#561 case sets, then
@@ -431,12 +434,17 @@ served another model's cached answer.
   models; anything else is sent uncached-flat (correct, just no Bedrock cache discount —
   Vertex Gemini caches implicitly, ~65% of input in the re-test). `PROMPT_CACHE_TTL` reaches
   Claude 4.5+ only.
-- `temperature=0` is sent by default; the newest Anthropic models reject it (pass `None`).
+- `temperature=0` is sent by default. `tm/llm.py` omits it automatically for the newest
+  Anthropic models, which reject it (`_TEMPERATURE_REJECTING_MARKERS`: Sonnet 5.x, Opus
+  4.7+/5.x, Haiku 5.x), so callers need not pass `None`; `None` remains only for a rejecting
+  model not yet on that list. For Gemini it passes `allowed_openai_params=["temperature"]`,
+  because litellm ≥1.108 rejects temperature for Gemini 3.5+ client-side (retro#1090).
 - Extraction memo keys include the model, so a switch never serves the old model's output.
 - Not wired in code (deliberately, nothing needs it yet): a thinking-level knob
   (`reasoning_effort` — Gemini 3.x defaults to high thinking; the re-test patched it to `low`
-  from outside), and Vertex credentials on the box (would need a GCP service account in SSM,
-  never a personal ADC file). Bedrock → Bedrock needs only the EC2 role to allow the model
+  from outside). Vertex credentials, by contrast, are wired on the box: `/relevance` runs on
+  Vertex Gemini through drop-in `relevance-model-vertex.conf`, keyless via Workload Identity
+  Federation from the EC2 role (retro#1038) — no service-account key, no personal ADC file. Bedrock → Bedrock needs only the EC2 role to allow the model
   (`infra/iam/README.md` §4).
 - Cost visibility: the daily cost report and the CloudWatch token metrics read Bedrock only;
   a non-Bedrock extractor's spend would be invisible there until the report learns about it.

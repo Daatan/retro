@@ -188,7 +188,7 @@ Used to compute per-category source accuracy scores for the forecasting model.
   "article_date": "2024-04-13",
   "event_date": "2024-04-14",
   "extractor_model": "bedrock/us.anthropic.claude-haiku-5-5",
-  "gatekeeper_model": "bedrock/amazon.nova-micro-v1:0",
+  "gatekeeper_model": "bedrock/us.amazon.nova-micro-v1:0",
   "gatekeeper_reason": "Article directly predicts an imminent Iranian missile strike on Israel.",
   "predictions": [...]
 }
@@ -201,7 +201,7 @@ Used to compute per-category source accuracy scores for the forecasting model.
   "extraction": { "predictions": [...] },
   "prompt_version": "v1",
   "extractor_model": "bedrock/us.anthropic.claude-haiku-5-5",
-  "gatekeeper_model": "bedrock/amazon.nova-micro-v1:0",
+  "gatekeeper_model": "bedrock/us.amazon.nova-micro-v1:0",
   "gatekeeper_reason": "...",
   "run_date": "2026-04-14T12:00:00"
 }
@@ -354,7 +354,7 @@ git push → GitHub Actions → GitHub Pages
 | Extractor | `bedrock/us.anthropic.claude-haiku-5-5`, adaptive thinking on (`extractor_thinking`), `extractor_max_tokens` 8000. Config default since retro#921 (2026-10-19). Before that: Haiku 4.5 from retro#778 (2026-09-08); batch was on Nova Lite. | Structured extraction of up to 5 predictions per article (14 requested fields — see "Prediction (extracted by LLM)" above) |
 | Article Aggregator | `aggregator_model` = `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0`. Its own knob since retro#911, so the extractor can move alone. | Collapses high-spread (>0.4) predictions within a single article into one editorial signal |
 | Keywords | `bedrock/us.amazon.nova-micro-v1:0` (`gatekeeper_model`) | One-time: generate search keywords per event (via `tm.llm`) |
-| Jev skip-gate + shadow + `evidence_class` corrector (live lane only) | TypeSafe System One, pinned `jev_model` = `jev-1.13.0` (retro#863; `api/src/forecast_api/jev_shadow.py`, not Bedrock, not LiteLLM) | Typed judgments, no generation: one `noul` per sentence. Shadow extraction next to Haiku (retro#840, `JEV_SHADOW_ENABLED`) and, since retro#850, a skip-gate in front of the extractor — `max_noul` predicts an empty Haiku extraction at AUC 0.93; `JEV_GATE_ENABLED` logs the verdict, `JEV_GATE_ENFORCE` skips the call when set (committed `jev-gate-enforce.conf`, threshold 0.07; the live value is the `event=stage_modes` startup line); `JEV_GATE_AB_ENABLED` (retro#849) logs a second pass 1 on a core-event rewrite of the question. The shadow's pass 2 also logs Jev's `evidence_class` (retro#851) and, on Haiku-settled claims, an `event_date` picked from code-found candidates (`jev_dates.py`, retro#873). Since retro#851, `jev_class.py` re-reads each claim's quote with the whole article and picks its `evidence_class`: `JEV_CLASS_ENABLED` logs `event=jev_class`, `JEV_CLASS_ENFORCE` replaces Haiku's class before anchor provenance and the class weights (fail-open to Haiku's, `jev_class_timeout_seconds` 1.5). All default off; see the drop-ins in `docs/ORACLE_DEPLOY.md`. Key in SSM `/retro/prod/secrets/TYPESAFE_API_KEY`. See `docs/ORACLE_VARIABLES.md` 2026-09-22 onward. |
+| Jev skip-gate + shadow + `evidence_class` corrector (live lane only) | TypeSafe System One, pinned `jev_model` = `jev-1.13.0` (retro#863; `api/src/forecast_api/jev_shadow.py`, not Bedrock, not LiteLLM) | Typed judgments, no generation: one `noul` per sentence. Shadow extraction next to Haiku (retro#840, `JEV_SHADOW_ENABLED`) and, since retro#850, a skip-gate in front of the extractor — `max_noul` predicts an empty Haiku extraction at AUC 0.93; `JEV_GATE_ENABLED` logs the verdict, `JEV_GATE_ENFORCE` skips the call when set (committed `jev-gate-enforce.conf`, threshold 0.07; the live value is the `event=stage_modes` startup line); `JEV_GATE_AB_ENABLED` (retro#849) logs a second pass 1 on a core-event rewrite of the question. The shadow's pass 2 also logs Jev's `evidence_class` (retro#851) and, on Haiku-settled claims, an `event_date` picked from code-found candidates (`jev_dates.py`, retro#873). Since retro#851, `jev_class.py` re-reads each claim's quote with the whole article and picks its `evidence_class`: `JEV_CLASS_ENABLED` logs `event=jev_class`, `JEV_CLASS_ENFORCE` replaces Haiku's class before anchor provenance and the class weights (fail-open to Haiku's, `jev_class_timeout_seconds` 1.5). All default off; see the drop-ins in `docs/ORACLE_DEPLOY.md`. Provider and key: `JEV_PROVIDER` (env → SSM `/retro/prod/secrets/JEV_PROVIDER` → legacy `JEV_SHADOW_API_URL`/`JEV_MODEL`/`JEV_API_KEY_SSM_NAME`); prod goes through OpenRouter with SSM `/retro/prod/secrets/OPENROUTER_JEV_API_KEY`, while `/retro/prod/secrets/TYPESAFE_API_KEY` is the direct-TypeSafe key. A non-empty `TYPESAFE_API_KEY` env var outranks the provider's key and is sent to whichever provider is active (prod leaves it unset). See `docs/ORACLE_VARIABLES.md` 2026-09-22 onward. |
 
 All defaults via AWS Bedrock. The one live non-Bedrock LiteLLM model is `/relevance` on Vertex Gemini (drop-in `relevance-model-vertex.conf`, WIF credential, retro#1038). Override via env vars in `pipeline/src/tm/config.py`. The API-side Bedrock stages are settlement verifier, subject gate, premise verifier, event decomposition, v2 and `/llm`. They fall back to `judge_model` (Haiku 4.5), not to the extractor (retro#911). `/relevance` and query distillation have their own `RELEVANCE_MODEL` / `QUERY_DISTILL_MODEL`; unset, they use the gatekeeper's model. The full list is in `docs/EXTRACTOR_MODEL_SURVEY.md` ("Model choices elsewhere"). The `model_api_base` and `model_api_key` settings allow routing through any LiteLLM-compatible provider (OpenRouter, etc.).
 
@@ -548,7 +548,7 @@ Remaining secrets stay in AWS Secrets Manager (`eu-central-1`):
 
 | Secret name | Used by |
 |---|---|
-| `daatan/openrouter-api-key` | LLM inference via OpenRouter (fallback) |
+| `daatan/openrouter-api-key` | No longer an LLM fallback: there is no OpenRouter LLM path in code (`tm.llm` calls go to Bedrock, plus `/relevance` on Vertex). `infra/ec2_bootstrap.sh` still requires it (exits without it) and writes it to `OPENROUTER_API_KEY`, which only sets litellm's global key — ignored for `bedrock/*` and `vertex_ai/*`. Jev's OpenRouter key is a separate SSM parameter, `/retro/prod/secrets/OPENROUTER_JEV_API_KEY` (above). |
 | `daatan/github-pat` | Push `factum_atlas.html` to repo |
 
 > **Note (resolved 2026-07-14):** these entries were originally created under `openclaw/*` (a decommissioned stack's namespace). PR #198 pointed the *code* at `daatan/*`; the `daatan/*` Secrets Manager entries existed to match, and the `openclaw/*` copies were retained but read by nothing. Search-provider keys have since moved again, off `daatan/*` Secrets Manager and onto the `/retro/prod/secrets/*` SSM parameters above (docs#122).

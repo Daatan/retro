@@ -19,6 +19,9 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 
 ## [Unreleased]
 
+### Added
+- `GET /leaderboard/author-shadow/resolutions` (daatan#2266): the author lane's scored resolutions, one row each, with `prediction_id`, `outcome`, `experts_prob` and `bylines`. `experts_prob` treats the experts as one forecaster: each byline's mean lean as a probability, which is what the author board scores, averaged over bylines. Written beside the author board on every rescore. Read-only and additive; shadow only.
+
 ### Changed
 - Author board (`GET /leaderboard/author-shadow`): each row gains `bits`, the author's log score against a coin flip, `log2(P(outcome)/0.5)` summed over scored resolutions at the per-resolution mean lean, with P clipped to [0.05, 0.95] (daatan#2259). `AuthorSignalInput` on `POST /leaderboard/ingest` accepts four optional, recorded-only consensus inputs (`published_date`, `consensus_snapshot_prob`, `consensus_prior_prob`, `consensus_prior_n`) for a later "bits vs consensus". Additive; an older daatan ingests unchanged.
 - Dependencies (security): soupsieve -> 4.1.2 in `api/` and `pipeline/`, closing Dependabot alerts #62–#67 (ReDoS / polynomial-time selector DoS, 3 high + 2 medium per lockfile). The lockfiles carried a second soupsieve 2.10 fork for Python < 3.11.5, because soupsieve 3.0.2+ requires 3.11.5; both projects now declare `requires-python = ">=3.11.5"` (the images run `python:3.11-slim`, the latest 3.11 patch), so the fork and Dependabot's blocked update are gone. soupsieve 3.0/4.0 breaking changes (stricter `:has()`, custom-selector order, `template`/`iframe` contents no longer searched) don't touch our selectors, which are plain tag/class/attribute ones. No other package changed.

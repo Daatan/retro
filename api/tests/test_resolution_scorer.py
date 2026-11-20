@@ -15,6 +15,7 @@ import pytest
 from forecast_api import resolution_scorer
 from forecast_api.resolution_feedback import record_tags
 from forecast_api.resolution_scorer import (
+    load_expert_resolutions,
     load_shadow_leaderboard,
     load_tag_board,
     rescore_authors_from_disk,
@@ -222,6 +223,40 @@ class TestRescoreAuthorsFromDisk:
         assert summary["resolutions_total"] == 0
         assert summary["authors_scored"] == 0
         assert json.loads((tmp_path / "out.json").read_text()) == []
+        assert load_expert_resolutions(tmp_path / "out.json") == []
+
+    def test_expert_resolutions_score_each_byline_once_then_average(self, tmp_path):
+        """daatan#2266: per resolution, each byline's mean lean as a probability (what the board
+        scores), averaged over bylines — Ann's two articles count once, not twice."""
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            _author_record("p1", True, [_signal("Ann", 0.6), _signal("Ann", 1.0), _signal("Bob", -0.4, outlet="maariv")]),
+            _author_record("p2", False, [_signal("Ann", 0.0)]),
+            _author_record("p3", True, []),                       # no signals: not an expert call
+            _author_record("p4", None, [_signal("Ann", 0.9)]),    # unresolved: skipped like the board
+        ])
+        out = tmp_path / "out.json"
+        summary = rescore_authors_from_disk(ingest, out)
+
+        assert summary["expert_resolutions"] == 2
+        # Ann: mean 0.8 -> 0.9; Bob: -0.4 -> 0.3; experts = (0.9 + 0.3) / 2
+        assert load_expert_resolutions(out) == [
+            {"prediction_id": "p1", "outcome": True, "experts_prob": 0.6, "bylines": 2},
+            {"prediction_id": "p2", "outcome": False, "experts_prob": 0.5, "bylines": 1},
+        ]
+
+    def test_expert_resolutions_group_bylines_through_the_identity_map(self, tmp_path, monkeypatch):
+        """Two spellings of one person are one byline here exactly as on the board."""
+        monkeypatch.setattr(resolution_scorer, "_load_identity_map", lambda: {"Ben Kaspit": "Ben Caspit"})
+        ingest = tmp_path / "in.jsonl"
+        _write_jsonl(ingest, [
+            _author_record("p1", True, [_signal("Ben Caspit", 1.0), _signal("Ben Kaspit", 0.0), _signal("Dana", -1.0)]),
+        ])
+        rescore_authors_from_disk(ingest, tmp_path / "out.json")
+        (row,) = load_expert_resolutions(tmp_path / "out.json")
+        # Ben: mean 0.5 -> 0.75; Dana: -1 -> 0; not (1 + 0.5 + 0) / 3
+        assert row["bylines"] == 2
+        assert row["experts_prob"] == 0.375
 
     def test_tag_boards_score_only_that_topics_resolutions(self, tmp_path):
         """retro#973: a per-topic board replays just the tagged resolutions, so an author

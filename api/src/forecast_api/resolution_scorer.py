@@ -295,6 +295,40 @@ def _load_identity_map() -> dict[str, str]:
         return {}
 
 
+def _leans_by_byline(record: dict, identity_map: dict) -> dict[tuple[str, str], list[float]]:
+    """One resolution's usable author_signals grouped per (byline author, outlet): the grouping
+    both the author board and the per-resolution experts probability score from."""
+    leans_by_key: dict[tuple[str, str], list[float]] = {}
+    for s in record.get("author_signals") or []:
+        if s.get("author_lean") is None:
+            continue
+        raw_author = _normalize_identity(s.get("author"))
+        author = identity_map.get(raw_author, raw_author) if raw_author else NO_BYLINE
+        key = (author, _normalize_identity(s.get("outlet_name")))
+        leans_by_key.setdefault(key, []).append(s["author_lean"])
+    return leans_by_key
+
+
+def _expert_resolutions(records: list[dict], identity_map: dict) -> list[dict]:
+    """daatan#2266: per scored resolution, the experts' probability as one forecaster — each
+    byline's mean lean as ``stance_to_prob``, the same per-resolution prediction the author board
+    scores, averaged over bylines so a prolific outlet counts once per byline, not per article."""
+    out = []
+    for record in records:
+        outcome = record.get("outcome")
+        leans_by_key = _leans_by_byline(record, identity_map)
+        if outcome is None or not leans_by_key:
+            continue
+        probs = [stance_to_prob(sum(leans) / len(leans)) for leans in leans_by_key.values()]
+        out.append({
+            "prediction_id": record.get("prediction_id"),
+            "outcome": bool(outcome),
+            "experts_prob": round(sum(probs) / len(probs), 4),
+            "bylines": len(probs),
+        })
+    return out
+
+
 def _score_author_board(records: list[dict], identity_map: dict) -> tuple[list[dict], int, int]:
     """One from-scratch author replay over ``records`` → (board, scored, without_signals)."""
     skill_model = PlackettLuce()
@@ -305,18 +339,10 @@ def _score_author_board(records: list[dict], identity_map: dict) -> tuple[list[d
 
     for record in records:
         outcome = record.get("outcome")
-        signals = record.get("author_signals") or []
-        usable = [s for s in signals if s.get("author_lean") is not None]
-        if outcome is None or not usable:
+        leans_by_key = _leans_by_byline(record, identity_map)
+        if outcome is None or not leans_by_key:
             resolutions_without_signals += 1
             continue
-
-        leans_by_key: dict[tuple[str, str], list[float]] = {}
-        for s in usable:
-            raw_author = _normalize_identity(s.get("author"))
-            author = identity_map.get(raw_author, raw_author) if raw_author else NO_BYLINE
-            key = (author, _normalize_identity(s.get("outlet_name")))
-            leans_by_key.setdefault(key, []).append(s["author_lean"])
 
         resolutions_scored += 1
         event_predictions: list[tuple[tuple[str, str], float]] = []
@@ -405,12 +431,18 @@ def rescore_authors_from_disk(ingest_path: Path, output_path: Path, tags_path: P
             by_tag[tag] = tag_board
     tag_output_path(output_path).write_text(json.dumps(by_tag, indent=2, ensure_ascii=False))
 
+    # daatan#2266: the same resolutions as one "experts" forecaster each, for daatan's combined
+    # people / AI / experts board. Another file, so the board files keep their shapes.
+    expert_resolutions = _expert_resolutions(records, identity_map)
+    resolutions_output_path(output_path).write_text(json.dumps(expert_resolutions, indent=2))
+
     summary = {
         "resolutions_total": len(records),
         "resolutions_scored": resolutions_scored,
         "resolutions_without_signals": resolutions_without_signals,
         "authors_scored": len(author_board),
         "tags_scored": len(by_tag),
+        "expert_resolutions": len(expert_resolutions),
     }
     logger.info("event=author_shadow_scored %s", summary)
     return summary
@@ -424,6 +456,17 @@ def load_shadow_leaderboard(output_path: Path) -> list[dict]:
 
 def tag_output_path(output_path: Path) -> Path:
     return output_path.with_name(f"{output_path.stem}_by_tag.json")
+
+
+def resolutions_output_path(output_path: Path) -> Path:
+    return output_path.with_name(f"{output_path.stem}_resolutions.json")
+
+
+def load_expert_resolutions(output_path: Path) -> list[dict]:
+    path = resolutions_output_path(output_path)
+    if not path.exists():
+        return []
+    return json.loads(path.read_text())
 
 
 def load_tag_map(tags_path: Path) -> dict[str, list[str]]:

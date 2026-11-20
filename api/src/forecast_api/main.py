@@ -30,7 +30,13 @@ from .leaderboard import (
     refresh_shadow_cache,
 )
 from .resolution_feedback import forget_resolution, ingest_resolution, record_tags, remove_tags
-from .resolution_scorer import load_shadow_leaderboard, load_tag_board, rescore_authors_from_disk, rescore_from_disk
+from .resolution_scorer import (
+    load_expert_resolutions,
+    load_shadow_leaderboard,
+    load_tag_board,
+    rescore_authors_from_disk,
+    rescore_from_disk,
+)
 from .settings_deprecations import deprecated_env, unrecognized_env
 from .settings_groups import grouped
 from .settlement_pin_ledger import forget_settlement_pin, load_ledger, record_settlement_pin
@@ -336,6 +342,20 @@ async def leaderboard_author_shadow(tag: str | None = None, _: ApiKeyClient = De
     else:
         data = await asyncio.to_thread(load_shadow_leaderboard, settings.resolved_resolution_author_leaderboard_path)
     return {"authors": data, "count": len(data)}
+
+
+@app.get("/leaderboard/author-shadow/resolutions", tags=["Meta"])
+async def leaderboard_author_shadow_resolutions(_: ApiKeyClient = Depends(verify_api_key)):
+    """
+    The author lane's scored resolutions, one row each (daatan#2266): ``prediction_id``,
+    ``outcome``, ``experts_prob`` (each byline's mean lean as ``stance_to_prob``, the
+    prediction the author board scores, averaged over the resolution's bylines) and
+    ``bylines``. Written beside the author board on every rescore, so it always matches it.
+    Lets daatan put "the experts" next to its users and the Oracul on the same forecasts.
+    Shadow only.
+    """
+    data = await asyncio.to_thread(load_expert_resolutions, settings.resolved_resolution_author_leaderboard_path)
+    return {"resolutions": data, "count": len(data)}
 
 
 @app.get("/leaderboard/settlement-pin-report", response_model=SettlementPinReportResponse, tags=["Meta"])

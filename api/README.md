@@ -83,6 +83,7 @@ secret. CI runs this on every PR, together with `ruff` and `mypy` (`uv run mypy`
 `GET /bayes/nodes`, `GET /leaderboard`, `POST /leaderboard/ingest`,
 `DELETE /leaderboard/ingest/{prediction_id}` (undo an ingest for a reverted resolution, daatan#2077),
 `GET /leaderboard/resolution-shadow`, `GET /leaderboard/author-shadow`,
+`GET /leaderboard/author-shadow/resolutions` (per-resolution experts probability, daatan#2266),
 `GET /leaderboard/settlement-pin-report`,
 `GET /health`, `GET /version`, `GET /pm/paper`, `GET /manifold/paper`, `POST /v2/forecast` + `GET /v2/jobs/{id}`
 (the Oracle 2.0 playground, retro#595 — traced query-path runs behind

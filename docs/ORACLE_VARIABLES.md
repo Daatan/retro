@@ -1642,6 +1642,17 @@ Small-tasks breakdown, in order:
   confidence when right. Same records and the same per-resolution mean
   as the rest of the board; it appears on the board file at the next
   ingest's replay.
+- **Per-resolution experts probability (daatan#2266, 2026-11-20)** — the
+  same replay also writes `data/resolution_author_leaderboard_resolutions.json`,
+  served at `GET /leaderboard/author-shadow/resolutions`: one row per scored
+  resolution with `prediction_id`, `outcome`, `experts_prob` and `bylines`.
+  `experts_prob` treats the experts as one forecaster: each byline's mean
+  lean as `(mean_lean + 1) / 2` (the prediction the board scores, bylines
+  grouped through the identity map), averaged over the resolution's bylines.
+  daatan's combined people / AI / experts board reads it. It has to come from
+  here, not from daatan's pool: the ledger keeps what each push stored, and
+  the current pool had drifted (28 of the ledger's 43 forecasts, mean gap
+  0.12). Shadow only.
 - **Consensus inputs on `author_signals` (daatan#2259 phase 2,
   2026-11-19)** — four optional, recorded-only fields per signal:
   - `published_date`;

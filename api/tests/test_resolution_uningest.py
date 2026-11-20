@@ -143,3 +143,21 @@ def test_appends_racing_a_removal_are_not_lost(tmp_path):
         t.join()
 
     assert sorted(_ids(path)) == sorted(f"new{n}-{i}" for n in range(3) for i in range(200))
+
+
+def test_expert_resolutions_follow_ingest_and_uningest(paths):
+    """daatan#2266: GET /leaderboard/author-shadow/resolutions serves the author lane's scored
+    resolutions and drops one the moment it is un-ingested."""
+    signals = [{"author": "Ann", "outlet_name": "ynet", "author_lean": 0.6}]
+    _ingest("gone", author_signals=signals)
+    _ingest("p", author_signals=signals, outcome=False)
+
+    body = client.get("/leaderboard/author-shadow/resolutions", headers=HEADERS).json()
+    assert body["count"] == 2
+    assert {r["prediction_id"]: (r["outcome"], r["experts_prob"]) for r in body["resolutions"]} == {
+        "gone": (True, 0.8),
+        "p": (False, 0.8),
+    }
+
+    client.delete("/leaderboard/ingest/gone", headers=HEADERS)
+    assert [r["prediction_id"] for r in client.get("/leaderboard/author-shadow/resolutions", headers=HEADERS).json()["resolutions"]] == ["p"]

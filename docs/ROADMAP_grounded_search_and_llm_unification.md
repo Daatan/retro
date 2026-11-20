@@ -60,7 +60,9 @@ Three different ways to call a model today, and Gemini is already reached two of
 > proxy, `calibrate_edges.py` and `improve_keywords.py` all go through `tm.llm` → litellm like
 > row B, with Bedrock ids by default (`/llm` takes `body.model`, else `JUDGE_MODEL`, Haiku 4.5;
 > `calibrate_edges.py` `CALIBRATE_EDGES_MODEL`, Haiku 4.5; `improve_keywords.py` the gatekeeper
-> model). There is no raw-`httpx` OpenRouter call left in retro. The one non-Bedrock litellm
+> model). None of the three calls OpenRouter over raw `httpx` any more; the only OpenRouter traffic
+> left in retro is Jev (`jev_shadow.py`, typed judgments, not an LLM dispatch path, via the
+> `JEV_PROVIDER` `openrouter` preset). The one non-Bedrock litellm
 > model live is `/relevance` on Vertex Gemini (retro#1038). The table above is kept as written.
 
 > **Guard note (row C).** The raw-`httpx` calls above are acceptable only because

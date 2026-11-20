@@ -419,7 +419,7 @@ served another model's cached answer.
   overrides, for that call only, the extractor plus the premise verifier, event decomposition
   and subject card — each of those three only where its own `*_MODEL` setting is unset (the
   subject card also yields to `SETTLEMENT_VERIFIER_MODEL`). It does not reach the gatekeeper
-  or the settlement verifier. daatan's evidence second-opinion cron is the caller that sends it.
+  or the settlement verifier.
 
 **Gates before a switch** (all offline, nothing in prod changes)
 1. `pipeline/scripts/ab_extractor_prompt.py` on the retro#561 case sets, then

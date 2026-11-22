@@ -20,6 +20,7 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 ## [Unreleased]
 
 ### Added
+- `/relevance` can bill its Vertex Gemini calls at Flex PayGo, half the per-token price for the same model and prompt, ~7–10 s instead of ~1 s (retro#1098). `RELEVANCE_FLEX_ENABLED` defaults to off; `RELEVANCE_FLEX_TIMEOUT_SECONDS` is 25. Any failure of the Flex attempt falls back to one standard call before the rate-limit backoff, so it costs money, never a verdict. `event=flex_stats` (every 500 attempts: outcomes, Flex latency), `event=flex_not_honoured` and the startup line `event=relevance_config` show the live state. The hand-synced drop-in `relevance-flex.conf` turns it on, after news-indexer#547.
 - `GET /leaderboard/author-shadow/resolutions` (daatan#2266): the author lane's scored resolutions, one row each, with `prediction_id`, `outcome`, `experts_prob` and `bylines`. `experts_prob` treats the experts as one forecaster: each byline's mean lean as a probability, which is what the author board scores, averaged over bylines. Written beside the author board on every rescore. Read-only and additive; shadow only.
 
 ### Changed

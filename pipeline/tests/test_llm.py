@@ -855,3 +855,16 @@ class TestVertexFlex:
         assert llm.traffic_type(self._completion("ON_DEMAND_FLEX")) == "ON_DEMAND_FLEX"
         assert llm.traffic_type(self._completion(None)) is None
         assert llm.traffic_type(SimpleNamespace(usage=None)) is None
+
+    def test_flex_stats_line_carries_window_latency(self, monkeypatch, caplog):
+        monkeypatch.setattr(llm, "_FLEX_STATS_EVERY", 4)
+        stats = llm._FlexStats()
+        with caplog.at_level("INFO", logger="tm.llm"):
+            stats.record("flex", 6.0)
+            stats.record("flex", 10.0)
+            stats.record("fallback")
+            stats.record("not_flex", 2.0)
+        assert "attempts=4 flex=2 not_flex=1 fallback=1" in caplog.text
+        assert "window_answered=3 mean_s=6.0 max_s=10.0" in caplog.text
+        assert stats.window_ok == 0 and stats.window_max == 0.0   # window reset after the line
+

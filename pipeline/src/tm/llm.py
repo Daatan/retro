@@ -18,6 +18,7 @@ import functools
 import json
 import logging
 import re
+import time
 
 import instructor
 import litellm
@@ -277,20 +278,38 @@ def traffic_type(completion) -> str | None:
 
 
 class _FlexStats:
-    """Cumulative Flex outcomes since process start; logs one line every `_FLEX_STATS_EVERY`."""
+    """Cumulative Flex outcomes since process start, plus the latency of answered Flex attempts
+    over the current window; logs one line every `_FLEX_STATS_EVERY` attempts.
+
+    The latency is what says whether news-indexer's concurrency keeps up (ni#547): its lanes are
+    paced per call, so a slower Flex means fewer calls per minute at the same concurrency."""
 
     def __init__(self) -> None:
         self.attempts = self.flex = self.not_flex = self.fallback = 0
         self.unsupported_logged: set[str] = set()
+        self._reset_window()
 
-    def record(self, outcome: str) -> None:
+    def _reset_window(self) -> None:
+        self.window_ok = 0
+        self.window_secs = 0.0
+        self.window_max = 0.0
+
+    def record(self, outcome: str, elapsed: float | None = None) -> None:
         self.attempts += 1
         setattr(self, outcome, getattr(self, outcome) + 1)
+        if elapsed is not None:
+            self.window_ok += 1
+            self.window_secs += elapsed
+            self.window_max = max(self.window_max, elapsed)
         if self.attempts % _FLEX_STATS_EVERY == 0:
+            mean = self.window_secs / self.window_ok if self.window_ok else 0.0
             logger.info(
-                "event=flex_stats attempts=%d flex=%d not_flex=%d fallback=%d",
+                "event=flex_stats attempts=%d flex=%d not_flex=%d fallback=%d "
+                "window_answered=%d mean_s=%.1f max_s=%.1f",
                 self.attempts, self.flex, self.not_flex, self.fallback,
+                self.window_ok, mean, self.window_max,
             )
+            self._reset_window()
 
 
 _flex_stats = _FlexStats()
@@ -308,6 +327,7 @@ async def _create_with_flex(kwargs: dict, model: str, flex_timeout: int | None):
     flex_kwargs = {**kwargs, "extra_headers": dict(VERTEX_FLEX_HEADERS)}
     if flex_timeout:
         flex_kwargs["timeout"] = flex_timeout
+    started = time.monotonic()
     try:
         output, completion = await client.chat.completions.create_with_completion(**flex_kwargs)
     except Exception as exc:  # noqa: BLE001 - any Flex failure falls back to standard, logged
@@ -316,13 +336,14 @@ async def _create_with_flex(kwargs: dict, model: str, flex_timeout: int | None):
             "event=flex_fallback model=%s err_type=%s err=%.200s", model, type(exc).__name__, exc,
         )
         return await client.chat.completions.create_with_completion(**kwargs)
+    elapsed = time.monotonic() - started
     tier = traffic_type(completion)
     if tier == FLEX_TRAFFIC_TYPE:
-        _flex_stats.record("flex")
+        _flex_stats.record("flex", elapsed)
     else:
         # The headers were sent but the call was billed (or reported) as something else — the
         # cost saving is not happening. Loud, because nothing else would show it.
-        _flex_stats.record("not_flex")
+        _flex_stats.record("not_flex", elapsed)
         logger.warning("event=flex_not_honoured model=%s traffic_type=%s", model, tier)
     return output, completion
 

@@ -713,8 +713,10 @@ class ApiSettings(BaseSettings):
     # per-token price, answered in ~7 s instead of ~1 s (3.5 Flash-Lite, measured 2026-11-22). Only
     # a `vertex_ai/` relevance_model has a Flex tier; any other model ignores the flag. Any failure
     # of the Flex attempt falls back to one standard call, so a capacity shortage costs money, not a
-    # verdict. Off by default; the hand-synced drop-in `relevance-flex.conf` turns it on, and only
-    # after news-indexer judges with enough concurrency to absorb the latency (ni#547).
+    # verdict. Applies to `short_form` requests only (news-indexer's short_form lane, ~97% of the
+    # calls); the cosine lane keeps the standard tier. Off by default; the hand-synced drop-in
+    # `relevance-flex.conf` turns it on, and only after news-indexer judges with enough concurrency
+    # to absorb the latency (ni#547).
     relevance_flex_enabled: bool = False
     # Timeout of the Flex attempt alone. Short on purpose: the Flex attempt plus a standard retry
     # (~1 s) must fit inside news-indexer's client timeout, or ni gives up on a call retro still

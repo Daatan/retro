@@ -225,9 +225,21 @@ def test_relevance_passes_the_flex_settings_through(monkeypatch):
     monkeypatch.setattr(settings, "relevance_flex_timeout_seconds", 17)
     spy = AsyncMock(return_value=(_verdict(), {}))
     with patch("forecast_api.main.check_is_prediction", new=spy):
-        r = client.post("/relevance", json=BODY, headers=HEADERS)
+        r = client.post("/relevance", json={**BODY, "short_form": True}, headers=HEADERS)
     assert r.status_code == 200
     assert spy.await_args.kwargs["flex"] is True
     assert spy.await_args.kwargs["flex_timeout"] == 17
     # The reported model is unchanged: news-indexer persists it, and the tier is not a model.
     assert r.json()["model"] == "bedrock/us.amazon.nova-micro-v1:0"
+
+
+def test_relevance_flex_skips_the_cosine_lane(monkeypatch):
+    # Mark 2026-11-22: Flex for short_form requests only; a cosine-lane request (short_form false,
+    # the default) keeps the standard tier even with the flag on.
+    from forecast_api.main import settings
+
+    monkeypatch.setattr(settings, "relevance_flex_enabled", True)
+    spy = AsyncMock(return_value=(_verdict(), {}))
+    with patch("forecast_api.main.check_is_prediction", new=spy):
+        client.post("/relevance", json=BODY, headers=HEADERS)
+    assert spy.await_args.kwargs["flex"] is False

@@ -495,7 +495,10 @@ async def relevance(
             model=evidence.relevance_model,
             numeric_bar_exception=True,  # retro#1054
             # retro#1098: Vertex Flex PayGo, falling back to the standard tier on any failure.
-            flex=evidence.relevance_flex_enabled,
+            # short_form only (Mark, 2026-11-22): that lane is ~97% of the calls, while the
+            # cosine lane is ~3% of calls but ~75% of deliveries, so it keeps the fast tier and
+            # stays out of any Flex trouble.
+            flex=evidence.relevance_flex_enabled and body.short_form,
             flex_timeout=evidence.relevance_flex_timeout_seconds,
         )
     except Exception as exc:  # noqa: BLE001 - logged, fail-open

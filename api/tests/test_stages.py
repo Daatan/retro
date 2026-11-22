@@ -49,6 +49,8 @@ NON_STAGE_ENABLED_FLAGS = frozenset(
         "event_decomposition_cache_enabled",
         "subject_gate_cache_enabled",
         "extraction_memo_enabled",
+        # billing-tier switch with a built-in fallback, no shadow lane (retro#1098)
+        "relevance_flex_enabled",
     }
 )
 

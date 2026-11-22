@@ -208,3 +208,26 @@ def test_a_real_short_post_still_reaches_the_model():
     llm.assert_awaited_once()
     assert r.status_code == 200
     assert r.json()["is_prediction"] is True
+
+
+def test_relevance_flex_is_off_by_default():
+    # retro#1098: the Flex tier is opt-in per deployment; the default request is unchanged.
+    spy = AsyncMock(return_value=(_verdict(), {}))
+    with patch("forecast_api.main.check_is_prediction", new=spy):
+        client.post("/relevance", json=BODY, headers=HEADERS)
+    assert spy.await_args.kwargs["flex"] is False
+
+
+def test_relevance_passes_the_flex_settings_through(monkeypatch):
+    from forecast_api.main import settings
+
+    monkeypatch.setattr(settings, "relevance_flex_enabled", True)
+    monkeypatch.setattr(settings, "relevance_flex_timeout_seconds", 17)
+    spy = AsyncMock(return_value=(_verdict(), {}))
+    with patch("forecast_api.main.check_is_prediction", new=spy):
+        r = client.post("/relevance", json=BODY, headers=HEADERS)
+    assert r.status_code == 200
+    assert spy.await_args.kwargs["flex"] is True
+    assert spy.await_args.kwargs["flex_timeout"] == 17
+    # The reported model is unchanged: news-indexer persists it, and the tier is not a model.
+    assert r.json()["model"] == "bedrock/us.amazon.nova-micro-v1:0"

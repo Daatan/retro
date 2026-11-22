@@ -45,3 +45,29 @@ def test_relevance_prefix_only_inserts_the_exception():
     assert rel.replace(gatekeeper._NUMERIC_BAR_EXCEPTION, "", 1) == gatekeeper.PROMPT_PREFIX
     assert gatekeeper._REJECTION_ANCHOR + gatekeeper._NUMERIC_BAR_EXCEPTION in rel
     assert rel.index(gatekeeper._NUMERIC_BAR_EXCEPTION) < rel.index("It is empty, a paywall/404 stub")
+
+
+async def _call_kwargs(**kwargs) -> dict:
+    with patch("tm.gatekeeper.complete_structured", new=AsyncMock(return_value=(None, {}))) as cs:
+        await gatekeeper.check_is_prediction(
+            article_text=ARTICLE, source_name="Fortune", article_date="2026-11-04",
+            event_name="The price of Brent crude oil will reach or exceed $130 per barrel",
+            **kwargs,
+        )
+    return cs.await_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_flex_is_off_unless_asked_for():
+    # retro#1098: /forecast never passes flex, so its call must not change.
+    kw = await _call_kwargs()
+    assert kw["flex"] is False
+    assert kw["flex_timeout"] is None
+
+
+@pytest.mark.asyncio
+async def test_flex_is_passed_through():
+    kw = await _call_kwargs(numeric_bar_exception=True, flex=True, flex_timeout=25)
+    assert kw["flex"] is True
+    assert kw["flex_timeout"] == 25
+    assert kw["cached_prefix"] == gatekeeper.RELEVANCE_PROMPT_PREFIX

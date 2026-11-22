@@ -58,6 +58,8 @@ def test_gatekeeper_model_is_not_read_by_api_stages_without_their_own_knob():
     ]
     assert all(
         r.startswith(("settings.relevance_model or", "model=settings.relevance_model or",
+                      # retro#1098: the same fallback, read through the settings groups (retro#947).
+                      "model=evidence.relevance_model or", "_evidence.relevance_model or",
                       "settings.query_distill_model or"))
         or "gatekeeper_model=_pipeline_settings.gatekeeper_model" in r
         for r in reads

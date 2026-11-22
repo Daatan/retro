@@ -77,6 +77,13 @@ async def lifespan(app: FastAPI):
         "event=stage_modes %s",
         " ".join(f"{name}={mode}" for name, mode in sorted(describe_stages(settings).items())),
     )
+    # retro#1098: the /relevance model and billing tier, so the live state is one grep away.
+    _evidence = grouped(settings).evidence
+    logger.info(
+        "event=relevance_config model=%s flex=%s flex_timeout=%ds",
+        _evidence.relevance_model or _pipeline_settings.gatekeeper_model,
+        _evidence.relevance_flex_enabled, _evidence.relevance_flex_timeout_seconds,
+    )
     # extra="ignore" swallows a misspelled or removed flag silently (retro#947). Report only;
     # this must never stop the service from starting. The shared `tm.config` settings read the
     # same environment (EXTRACTOR_MODEL is one of theirs), so their fields count as known.
@@ -476,6 +483,7 @@ async def relevance(
     Stateless, and no search — one LLM call. It does not aggregate, does not
     touch the leaderboard, and does not affect `/forecast`'s behaviour.
     """
+    evidence = grouped(settings).evidence
     try:
         out, usage = await check_is_prediction(
             article_text=body.article_text,
@@ -484,8 +492,11 @@ async def relevance(
             event_name=body.claim,
             short_form=body.short_form,
             language=body.language,
-            model=settings.relevance_model,
+            model=evidence.relevance_model,
             numeric_bar_exception=True,  # retro#1054
+            # retro#1098: Vertex Flex PayGo, falling back to the standard tier on any failure.
+            flex=evidence.relevance_flex_enabled,
+            flex_timeout=evidence.relevance_flex_timeout_seconds,
         )
     except Exception as exc:  # noqa: BLE001 - logged, fail-open
         logger.warning("relevance check failed claim=%.60s err=%s", body.claim, exc)
@@ -495,7 +506,7 @@ async def relevance(
         relevance_score=out.relevance_score,
         reason=out.reason,
         prediction_count_estimate=out.prediction_count_estimate,
-        model=settings.relevance_model or _pipeline_settings.gatekeeper_model,
+        model=evidence.relevance_model or _pipeline_settings.gatekeeper_model,
         gatekeeper_prompt_version=RELEVANCE_GATEKEEPER_PROMPT_VERSION,
         gatekeeper_prompt_hash=RELEVANCE_GATEKEEPER_PROMPT_HASH,
         gatekeeper_schema_hash=GATEKEEPER_SCHEMA_HASH,

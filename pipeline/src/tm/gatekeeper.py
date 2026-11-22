@@ -261,6 +261,8 @@ async def check_is_prediction(
     language: str | None = None,
     model: str | None = None,
     numeric_bar_exception: bool = False,
+    flex: bool = False,
+    flex_timeout: int | None = None,
 ) -> tuple["GatekeeperOutput", dict]:
     """Returns (GatekeeperOutput, usage) where usage has prompt_tokens/completion_tokens/total_tokens.
 
@@ -276,6 +278,10 @@ async def check_is_prediction(
     `numeric_bar_exception` (retro#1054) swaps in RELEVANCE_PROMPT_PREFIX, which adds the
     numeric-bar exception to the rejection rule. Only /relevance sets it; False (the default and
     /forecast) sends PROMPT_PREFIX unchanged.
+
+    `flex`/`flex_timeout` (retro#1098) are passed through to `complete_structured`: Vertex Flex
+    PayGo with a fallback to the standard tier. Only /relevance sets them, from its own settings;
+    the prompt is unaffected.
 
     Input that carries no proposition is rejected here without an LLM call — see
     `carries_proposition`. That guard sits in front of BOTH callers on purpose: /relevance is the
@@ -303,4 +309,5 @@ async def check_is_prediction(
     return await complete_structured(
         model or settings.gatekeeper_model, GatekeeperOutput, prompt, max_tokens=200, timeout=90,
         cached_prefix=RELEVANCE_PROMPT_PREFIX if numeric_bar_exception else PROMPT_PREFIX,
+        flex=flex, flex_timeout=flex_timeout,
     )

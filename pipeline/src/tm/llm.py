@@ -18,6 +18,7 @@ import functools
 import json
 import logging
 import re
+import time
 
 import instructor
 import litellm
@@ -250,6 +251,103 @@ def retry_on_rate_limit(func):
     return wrapper
 
 
+# retro#1098 — Vertex AI Flex PayGo: the same model at half the per-token price, answered from
+# shared capacity (~7 s instead of ~1 s on 3.5 Flash-Lite, measured 2026-11-22). Selected per
+# request by these two headers; the response's `usageMetadata.trafficType` says which tier was
+# actually billed (`ON_DEMAND_FLEX` vs `ON_DEMAND`), and litellm copies it into hidden params.
+VERTEX_FLEX_HEADERS = {
+    "X-Vertex-AI-LLM-Shared-Request-Type": "flex",
+    "X-Vertex-AI-LLM-Request-Type": "shared",
+}
+FLEX_TRAFFIC_TYPE = "ON_DEMAND_FLEX"
+# One aggregate line per this many Flex attempts, so the Flex share is measurable from the log
+# without a line per call (/relevance runs ~30k calls/day).
+_FLEX_STATS_EVERY = 500
+
+
+def _model_supports_flex(model: str) -> bool:
+    return model.startswith("vertex_ai/")
+
+
+def traffic_type(completion) -> str | None:
+    """The Vertex billing tier litellm copied off ``usageMetadata.trafficType``, or None."""
+    hidden = getattr(completion, "_hidden_params", None) or {}
+    fields = hidden.get("provider_specific_fields") or {}
+    value = fields.get("traffic_type")
+    return str(value) if value else None
+
+
+class _FlexStats:
+    """Cumulative Flex outcomes since process start, plus the latency of answered Flex attempts
+    over the current window; logs one line every `_FLEX_STATS_EVERY` attempts.
+
+    The latency is what says whether news-indexer's concurrency keeps up (ni#547): its lanes are
+    paced per call, so a slower Flex means fewer calls per minute at the same concurrency."""
+
+    def __init__(self) -> None:
+        self.attempts = self.flex = self.not_flex = self.fallback = 0
+        self.unsupported_logged: set[str] = set()
+        self._reset_window()
+
+    def _reset_window(self) -> None:
+        self.window_ok = 0
+        self.window_secs = 0.0
+        self.window_max = 0.0
+
+    def record(self, outcome: str, elapsed: float | None = None) -> None:
+        self.attempts += 1
+        setattr(self, outcome, getattr(self, outcome) + 1)
+        if elapsed is not None:
+            self.window_ok += 1
+            self.window_secs += elapsed
+            self.window_max = max(self.window_max, elapsed)
+        if self.attempts % _FLEX_STATS_EVERY == 0:
+            mean = self.window_secs / self.window_ok if self.window_ok else 0.0
+            logger.info(
+                "event=flex_stats attempts=%d flex=%d not_flex=%d fallback=%d "
+                "window_answered=%d mean_s=%.1f max_s=%.1f",
+                self.attempts, self.flex, self.not_flex, self.fallback,
+                self.window_ok, mean, self.window_max,
+            )
+            self._reset_window()
+
+
+_flex_stats = _FlexStats()
+
+
+async def _create_with_flex(kwargs: dict, model: str, flex_timeout: int | None):
+    """One Flex attempt, then — on ANY failure of it — one standard call with the same kwargs.
+
+    Any failure, not a 429 string match: instructor re-raises provider errors wrapped in its own
+    retry exception, and whether a Flex capacity shortage arrives as 429 or 503 is not something
+    we have observed. A Flex failure must cost money, never a verdict. The fallback sits here,
+    INSIDE `complete_structured`, so a Flex 429 never reaches `retry_on_rate_limit`'s 30/60/120 s
+    backoff; only a failure of the standard call does, as before.
+    """
+    flex_kwargs = {**kwargs, "extra_headers": dict(VERTEX_FLEX_HEADERS)}
+    if flex_timeout:
+        flex_kwargs["timeout"] = flex_timeout
+    started = time.monotonic()
+    try:
+        output, completion = await client.chat.completions.create_with_completion(**flex_kwargs)
+    except Exception as exc:  # noqa: BLE001 - any Flex failure falls back to standard, logged
+        _flex_stats.record("fallback")
+        logger.warning(
+            "event=flex_fallback model=%s err_type=%s err=%.200s", model, type(exc).__name__, exc,
+        )
+        return await client.chat.completions.create_with_completion(**kwargs)
+    elapsed = time.monotonic() - started
+    tier = traffic_type(completion)
+    if tier == FLEX_TRAFFIC_TYPE:
+        _flex_stats.record("flex", elapsed)
+    else:
+        # The headers were sent but the call was billed (or reported) as something else — the
+        # cost saving is not happening. Loud, because nothing else would show it.
+        _flex_stats.record("not_flex", elapsed)
+        logger.warning("event=flex_not_honoured model=%s traffic_type=%s", model, tier)
+    return output, completion
+
+
 @retry_on_rate_limit
 async def complete_structured(
     model: str,
@@ -261,6 +359,8 @@ async def complete_structured(
     cached_prefix: str | None = None,
     temperature: float | None = 0,
     thinking: bool = False,
+    flex: bool = False,
+    flex_timeout: int | None = None,
 ):
     """Make one structured-output LLM call and return ``(output, usage)``.
 
@@ -293,6 +393,12 @@ async def complete_structured(
     returns an empty body, so only a caller that also raises its cap opts in. The extractor
     does (retro#921): without reasoning, 5.5 scores a negated question ("X will NOT happen")
     as if it were the inner event.
+
+    ``flex`` (retro#1098) sends the call to Vertex AI Flex PayGo — half price, slower — with
+    ``flex_timeout`` as that attempt's timeout, and falls back to one standard call on any Flex
+    failure (:func:`_create_with_flex`). Only ``vertex_ai/`` models have a Flex tier; for any
+    other model the flag is ignored (logged once per model) and the call is the standard one.
+    Off by default, so every existing caller's request is unchanged.
     """
     if cached_prefix and settings.enable_prompt_cache and _model_supports_prompt_cache(model):
         cache_control = {"type": "ephemeral"}
@@ -330,6 +436,12 @@ async def complete_structured(
         # raises UnsupportedParamsError (seen live 2026-10-12). Allow it explicitly.
         _allow_param(call_kwargs, "thinking")
     kwargs = apply_routing(call_kwargs)
+    if flex and _model_supports_flex(model):
+        output, completion = await _create_with_flex(kwargs, model, flex_timeout)
+        return output, extract_usage(completion)
+    if flex and model not in _flex_stats.unsupported_logged:
+        _flex_stats.unsupported_logged.add(model)
+        logger.info("event=flex_skipped_unsupported_model model=%s", model)
     output, completion = await client.chat.completions.create_with_completion(**kwargs)
     return output, extract_usage(completion)
 

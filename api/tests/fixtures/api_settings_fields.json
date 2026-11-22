@@ -93,6 +93,8 @@
 "query_distill_model",
 "recency_floor",
 "recency_half_life_days",
+"relevance_flex_enabled",
+"relevance_flex_timeout_seconds",
 "relevance_model",
 "relevance_reuse_allowed_clients",
 "relevance_weight_floor",

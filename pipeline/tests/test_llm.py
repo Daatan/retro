@@ -698,15 +698,18 @@ class TestCallerDelegation:
         from tm.models import GatekeeperOutput
 
         captured = {}
-        async def fake(model, response_model, prompt, *, max_tokens, timeout, cached_prefix=None):
+        async def fake(model, response_model, prompt, *, max_tokens, timeout, cached_prefix=None,
+                       flex, flex_timeout):
             captured.update(model=model, response_model=response_model,
                             prompt=prompt, max_tokens=max_tokens, timeout=timeout,
-                            cached_prefix=cached_prefix)
+                            cached_prefix=cached_prefix, flex=flex, flex_timeout=flex_timeout)
             return ("OUT", {"total_tokens": 1})
         monkeypatch.setattr(gatekeeper, "complete_structured", fake)
 
         result = await gatekeeper.check_is_prediction("article", "src", "2024-01-01", "Some Event")
         assert result == ("OUT", {"total_tokens": 1})
+        # retro#1098: Flex is off unless a caller asks for it (only /relevance does).
+        assert captured["flex"] is False and captured["flex_timeout"] is None
         assert captured["model"] == gatekeeper.settings.gatekeeper_model
         assert captured["response_model"] is GatekeeperOutput
         assert captured["max_tokens"] == 200
@@ -768,3 +771,100 @@ class TestCallerDelegation:
         assert captured["response_model"] is PredictionExtraction
         assert captured["max_tokens"] == 1000
         assert captured["timeout"] == 120
+
+
+class TestVertexFlex:
+    """retro#1098: Vertex AI Flex PayGo on request, with a standard-tier fallback.
+
+    The Flex attempt must carry the two request headers and its own (short) timeout; any failure
+    of it must fall back to exactly one standard call, and must not reach the rate-limit backoff.
+    A model without a Flex tier, or the flag off, must send the request it always sent."""
+
+    VERTEX = "vertex_ai/gemini-3.5-flash-lite"
+
+    @staticmethod
+    def _completion(traffic):
+        hidden = {"provider_specific_fields": {"traffic_type": traffic}} if traffic else {}
+        return SimpleNamespace(usage=None, _hidden_params=hidden)
+
+    def _patch(self, monkeypatch, *outcomes):
+        """Each call pops the next outcome: an exception to raise, or a trafficType to return."""
+        calls = []
+        queue = list(outcomes)
+
+        async def fake_create(**kwargs):
+            calls.append(dict(kwargs))
+            nxt = queue.pop(0)
+            if isinstance(nxt, Exception):
+                raise nxt
+            return ("OUT", self._completion(nxt))
+
+        monkeypatch.setattr(llm.client.chat.completions, "create_with_completion", fake_create)
+        monkeypatch.setattr(llm.asyncio, "sleep", AsyncMock())
+        return calls
+
+    async def test_flex_sends_the_headers_and_its_own_timeout(self, monkeypatch):
+        calls = self._patch(monkeypatch, "ON_DEMAND_FLEX")
+        out, _ = await llm.complete_structured(self.VERTEX, dict, "P", max_tokens=10, timeout=90,
+                                               flex=True, flex_timeout=25)
+        assert out == "OUT"
+        assert len(calls) == 1
+        assert calls[0]["extra_headers"] == llm.VERTEX_FLEX_HEADERS
+        assert calls[0]["timeout"] == 25
+
+    async def test_flex_off_sends_no_headers(self, monkeypatch):
+        calls = self._patch(monkeypatch, "ON_DEMAND")
+        await llm.complete_structured(self.VERTEX, dict, "P", max_tokens=10, timeout=90)
+        assert len(calls) == 1
+        assert "extra_headers" not in calls[0]
+        assert calls[0]["timeout"] == 90
+
+    async def test_non_vertex_model_ignores_the_flag(self, monkeypatch):
+        calls = self._patch(monkeypatch, None)
+        await llm.complete_structured("bedrock/us.amazon.nova-micro-v1:0", dict, "P",
+                                      max_tokens=10, timeout=90, flex=True, flex_timeout=25)
+        assert len(calls) == 1
+        assert "extra_headers" not in calls[0]
+        assert calls[0]["timeout"] == 90
+
+    @pytest.mark.parametrize("exc", [
+        litellm.RateLimitError("RESOURCE_EXHAUSTED", llm_provider="vertex_ai", model="m"),
+        litellm.Timeout("timed out", model="m", llm_provider="vertex_ai"),
+        RuntimeError("503 UNAVAILABLE wrapped by instructor"),
+    ])
+    async def test_any_flex_failure_falls_back_to_one_standard_call(self, monkeypatch, exc):
+        calls = self._patch(monkeypatch, exc, "ON_DEMAND")
+        out, _ = await llm.complete_structured(self.VERTEX, dict, "P", max_tokens=10, timeout=90,
+                                               flex=True, flex_timeout=25)
+        assert out == "OUT"
+        assert len(calls) == 2
+        assert calls[0]["extra_headers"] == llm.VERTEX_FLEX_HEADERS
+        assert "extra_headers" not in calls[1]
+        assert calls[1]["timeout"] == 90
+        # The fallback happened inside the call, not through the 30/60/120 s rate-limit backoff.
+        llm.asyncio.sleep.assert_not_awaited()
+
+    async def test_flex_not_honoured_is_logged(self, monkeypatch, caplog):
+        self._patch(monkeypatch, "ON_DEMAND")
+        with caplog.at_level("WARNING", logger="tm.llm"):
+            await llm.complete_structured(self.VERTEX, dict, "P", max_tokens=10, timeout=90,
+                                          flex=True, flex_timeout=25)
+        assert "event=flex_not_honoured" in caplog.text
+
+    def test_traffic_type_reads_litellms_hidden_params(self):
+        assert llm.traffic_type(self._completion("ON_DEMAND_FLEX")) == "ON_DEMAND_FLEX"
+        assert llm.traffic_type(self._completion(None)) is None
+        assert llm.traffic_type(SimpleNamespace(usage=None)) is None
+
+    def test_flex_stats_line_carries_window_latency(self, monkeypatch, caplog):
+        monkeypatch.setattr(llm, "_FLEX_STATS_EVERY", 4)
+        stats = llm._FlexStats()
+        with caplog.at_level("INFO", logger="tm.llm"):
+            stats.record("flex", 6.0)
+            stats.record("flex", 10.0)
+            stats.record("fallback")
+            stats.record("not_flex", 2.0)
+        assert "attempts=4 flex=2 not_flex=1 fallback=1" in caplog.text
+        assert "window_answered=3 mean_s=6.0 max_s=10.0" in caplog.text
+        assert stats.window_ok == 0 and stats.window_max == 0.0   # window reset after the line
+

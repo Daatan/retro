@@ -1,0 +1,105 @@
+{
+  "structured": [
+    {
+      "aws_region_name": "us-east-1",
+      "instructor_mode": "markdown_json_mode",
+      "max_retries": 1,
+      "max_tokens": 100,
+      "messages": [
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "type": "text"
+            },
+            {
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "model": "bedrock/us.anthropic.claude-opus-5",
+      "path": "structured",
+      "response_model": "GatekeeperOutput",
+      "timeout": 30
+    }
+  ],
+  "structured_flex": [
+    {
+      "aws_region_name": "us-east-1",
+      "instructor_mode": "markdown_json_mode",
+      "max_retries": 1,
+      "max_tokens": 100,
+      "messages": [
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "type": "text"
+            },
+            {
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "model": "bedrock/us.anthropic.claude-opus-5",
+      "path": "structured",
+      "response_model": "GatekeeperOutput",
+      "timeout": 30
+    }
+  ],
+  "structured_thinking": [
+    {
+      "aws_region_name": "us-east-1",
+      "instructor_mode": "markdown_json_mode",
+      "max_retries": 1,
+      "max_tokens": 100,
+      "messages": [
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "type": "text"
+            },
+            {
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "model": "bedrock/us.anthropic.claude-opus-5",
+      "path": "structured",
+      "response_model": "GatekeeperOutput",
+      "timeout": 30
+    }
+  ],
+  "text": [
+    {
+      "aws_region_name": "us-east-1",
+      "max_tokens": 100,
+      "messages": [
+        {
+          "content": "str",
+          "role": "system"
+        },
+        {
+          "content": "str",
+          "role": "user"
+        }
+      ],
+      "model": "bedrock/us.anthropic.claude-opus-5",
+      "path": "text",
+      "timeout": 30
+    }
+  ]
+}

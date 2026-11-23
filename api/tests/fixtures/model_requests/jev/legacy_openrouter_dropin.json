@@ -1,0 +1,52 @@
+{
+  "requests": [
+    {
+      "header_names": [
+        "authorization",
+        "content-type"
+      ],
+      "json_keys": [
+        "model",
+        "questions",
+        "state"
+      ],
+      "method": "POST",
+      "model": "typesafe/jev-1.13",
+      "questions": {
+        "neg": [
+          "instructions",
+          "type"
+        ]
+      },
+      "state_keys": [
+        "related_event"
+      ],
+      "url": "https://openrouter.ai/api/v1/systemone"
+    },
+    {
+      "header_names": [
+        "authorization",
+        "content-type"
+      ],
+      "json_keys": [
+        "model",
+        "questions",
+        "state"
+      ],
+      "method": "POST",
+      "model": "typesafe/jev-1.13",
+      "questions": {
+        "s<i>": [
+          "criteria",
+          "instructions",
+          "type"
+        ]
+      },
+      "state_keys": [
+        "question",
+        "sentences"
+      ],
+      "url": "https://openrouter.ai/api/v1/systemone"
+    }
+  ]
+}

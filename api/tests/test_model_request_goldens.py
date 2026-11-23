@@ -32,10 +32,15 @@ default today) and ``RELEVANCE_MODEL``. ``VERTEXAI_LOCATION`` is read by litellm
 environment and never passes through our kwargs, so no golden shows it. Every setting a request
 reads is reset to its class default first, so a developer's shell or ``.env`` cannot leak in.
 
-**Not covered here.** The extractor shadow call (``extractor_shadow_model``, off by default),
-Jev's later requests (only pass 1 is pinned), the A/B harness ``pipeline/scripts/ab_extractor_prompt.py``,
-and the batch orchestrator itself: the threshold-routing goldens start at ``run_article``, fed by
-the same ``select_extractor_model`` call the orchestrator makes. The two lane drivers fail on any
+**Not covered here.** The extractor shadow call (``extractor_shadow_model``, off by default).
+Jev requests other than pass 1: the per-sentence scoring and date requests in ``run_jev_shadow``
+and the evidence_class corrector in ``jev_class.py`` (off by default). They share ``_ask``/``_post``
+with pass 1, so URL, headers and model are pinned; their question shapes are not. Offline A/B,
+eval, labelling and smoke scripts (``api/scripts/ab_settled_decision.py``,
+``api/scripts/label_settlement_candidates.py``, ``pipeline/eval_*.py``,
+``pipeline/smoke_test_prompt_cache.py``, ``pipeline/scripts/ab_extractor_prompt.py``). The batch
+orchestrator itself: the threshold-routing goldens start at ``run_article``, fed by the same
+``select_extractor_model`` call the orchestrator makes. The two lane drivers fail on any
 LLM call made outside the stages they spy on, so a new unlabelled call does not go unseen.
 
 **Regenerating.** A golden is written only by ``UPDATE_GOLDENS=1 uv run pytest

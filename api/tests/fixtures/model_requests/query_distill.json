@@ -1,0 +1,18 @@
+{
+  "calls": [
+    {
+      "aws_region_name": "us-east-1",
+      "max_tokens": 40,
+      "messages": [
+        {
+          "content": "str",
+          "role": "user"
+        }
+      ],
+      "model": "bedrock/us.amazon.nova-micro-v1:0",
+      "path": "text",
+      "temperature": 0.0,
+      "timeout": 20
+    }
+  ]
+}

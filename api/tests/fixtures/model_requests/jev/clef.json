@@ -1,0 +1,51 @@
+{
+  "requests": [
+    {
+      "header_names": [
+        "authorization",
+        "content-type"
+      ],
+      "json_keys": [
+        "model",
+        "questions",
+        "state"
+      ],
+      "method": "POST",
+      "model": "clef",
+      "questions": {
+        "neg": [
+          "instructions",
+          "type"
+        ]
+      },
+      "state_keys": [
+        "related_event"
+      ],
+      "url": "https://api.cloudflare.com/client/v4/accounts/acct-fixture/ai/run/@cf/cloudflare/clef"
+    },
+    {
+      "header_names": [
+        "authorization",
+        "content-type"
+      ],
+      "json_keys": [
+        "model",
+        "questions",
+        "state"
+      ],
+      "method": "POST",
+      "model": "clef",
+      "questions": {
+        "s<i>": [
+          "instructions",
+          "type"
+        ]
+      },
+      "state_keys": [
+        "question",
+        "sentences"
+      ],
+      "url": "https://api.cloudflare.com/client/v4/accounts/acct-fixture/ai/run/@cf/cloudflare/clef"
+    }
+  ]
+}

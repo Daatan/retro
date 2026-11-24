@@ -1,0 +1,52 @@
+{
+  "requests": [
+    {
+      "header_names": [
+        "authorization",
+        "content-type"
+      ],
+      "json_keys": [
+        "model",
+        "questions",
+        "state"
+      ],
+      "method": "POST",
+      "model": "jev-1.13.0",
+      "questions": {
+        "neg": [
+          "instructions",
+          "type"
+        ]
+      },
+      "state_keys": [
+        "related_event"
+      ],
+      "url": "https://api.typesafe.ai/v1/systemone"
+    },
+    {
+      "header_names": [
+        "authorization",
+        "content-type"
+      ],
+      "json_keys": [
+        "model",
+        "questions",
+        "state"
+      ],
+      "method": "POST",
+      "model": "jev-1.13.0",
+      "questions": {
+        "s<i>": [
+          "criteria",
+          "instructions",
+          "type"
+        ]
+      },
+      "state_keys": [
+        "question",
+        "sentences"
+      ],
+      "url": "https://api.typesafe.ai/v1/systemone"
+    }
+  ]
+}

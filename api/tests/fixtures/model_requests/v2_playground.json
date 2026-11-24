@@ -1,0 +1,50 @@
+{
+  "anchor_match": [
+    {
+      "aws_region_name": "us-east-1",
+      "max_tokens": 200,
+      "messages": [
+        {
+          "content": "str",
+          "role": "user"
+        }
+      ],
+      "model": "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "path": "text",
+      "temperature": 0.0,
+      "timeout": 30
+    }
+  ],
+  "decompose": [
+    {
+      "aws_region_name": "us-east-1",
+      "max_tokens": 1500,
+      "messages": [
+        {
+          "content": "str",
+          "role": "user"
+        }
+      ],
+      "model": "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "path": "text",
+      "temperature": 0.2,
+      "timeout": 60
+    }
+  ],
+  "precursor_match": [
+    {
+      "aws_region_name": "us-east-1",
+      "max_tokens": 200,
+      "messages": [
+        {
+          "content": "str",
+          "role": "user"
+        }
+      ],
+      "model": "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "path": "text",
+      "temperature": 0.0,
+      "timeout": 30
+    }
+  ]
+}

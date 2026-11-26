@@ -356,7 +356,7 @@ git push → GitHub Actions → GitHub Pages
 | Keywords | `bedrock/us.amazon.nova-micro-v1:0` (`gatekeeper_model`) | One-time: generate search keywords per event (via `tm.llm`) |
 | Jev skip-gate + shadow + `evidence_class` corrector (live lane only) | TypeSafe System One, Jev 1.13; the requested model depends on the provider: `typesafe/jev-1.13` under the `openrouter` preset (prod), `jev-1.13.0` under `typesafe`, `jev_model` only on the legacy path (retro#863/#901; `api/src/forecast_api/jev_shadow.py`, not Bedrock, not LiteLLM) | Typed judgments, no generation: one `noul` per sentence. Shadow extraction next to Haiku (retro#840, `JEV_SHADOW_ENABLED`) and, since retro#850, a skip-gate in front of the extractor — `max_noul` predicts an empty Haiku extraction at AUC 0.93; `JEV_GATE_ENABLED` logs the verdict, `JEV_GATE_ENFORCE` skips the call when set (committed `jev-gate-enforce.conf`, threshold 0.07; the live value is the `event=stage_modes` startup line); `JEV_GATE_AB_ENABLED` (retro#849) logs a second pass 1 on a core-event rewrite of the question. The shadow's pass 2 also logs Jev's `evidence_class` (retro#851) and, on Haiku-settled claims, an `event_date` picked from code-found candidates (`jev_dates.py`, retro#873). Since retro#851, `jev_class.py` re-reads each claim's quote with the whole article and picks its `evidence_class`: `JEV_CLASS_ENABLED` logs `event=jev_class`, `JEV_CLASS_ENFORCE` replaces Haiku's class before anchor provenance and the class weights (fail-open to Haiku's, `jev_class_timeout_seconds` 1.5). All default off; see the drop-ins in `docs/ORACLE_DEPLOY.md`. Provider and key: `JEV_PROVIDER` (env → SSM `/retro/prod/secrets/JEV_PROVIDER` → legacy `JEV_SHADOW_API_URL`/`JEV_MODEL`/`JEV_API_KEY_SSM_NAME`); prod goes through OpenRouter with SSM `/retro/prod/secrets/OPENROUTER_JEV_API_KEY`, while `/retro/prod/secrets/TYPESAFE_API_KEY` is the direct-TypeSafe key. A non-empty `TYPESAFE_API_KEY` env var outranks the provider's key and is sent to whichever provider is active (prod leaves it unset). See `docs/ORACLE_VARIABLES.md` 2026-09-22 onward. |
 
-All defaults via AWS Bedrock. The one live non-Bedrock LiteLLM model is `/relevance` on Vertex Gemini (drop-in `relevance-model-vertex.conf`, WIF credential, retro#1038). Override via env vars in `pipeline/src/tm/config.py`. The API-side Bedrock stages are settlement verifier, subject gate, premise verifier, event decomposition, v2 and `/llm`. They fall back to `judge_model` (Haiku 4.5), not to the extractor (retro#911). `/relevance` and query distillation have their own `RELEVANCE_MODEL` / `QUERY_DISTILL_MODEL`; unset, they use the gatekeeper's model. The full list is in `docs/EXTRACTOR_MODEL_SURVEY.md` ("Model choices elsewhere"). The `model_api_base` and `model_api_key` settings allow routing through any LiteLLM-compatible provider (OpenRouter, etc.).
+All defaults via AWS Bedrock. The one live non-Bedrock LiteLLM model is `/relevance` on Vertex Gemini (drop-in `relevance-model-vertex.conf`, WIF credential, retro#1038). Its `short_form` calls can be billed at Vertex Flex PayGo with a standard-tier fallback: `RELEVANCE_FLEX_ENABLED`, code default off, drop-in `relevance-flex.conf` (retro#1098). Override via env vars in `pipeline/src/tm/config.py`. The API-side Bedrock stages are settlement verifier, subject gate, premise verifier, event decomposition, v2 and `/llm`. They fall back to `judge_model` (Haiku 4.5), not to the extractor (retro#911). `/relevance` and query distillation have their own `RELEVANCE_MODEL` / `QUERY_DISTILL_MODEL`; unset, they use the gatekeeper's model. The full list is in `docs/EXTRACTOR_MODEL_SURVEY.md` ("Model choices elsewhere"). The `model_api_base` and `model_api_key` settings allow routing through any LiteLLM-compatible provider (OpenRouter, etc.).
 
 **[UPDATED 2026-09-08, retro#778] The Extractor row above is now the shared default for both
 lanes.** `oracle-api.service` (the `/forecast` path most callers hit) additionally pins
@@ -560,11 +560,11 @@ Remaining secrets stay in AWS Secrets Manager (`eu-central-1`):
 ```bash
 # On the instance (via SSM session):
 curl -sSL https://raw.githubusercontent.com/Daatan/retro/main/infra/ec2_bootstrap.sh | bash
-
-# Start pipeline loop
-nohup bash ~/truthmachine/infra/ec2_run.sh \
-  >> ~/truthmachine/pipeline_log.txt 2>&1 &
 ```
+
+The bootstrap's last step installs, enables and starts `truthmachine.service`
+(`infra/truthmachine.service`), which runs `infra/ec2_run.sh` as the pipeline loop and appends
+its output to `~/truthmachine/pipeline_log.txt`. There is no separate start step.
 
 ### Monitor from Local Machine
 ```bash
@@ -572,12 +572,15 @@ bash infra/monitor.sh
 ```
 
 ### Stop / Restart
+The loop runs under systemd with `Restart=always` (30 s), so a bare `kill` of `ec2_run.sh`
+comes back on its own, and a hand-started `nohup` copy would run beside the service's.
+
 ```bash
 # On EC2 (via SSM):
-kill $(pgrep -f ec2_run.sh)
+sudo systemctl stop truthmachine
 
 # Restart:
-nohup bash ~/truthmachine/infra/ec2_run.sh >> ~/truthmachine/pipeline_log.txt 2>&1 &
+sudo systemctl restart truthmachine
 ```
 
 ---
@@ -586,12 +589,12 @@ nohup bash ~/truthmachine/infra/ec2_run.sh >> ~/truthmachine/pipeline_log.txt 2>
 
 | Workflow | Trigger | Effect |
 |---|---|---|
-| `deploy-atlas.yml`  | push to `main` touching `factum_atlas.html`, or `oracle-test.html` | Deploys to **https://daatan.github.io/retro/** via GitHub Pages. The EC2 pipeline commits and pushes `factum_atlas.html` after each cycle, which triggers this. |
-| `deploy-oracle.yml` | push to `main` touching `api/**`, `pipeline/**`, `infra/deploy_oracle.sh`, `infra/oracle-api.service`, or the workflow itself; or manual `workflow_dispatch` | Authenticates to AWS via OIDC (no static keys), runs `aws ssm send-command` against the EC2 box to invoke `infra/deploy_oracle.sh`, polls until completion, prints the script output into the Actions log. Includes a no-op fast path when the resolved SHA is already deployed. |
+| `deploy-atlas.yml`  | push to `main` touching `factum_atlas.html`, `oracle-test.html`, `oracle-v2-test.html`, `oracle-mcp-test.html`, `bayesoracle/**`, `studies/**` or the workflow itself; or manual `workflow_dispatch` | Deploys to **https://daatan.github.io/retro/** via GitHub Pages. The EC2 pipeline commits and pushes `factum_atlas.html` after each cycle, which triggers this. |
+| `deploy-oracle.yml` | push to `main` touching `api/**`, `pipeline/**`, `metaculus/**`, `polymarket_paper/**`, `manifold_paper/**`, `infra/deploy_oracle.sh`, `infra/oracle-api.service`, the three sidecars' `infra/` service/timer/installer files, or the workflow itself; or manual `workflow_dispatch` (from `main` only, retro#1078) | Authenticates to AWS via OIDC (no static keys), runs `aws ssm send-command` against the EC2 box to invoke `infra/deploy_oracle.sh`, polls until completion, prints the script output into the Actions log. Includes a no-op fast path when the resolved SHA is already deployed. |
 
 OIDC auth uses an IAM role whose ARN is stored as the `AWS_DEPLOY_ROLE_ARN` repo
 variable. The role's trust + permissions are scoped to GH runs from this repo on
-`main` (plus `workflow_dispatch`) and to `ssm:SendCommand` on the one oracle
+`main` (a `workflow_dispatch` too, but only when dispatched from `main`) and to `ssm:SendCommand` on the one oracle
 instance with the `AWS-RunShellScript` document only. Templates live in
 `infra/iam/` — see [`infra/iam/README.md`](../infra/iam/README.md) and
 [`docs/ORACLE_DEPLOY.md`](ORACLE_DEPLOY.md).
@@ -714,8 +717,10 @@ POST /forecast
   "provider": "news_indexer",
   "provider_chain": ["news_indexer"],
   "distilled_query": null,
+  "diagnostics": { "n_eff_event": null, "echo_ratio": null, "width_disagreement": null,
+                   "width_strength": null, "shape": null, "movement": null },
   "provenance": {
-    "schema_version": "1.6",
+    "schema_version": "1.7",
     "engine": "v1",
     "oracle": { "version": "1.4.x", "git_sha": "…", "built_at": "…" },
     "models": { "gatekeeper": "nova-micro", "extractor": "claude-haiku-5-5" },
@@ -734,6 +739,10 @@ POST /forecast
 above. The MCP `forecast` tool trims this (and `sources[]`) out of its default response;
 pass `verbose: true` to get the full `model_dump()` including `provenance` — see
 [`docs/ORACLE_MCP.md`](ORACLE_MCP.md).
+
+`diagnostics` (retro#1067, on every `/forecast` and `/pool/aggregate` response from
+`provenance.schema_version` 1.7) is a reporting block whose fields all stay `null` until Oracle
+1.5 Phase 3 computes them; no estimate reads it. See `docs/ORACLE_VARIABLES.md`.
 
 When the pipeline can't compute a real estimate it returns `insufficient_data: true`
 with a `reason` (e.g. `no_search_results`, `all_articles_off_topic`,

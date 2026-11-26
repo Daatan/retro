@@ -76,6 +76,15 @@ cd api && uv run pytest        # no network/secrets needed
 secret. CI runs this on every PR, together with `ruff` and `mypy` (`uv run mypy`, after
 `uv sync --extra dev`), behind the required `ci-gate` check, and the same suite **gates the deploy** (see `.github/workflows/`).
 
+`tests/test_model_request_goldens.py` (retro#1102) snapshots every outgoing LLM request per role
+(model id and call kwargs; prompt text is pinned elsewhere) into `tests/fixtures/model_requests/`.
+The extractor and `/relevance` model ids are test constants mirroring the prod drop-ins
+(`PROD_EXTRACTOR_MODEL`, `PROD_RELEVANCE_MODEL`); every other role runs on its code default, so a
+changed default for one of those roles, or a changed call parameter, fails it. If the change is
+intended, regenerate with
+`UPDATE_GOLDENS=1 uv run pytest tests/test_model_request_goldens.py` and show the golden diff in
+the PR. The module docstring lists what is and is not covered.
+
 ## Endpoints (summary)
 
 `POST /forecast`, `POST /search`, `GET /search/health`, `POST /llm`,

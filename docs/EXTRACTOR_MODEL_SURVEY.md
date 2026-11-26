@@ -439,6 +439,10 @@ served another model's cached answer.
   4.7+/5.x, Haiku 5.x), so callers need not pass `None`; `None` remains only for a rejecting
   model not yet on that list. For Gemini it passes `allowed_openai_params=["temperature"]`,
   because litellm ≥1.108 rejects temperature for Gemini 3.5+ client-side (retro#1090).
+- Billing tier: `complete_structured(flex=True)` sends Vertex Flex PayGo headers on `vertex_ai/`
+  models only. Any other model ignores the flag (logged once per model,
+  `event=flex_skipped_unsupported_model`). Only `/relevance` sets it (`RELEVANCE_FLEX_ENABLED`,
+  default off, retro#1098), so moving `RELEVANCE_MODEL` off Vertex also drops the Flex discount.
 - Extraction memo keys include the model, so a switch never serves the old model's output.
 - Not wired in code (deliberately, nothing needs it yet): a thinking-level knob
   (`reasoning_effort` — Gemini 3.x defaults to high thinking; the re-test patched it to `low`

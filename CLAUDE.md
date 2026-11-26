@@ -53,6 +53,7 @@ Three related systems, one repo:
 ## Infra cheat-sheet
 
 - Oracle host: EC2 `i-00ac444b94c5ff9b2` (`oracle.daatan.com` / `bayes.daatan.com`), eu-central-1. **SSM only, no SSH.**
+- **On that box, run anything that writes under `/home/ubuntu` as `ubuntu`:** prefix SSM commands with `sudo -u ubuntu HOME=/home/ubuntu`, because SSM itself runs as root. That includes `uv sync`/`uv run`, `pytest` and a bare `python`, which writes `__pycache__`. Two root-owned `__pycache__` files from a root diagnostic on 2026-11-18 made the 2026-11-26 deploy's `uv sync` fail halfway and took the API down (retro#1110). `deploy_oracle.sh` now hands such files back under `oracle-api/` before it syncs. Nothing does that for `truthmachine/`.
 - Oracul logs: `/home/ubuntu/truthmachine/oracle_log.txt` — **not** journald; `journalctl` finds nothing useful.
 - Services on the box: `truthmachine.service` (batch pipeline loop) + `oracle-api.service` (FastAPI), plus the `metaculus-sync.timer`, `polymarket-paper.timer` and `manifold-paper.timer` sidecars (`infra/install_*_timer.sh`).
 - Latency profile: `/forecast` is capped by `forecast_timeout_seconds` (90 s) and `per_article_timeout_seconds` (35 s) in `api` `config.py`; the LLM article phase is the slow part. GDELT Doc's slow failures moved to the chain tail in retro#990.

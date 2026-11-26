@@ -93,15 +93,28 @@ service environment would therefore send the TypeSafe key to whichever provider 
 
 ## Deploy flow
 
-`infra/deploy_oracle.sh` runs on the box and does:
+`infra/deploy_oracle.sh` runs on the box (as `ubuntu` from the workflow, as root from a by-hand SSM run) and does:
 
+0. **Ownership (retro#1110):** hand every entry under `/home/ubuntu/oracle-api` not owned by `ubuntu` back to it (`sudo chown -R`). A root-owned file in a venv makes `uv sync`, which runs as `ubuntu`, fail halfway, after it has already removed packages. The scan takes ~5 s (~45k entries on the box).
 1. `git fetch origin main` in `/home/ubuntu/oracle-api`
-2. `git reset --hard <ref>` (defaults to `origin/main`, override with a SHA to pin)
-3. `uv sync --frozen` in `api/`, re-run `infra/install_metaculus_timer.sh` + `infra/install_polymarket_paper_timer.sh` + `infra/install_manifold_paper_timer.sh` (the sidecar timers above), and write `api/src/forecast_api/_build_info.json` (git SHA / build number read by `/version` and `/health`)
+2. If `<ref>` is the last deploy that came up healthy (`.deployed_sha`, written in step 5) and HEAD is already there, exit with "no change". Otherwise `git reset --hard <ref>` (defaults to `origin/main`, override with a SHA to pin)
+3. Sync the venv in `api/`: remove `*.dist-info` dirs that have no `METADATA` (the residue of an interrupted uninstall, which uv otherwise counts as installed), `uv sync --frozen`, then `uv pip check`. **If the sync or the check fails, the script resets the checkout to the last good deploy, syncs and checks that venv the same way, and exits 1 without reloading the service.** If that rollback fails too, it deletes `.deployed_sha`, so the next run syncs instead of reporting "no change", and the log says to fix the venv by hand. Then re-run `infra/install_metaculus_timer.sh` + `infra/install_polymarket_paper_timer.sh` + `infra/install_manifold_paper_timer.sh` (the sidecar timers above), and write `api/src/forecast_api/_build_info.json` (git SHA / build number read by `/version` and `/health`)
 4. `sudo systemctl reload-or-restart oracle-api` — gunicorn SIGHUPs its workers, new code is imported into fresh workers, old workers drain gracefully. The listening socket on `:8001` is never closed, so there's no 502 window.
-5. **Health gate (hardened 2026-06-02):** poll `/health` and require **5 consecutive** 200s over a window that spans the graceful-drain. If the reload is not durably healthy, **escalate to a full `systemctl restart`** and re-verify; only if *that* also fails does the script `exit 1` (deploy goes red).
+5. **Health gate (hardened 2026-06-02):** poll `/health` and require **5 consecutive** 200s over a window that spans the graceful-drain. If the reload is not durably healthy, **escalate to a full `systemctl restart`** and re-verify; only if *that* also fails does the script `exit 1` (deploy goes red). Only a healthy deploy writes its SHA to `.deployed_sha` (untracked, git-ignored).
 
-No-op fast-path: if `git reset` produces the same SHA as before, the script skips `uv sync` and the reload entirely.
+No-op fast-path: when `<ref>` is the last healthy deploy and HEAD is already there, the script skips `uv sync` and the reload entirely. Until retro#1110 it compared with HEAD instead, so a re-run after a failed sync found HEAD already at the target and skipped the sync it needed. The first run of the new script finds no `.deployed_sha`, so it syncs and reloads even when the code has not changed.
+
+> **Why the rollback and the marker (incident 2026-11-26, retro#1110).** Two
+> root-owned `__pycache__` files in the venv's litellm package, left by a diagnostic
+> run as root on 2026-11-18, made a Dependabot deploy's `uv sync` fail halfway: it
+> had already removed fastapi and litellm. The script exited, the running workers
+> kept serving, and the next worker recycle failed to boot (`No module named
+> 'fastapi'`). gunicorn exited and systemd restarted it, ~33 s down. Re-running the deploy did
+> nothing, because HEAD already matched. A local reproduction with uv 0.11.2 (the
+> box's version) also showed that rolling back with a plain re-sync is not enough:
+> it exits 0 with litellm's files still missing, because the emptied dist-info dir
+> makes uv count the old version as installed. Hence the stub purge and the
+> `uv pip check` gate.
 
 > **Why the consecutive-200 gate + restart escalation (incident 2026-06-02).** A
 > dependency upgrade took the live API down: every request returned `400 "Invalid
@@ -131,7 +144,7 @@ There are two supported ways to deploy. **Normal operation is path 1 — do noth
 this list had gone stale]**. It authenticates to AWS via OIDC, calls `aws ssm send-command`
 against the box, waits for completion, and prints the deploy script's stdout/stderr into the
 Actions log. A `no-op` fast-path in `deploy_oracle.sh` makes the workflow cheap when the resolved
-HEAD already matches what's on the box.
+ref is already the last healthy deploy on the box.
 
 The workflow's `test` job runs first. It calls the whole `tests.yml` (pytest, ruff, mypy, infra shell tests). The `deploy` job `needs` it, so any red job blocks the deploy.
 

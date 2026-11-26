@@ -62,3 +62,6 @@ manifold_paper/.venv/
 
 # mypy (retro#977)
 .mypy_cache/
+
+# Last healthy Oracle deploy, written on the box by infra/deploy_oracle.sh (retro#1110).
+/.deployed_sha

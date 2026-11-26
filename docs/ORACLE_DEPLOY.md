@@ -46,6 +46,8 @@ sudo systemctl daemon-reload && sudo systemctl restart oracle-api
 
 Rollback: delete the file on the host, daemon-reload, restart. What is actually running is the
 `event=stage_modes` line each worker logs at startup (`docs/ORACLE_VARIABLES.md`, retro#866).
+`/relevance`'s model and Flex tier are not stages, so they are not on that line: they are in the
+`event=relevance_config model=… flex=… flex_timeout=…` startup line (retro#1098).
 
 | Drop-in | Sets | Issue |
 |---|---|---|
@@ -60,7 +62,7 @@ Rollback: delete the file on the host, daemon-reload, restart. What is actually 
 | `jev-segment-v2.conf` | `JEV_SEGMENT_V2=true` | retro#943 |
 | `pool-shadow-a.conf` | `POOL_SHADOW_A_ENABLED=true` (log-only Jev-weighted pool shadow; live since 2026-10-17) | retro#955 |
 | `relevance-model-vertex.conf` | `RELEVANCE_MODEL` = Gemini 3.5 Flash-Lite on Vertex + `VERTEXAI_PROJECT`/`VERTEXAI_LOCATION`/`GOOGLE_APPLICATION_CREDENTIALS` (WIF config, no key). `/relevance` only. **Live since 2026-10-30 11:15 UTC.** WIF config at `/home/ubuntu/.config/gcloud/oracul-wif.json`. | retro#1038 |
-| `relevance-flex.conf` | `RELEVANCE_FLEX_ENABLED=true` + `RELEVANCE_FLEX_TIMEOUT_SECONDS=25`: `/relevance`'s Vertex calls go to Flex PayGo (half price, ~7–10 s), falling back to one standard call on any Flex failure. Needs `relevance-model-vertex.conf`. **Not applied yet**: apply only after news-indexer's lane concurrency (ni#547) is live. | retro#1098 |
+| `relevance-flex.conf` | `RELEVANCE_FLEX_ENABLED=true` + `RELEVANCE_FLEX_TIMEOUT_SECONDS=25`: `/relevance`'s Vertex calls on `short_form` requests go to Flex PayGo (half price, ~7–10 s), falling back to one standard call on any Flex failure; other `/relevance` requests keep the standard tier. Needs `relevance-model-vertex.conf`. **Not applied yet** (as of 2026-11-22, retro#1100): apply only after news-indexer's lane concurrency (ni#547) is live. | retro#1098 |
 
 ## Switching the Jev provider (retro#901)
 

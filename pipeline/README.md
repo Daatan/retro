@@ -82,6 +82,7 @@ uv sync
 | `EXA_API_KEY` | No | Exa — news search with published dates; free $10/month tier |
 | `TAVILY_API_KEY` | No | Tavily — news search with date windowing; 1 credit/call |
 | `BRAVE_API_KEY` | No | Brave News Search; also URL resolution fallback in gnews_ingest |
+| `SERPERDEV_KEY` | No | Serper.dev — `gnews_ingest.py` URL resolution only, after Brave; not a `web_search.py` leg since retro#989 |
 | `BRIGHTDATA_API_KEY` | No | BrightData SERP API |
 | `NIMBLEWAY_API_KEY` | No | Nimbleway SERP API |
 | `NEWSDATA_API_KEY` | No | Newsdata.io archive search |

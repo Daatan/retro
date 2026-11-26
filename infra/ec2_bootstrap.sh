@@ -1,6 +1,6 @@
 #!/bin/bash
 # TruthMachine EC2 Bootstrap — run once on a fresh instance.
-# Access via SSM: aws ssm start-session --target <instance-id> --region us-east-1
+# Access via SSM: aws ssm send-command --instance-ids <instance-id> --region eu-central-1
 set -euo pipefail
 
 # Auto-detect region from EC2 metadata (IMDSv2), fallback to us-east-1

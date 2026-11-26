@@ -135,7 +135,9 @@ def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRespons
         headers["Access-Control-Allow-Origin"] = origin
         headers["Access-Control-Allow-Headers"] = "Content-Type, x-api-key"
         headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    return JSONResponse({"detail": "Rate limit exceeded — max 10 requests/minute"}, status_code=429, headers=headers)
+    # exc.detail is the limit that tripped, e.g. "30 per 1 minute" — routes range from 5 to 120/min,
+    # so a fixed number here told callers the wrong budget (retro#1109).
+    return JSONResponse({"detail": f"Rate limit exceeded — max {exc.detail}"}, status_code=429, headers=headers)
 
 
 app = FastAPI(

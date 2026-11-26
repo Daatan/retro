@@ -19,6 +19,9 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 
 ## [Unreleased]
 
+### Fixed
+- The 429 body names the limit that actually tripped (e.g. `Rate limit exceeded — max 30 per 1 minute`) instead of `max 10 requests/minute` on every route; per-route limits range from 5 to 120/min, so callers throttled to the wrong number (`/llm` is 30/min) (retro#1109). Status code, CORS headers and the limits themselves are unchanged.
+
 ### Added
 - `/relevance` can bill its Vertex Gemini calls at Flex PayGo, half the per-token price for the same model and prompt, ~7–10 s instead of ~1 s (retro#1098). It applies to `short_form` requests only, news-indexer's short_form lane and ~97% of the calls; the cosine lane keeps the standard tier. `RELEVANCE_FLEX_ENABLED` defaults to off; `RELEVANCE_FLEX_TIMEOUT_SECONDS` is 25. Any failure of the Flex attempt falls back to one standard call before the rate-limit backoff, so it costs money, never a verdict. `event=flex_stats` (every 500 attempts: outcomes, Flex latency), `event=flex_not_honoured` and the startup line `event=relevance_config` show the live state. The hand-synced drop-in `relevance-flex.conf` turns it on, after news-indexer#547.
 - `GET /leaderboard/author-shadow/resolutions` (daatan#2266): the author lane's scored resolutions, one row each, with `prediction_id`, `outcome`, `experts_prob` and `bylines`. `experts_prob` treats the experts as one forecaster: each byline's mean lean as a probability, which is what the author board scores, averaged over bylines. Written beside the author board on every rescore. Read-only and additive; shadow only.

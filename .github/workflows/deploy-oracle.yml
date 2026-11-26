@@ -3,8 +3,9 @@ name: Deploy Oracle API
 # Auto-deploys the Oracle API on every merge to main. Invokes
 # infra/deploy_oracle.sh on the EC2 box via SSM Run Command — no SSH needed.
 # The script does git-fetch → reset → uv-sync → SIGHUP reload with a no-op
-# fast-path when HEAD is unchanged, so path-filter misses here (e.g. data-only
-# atlas commits from the pipeline) are harmless and cheap.
+# fast-path when the ref is already the last healthy deploy (.deployed_sha,
+# retro#1110), so path-filter misses here (e.g. data-only atlas commits from the
+# pipeline) are harmless and cheap.
 
 on:
   push:

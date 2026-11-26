@@ -63,6 +63,13 @@ version heading — see `docs/ORACLE_DEPLOY.md` § Cutting a release.
 - Startup log notices for env vars `ApiSettings` silently ignores (retro#947, item 2): `event=unrecognized_env` for a variable with one of the service's own prefixes (`JEV_`, `SETTLEMENT_`, …) that matches no field — a typo or a flag removed without notice — and `event=deprecated_env` for entries in `DEPRECATED_ENV` (empty today). Report-only: no value changes, no exception can reach startup.
 
 ### Fixed
+- `infra/deploy_oracle.sh`: a failed deploy no longer leaves a broken venv or blocks its own retry (retro#1110).
+  - Before git runs, it hands files under the checkout that are not owned by `ubuntu` back to it.
+  - It gates the sync on `uv pip check`, after removing `dist-info` dirs that have no `METADATA`.
+  - When the sync fails, it rolls the checkout and the venv back without reloading the service.
+  - It decides "nothing to do" against `.deployed_sha`, the last deploy that came up healthy, instead of HEAD.
+
+  On 2026-11-26 a sync died on two root-owned `__pycache__` files after removing fastapi and litellm. The next worker recycle took the API down for ~33 s, and the re-run skipped the sync because HEAD already matched.
 - `/relevance` returned 502 on every call from 2026-11-18 17:33 UTC (retro#1090): litellm 1.109.1 (retro#1085) rejects `temperature` for Gemini 3.5+ client-side, and `/relevance` runs on `vertex_ai/gemini-3.5-flash-lite` with `temperature=0`. `tm.llm` now passes `allowed_openai_params=["temperature"]` for Gemini models, so `temperature=0` still reaches Vertex (probed: accepted). Bedrock requests are unchanged.
 - Batch loop no longer pushes a no-op atlas commit every cycle for an unprocessable article (retro#959): the cell recorded the raw gatekeeper error, which embeds a fresh completion id on each `--retry-empty` re-judge, so `progress.json` changed every pass. It now records the stable marker (`unprocessable article: Input Tokens Exceeded` / `…max_tokens length limit`).
 - Batch cells no longer end `failed` on deterministic gatekeeper errors (retro#962): an article too long for Nova Micro (`Input Tokens Exceeded`) or one that makes it hit `max_tokens` fails identically every pass, so a cell whose only errors are these now ends `no_predictions` with `error: unprocessable article: …` instead of being retried. A cell with any other error still ends `failed`. The live `/forecast` path and the gate itself are unchanged.

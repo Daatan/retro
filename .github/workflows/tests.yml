@@ -112,6 +112,15 @@ jobs:
       - name: Run oracle-series cron tests
         run: bash infra/tests/test_oracle_series_cron.sh
 
+      # deploy_oracle.sh only ever runs on the oracle box. This drives the real script
+      # against a throwaway git origin with fake uv / systemctl / curl: rollback on a
+      # failed sync, the .deployed_sha marker, the ownership repair (retro#1110).
+      - name: shellcheck deploy_oracle.sh
+        run: shellcheck -S error infra/deploy_oracle.sh infra/tests/test_deploy_oracle.sh
+
+      - name: Run deploy_oracle.sh behaviour tests
+        run: bash infra/tests/test_deploy_oracle.sh
+
   pytest:
     needs: changes
     if: needs.changes.outputs.code == 'true'
